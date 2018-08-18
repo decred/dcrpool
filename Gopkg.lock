@@ -80,9 +80,15 @@
   version = "v1.0.0"
 
 [[projects]]
+  name = "github.com/segmentio/ksuid"
+  packages = ["."]
+  revision = "112f929a3020abfcd06b77c963ec919130796a35"
+  version = "1.0.1"
+
+[[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["ripemd160"]
+  packages = ["bcrypt","blowfish","ripemd160"]
   revision = "de0752318171da717af4ce24d0a2e8626afaeb11"
 
 [[projects]]
@@ -94,6 +100,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c900f447789bb8fa5b821e10c7105428008623042333e3bf117cfa364e9594cb"
+  inputs-digest = "ea43b1849d21b0b67c8430d8dc69e7e66c612e0733f4fedf03a0951e54bd3951"
   solver-name = "gps-cdcl"
   solver-version = 1

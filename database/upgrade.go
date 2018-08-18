@@ -25,14 +25,14 @@ var upgrades = [...]func(tx *bolt.Tx) error{}
 func Upgrade(db *bolt.DB) error {
 	var version uint32
 	err := db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolbkt)
-		if poolbkt == nil {
-			return fmt.Errorf("'%s' bucket does not exist", string(poolbkt))
+		pbkt := tx.Bucket(PoolBkt)
+		if PoolBkt == nil {
+			return fmt.Errorf("'%s' bucket does not exist", string(PoolBkt))
 		}
-		v := pbkt.Get(versionk)
+		v := pbkt.Get(VersionK)
 		if v == nil {
 			return fmt.Errorf("associated value for '%s' not found",
-				string(versionk))
+				string(VersionK))
 		}
 
 		version = binary.LittleEndian.Uint32(v)

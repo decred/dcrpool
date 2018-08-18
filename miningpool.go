@@ -16,6 +16,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"dnldd/dcrpool/database"
+	"dnldd/dcrpool/mgmt"
 	"dnldd/dcrpool/ws"
 )
 
@@ -36,33 +37,8 @@ type MiningPool struct {
 	httpc    *http.Client
 	hub      *ws.Hub
 	router   *mux.Router
+	sessions map[string]*mgmt.Session // k/v -> accountID/Sesssion
 	upgrader websocket.Upgrader
-}
-
-// setupRoutes configures the accessible routes of the mining pool.
-func (p *MiningPool) setupRoutes() {
-	p.router.HandleFunc("/", p.handleRegistration)
-	p.router.HandleFunc("/ws", p.handleWebsockets)
-}
-
-// handleWebsockets establishes websocket connections with clients and handles
-// subsequent requests.
-func (p *MiningPool) handleWebsockets(w http.ResponseWriter, r *http.Request) {
-	// Upgrade the http request to a websocket connection.
-	socket, err := p.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		mpLog.Error(err)
-		return
-	}
-
-	c := ws.NewClient(p.hub, socket)
-	p.hub.AddClient(c)
-	go c.Process()
-	go c.Send()
-}
-
-// handleRegistration signs up new mining pool users.
-func (p *MiningPool) handleRegistration(w http.ResponseWriter, r *http.Request) {
 }
 
 // NewMiningPool initializes the mining pool.
@@ -95,6 +71,7 @@ func NewMiningPool(config *config) (*MiningPool, error) {
 	}
 	p.hub = ws.NewHub(p.db, p.httpc)
 	p.upgrader = websocket.Upgrader{}
+	p.sessions = make(map[string]*mgmt.Session)
 
 	return p, nil
 }
@@ -116,8 +93,7 @@ func (p *MiningPool) shutdown(ctx context.Context) context.Context {
 		defer cancel()
 
 		if err := p.server.Shutdown(ctx); err != nil {
-			mpLog.Errorf("Failed at gracefully shuting down the server: %v",
-				err)
+			mpLog.Errorf("failed at gracefully shuting down server: %v", err)
 		}
 	}()
 

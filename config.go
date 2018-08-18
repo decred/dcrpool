@@ -390,7 +390,7 @@ func loadConfig() (*config, []string, error) {
 	if !fileExists(preCfg.ConfigFile) {
 		err := createConfigFile(preCfg)
 		if err != nil {
-			return nil, nil, fmt.Errorf("Error creating a default "+
+			return nil, nil, fmt.Errorf("error creating a default "+
 				"config file: %v", err)
 		}
 	}
@@ -492,20 +492,20 @@ func loadConfig() (*config, []string, error) {
 		// Generated certificate will have 5 years of validity.
 		validUntil := time.Now().Add(time.Duration(5) * 365 * 24 * time.Hour)
 		cert, key, err := certgen.NewTLSCertPair(elliptic.P521(),
-			"decred mining pool (dcrpool)", validUntil, nil)
+			"dcrpool", validUntil, nil)
 		if err != nil {
-			return nil, nil, fmt.Errorf("Failed to create TLS certificate "+
+			return nil, nil, fmt.Errorf("failed to create TLS certificate "+
 				"file %v", err)
 		}
 
 		// Write cert and key files.
 		if err = ioutil.WriteFile(cfg.TLSCert, cert, 0644); err != nil {
-			return nil, nil, fmt.Errorf("Cannot write TLS cert: %v", err)
+			return nil, nil, fmt.Errorf("cannot write TLS cert: %v", err)
 		}
 
 		if err = ioutil.WriteFile(cfg.TLSKey, key, 0600); err != nil {
 			os.Remove(cfg.TLSCert)
-			return nil, nil, fmt.Errorf("Cannot write TLS key: %v", err)
+			return nil, nil, fmt.Errorf("cannot write TLS key: %v", err)
 		}
 	}
 

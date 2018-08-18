@@ -121,7 +121,7 @@ func directionString(inbound bool) string {
 
 // fatalf logs a string, then cleanly exits.
 func fatalf(str string) {
-	mpLog.Errorf("Unable to create profiler: %v", str)
+	mpLog.Errorf(str)
 	os.Stdout.Sync()
 	if logRotator != nil {
 		logRotator.Close()
