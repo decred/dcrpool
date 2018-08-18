@@ -1,17 +1,18 @@
 package main
 
 import (
-	"dnldd/dcrpool/database"
-	"dnldd/dcrpool/mgmt"
-	"dnldd/dcrpool/ws"
-	"einheit/eana/util"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
 
 	"github.com/gorilla/mux"
+	"golang.org/x/crypto/bcrypt"
+
+	"dnldd/dcrpool/database"
+	"dnldd/dcrpool/ws"
 )
 
 // errParamNotFound is returned when a provided parameter key does not map
@@ -22,8 +23,10 @@ func errParamNotFound(key string) error {
 
 // setupRoutes configures the accessible routes of the mining pool.
 func (p *MiningPool) setupRoutes() {
-	p.router.HandleFunc("/register", p.handleRegistration)
-	p.router.HandleFunc("/activate/{id}", p.handleActivation)
+	p.router.HandleFunc("/account/create", p.handleCreateAccount)
+	p.router.HandleFunc("/account/{id}/username", p.handleUpdateUsername)
+	p.router.HandleFunc("/account/{id}/address", p.handleUpdateAddress)
+	p.router.HandleFunc("/account/{id}/password", p.handleUpdatePassword)
 	p.router.HandleFunc("/ws", p.handleWebsockets)
 }
 
@@ -38,6 +41,12 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(response)
+}
+
+// respondWithStatusCode responds with only a status code to a request.
+func respondWithStatusCode(w http.ResponseWriter, code int) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(code)
 }
 
 // handleWebsockets establishes websocket connections with clients and handles
@@ -56,16 +65,16 @@ func (p *MiningPool) handleWebsockets(w http.ResponseWriter, r *http.Request) {
 	go c.Send()
 }
 
-// handleRegistration handles new account registration.
-func (p *MiningPool) handleRegistration(w http.ResponseWriter, r *http.Request) {
+// handleCreateAccount handles account creation.
+func (p *MiningPool) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		util.RespondWithError(w, http.StatusBadRequest,
+		respondWithError(w, http.StatusBadRequest,
 			fmt.Errorf("Failed to read request body"))
 		return
 	}
 	if len(body) == 0 {
-		util.RespondWithError(w, http.StatusBadRequest,
+		respondWithError(w, http.StatusBadRequest,
 			fmt.Errorf("Invalid request body"))
 		return
 	}
@@ -78,11 +87,85 @@ func (p *MiningPool) handleRegistration(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	email, ok := payload["email"].(string)
+	username, ok := payload["username"].(string)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, errParamNotFound("email"))
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("username"))
 		return
 	}
+	address, ok := payload["address"].(string)
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("address"))
+		return
+	}
+	password, ok := payload["password"].(string)
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("password"))
+		return
+	}
+
+	// Verify the address provided is a valid decred address.
+
+	exists, err := database.IndexExists(p.db, database.UsernameIdxBkt,
+		[]byte(strings.ToLower(username)))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if exists {
+		respondWithError(w,
+			http.StatusBadRequest,
+			fmt.Errorf("'%s' is registered to another account", username))
+		return
+	}
+
+	account, err := NewAccount(username, address, password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err)
+	}
+	err = account.Create(p.db)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err)
+	}
+	err = database.UpdateIndex(p.db, database.UsernameIdxBkt,
+		[]byte(account.UUID), []byte(account.Username))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err)
+	}
+
+	respondWithJSON(w, http.StatusCreated, account)
+}
+
+// handleUpdateUsername handles username updates.
+func (p *MiningPool) handleUpdateUsername(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	id := params["id"]
+
+	account, err := GetAccount(p.db, []byte(id))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("Failed to read request body"))
+		return
+	}
+	if len(body) == 0 {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("Invalid request body"))
+		return
+	}
+
+	var payload map[string]interface{}
+	err = json.Unmarshal(body, &payload)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("Request body is invalid json: %v", err))
+		return
+	}
+
 	username, ok := payload["username"].(string)
 	if !ok {
 		respondWithError(w, http.StatusBadRequest, errParamNotFound("username"))
@@ -94,72 +177,134 @@ func (p *MiningPool) handleRegistration(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Ensure the email and username provided have not already been indexed.
-	emailExists, err := database.IndexExists(p.db, database.EmailIdxBkt,
-		[]byte(strings.ToLower(email)))
+	err = bcrypt.CompareHashAndPassword([]byte(account.Password),
+		[]byte(password))
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
+		respondWithError(w, http.StatusBadRequest,
+			errors.New("password is incorrect"))
 		return
 	}
 
-	if emailExists {
-		respondWithError(w,
-			http.StatusBadRequest,
-			fmt.Errorf("the email provided ('%s') is registered"+
-				" to another account", email))
-		return
-	}
+	account.Username = username
+	account.Update(p.db)
 
-	usernameExists, err := database.IndexExists(p.db, database.UsernameIdxBkt,
-		[]byte(strings.ToLower(username)))
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	if usernameExists {
-		respondWithError(w,
-			http.StatusBadRequest,
-			fmt.Errorf("the username provided ('%s') is registered"+
-				" to another account", username))
-		return
-	}
-
-	account, err := mgmt.NewAccount(email, username, password)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
-	}
-
-	err = account.Create(p.db)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
-	}
-
-	// Send account activation email.
-
-	respondWithJSON(w, http.StatusCreated,
-		map[string]string{"response": "account created"})
+	respondWithJSON(w, http.StatusOK, account)
 }
 
-// handleRegistration handles new account activations.
-func (p *MiningPool) handleActivation(w http.ResponseWriter, r *http.Request) {
+// handleUpdateAddress handles address updates.
+func (p *MiningPool) handleUpdateAddress(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	id := params["id"]
 
-	account, err := mgmt.GetAccount(p.db, []byte(id))
+	account, err := GetAccount(p.db, []byte(id))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	if account.Status != mgmt.Disabled {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
 		respondWithError(w, http.StatusBadRequest,
-			fmt.Errorf("only disabled accounts can be activated"))
+			fmt.Errorf("Failed to read request body"))
+		return
+	}
+	if len(body) == 0 {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("Invalid request body"))
 		return
 	}
 
-	account.Status = mgmt.Active
+	var payload map[string]interface{}
+	err = json.Unmarshal(body, &payload)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("Request body is invalid json: %v", err))
+		return
+	}
+
+	address, ok := payload["address"].(string)
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("address"))
+		return
+	}
+	password, ok := payload["password"].(string)
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("password"))
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(account.Password),
+		[]byte(password))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest,
+			errors.New("password is incorrect"))
+		return
+	}
+
+	account.Address = address
 	account.Update(p.db)
 
-	respondWithJSON(w, http.StatusCreated, account)
+	respondWithJSON(w, http.StatusOK, account)
+}
+
+// handleUpdateAddress handles address updates.
+func (p *MiningPool) handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	id := params["id"]
+
+	account, err := GetAccount(p.db, []byte(id))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("Failed to read request body"))
+		return
+	}
+	if len(body) == 0 {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("Invalid request body"))
+		return
+	}
+
+	var payload map[string]interface{}
+	err = json.Unmarshal(body, &payload)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("Request body is invalid json: %v", err))
+		return
+	}
+
+	password, ok := payload["password"].(string)
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("password"))
+		return
+	}
+	newPassword, ok := payload["newpassword"].(string)
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("newpassword"))
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(account.Password),
+		[]byte(password))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest,
+			errors.New("old password is incorrect"))
+		return
+	}
+
+	hashedPass, err := bcryptHash(newPassword)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	account.Password = string(hashedPass)
+	account.Update(p.db)
+
+	respondWithStatusCode(w, http.StatusOK)
 }

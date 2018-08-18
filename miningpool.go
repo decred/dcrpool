@@ -16,7 +16,6 @@ import (
 	"github.com/gorilla/websocket"
 
 	"dnldd/dcrpool/database"
-	"dnldd/dcrpool/mgmt"
 	"dnldd/dcrpool/ws"
 )
 
@@ -37,7 +36,6 @@ type MiningPool struct {
 	httpc    *http.Client
 	hub      *ws.Hub
 	router   *mux.Router
-	sessions map[string]*mgmt.Session // k/v -> accountID/Sesssion
 	upgrader websocket.Upgrader
 }
 
@@ -71,7 +69,6 @@ func NewMiningPool(config *config) (*MiningPool, error) {
 	}
 	p.hub = ws.NewHub(p.db, p.httpc)
 	p.upgrader = websocket.Upgrader{}
-	p.sessions = make(map[string]*mgmt.Session)
 
 	return p, nil
 }

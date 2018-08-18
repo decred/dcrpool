@@ -1,54 +1,53 @@
-package mgmt
+package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
-	"github.com/segmentio/ksuid"
-
 	"github.com/coreos/bbolt"
+	"github.com/segmentio/ksuid"
+	"golang.org/x/crypto/bcrypt"
 
 	"dnldd/dcrpool/database"
 )
 
-const (
-	// Activate represents an activated account.
-	Active = "active"
-	// Disabled represents a disabled user account.
-	Disabled = "disabled"
-	// Banned represents a banned user account.
-	Banned = "banned"
-)
-
-// Account represents a mining pool user account. Miners will be required to
-// have an account created in order to authenticate miners to the account.
+// Account represents a mining pool user account.
 type Account struct {
 	UUID       string `json:"uuid"`
-	Email      string `json:"email"`
 	Username   string `json:"username"`
-	Password   string `json:"password"`
 	Address    string `json:"address"`
-	Status     string `json:"status"`
+	Password   string `json:"-"`
 	CreatedOn  uint64 `json:"createdon"`
 	ModifiedOn uint64 `json:"modifiedon"`
 }
 
-// NewAccount initializes a new account.
-func NewAccount(email string, username string, password string) (*Account, error) {
+// bcryptHash generates a bcrypt hash from the supplied plaintext. This should
+// be used to hash passwords before persisting in a database.
+func bcryptHash(plaintext string) ([]byte, error) {
+	hashedPass, err := bcrypt.GenerateFromPassword([]byte(plaintext),
+		bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash plaintext: %v", err)
+	}
+	return hashedPass, nil
+}
+
+// NewAccount generates a new account.
+func NewAccount(username string, address string, password string) (*Account, error) {
 	id, err := ksuid.NewRandom()
 	if err != nil {
 		return nil, err
 	}
-	hashedPass, err := database.BcryptHash(password)
+	hashedPass, err := bcryptHash(password)
 	if err != nil {
 		return nil, err
 	}
 	account := &Account{
 		UUID:       id.String(),
-		Email:      email,
 		Username:   username,
+		Address:    address,
 		Password:   string(hashedPass),
-		Status:     Disabled,
 		CreatedOn:  uint64(time.Now().Unix()),
 		ModifiedOn: 0,
 	}

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	bolt "github.com/coreos/bbolt"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -16,8 +15,6 @@ var (
 	PoolBkt = []byte("poolbkt")
 	// AccountBkt stores all registered accounts for the mining pool.
 	AccountBkt = []byte("accountbkt")
-	// EmailIdxBkt is an index of all account emails.
-	EmailIdxBkt = []byte("emailidxbkt")
 	// UsernameIdxBkt is an index of all account emails.
 	UsernameIdxBkt = []byte("usernameidxbkt")
 
@@ -73,12 +70,6 @@ func CreateBuckets(db *bolt.DB) error {
 				string(AccountBkt), err)
 		}
 
-		_, err = pbkt.CreateBucketIfNotExists(EmailIdxBkt)
-		if err != nil {
-			return fmt.Errorf("failed to create '%v' bucket: %v",
-				string(EmailIdxBkt), err)
-		}
-
 		_, err = pbkt.CreateBucketIfNotExists(UsernameIdxBkt)
 		if err != nil {
 			return fmt.Errorf("failed to create '%v' bucket: %v",
@@ -99,12 +90,15 @@ func Delete(db *bolt.DB, bucket, key []byte) error {
 	return err
 }
 
-// IndexExists asserts if a an idex value exists in the provided bucket.
+// IndexExists asserts if a an index value exists in the provided bucket.
 func IndexExists(db *bolt.DB, bucket, value []byte) (bool, error) {
 	var exists bool
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucket)
-		c := b.Cursor()
+		bkt := tx.Bucket(bucket)
+		if bkt == nil {
+			return ErrBucketNotFound(bucket)
+		}
+		c := bkt.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			if bytes.Contains(value, v) {
 				exists = true
@@ -116,13 +110,16 @@ func IndexExists(db *bolt.DB, bucket, value []byte) (bool, error) {
 	return exists, err
 }
 
-// BcryptHash generates a bcrypt hash from the supplied plaintext. This should
-// be used to hash passwords before persisting in a database.
-func BcryptHash(plaintext string) ([]byte, error) {
-	hashedPass, err := bcrypt.GenerateFromPassword([]byte(plaintext),
-		bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash plaintext: %v", err)
-	}
-	return hashedPass, nil
+// UpdateIndex updates an index entry in the provided bucket.
+func UpdateIndex(db *bolt.DB, bucket []byte, key []byte, value []byte) error {
+	// Update the username index.
+	err := db.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(bucket)
+		if bkt == nil {
+			return ErrBucketNotFound(bucket)
+		}
+		err := bkt.Put(key, value)
+		return err
+	})
+	return err
 }
