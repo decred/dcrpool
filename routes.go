@@ -10,6 +10,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+
+	"github.com/gorilla/mux"
 )
 
 // errParamNotFound is returned when a provided parameter key does not map
@@ -21,6 +23,7 @@ func errParamNotFound(key string) error {
 // setupRoutes configures the accessible routes of the mining pool.
 func (p *MiningPool) setupRoutes() {
 	p.router.HandleFunc("/register", p.handleRegistration)
+	p.router.HandleFunc("/activate/{id}", p.handleActivation)
 	p.router.HandleFunc("/ws", p.handleWebsockets)
 }
 
@@ -133,6 +136,30 @@ func (p *MiningPool) handleRegistration(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Send account activation email.
+
+	respondWithJSON(w, http.StatusCreated,
+		map[string]string{"response": "account created"})
+}
+
+// handleRegistration handles new account activations.
+func (p *MiningPool) handleActivation(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	id := params["id"]
+
+	account, err := mgmt.GetAccount(p.db, []byte(id))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if account.Status != mgmt.Disabled {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("only disabled accounts can be activated"))
+		return
+	}
+
+	account.Status = mgmt.Active
+	account.Update(p.db)
 
 	respondWithJSON(w, http.StatusCreated, account)
 }
