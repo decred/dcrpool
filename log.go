@@ -47,9 +47,10 @@ var (
 	// application shutdown.
 	logRotator *rotator.Rotator
 
-	mpLog = backendLog.Logger("MP")
-	wsLog = backendLog.Logger("WS")
-	dbLog = backendLog.Logger("DB")
+	mpLog  = backendLog.Logger("MP")
+	wsLog  = backendLog.Logger("WS")
+	dbLog  = backendLog.Logger("DB")
+	lmtLog = backendLog.Logger("LMT")
 )
 
 // Initialize package-global logger variables.
@@ -60,9 +61,10 @@ func init() {
 
 // subsystemLoggers maps each subsystem identifier to its associated logger.
 var subsystemLoggers = map[string]slog.Logger{
-	"MP": mpLog,
-	"WS": wsLog,
-	"DB": dbLog,
+	"MP":  mpLog,
+	"WS":  wsLog,
+	"DB":  dbLog,
+	"LMT": lmtLog,
 }
 
 // initLogRotator initializes the logging rotater to write logs to logFile and

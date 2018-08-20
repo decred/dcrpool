@@ -59,10 +59,24 @@ func (p *MiningPool) handleWebsockets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c := ws.NewClient(p.hub, socket)
+	c := ws.NewClient(p.hub, socket, r.RemoteAddr)
 	p.hub.AddClient(c)
+
 	go c.Process()
 	go c.Send()
+}
+
+// limit ensures all incoming requests stay within the rate limit bounds
+// defined.
+func (p *MiningPool) limit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		allow := p.limiter.WithinLimit(r.RemoteAddr)
+		if !allow {
+			http.Error(w, http.StatusText(429), http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // handleCreateAccount handles account creation.

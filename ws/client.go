@@ -17,16 +17,18 @@ type Client struct {
 	hub           *Hub
 	ws            *websocket.Conn
 	ch            chan Message
+	ip            string
 	ticker        *time.Ticker
 	pingRetries   int
 	Authenticated bool
 }
 
 // NewClient initializes a new wesocket client.
-func NewClient(h *Hub, socket *websocket.Conn) *Client {
+func NewClient(h *Hub, socket *websocket.Conn, ip string) *Client {
 	return &Client{
 		hub:           h,
 		ws:            socket,
+		ip:            ip,
 		ch:            make(chan Message),
 		ticker:        time.NewTicker(time.Second * 30),
 		pingRetries:   0,
@@ -56,6 +58,7 @@ func (c *Client) Process() {
 
 	c.ws.SetReadLimit(maxMessageSize)
 	for {
+		// wait for a message.
 		_, data, err := c.ws.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err,
@@ -66,9 +69,16 @@ func (c *Client) Process() {
 			break
 		}
 
+		// Ensure the requesting client is within their request limits.
+		allow := c.hub.limiter.WithinLimit(c.ip)
+		if !allow {
+			c.ch <- tooManyRequestsResponse()
+			continue
+		}
+
+		// Determine if the received message is a request or a response.
 		var req *Request
 		var resp *Response
-
 		req = castReq(data)
 		if req == nil {
 			resp = castResp(data)
@@ -90,7 +100,7 @@ func (c *Client) Process() {
 	}
 }
 
-// Send routes messages to a client.
+// Send messages to a client.
 func (c *Client) Send() {
 	for {
 		select {

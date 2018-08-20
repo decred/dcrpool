@@ -6,13 +6,16 @@ import (
 
 	"github.com/coreos/bbolt"
 	"github.com/gorilla/websocket"
+
+	"dnldd/dcrpool/limiter"
 )
 
 // Hub maintains the set of active clients and facilitates message broadcasting
 // to all active clients.
 type Hub struct {
-	bolt  *bolt.DB
-	httpc *http.Client
+	bolt    *bolt.DB
+	httpc   *http.Client
+	limiter *limiter.RateLimiter
 
 	// The fields below handle message processing.
 	clients   map[*Client]bool
@@ -22,10 +25,11 @@ type Hub struct {
 }
 
 // NewHub initializes a hub.
-func NewHub(bolt *bolt.DB, httpc *http.Client) *Hub {
+func NewHub(bolt *bolt.DB, httpc *http.Client, limiter *limiter.RateLimiter) *Hub {
 	return &Hub{
 		bolt:      bolt,
 		httpc:     httpc,
+		limiter:   limiter,
 		broadcast: make(chan Message),
 		clients:   make(map[*Client]bool),
 		close:     make(chan *Client),

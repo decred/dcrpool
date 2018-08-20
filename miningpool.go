@@ -16,6 +16,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"dnldd/dcrpool/database"
+	"dnldd/dcrpool/limiter"
 	"dnldd/dcrpool/ws"
 )
 
@@ -36,6 +37,7 @@ type MiningPool struct {
 	httpc    *http.Client
 	hub      *ws.Hub
 	router   *mux.Router
+	limiter  *limiter.RateLimiter
 	upgrader websocket.Upgrader
 }
 
@@ -57,7 +59,7 @@ func NewMiningPool(config *config) (*MiningPool, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	p.limiter = limiter.NewRateLimiter()
 	p.router = new(mux.Router)
 	p.setupRoutes()
 	p.server = &http.Server{
@@ -65,9 +67,9 @@ func NewMiningPool(config *config) (*MiningPool, error) {
 		Handler: handlers.CORS(
 			headersOk,
 			originsOk,
-			methodsOk)(p.router),
+			methodsOk)(p.limit(p.router)),
 	}
-	p.hub = ws.NewHub(p.db, p.httpc)
+	p.hub = ws.NewHub(p.db, p.httpc, p.limiter)
 	p.upgrader = websocket.Upgrader{}
 
 	return p, nil

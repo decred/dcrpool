@@ -59,3 +59,13 @@ func pongResponse() *Response {
 		Result: "pong",
 	}
 }
+
+// tooManyRequestsResponse creates a TooManyRequests response.
+func tooManyRequestsResponse() *Response {
+	err := "too many requests"
+	return &Response{
+		ID:     nil,
+		Error:  &err,
+		Result: nil,
+	}
+}
