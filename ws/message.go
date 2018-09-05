@@ -1,70 +1,113 @@
 package ws
 
+import (
+	"encoding/json"
+)
+
+// Message types.
 const (
-	ping = "ping"
-	pong = "pong"
+	RequestType      = "request"
+	ResponseType     = "response"
+	NotificationType = "notification"
 )
 
-var (
-	pingReq  = pingRequest()
-	pongResp = pongResponse()
+// Thresholds.
+const (
+	MaxMessageSize = 1024
+	MaxPingRetries = 3
 )
 
-// Message defines the Haste message interface.
+// Handler types.
+const (
+	Ping = "ping"
+	Pong = "pong"
+)
+
+// Message is the base interface messages exchanged between a websocket client
+// and the server must adhere to.
 type Message interface {
-	GetID() *uint
+	HasID() bool
 }
 
-// Request defines a Haste websocket request message. It specifies the
-// targetted processing method and supplies the required parameters
-// for the targetted method.
+// Request defines a request message. It specifies the targetted processing
+// method and supplies the required parameters.
 type Request struct {
-	ID     *uint       `json:"id"`
+	ID     *uint64     `json:"id"`
 	Method string      `json:"method"`
 	Params interface{} `json:"params"`
 }
 
-// GetID fetches the ID of the request.
-func (req *Request) GetID() *uint {
-	return req.ID
+// HasID determines if the request has an ID.
+func (req *Request) HasID() bool {
+	return req.ID != nil
 }
 
-// Response defines a Haste websocket response message. It bundles the payload
+// Response defines a response message. It bundles the payload
 // of the preceding request and any errors in processing the request, if any.
 type Response struct {
-	ID     *uint       `json:"id"`
+	ID     *uint64     `json:"id"`
 	Error  *string     `json:"error"`
 	Result interface{} `json:"interface"`
 }
 
-// GetID fetches the ID of the request.
-func (resp *Response) GetID() *uint {
-	return resp.ID
+// HasID determines if the response has an ID.
+func (resp *Response) HasID() bool {
+	return resp.ID != nil
 }
 
-// pingRequest creates a ping request.
-func pingRequest() *Request {
+// IdentifyMessage determines the received message type. It returns the message
+// cast to the appropriate message type, the message type and an error type.
+func IdentifyMessage(data []byte) (Message, string, error) {
+	var req Request
+	err := json.Unmarshal(data, &req)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if req.Method != "" {
+		if !req.HasID() {
+			return &req, NotificationType, nil
+		}
+
+		return &req, RequestType, nil
+	}
+
+	var resp Response
+	err = json.Unmarshal(data, &resp)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if !req.HasID() {
+		return &resp, NotificationType, nil
+	}
+	return &resp, ResponseType, nil
+}
+
+// PingRequest is a convenince function for creating ping requests.
+func PingRequest(id *uint64) *Request {
 	return &Request{
-		ID:     nil,
+		ID:     id,
 		Method: "ping",
 		Params: nil,
 	}
 }
 
-// pongResponse creates a pong response.
-func pongResponse() *Response {
+// PongResponse is a convenience function for creating a pong responses.
+func PongResponse(id *uint64) *Response {
 	return &Response{
-		ID:     nil,
+		ID:     id,
 		Error:  nil,
 		Result: "pong",
 	}
 }
 
-// tooManyRequestsResponse creates a TooManyRequests response.
-func tooManyRequestsResponse() *Response {
+// tooManyRequestsResponse is a convenience function for creating
+// TooManyRequests responses.
+func tooManyRequestsResponse(id *uint64) *Response {
 	err := "too many requests"
 	return &Response{
-		ID:     nil,
+		ID:     id,
 		Error:  &err,
 		Result: nil,
 	}

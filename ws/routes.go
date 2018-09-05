@@ -1,17 +1,21 @@
 package ws
 
+import (
+	"sync/atomic"
+)
+
 func processPing(c *Client, m Message) {
 	resp := m.(*Response)
 	if resp == nil {
-		c.hub.close <- c
+		c.cancel()
 		return
 	}
 
 	msg := resp.Result.(string)
-	if msg != pong {
-		c.hub.close <- c
+	if msg != Pong {
+		c.cancel()
 		return
 	}
 
-	c.pingRetries = 0
+	atomic.StoreUint64(&c.pingRetries, 0)
 }

@@ -27,7 +27,7 @@ func (p *MiningPool) setupRoutes() {
 	p.router.HandleFunc("/account/{id}/username", p.handleUpdateUsername)
 	p.router.HandleFunc("/account/{id}/address", p.handleUpdateAddress)
 	p.router.HandleFunc("/account/{id}/password", p.handleUpdatePassword)
-	p.router.HandleFunc("/ws", p.handleWebsockets)
+	p.router.HandleFunc("/ws", p.handleWS)
 }
 
 // respondWithError writes a JSON error message to a request.
@@ -49,21 +49,18 @@ func respondWithStatusCode(w http.ResponseWriter, code int) {
 	w.WriteHeader(code)
 }
 
-// handleWebsockets establishes websocket connections with clients and handles
-// subsequent requests.
-func (p *MiningPool) handleWebsockets(w http.ResponseWriter, r *http.Request) {
+// handleWS establishes websocket connections with clients.
+func (p *MiningPool) handleWS(w http.ResponseWriter, r *http.Request) {
 	// Upgrade the http request to a websocket connection.
-	socket, err := p.upgrader.Upgrade(w, r, nil)
+	conn, err := p.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		mpLog.Error(err)
+		pLog.Error(err)
 		return
 	}
 
-	c := ws.NewClient(p.hub, socket, r.RemoteAddr)
-	p.hub.AddClient(c)
-
-	go c.Process()
-	go c.Send()
+	c := ws.NewClient(p.hub, conn, r.RemoteAddr)
+	go c.Process(c.Ctx)
+	go c.Send(c.Ctx)
 }
 
 // limit ensures all incoming requests stay within the rate limit bounds

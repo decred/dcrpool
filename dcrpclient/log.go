@@ -12,9 +12,6 @@ import (
 
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
-
-	"dnldd/dcrpool/database"
-	"dnldd/dcrpool/ws"
 )
 
 // logWriter implements an io.Writer that outputs to both standard output and
@@ -47,24 +44,16 @@ var (
 	// application shutdown.
 	logRotator *rotator.Rotator
 
-	pLog   = backendLog.Logger("MP")
-	wsLog  = backendLog.Logger("WS")
-	dbLog  = backendLog.Logger("DB")
-	lmtLog = backendLog.Logger("LMT")
+	log = backendLog.Logger("CL")
 )
 
 // Initialize package-global logger variables.
 func init() {
-	ws.UseLogger(wsLog)
-	database.UseLogger(dbLog)
 }
 
 // subsystemLoggers maps each subsystem identifier to its associated logger.
 var subsystemLoggers = map[string]slog.Logger{
-	"MP":  pLog,
-	"WS":  wsLog,
-	"DB":  dbLog,
-	"LMT": lmtLog,
+	"CL": log,
 }
 
 // initLogRotator initializes the logging rotater to write logs to logFile and
@@ -123,7 +112,7 @@ func directionString(inbound bool) string {
 
 // fatalf logs a string, then cleanly exits.
 func fatalf(str string) {
-	pLog.Errorf(str)
+	log.Errorf(str)
 	os.Stdout.Sync()
 	if logRotator != nil {
 		logRotator.Close()

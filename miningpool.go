@@ -5,9 +5,6 @@ package main
 import (
 	"context"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/coreos/bbolt"
@@ -35,6 +32,8 @@ type MiningPool struct {
 	db       *bolt.DB
 	server   *http.Server
 	httpc    *http.Client
+	ctx      context.Context
+	cancel   context.CancelFunc
 	hub      *ws.Hub
 	router   *mux.Router
 	limiter  *limiter.RateLimiter
@@ -71,30 +70,26 @@ func NewMiningPool(config *config) (*MiningPool, error) {
 	}
 	p.hub = ws.NewHub(p.db, p.httpc, p.limiter)
 	p.upgrader = websocket.Upgrader{}
-
+	p.ctx, p.cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	return p, nil
 }
 
-// Shutdown gracefully terminates the server when shutdown is signalled.
-func (p *MiningPool) shutdown(ctx context.Context) context.Context {
-	ctx, done := context.WithCancel(ctx)
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+// listen starts the mining pool server.
+func (p *MiningPool) listen() {
+	err := p.server.ListenAndServeTLS(p.cfg.TLSCert, p.cfg.TLSKey)
+	if err != http.ErrServerClosed {
+		pLog.Error(err)
+		return
+	}
+}
 
-	go func() {
-		defer done()
-		<-quit
-		signal.Stop(quit)
-		close(quit)
-		p.hub.Close()
-		p.db.Close()
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-
-		if err := p.server.Shutdown(ctx); err != nil {
-			mpLog.Errorf("failed at gracefully shuting down server: %v", err)
-		}
-	}()
-
-	return ctx
+// shutdown gracefully terminates the mining pool.
+func (p *MiningPool) shutdown() {
+	pLog.Info("Shutting down dcrpool...")
+	p.hub.Close()
+	p.db.Close()
+	defer p.cancel()
+	if err := p.server.Shutdown(p.ctx); err != nil {
+		pLog.Errorf("Shutdown error: %v", err)
+	}
 }

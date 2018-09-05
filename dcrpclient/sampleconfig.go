@@ -1,7 +1,7 @@
 package main
 
-// ConfigFileContents is a string containing the commented example config for
-// dcrpclient.
+// ConfigFileContents is a string containing the commented example config
+// for dcrpclient.
 const ConfigFileContents = `[Application Options]
 ; ------------------------------------------------------------------------------
 ; Debug settings
@@ -16,11 +16,10 @@ const ConfigFileContents = `[Application Options]
 ; ------------------------------------------------------------------------------
 ; Data settings
 ; ------------------------------------------------------------------------------
-; The home directory of dcrpool.
+; The home directory of dcrpclient.
 ; homedir=
 
-; The directory to store data, dcrpool must keep record of registered
-; users and only accept requests from miners authenticated by these users.  
+; The data directory.  
 ; datadir=
 
 ; The config file directory.  
@@ -28,12 +27,6 @@ const ConfigFileContents = `[Application Options]
 
 ; The log file directory.  
 ; logdir=
-
-; ------------------------------------------------------------------------------
-; DB settings
-; ------------------------------------------------------------------------------
-; The database file.  
-; dbfile=
 
 ; ------------------------------------------------------------------------------
 ; TLS settings
@@ -45,26 +38,8 @@ const ConfigFileContents = `[Application Options]
 ; tlskey=
 
 ; ------------------------------------------------------------------------------
-; RPC settings
-; ------------------------------------------------------------------------------
-; The username and password to authenticate to a dcrd RPC server, dcrpool must 
-; listen in on block template regenerations and update connected miners
-; accordingly. 
-; rpcuser=
-; rpcpass=
-
-; The path to the dcrd RPC certificate file.
-; rpccert=
-
-; ------------------------------------------------------------------------------
 ; Network settings
 ; ------------------------------------------------------------------------------
-; The listening port for incoming requests.  
-; port=
-
-; ------------------------------------------------------------------------------
-; Mining settings
-; ------------------------------------------------------------------------------
-; An address to pay mining subsidy for mined blocks to.
-; miningaddr=
+; The the IP address and port to connect to, in the form ip:port
+; host=
 `

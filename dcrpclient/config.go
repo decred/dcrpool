@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/elliptic"
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -14,33 +15,26 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/certgen"
-	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
 )
 
 const (
-	defaultConfigFilename  = "dcrpool.conf"
-	defaultDataDirname     = "data"
 	defaultLogLevel        = "debug"
-	defaultLogDirname      = "log"
-	defaultLogFilename     = "dcrpool.log"
-	defaultDBFilename      = "dcrpool.kv"
-	defaultRPCCertFilename = "rpc.cert"
+	defaultConfigFilename  = "dcrpclient.conf"
+	defaultHost            = "localhost:25000"
+	defaultDataDirname     = "data"
+	defaultEndpoint        = "wss"
 	defaultTLSCertFilename = "tls.cert"
 	defaultTLSKeyFilename  = "tls.key"
-	defaultPort            = ":25000"
-	defaultRPCUser         = "dcrp"
-	defaultRPCPass         = "dcrppass"
-	defaultMiningAddr      = "TsfDLrRkk9ciUuwfp2b8PawwnukYD7yAjGd"
+	defaultLogDirname      = "log"
+	defaultLogFilename     = "client.log"
 )
 
 var (
-	defaultHomeDir     = "deploy" // dcrutil.AppDataDir("dcrpool", false)
-	defaultConfigFile  = filepath.Join(defaultHomeDir, defaultConfigFilename)
+	defaultHomeDir     = "deploy" // dcrutil.AppDataDir("dcrpclient", false)
 	defaultDataDir     = filepath.Join(defaultHomeDir, defaultDataDirname)
-	defaultDBFile      = filepath.Join(defaultDataDir, defaultDBFilename)
-	defaultRPCCertFile = filepath.Join(defaultDataDir, defaultRPCCertFilename)
+	defaultConfigFile  = filepath.Join(defaultHomeDir, defaultConfigFilename)
 	defaultTLSCertFile = filepath.Join(defaultDataDir, defaultTLSCertFilename)
 	defaultTLSKeyFile  = filepath.Join(defaultDataDir, defaultTLSKeyFilename)
 	defaultLogDir      = filepath.Join(defaultHomeDir, defaultLogDirname)
@@ -50,25 +44,17 @@ var (
 // to parse and execute service commands specified via the -s flag.
 var runServiceCommand func(string) error
 
-// TODO: add generating a TLS cert for the mining pool to the config if
-// path provided does not exist
-
-// config defines the configuration options for hastepool.
+// config describes the connection parameters for the client.
 type config struct {
-	HomeDir    string `long:"homedir" description:"Path to application home directory"`
-	ConfigFile string `long:"configfile" description:"Path to configuration file"`
-	DataDir    string `long:"datadir" description:"The data directory"`
-	DebugLevel string `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
-	LogDir     string `long:"logdir" description:"Directory to log output."`
-	DBFile     string `long:"dbfile" description:"Path to the database file"`
-	RPCUser    string `long:"rpcuser" description:"Username for RPC connections"`
-	RPCPass    string `long:"rpcpass" default-mask:"-" description:"Password for RPC connections"`
-	RPCCert    string `long:"rpccert" description:"The RPC certificate file"`
-	TLSCert    string `long:"tlscert" description:"The TLS certificate file"`
-	TLSKey     string `long:"tlskey" description:"The TLS private key"`
-	MiningAddr string `long:"miningaddr" description:"The payment address for generated blocks"`
-	Port       string `long:"port" description:"The listening port"`
-	miningAddr dcrutil.Address
+	HomeDir     string `long:"homedir" description:"Path to application home directory"`
+	ConfigFile  string `long:"configfile" description:"Path to configuration file"`
+	Host        string `long:"host" description:"The ip address and port of the mining pool"`
+	DataDir     string `long:"datadir" description:"The data directory"`
+	DebugLevel  string `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
+	LogDir      string `long:"logdir" description:"Directory to log output."`
+	TLSCert     string `long:"tlscert" description:"The TLS certificate file"`
+	TLSKey      string `long:"tlskey" description:"The TLS private key"`
+	certificate tls.Certificate
 }
 
 // serviceOptions defines the configuration options for the daemon as a service on
@@ -234,28 +220,18 @@ func createConfigFile(preCfg config) error {
 	homeDirRE := regexp.MustCompile(`(?m)^;\s*homedir=[^\s]*$`)
 	dataDirRE := regexp.MustCompile(`(?m)^;\s*datadir=[^\s]*$`)
 	configFileRE := regexp.MustCompile(`(?m)^;\s*configfile=[^\s]*$`)
-	dbFileRE := regexp.MustCompile(`(?m)^;\s*dbfile=[^\s]*$`)
 	logDirRE := regexp.MustCompile(`(?m)^;\s*logdir=[^\s]*$`)
-	portRE := regexp.MustCompile(`(?m)^;\s*port=[^\s]*$`)
-	rpcUserRE := regexp.MustCompile(`(?m)^;\s*rpcuser=[^\s]*$`)
-	rpcPassRE := regexp.MustCompile(`(?m)^;\s*rpcpass=[^\s]*$`)
-	rpcCertRE := regexp.MustCompile(`(?m)^;\s*rpccert=[^\s]*$`)
+	hostRE := regexp.MustCompile(`(?m)^;\s*host=[^\s]*$`)
 	tlsCertRE := regexp.MustCompile(`(?m)^;\s*tlscert=[^\s]*$`)
 	tlsKeyRE := regexp.MustCompile(`(?m)^;\s*tlskey=[^\s]*$`)
-	miningAddrRE := regexp.MustCompile(`(?m)^;\s*miningaddr=[^\s]*$`)
 	s := homeDirRE.ReplaceAllString(ConfigFileContents, fmt.Sprintf("homedir=%s", preCfg.HomeDir))
 	s = debugLevelRE.ReplaceAllString(s, fmt.Sprintf("debuglevel=%s", preCfg.DebugLevel))
 	s = dataDirRE.ReplaceAllString(s, fmt.Sprintf("datadir=%s", preCfg.DataDir))
 	s = configFileRE.ReplaceAllString(s, fmt.Sprintf("configfile=%s", preCfg.ConfigFile))
-	s = dbFileRE.ReplaceAllString(s, fmt.Sprintf("dbfile=%s", preCfg.DBFile))
+	s = hostRE.ReplaceAllString(s, fmt.Sprintf("dbfile=%s", preCfg.Host))
 	s = logDirRE.ReplaceAllString(s, fmt.Sprintf("logdir=%s", preCfg.LogDir))
-	s = portRE.ReplaceAllString(s, fmt.Sprintf("port=%s", preCfg.Port))
-	s = rpcUserRE.ReplaceAllString(s, fmt.Sprintf("rpcuser=%s", preCfg.RPCUser))
-	s = rpcPassRE.ReplaceAllString(s, fmt.Sprintf("rpcpass=%s", preCfg.RPCPass))
-	s = rpcCertRE.ReplaceAllString(s, fmt.Sprintf("rpccert=%s", preCfg.RPCCert))
 	s = tlsCertRE.ReplaceAllString(s, fmt.Sprintf("tlscert=%s", preCfg.TLSCert))
 	s = tlsKeyRE.ReplaceAllString(s, fmt.Sprintf("tlskey=%s", preCfg.TLSKey))
-	s = miningAddrRE.ReplaceAllString(s, fmt.Sprintf("miningaddr=%s", preCfg.MiningAddr))
 
 	// Create config file at the provided path.
 	dest, err := os.OpenFile(preCfg.ConfigFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
@@ -285,17 +261,12 @@ func loadConfig() (*config, []string, error) {
 	cfg := config{
 		HomeDir:    defaultHomeDir,
 		ConfigFile: defaultConfigFile,
+		Host:       defaultHost,
 		DataDir:    defaultDataDir,
-		DBFile:     defaultDBFile,
-		DebugLevel: defaultLogLevel,
-		LogDir:     defaultLogDir,
-		Port:       defaultPort,
-		RPCUser:    defaultRPCUser,
-		RPCPass:    defaultRPCPass,
-		RPCCert:    defaultRPCCertFile,
 		TLSCert:    defaultTLSCertFile,
 		TLSKey:     defaultTLSKeyFile,
-		MiningAddr: defaultMiningAddr,
+		DebugLevel: defaultLogLevel,
+		LogDir:     defaultLogDir,
 	}
 
 	// Service options which are only added on Windows.
@@ -333,7 +304,7 @@ func loadConfig() (*config, []string, error) {
 		os.Exit(0)
 	}
 
-	// Update the home directory for dcrpool if specified. Since the home
+	// Update the home directory for dcrpcclient if specified. Since the home
 	// directory is updated, other variables need to be updated to
 	// reflect the new changes.
 	if preCfg.HomeDir != "" {
@@ -347,15 +318,18 @@ func loadConfig() (*config, []string, error) {
 		} else {
 			cfg.ConfigFile = preCfg.ConfigFile
 		}
+		if preCfg.ConfigFile == defaultConfigFile {
+			defaultConfigFile = filepath.Join(cfg.HomeDir,
+				defaultConfigFilename)
+			preCfg.ConfigFile = defaultConfigFile
+			cfg.ConfigFile = defaultConfigFile
+		} else {
+			cfg.ConfigFile = preCfg.ConfigFile
+		}
 		if preCfg.DataDir == defaultDataDir {
 			cfg.DataDir = filepath.Join(cfg.HomeDir, defaultDataDirname)
 		} else {
 			cfg.DataDir = preCfg.DataDir
-		}
-		if preCfg.RPCCert == defaultRPCCertFile {
-			cfg.RPCCert = filepath.Join(cfg.DataDir, defaultRPCCertFilename)
-		} else {
-			cfg.RPCCert = preCfg.RPCCert
 		}
 		if preCfg.TLSCert == defaultTLSCertFile {
 			cfg.TLSCert = filepath.Join(cfg.DataDir, defaultTLSCertFilename)
@@ -371,11 +345,6 @@ func loadConfig() (*config, []string, error) {
 			cfg.LogDir = filepath.Join(cfg.HomeDir, defaultLogDirname)
 		} else {
 			cfg.LogDir = preCfg.LogDir
-		}
-		if preCfg.DBFile == defaultDBFile {
-			cfg.DBFile = filepath.Join(cfg.DataDir, defaultDBFilename)
-		} else {
-			cfg.DBFile = preCfg.DBFile
 		}
 	}
 
@@ -456,26 +425,14 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	// Check mining address is valid.
-	addr, err := dcrutil.DecodeAddress(cfg.MiningAddr)
-	if err != nil {
-		str := "%s: mining address '%s' failed to decode: %v"
-		err := fmt.Errorf(str, funcName, addr, err)
-		fmt.Fprintln(os.Stderr, err)
-		fmt.Fprintln(os.Stderr, usageMessage)
-		return nil, nil, err
-	}
-	cfg.miningAddr = addr
-	// TODO: ensure the mining address originates from the active network.
-
 	// Warn about missing config file only after all other configuration is
 	// done. This prevents the warning on help messages and invalid
 	// options. Note this should go directly before the return.
 	if configFileError != nil {
-		pLog.Warnf("%v", configFileError)
+		log.Debugf("%v", configFileError)
 	}
 
-	// Create TLS certificate and key if the certificate it does not exist.
+	// Create TLS certificate and key if the certificate does not exist.
 	if !fileExists(cfg.TLSCert) {
 		err := os.MkdirAll(cfg.DataDir, 0700)
 		if err != nil {
@@ -486,7 +443,7 @@ func loadConfig() (*config, []string, error) {
 		// Generated certificate will have 5 years of validity.
 		validUntil := time.Now().Add(time.Duration(5) * 365 * 24 * time.Hour)
 		cert, key, err := certgen.NewTLSCertPair(elliptic.P521(),
-			"dcrpool", validUntil, nil)
+			"dcrpclient", validUntil, nil)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create TLS certificate "+
 				"file %v", err)
@@ -502,6 +459,13 @@ func loadConfig() (*config, []string, error) {
 			return nil, nil, fmt.Errorf("cannot write TLS key: %v", err)
 		}
 	}
+
+	keypair, err := tls.LoadX509KeyPair(cfg.TLSCert, cfg.TLSKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cfg.certificate = keypair
 
 	return &cfg, remainingArgs, nil
 }

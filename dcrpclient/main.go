@@ -7,9 +7,6 @@ import (
 	"runtime"
 )
 
-var cfg *config
-var pool *MiningPool
-
 func main() {
 	// Use all processor cores.
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -25,28 +22,25 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+
 	defer func() {
 		if logRotator != nil {
 			logRotator.Close()
 		}
 	}()
 
-	pLog.Infof("Version: %s", version())
-	pLog.Infof("Runtime: Go version %s", runtime.Version())
-	pLog.Infof("Home dir: %s", cfg.HomeDir)
-	pLog.Infof("Started dcrpool")
-
-	p, err := NewMiningPool(cfg)
+	// Initialize the client.
+	pc, err := newClient(cfg)
 	if err != nil {
-		pLog.Error(err)
+		log.Errorf("Failed to create client: %v", err)
 		return
 	}
 
-	go p.listen()
+	go pc.processMessages()
 	for {
 		select {
 		case <-interrupt:
-			go p.shutdown()
+			pc.cancel()
 			return
 		}
 	}
