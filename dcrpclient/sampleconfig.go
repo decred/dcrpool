@@ -19,23 +19,11 @@ const ConfigFileContents = `[Application Options]
 ; The home directory of dcrpclient.
 ; homedir=
 
-; The data directory.  
-; datadir=
-
 ; The config file directory.  
 ; configfile=
 
-; The log file directory.  
+; The log output directory.  
 ; logdir=
-
-; ------------------------------------------------------------------------------
-; TLS settings
-; ------------------------------------------------------------------------------
-; The TLS certificate.
-; tlscert=
-
-; The TLS private key.
-; tlskey=
 
 ; ------------------------------------------------------------------------------
 ; Network settings

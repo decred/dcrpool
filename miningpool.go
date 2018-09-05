@@ -74,9 +74,9 @@ func NewMiningPool(config *config) (*MiningPool, error) {
 	return p, nil
 }
 
-// listen starts the mining pool server.
+// listen starts the mining pool server for incoming connections.
 func (p *MiningPool) listen() {
-	err := p.server.ListenAndServeTLS(p.cfg.TLSCert, p.cfg.TLSKey)
+	err := p.server.ListenAndServe()
 	if err != http.ErrServerClosed {
 		pLog.Error(err)
 		return

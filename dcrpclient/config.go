@@ -1,10 +1,7 @@
 package main
 
 import (
-	"crypto/elliptic"
-	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -12,32 +9,24 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/decred/dcrd/certgen"
 	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
 )
 
 const (
-	defaultLogLevel        = "debug"
-	defaultConfigFilename  = "dcrpclient.conf"
-	defaultHost            = "localhost:25000"
-	defaultDataDirname     = "data"
-	defaultEndpoint        = "wss"
-	defaultTLSCertFilename = "tls.cert"
-	defaultTLSKeyFilename  = "tls.key"
-	defaultLogDirname      = "log"
-	defaultLogFilename     = "client.log"
+	defaultLogLevel       = "debug"
+	defaultConfigFilename = "dcrpclient.conf"
+	defaultHost           = "localhost:25000"
+	defaultEndpoint       = "wss"
+	defaultLogDirname     = "log"
+	defaultLogFilename    = "dcrpclient.log"
 )
 
 var (
-	defaultHomeDir     = "deploy" // dcrutil.AppDataDir("dcrpclient", false)
-	defaultDataDir     = filepath.Join(defaultHomeDir, defaultDataDirname)
-	defaultConfigFile  = filepath.Join(defaultHomeDir, defaultConfigFilename)
-	defaultTLSCertFile = filepath.Join(defaultDataDir, defaultTLSCertFilename)
-	defaultTLSKeyFile  = filepath.Join(defaultDataDir, defaultTLSKeyFilename)
-	defaultLogDir      = filepath.Join(defaultHomeDir, defaultLogDirname)
+	defaultHomeDir    = "deploy" // dcrutil.AppDataDir("dcrpclient", false)
+	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFilename)
+	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogDirname)
 )
 
 // runServiceCommand is only set to a real function on Windows.  It is used
@@ -46,15 +35,11 @@ var runServiceCommand func(string) error
 
 // config describes the connection parameters for the client.
 type config struct {
-	HomeDir     string `long:"homedir" description:"Path to application home directory"`
-	ConfigFile  string `long:"configfile" description:"Path to configuration file"`
-	Host        string `long:"host" description:"The ip address and port of the mining pool"`
-	DataDir     string `long:"datadir" description:"The data directory"`
-	DebugLevel  string `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
-	LogDir      string `long:"logdir" description:"Directory to log output."`
-	TLSCert     string `long:"tlscert" description:"The TLS certificate file"`
-	TLSKey      string `long:"tlskey" description:"The TLS private key"`
-	certificate tls.Certificate
+	HomeDir    string `long:"homedir" description:"Path to application home directory"`
+	ConfigFile string `long:"configfile" description:"Path to configuration file"`
+	Host       string `long:"host" description:"The ip address and port of the mining pool in the form ip:port"`
+	DebugLevel string `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
+	LogDir     string `long:"logdir" description:"The log output directory."`
 }
 
 // serviceOptions defines the configuration options for the daemon as a service on
@@ -218,20 +203,14 @@ func createConfigFile(preCfg config) error {
 	// Replace the sample configuration file contents with the provided values.
 	debugLevelRE := regexp.MustCompile(`(?m)^;\s*debuglevel=[^\s]*$`)
 	homeDirRE := regexp.MustCompile(`(?m)^;\s*homedir=[^\s]*$`)
-	dataDirRE := regexp.MustCompile(`(?m)^;\s*datadir=[^\s]*$`)
 	configFileRE := regexp.MustCompile(`(?m)^;\s*configfile=[^\s]*$`)
 	logDirRE := regexp.MustCompile(`(?m)^;\s*logdir=[^\s]*$`)
 	hostRE := regexp.MustCompile(`(?m)^;\s*host=[^\s]*$`)
-	tlsCertRE := regexp.MustCompile(`(?m)^;\s*tlscert=[^\s]*$`)
-	tlsKeyRE := regexp.MustCompile(`(?m)^;\s*tlskey=[^\s]*$`)
 	s := homeDirRE.ReplaceAllString(ConfigFileContents, fmt.Sprintf("homedir=%s", preCfg.HomeDir))
 	s = debugLevelRE.ReplaceAllString(s, fmt.Sprintf("debuglevel=%s", preCfg.DebugLevel))
-	s = dataDirRE.ReplaceAllString(s, fmt.Sprintf("datadir=%s", preCfg.DataDir))
 	s = configFileRE.ReplaceAllString(s, fmt.Sprintf("configfile=%s", preCfg.ConfigFile))
 	s = hostRE.ReplaceAllString(s, fmt.Sprintf("dbfile=%s", preCfg.Host))
 	s = logDirRE.ReplaceAllString(s, fmt.Sprintf("logdir=%s", preCfg.LogDir))
-	s = tlsCertRE.ReplaceAllString(s, fmt.Sprintf("tlscert=%s", preCfg.TLSCert))
-	s = tlsKeyRE.ReplaceAllString(s, fmt.Sprintf("tlskey=%s", preCfg.TLSKey))
 
 	// Create config file at the provided path.
 	dest, err := os.OpenFile(preCfg.ConfigFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
@@ -262,9 +241,6 @@ func loadConfig() (*config, []string, error) {
 		HomeDir:    defaultHomeDir,
 		ConfigFile: defaultConfigFile,
 		Host:       defaultHost,
-		DataDir:    defaultDataDir,
-		TLSCert:    defaultTLSCertFile,
-		TLSKey:     defaultTLSKeyFile,
 		DebugLevel: defaultLogLevel,
 		LogDir:     defaultLogDir,
 	}
@@ -325,21 +301,6 @@ func loadConfig() (*config, []string, error) {
 			cfg.ConfigFile = defaultConfigFile
 		} else {
 			cfg.ConfigFile = preCfg.ConfigFile
-		}
-		if preCfg.DataDir == defaultDataDir {
-			cfg.DataDir = filepath.Join(cfg.HomeDir, defaultDataDirname)
-		} else {
-			cfg.DataDir = preCfg.DataDir
-		}
-		if preCfg.TLSCert == defaultTLSCertFile {
-			cfg.TLSCert = filepath.Join(cfg.DataDir, defaultTLSCertFilename)
-		} else {
-			cfg.TLSCert = preCfg.TLSCert
-		}
-		if preCfg.TLSKey == defaultTLSKeyFile {
-			cfg.TLSKey = filepath.Join(cfg.DataDir, defaultTLSKeyFilename)
-		} else {
-			cfg.TLSKey = preCfg.TLSKey
 		}
 		if preCfg.LogDir == defaultLogDir {
 			cfg.LogDir = filepath.Join(cfg.HomeDir, defaultLogDirname)
@@ -403,7 +364,6 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	cfg.DataDir = cleanAndExpandPath(cfg.DataDir)
 	cfg.LogDir = cleanAndExpandPath(cfg.LogDir)
 	logRotator = nil
 
@@ -431,41 +391,6 @@ func loadConfig() (*config, []string, error) {
 	if configFileError != nil {
 		log.Debugf("%v", configFileError)
 	}
-
-	// Create TLS certificate and key if the certificate does not exist.
-	if !fileExists(cfg.TLSCert) {
-		err := os.MkdirAll(cfg.DataDir, 0700)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to create log directory: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Generated certificate will have 5 years of validity.
-		validUntil := time.Now().Add(time.Duration(5) * 365 * 24 * time.Hour)
-		cert, key, err := certgen.NewTLSCertPair(elliptic.P521(),
-			"dcrpclient", validUntil, nil)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create TLS certificate "+
-				"file %v", err)
-		}
-
-		// Write cert and key files.
-		if err = ioutil.WriteFile(cfg.TLSCert, cert, 0644); err != nil {
-			return nil, nil, fmt.Errorf("cannot write TLS cert: %v", err)
-		}
-
-		if err = ioutil.WriteFile(cfg.TLSKey, key, 0600); err != nil {
-			os.Remove(cfg.TLSCert)
-			return nil, nil, fmt.Errorf("cannot write TLS key: %v", err)
-		}
-	}
-
-	keypair, err := tls.LoadX509KeyPair(cfg.TLSCert, cfg.TLSKey)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	cfg.certificate = keypair
 
 	return &cfg, remainingArgs, nil
 }

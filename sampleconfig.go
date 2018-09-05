@@ -36,15 +36,6 @@ const ConfigFileContents = `[Application Options]
 ; dbfile=
 
 ; ------------------------------------------------------------------------------
-; TLS settings
-; ------------------------------------------------------------------------------
-; The TLS certificate.
-; tlscert=
-
-; The TLS private key.
-; tlskey=
-
-; ------------------------------------------------------------------------------
 ; RPC settings
 ; ------------------------------------------------------------------------------
 ; The username and password to authenticate to a dcrd RPC server, dcrpool must 

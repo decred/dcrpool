@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"dnldd/dcrpool/ws"
 	"fmt"
 	"net/http"
@@ -13,7 +12,8 @@ import (
 )
 
 const (
-	scheme = "wss"
+	scheme   = "ws"
+	endpoint = "ws"
 )
 
 // Client connects a miner to the mining pool for block template updates
@@ -48,6 +48,7 @@ out:
 	for {
 		select {
 		case <-pc.ctx.Done():
+			// Send a close message.
 			pc.Conn.WriteMessage(websocket.CloseMessage,
 				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			time.Sleep(time.Second * 5)
@@ -55,11 +56,15 @@ out:
 		default:
 			_, data, err := pc.Conn.ReadMessage()
 			if err != nil {
-				log.Error(err)
+				if websocket.IsUnexpectedCloseError(err,
+					websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Errorf("Websocket read error: %v", err)
+				}
 				pc.cancel()
 				continue
 			}
 
+			// Identify the message type and proceed to handle accordingly.
 			msg, reqType, err := ws.IdentifyMessage(data)
 			if err != nil {
 				log.Errorf("Websocket message error: %v", err)
@@ -72,7 +77,6 @@ out:
 				req := msg.(*ws.Request)
 				switch req.Method {
 				case ws.Ping:
-					log.Debug("responding")
 					pc.Conn.WriteJSON(ws.PongResponse(req.ID))
 					if err != nil {
 						log.Errorf("Websockect write error: %v", err)
@@ -90,45 +94,16 @@ out:
 	os.Exit(1)
 }
 
-// handleInterrupt gracefully terminates the pool client when a interrupt signal
-// is recieved.
-// func (pc *Client) processInterrupt(interrupt chan os.Signal,
-// 	cancel context.CancelFunc) {
-
-// }
-
-// dial opens a websocket connection using the passed connection configuration
+// dial opens a websocket connection using the provided connection configuration
 // details.
 func dial(cfg *config) (*websocket.Conn, error) {
-	var tlsConfig *tls.Config
-	var scheme = "wss"
-	tlsConfig = &tls.Config{
-		Certificates:       []tls.Certificate{cfg.certificate},
-		InsecureSkipVerify: true,
-		MinVersion:         tls.VersionTLS12,
-	}
-	// if len(cfg.cert) > 0 {
-	// 	pool := x509.NewCertPool()
-	// 	pool.AppendCertsFromPEM(cfg.cert)
-	// 	tlsConfig.RootCAs = pool
-	// }
-
 	// Create the websocket dialer.
-	dialer := websocket.Dialer{TLSClientConfig: tlsConfig}
+	dialer := new(websocket.Dialer)
 	dialer.ReadBufferSize = ws.MaxMessageSize
 	dialer.WriteBufferSize = ws.MaxMessageSize
 
-	// TODO: Authenticate the connection
-	// The mining pool server requires basic authorization, so create a custom
-	// request header with the Authorization header set.
-	// login := config.User + ":" + config.Pass
-	// auth := "Basic " + base64.StdEncoding.EncodeToString([]byte(login))
-	// requestHeader := make(http.Header)
-	// requestHeader.Add("Authorization", auth)
-
 	// Dial the connection.
-	url := fmt.Sprintf("%s://%s/%s", scheme, cfg.Host, "ws")
-	// wsConn, resp, err := dialer.Dial(url, requestHeader)
+	url := fmt.Sprintf("%s://%s/%s", scheme, cfg.Host, endpoint)
 	wsConn, resp, err := dialer.Dial(url, nil)
 	if err != nil {
 		if err != websocket.ErrBadHandshake || resp == nil {
@@ -152,5 +127,6 @@ func dial(cfg *config) (*websocket.Conn, error) {
 		// cases above apply.
 		return nil, fmt.Errorf("Connection error: %v, %v", err, resp.Status)
 	}
+
 	return wsConn, nil
 }

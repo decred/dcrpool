@@ -2,6 +2,7 @@ package ws
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -14,6 +15,7 @@ type Client struct {
 	id            uint64
 	ws            *websocket.Conn
 	ch            chan Message
+	mtx           sync.RWMutex
 	Ctx           context.Context
 	cancel        context.CancelFunc
 	ip            string
@@ -50,7 +52,10 @@ out:
 			// Wait for a message.
 			_, data, err := c.ws.ReadMessage()
 			if err != nil {
-				log.Debug(err)
+				if websocket.IsUnexpectedCloseError(err,
+					websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Errorf("Websocket read error: %v", err)
+				}
 				c.cancel()
 				continue
 			}
@@ -76,12 +81,12 @@ out:
 				// Process message.
 				}
 			case ResponseType:
-				// The only response type expected from connected clients are ping
-				// responses.
+				// The only response type expected from connected clients are
+				// ping responses.
 				processPing(c, msg)
 			case NotificationType:
 			default:
-				log.Errorf("Unknown message type recieved")
+				log.Errorf("Unknown message type received")
 			}
 		}
 	}
@@ -99,7 +104,6 @@ out:
 			close(c.ch)
 			break out
 		case <-c.ticker.C:
-			log.Info("sending ping")
 			// Close the connection if unreachable after 3 pings.
 			retries := atomic.LoadUint64(&c.pingRetries)
 			if retries == MaxPingRetries {

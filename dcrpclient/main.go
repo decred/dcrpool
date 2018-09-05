@@ -36,6 +36,11 @@ func main() {
 		return
 	}
 
+	log.Infof("Version: %s", version())
+	log.Infof("Runtime: Go version %s", runtime.Version())
+	log.Infof("Home dir: %s", cfg.HomeDir)
+	log.Infof("Started dcrpclient.")
+
 	go pc.processMessages()
 	for {
 		select {

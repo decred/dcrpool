@@ -1,9 +1,7 @@
 package main
 
 import (
-	"crypto/elliptic"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -11,9 +9,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/decred/dcrd/certgen"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
@@ -27,8 +23,6 @@ const (
 	defaultLogFilename     = "dcrpool.log"
 	defaultDBFilename      = "dcrpool.kv"
 	defaultRPCCertFilename = "rpc.cert"
-	defaultTLSCertFilename = "tls.cert"
-	defaultTLSKeyFilename  = "tls.key"
 	defaultPort            = ":25000"
 	defaultRPCUser         = "dcrp"
 	defaultRPCPass         = "dcrppass"
@@ -41,17 +35,12 @@ var (
 	defaultDataDir     = filepath.Join(defaultHomeDir, defaultDataDirname)
 	defaultDBFile      = filepath.Join(defaultDataDir, defaultDBFilename)
 	defaultRPCCertFile = filepath.Join(defaultDataDir, defaultRPCCertFilename)
-	defaultTLSCertFile = filepath.Join(defaultDataDir, defaultTLSCertFilename)
-	defaultTLSKeyFile  = filepath.Join(defaultDataDir, defaultTLSKeyFilename)
 	defaultLogDir      = filepath.Join(defaultHomeDir, defaultLogDirname)
 )
 
 // runServiceCommand is only set to a real function on Windows.  It is used
 // to parse and execute service commands specified via the -s flag.
 var runServiceCommand func(string) error
-
-// TODO: add generating a TLS cert for the mining pool to the config if
-// path provided does not exist
 
 // config defines the configuration options for hastepool.
 type config struct {
@@ -64,8 +53,6 @@ type config struct {
 	RPCUser    string `long:"rpcuser" description:"Username for RPC connections"`
 	RPCPass    string `long:"rpcpass" default-mask:"-" description:"Password for RPC connections"`
 	RPCCert    string `long:"rpccert" description:"The RPC certificate file"`
-	TLSCert    string `long:"tlscert" description:"The TLS certificate file"`
-	TLSKey     string `long:"tlskey" description:"The TLS private key"`
 	MiningAddr string `long:"miningaddr" description:"The payment address for generated blocks"`
 	Port       string `long:"port" description:"The listening port"`
 	miningAddr dcrutil.Address
@@ -240,8 +227,6 @@ func createConfigFile(preCfg config) error {
 	rpcUserRE := regexp.MustCompile(`(?m)^;\s*rpcuser=[^\s]*$`)
 	rpcPassRE := regexp.MustCompile(`(?m)^;\s*rpcpass=[^\s]*$`)
 	rpcCertRE := regexp.MustCompile(`(?m)^;\s*rpccert=[^\s]*$`)
-	tlsCertRE := regexp.MustCompile(`(?m)^;\s*tlscert=[^\s]*$`)
-	tlsKeyRE := regexp.MustCompile(`(?m)^;\s*tlskey=[^\s]*$`)
 	miningAddrRE := regexp.MustCompile(`(?m)^;\s*miningaddr=[^\s]*$`)
 	s := homeDirRE.ReplaceAllString(ConfigFileContents, fmt.Sprintf("homedir=%s", preCfg.HomeDir))
 	s = debugLevelRE.ReplaceAllString(s, fmt.Sprintf("debuglevel=%s", preCfg.DebugLevel))
@@ -253,8 +238,6 @@ func createConfigFile(preCfg config) error {
 	s = rpcUserRE.ReplaceAllString(s, fmt.Sprintf("rpcuser=%s", preCfg.RPCUser))
 	s = rpcPassRE.ReplaceAllString(s, fmt.Sprintf("rpcpass=%s", preCfg.RPCPass))
 	s = rpcCertRE.ReplaceAllString(s, fmt.Sprintf("rpccert=%s", preCfg.RPCCert))
-	s = tlsCertRE.ReplaceAllString(s, fmt.Sprintf("tlscert=%s", preCfg.TLSCert))
-	s = tlsKeyRE.ReplaceAllString(s, fmt.Sprintf("tlskey=%s", preCfg.TLSKey))
 	s = miningAddrRE.ReplaceAllString(s, fmt.Sprintf("miningaddr=%s", preCfg.MiningAddr))
 
 	// Create config file at the provided path.
@@ -293,8 +276,6 @@ func loadConfig() (*config, []string, error) {
 		RPCUser:    defaultRPCUser,
 		RPCPass:    defaultRPCPass,
 		RPCCert:    defaultRPCCertFile,
-		TLSCert:    defaultTLSCertFile,
-		TLSKey:     defaultTLSKeyFile,
 		MiningAddr: defaultMiningAddr,
 	}
 
@@ -356,16 +337,6 @@ func loadConfig() (*config, []string, error) {
 			cfg.RPCCert = filepath.Join(cfg.DataDir, defaultRPCCertFilename)
 		} else {
 			cfg.RPCCert = preCfg.RPCCert
-		}
-		if preCfg.TLSCert == defaultTLSCertFile {
-			cfg.TLSCert = filepath.Join(cfg.DataDir, defaultTLSCertFilename)
-		} else {
-			cfg.TLSCert = preCfg.TLSCert
-		}
-		if preCfg.TLSKey == defaultTLSKeyFile {
-			cfg.TLSKey = filepath.Join(cfg.DataDir, defaultTLSKeyFilename)
-		} else {
-			cfg.TLSKey = preCfg.TLSKey
 		}
 		if preCfg.LogDir == defaultLogDir {
 			cfg.LogDir = filepath.Join(cfg.HomeDir, defaultLogDirname)
@@ -473,34 +444,6 @@ func loadConfig() (*config, []string, error) {
 	// options. Note this should go directly before the return.
 	if configFileError != nil {
 		pLog.Warnf("%v", configFileError)
-	}
-
-	// Create TLS certificate and key if the certificate it does not exist.
-	if !fileExists(cfg.TLSCert) {
-		err := os.MkdirAll(cfg.DataDir, 0700)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to create log directory: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Generated certificate will have 5 years of validity.
-		validUntil := time.Now().Add(time.Duration(5) * 365 * 24 * time.Hour)
-		cert, key, err := certgen.NewTLSCertPair(elliptic.P521(),
-			"dcrpool", validUntil, nil)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create TLS certificate "+
-				"file %v", err)
-		}
-
-		// Write cert and key files.
-		if err = ioutil.WriteFile(cfg.TLSCert, cert, 0644); err != nil {
-			return nil, nil, fmt.Errorf("cannot write TLS cert: %v", err)
-		}
-
-		if err = ioutil.WriteFile(cfg.TLSKey, key, 0600); err != nil {
-			os.Remove(cfg.TLSCert)
-			return nil, nil, fmt.Errorf("cannot write TLS key: %v", err)
-		}
 	}
 
 	return &cfg, remainingArgs, nil

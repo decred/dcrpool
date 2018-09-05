@@ -31,16 +31,16 @@ func main() {
 		}
 	}()
 
-	pLog.Infof("Version: %s", version())
-	pLog.Infof("Runtime: Go version %s", runtime.Version())
-	pLog.Infof("Home dir: %s", cfg.HomeDir)
-	pLog.Infof("Started dcrpool")
-
 	p, err := NewMiningPool(cfg)
 	if err != nil {
 		pLog.Error(err)
 		return
 	}
+
+	pLog.Infof("Version: %s", version())
+	pLog.Infof("Runtime: Go version %s", runtime.Version())
+	pLog.Infof("Home dir: %s", cfg.HomeDir)
+	pLog.Infof("Started dcrpool.")
 
 	go p.listen()
 	for {
