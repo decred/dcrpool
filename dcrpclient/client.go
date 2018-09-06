@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"dnldd/dcrpool/ws"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
@@ -57,7 +58,8 @@ out:
 			_, data, err := pc.Conn.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err,
-					websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					websocket.CloseGoingAway, websocket.CloseAbnormalClosure,
+					websocket.CloseNormalClosure) {
 					log.Errorf("Websocket read error: %v", err)
 				}
 				pc.cancel()
@@ -102,9 +104,15 @@ func dial(cfg *config) (*websocket.Conn, error) {
 	dialer.ReadBufferSize = ws.MaxMessageSize
 	dialer.WriteBufferSize = ws.MaxMessageSize
 
+	// Set the authorization header.
+	credentials := fmt.Sprintf("%s:%s", cfg.User, cfg.Pass)
+	auth := "Basic " + base64.StdEncoding.EncodeToString([]byte(credentials))
+	header := make(http.Header)
+	header.Add("Authorization", auth)
+
 	// Dial the connection.
 	url := fmt.Sprintf("%s://%s/%s", scheme, cfg.Host, endpoint)
-	wsConn, resp, err := dialer.Dial(url, nil)
+	wsConn, resp, err := dialer.Dial(url, header)
 	if err != nil {
 		if err != websocket.ErrBadHandshake || resp == nil {
 			return nil, err

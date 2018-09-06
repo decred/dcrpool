@@ -37,6 +37,8 @@ var runServiceCommand func(string) error
 type config struct {
 	HomeDir    string `long:"homedir" description:"Path to application home directory"`
 	ConfigFile string `long:"configfile" description:"Path to configuration file"`
+	User       string `long:"user" description:"The username of the mining account"`
+	Pass       string `long:"pass" description:"The password of the mining account"`
 	Host       string `long:"host" description:"The ip address and port of the mining pool in the form ip:port"`
 	DebugLevel string `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir     string `long:"logdir" description:"The log output directory."`
@@ -209,7 +211,7 @@ func createConfigFile(preCfg config) error {
 	s := homeDirRE.ReplaceAllString(ConfigFileContents, fmt.Sprintf("homedir=%s", preCfg.HomeDir))
 	s = debugLevelRE.ReplaceAllString(s, fmt.Sprintf("debuglevel=%s", preCfg.DebugLevel))
 	s = configFileRE.ReplaceAllString(s, fmt.Sprintf("configfile=%s", preCfg.ConfigFile))
-	s = hostRE.ReplaceAllString(s, fmt.Sprintf("dbfile=%s", preCfg.Host))
+	s = hostRE.ReplaceAllString(s, fmt.Sprintf("host=%s", preCfg.Host))
 	s = logDirRE.ReplaceAllString(s, fmt.Sprintf("logdir=%s", preCfg.LogDir))
 
 	// Create config file at the provided path.
@@ -243,6 +245,8 @@ func loadConfig() (*config, []string, error) {
 		Host:       defaultHost,
 		DebugLevel: defaultLogLevel,
 		LogDir:     defaultLogDir,
+		User:       "",
+		Pass:       "",
 	}
 
 	// Service options which are only added on Windows.
@@ -323,7 +327,7 @@ func loadConfig() (*config, []string, error) {
 	var configFileError error
 	parser := newConfigParser(&cfg, &serviceOpts, flags.Default)
 	if preCfg.ConfigFile != defaultConfigFile {
-		err := flags.NewIniParser(parser).ParseFile(preCfg.ConfigFile)
+		err = flags.NewIniParser(parser).ParseFile(preCfg.ConfigFile)
 		if err != nil {
 			if _, ok := err.(*os.PathError); !ok {
 				fmt.Fprintf(os.Stderr, "Error parsing config "+

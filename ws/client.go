@@ -11,32 +11,30 @@ import (
 
 // Client defines an established websocket connection.
 type Client struct {
-	hub           *Hub
-	id            uint64
-	ws            *websocket.Conn
-	ch            chan Message
-	mtx           sync.RWMutex
-	Ctx           context.Context
-	cancel        context.CancelFunc
-	ip            string
-	ticker        *time.Ticker
-	pingRetries   uint64
-	Authenticated bool
+	hub         *Hub
+	id          uint64
+	ws          *websocket.Conn
+	ch          chan Message
+	mtx         sync.RWMutex
+	Ctx         context.Context
+	cancel      context.CancelFunc
+	ip          string
+	ticker      *time.Ticker
+	pingRetries uint64
 }
 
 // NewClient initializes a new websocket client.
 func NewClient(h *Hub, socket *websocket.Conn, ip string) *Client {
 	ctx, cancel := context.WithCancel(context.TODO())
 	return &Client{
-		hub:           h,
-		ws:            socket,
-		ip:            ip,
-		ch:            make(chan Message),
-		Ctx:           ctx,
-		cancel:        cancel,
-		ticker:        time.NewTicker(time.Second * 5),
-		pingRetries:   0,
-		Authenticated: false,
+		hub:         h,
+		ws:          socket,
+		ip:          ip,
+		ch:          make(chan Message),
+		Ctx:         ctx,
+		cancel:      cancel,
+		ticker:      time.NewTicker(time.Second * 5),
+		pingRetries: 0,
 	}
 }
 
@@ -53,7 +51,8 @@ out:
 			_, data, err := c.ws.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err,
-					websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					websocket.CloseGoingAway, websocket.CloseAbnormalClosure,
+					websocket.CloseNormalClosure) {
 					log.Errorf("Websocket read error: %v", err)
 				}
 				c.cancel()

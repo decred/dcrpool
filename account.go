@@ -15,9 +15,9 @@ import (
 // Account represents a mining pool user account.
 type Account struct {
 	UUID       string `json:"uuid"`
-	Username   string `json:"username"`
+	Name       string `json:"name"`
 	Address    string `json:"address"`
-	Password   string `json:"-"`
+	Pass       string `json:"pass,omitempty"`
 	CreatedOn  uint64 `json:"createdon"`
 	ModifiedOn uint64 `json:"modifiedon"`
 }
@@ -34,20 +34,20 @@ func bcryptHash(plaintext string) ([]byte, error) {
 }
 
 // NewAccount generates a new account.
-func NewAccount(username string, address string, password string) (*Account, error) {
+func NewAccount(name string, address string, pass string) (*Account, error) {
 	id, err := ksuid.NewRandom()
 	if err != nil {
 		return nil, err
 	}
-	hashedPass, err := bcryptHash(password)
+	hashedPass, err := bcryptHash(pass)
 	if err != nil {
 		return nil, err
 	}
 	account := &Account{
 		UUID:       id.String(),
-		Username:   username,
+		Name:       name,
 		Address:    address,
-		Password:   string(hashedPass),
+		Pass:       string(hashedPass),
 		CreatedOn:  uint64(time.Now().Unix()),
 		ModifiedOn: 0,
 	}
@@ -56,9 +56,13 @@ func NewAccount(username string, address string, password string) (*Account, err
 
 // GetAccount fetches the account referenced by the provided id.
 func GetAccount(db *bolt.DB, id []byte) (*Account, error) {
-	var account *Account
+	var account Account
 	err := db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(database.AccountBkt)
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+		bkt := pbkt.Bucket(database.AccountBkt)
 		if bkt == nil {
 			return database.ErrBucketNotFound(database.AccountBkt)
 		}
@@ -66,17 +70,20 @@ func GetAccount(db *bolt.DB, id []byte) (*Account, error) {
 		if v == nil {
 			return database.ErrValueNotFound(id)
 		}
-
-		err := json.Unmarshal(v, account)
+		err := json.Unmarshal(v, &account)
 		return err
 	})
-	return account, err
+	return &account, err
 }
 
 // Create persists the account to the database.
 func (acc *Account) Create(db *bolt.DB) error {
 	err := db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(database.AccountBkt)
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+		bkt := pbkt.Bucket(database.AccountBkt)
 		if bkt == nil {
 			return database.ErrBucketNotFound(database.AccountBkt)
 		}

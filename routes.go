@@ -1,14 +1,14 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
-	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
 
 	"dnldd/dcrpool/database"
@@ -23,10 +23,14 @@ func errParamNotFound(key string) error {
 
 // setupRoutes configures the accessible routes of the mining pool.
 func (p *MiningPool) setupRoutes() {
-	p.router.HandleFunc("/account/create", p.handleCreateAccount)
-	p.router.HandleFunc("/account/{id}/username", p.handleUpdateUsername)
-	p.router.HandleFunc("/account/{id}/address", p.handleUpdateAddress)
-	p.router.HandleFunc("/account/{id}/password", p.handleUpdatePassword)
+	p.router.HandleFunc("/create/account", p.handleCreateAccount).
+		Methods(http.MethodPost)
+	p.router.HandleFunc("/update/name", p.handleUpdateName).
+		Methods(http.MethodPost)
+	p.router.HandleFunc("/update/address", p.handleUpdateAddress).
+		Methods(http.MethodPost)
+	p.router.HandleFunc("/update/pass", p.handleUpdatePass).
+		Methods(http.MethodPost)
 	p.router.HandleFunc("/ws", p.handleWS)
 }
 
@@ -49,8 +53,61 @@ func respondWithStatusCode(w http.ResponseWriter, code int) {
 	w.WriteHeader(code)
 }
 
+// getBasicAuthorization returns the user credentials in a basic
+// authorization header of a request.
+func getBasicAuthorization(r *http.Request) (string, string, error) {
+	auth := strings.Split(r.Header.Get("Authorization"), " ")
+	if len(auth) != 2 || auth[0] != "Basic" {
+		return "", "", fmt.Errorf("Authorization type is not Basic")
+	}
+	payload, _ := base64.StdEncoding.DecodeString(auth[1])
+	pair := strings.Split(string(payload), ":")
+	if len(pair) != 2 {
+		return "", "", fmt.Errorf("Authorization type is not Basic")
+	}
+	return pair[0], pair[1], nil
+}
+
 // handleWS establishes websocket connections with clients.
+// endpoint: POST ip:port/ws
+// 	Authorization: Basic base64('user:pass')
 func (p *MiningPool) handleWS(w http.ResponseWriter, r *http.Request) {
+	name, pass, err := getBasicAuthorization(r)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	// Lookup the user account.
+	id, err := database.GetIndexValue(p.db, database.NameIdxBkt,
+		[]byte(strings.ToLower(name)))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if id == nil {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("'%s' is not a registered user", name))
+		return
+	}
+
+	account, err := GetAccount(p.db, id)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	// Authenticate the request.
+	err = bcrypt.CompareHashAndPassword([]byte(account.Pass),
+		[]byte(pass))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("the provided pass for account '%s' is incorrect",
+				name))
+		return
+	}
+
 	// Upgrade the http request to a websocket connection.
 	conn, err := p.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -77,6 +134,21 @@ func (p *MiningPool) limit(next http.Handler) http.Handler {
 }
 
 // handleCreateAccount handles account creation.
+// endpoint: POST ip:port/create/account
+// 	sample payload:
+// 		{
+// 			"name": "dnldd",
+// 			"address": "DsTpf5FoEQHRFE43VJcgsHxBX55s9WAHM78",
+// 			"pass": "pass"
+// 		}
+// 	sample response:
+// 		{
+// 			"uuid": "19oBmvDBPjIa3Lq7aE9FdoDebhM",
+// 			"name": "dnldd",
+// 			"address": "DsTpf5FoEQHRFE43VJcgsHxBX55s9WAHM78",
+// 			"createdon": 1536186735,
+// 			"modifiedon": 0
+// 		}
 func (p *MiningPool) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -98,9 +170,9 @@ func (p *MiningPool) handleCreateAccount(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	username, ok := payload["username"].(string)
+	name, ok := payload["name"].(string)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, errParamNotFound("username"))
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("name"))
 		return
 	}
 	address, ok := payload["address"].(string)
@@ -108,55 +180,66 @@ func (p *MiningPool) handleCreateAccount(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusBadRequest, errParamNotFound("address"))
 		return
 	}
-	password, ok := payload["password"].(string)
+	pass, ok := payload["pass"].(string)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, errParamNotFound("password"))
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("pass"))
 		return
 	}
 
-	// Verify the address provided is a valid decred address.
+	// TODO: Verify the address provided is a valid decred address.
 
-	exists, err := database.IndexExists(p.db, database.UsernameIdxBkt,
-		[]byte(strings.ToLower(username)))
+	id, err := database.GetIndexValue(p.db, database.NameIdxBkt,
+		[]byte(strings.ToLower(name)))
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, err)
 		return
 	}
-	if exists {
+	if id != nil {
 		respondWithError(w,
 			http.StatusBadRequest,
-			fmt.Errorf("'%s' is registered to another account", username))
+			fmt.Errorf("'%s' is registered to another account", name))
 		return
 	}
 
-	account, err := NewAccount(username, address, password)
+	account, err := NewAccount(name, address, pass)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, err)
+		return
 	}
 	err = account.Create(p.db)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, err)
+		return
 	}
-	err = database.UpdateIndex(p.db, database.UsernameIdxBkt,
-		[]byte(account.UUID), []byte(account.Username))
+	err = database.UpdateIndex(p.db, database.NameIdxBkt,
+		[]byte(account.Name), []byte(account.UUID))
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, err)
-	}
-
-	respondWithJSON(w, http.StatusCreated, account)
-}
-
-// handleUpdateUsername handles username updates.
-func (p *MiningPool) handleUpdateUsername(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	id := params["id"]
-
-	account, err := GetAccount(p.db, []byte(id))
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, err)
 		return
 	}
 
+	// Sanitize account of sensitive data before responding.
+	account.Pass = ""
+	respondWithJSON(w, http.StatusCreated, account)
+}
+
+// handleUpdateName handles name updates.
+// endpoint: POST ip:port/update/name
+// 		sample payload:
+// 			{
+// 				"oldname": "dnldd",
+// 				"newname": "einheit",
+// 				"pass": "pass"
+// 			}
+// 		sample response:
+// 		{
+// 			"uuid": "19oBmvDBPjIa3Lq7aE9FdoDebhM",
+// 			"name": "einheit",
+// 			"address": "DsTpf5FoEQHRFE43VJcgsHxBX55s9WAHM78",
+// 			"createdon": 1536186735,
+// 			"modifiedon": 1536189736
+// 		}
+func (p *MiningPool) handleUpdateName(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest,
@@ -177,42 +260,91 @@ func (p *MiningPool) handleUpdateUsername(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	username, ok := payload["username"].(string)
+	oldName, ok := payload["oldname"].(string)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, errParamNotFound("username"))
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("oldname"))
 		return
 	}
-	password, ok := payload["password"].(string)
+	newName, ok := payload["newname"].(string)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, errParamNotFound("password"))
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("newname"))
+		return
+	}
+	pass, ok := payload["pass"].(string)
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("pass"))
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(account.Password),
-		[]byte(password))
+	// Fetch the corresponding account of the name.
+	id, err := database.GetIndexValue(p.db, database.NameIdxBkt,
+		[]byte(strings.ToLower(oldName)))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if id == nil {
+		respondWithError(w,
+			http.StatusBadRequest,
+			fmt.Errorf("no account found with name '%s'", oldName))
+		return
+	}
+
+	account, err := GetAccount(p.db, []byte(id))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	// Authenticate the request.
+	err = bcrypt.CompareHashAndPassword([]byte(account.Pass),
+		[]byte(pass))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest,
-			errors.New("password is incorrect"))
+			fmt.Errorf("the provided pass for account '%s' is incorrect",
+				oldName))
 		return
 	}
 
-	account.Username = username
+	// Update the account name and index.
+	account.Name = newName
+	account.ModifiedOn = uint64(time.Now().Unix())
 	account.Update(p.db)
 
+	err = database.RemoveIndex(p.db, database.NameIdxBkt, []byte(oldName))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err)
+		return
+	}
+	err = database.UpdateIndex(p.db, database.NameIdxBkt, []byte(newName),
+		[]byte(account.UUID))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	// Sanitize account of sensitive data before responding.
+	account.Pass = ""
 	respondWithJSON(w, http.StatusOK, account)
 }
 
 // handleUpdateAddress handles address updates.
+// endpoint: POST ip:port/update/address
+// 		sample payload:
+// 			{
+// 				"name": "dnldd",
+// 				"address": "DsTpf5FoEQHRFE43VJcgsHxBX55s9WAHM78",
+// 				"pass": "pass"
+// 			}
+// 		sample response:
+// 		{
+// 			"uuid": "19pjXE2EJbF938dVOvj0w2FN5tR",
+// 			"name": "dnldd",
+// 			"address": "DsTpf5FoEQHRFE43VJcgsHxBX55s9WAHM78",
+// 			"createdon": 1536233973,
+// 			"modifiedon": 1536233991
+// 		}
 func (p *MiningPool) handleUpdateAddress(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	id := params["id"]
-
-	account, err := GetAccount(p.db, []byte(id))
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, err)
-		return
-	}
-
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest,
@@ -233,35 +365,35 @@ func (p *MiningPool) handleUpdateAddress(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	name, ok := payload["name"].(string)
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("name"))
+		return
+	}
 	address, ok := payload["address"].(string)
 	if !ok {
 		respondWithError(w, http.StatusBadRequest, errParamNotFound("address"))
 		return
 	}
-	password, ok := payload["password"].(string)
+	pass, ok := payload["pass"].(string)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, errParamNotFound("password"))
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("pass"))
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(account.Password),
-		[]byte(password))
+	// Fetch the corresponding account of the name.
+	id, err := database.GetIndexValue(p.db, database.NameIdxBkt,
+		[]byte(strings.ToLower(name)))
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest,
-			errors.New("password is incorrect"))
+		respondWithError(w, http.StatusInternalServerError, err)
 		return
 	}
-
-	account.Address = address
-	account.Update(p.db)
-
-	respondWithJSON(w, http.StatusOK, account)
-}
-
-// handleUpdateAddress handles address updates.
-func (p *MiningPool) handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	id := params["id"]
+	if id == nil {
+		respondWithError(w,
+			http.StatusBadRequest,
+			fmt.Errorf("no account found with name '%s'", name))
+		return
+	}
 
 	account, err := GetAccount(p.db, []byte(id))
 	if err != nil {
@@ -269,6 +401,36 @@ func (p *MiningPool) handleUpdatePassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Authenticate the request.
+	err = bcrypt.CompareHashAndPassword([]byte(account.Pass),
+		[]byte(pass))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("the provided pass for account '%s' is incorrect",
+				name))
+		return
+	}
+
+	// Update the account address.
+	account.Address = address
+	account.ModifiedOn = uint64(time.Now().Unix())
+	account.Update(p.db)
+
+	// Sanitize account of sensitive data before responding.
+	account.Pass = ""
+	respondWithJSON(w, http.StatusOK, account)
+}
+
+// handleUpdatePass handles address updates.
+// endpoint: POST ip:port/update/pass
+// 		sample payload:
+// 			{
+// 				"name": "dnldd",
+// 				"oldpass": "pass",
+// 				"newpass": "h3ll0"
+// 			}
+// 		sample response: Status OK
+func (p *MiningPool) handleUpdatePass(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest,
@@ -289,32 +451,59 @@ func (p *MiningPool) handleUpdatePassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	password, ok := payload["password"].(string)
+	name, ok := payload["name"].(string)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, errParamNotFound("password"))
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("name"))
 		return
 	}
-	newPassword, ok := payload["newpassword"].(string)
+	oldPass, ok := payload["oldpass"].(string)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, errParamNotFound("newpassword"))
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("oldpass"))
+		return
+	}
+	newPass, ok := payload["newpass"].(string)
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, errParamNotFound("newpass"))
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(account.Password),
-		[]byte(password))
+	// Fetch the corresponding account of the name.
+	id, err := database.GetIndexValue(p.db, database.NameIdxBkt,
+		[]byte(strings.ToLower(name)))
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest,
-			errors.New("old password is incorrect"))
+		respondWithError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if id == nil {
+		respondWithError(w,
+			http.StatusBadRequest,
+			fmt.Errorf("no account found with name '%s'", name))
 		return
 	}
 
-	hashedPass, err := bcryptHash(newPassword)
+	account, err := GetAccount(p.db, []byte(id))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	account.Password = string(hashedPass)
+	err = bcrypt.CompareHashAndPassword([]byte(account.Pass),
+		[]byte(oldPass))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest,
+			fmt.Errorf("the provided pass for account '%s' is incorrect", name))
+		return
+	}
+
+	hashedPass, err := bcryptHash(newPass)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	// Update the account address.
+	account.Pass = string(hashedPass)
+	account.ModifiedOn = uint64(time.Now().Unix())
 	account.Update(p.db)
 
 	respondWithStatusCode(w, http.StatusOK)

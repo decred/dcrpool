@@ -14,6 +14,13 @@ const ConfigFileContents = `[Application Options]
 ; debuglevel=
 
 ; ------------------------------------------------------------------------------
+; Mining account settings
+; ------------------------------------------------------------------------------
+; The mining account username and password.
+; user=
+; pass=
+
+; ------------------------------------------------------------------------------
 ; Data settings
 ; ------------------------------------------------------------------------------
 ; The home directory of dcrpclient.
