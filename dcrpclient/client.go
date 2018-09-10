@@ -4,6 +4,8 @@ import (
 	"context"
 	"dnldd/dcrpool/ws"
 	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -88,6 +90,31 @@ out:
 				}
 			case ws.ResponseType:
 			case ws.NotificationType:
+				req := msg.(*ws.Request)
+				switch req.Method {
+				case ws.Work:
+					params, ok := req.Params.(map[string]interface{})
+					if !ok {
+						log.Errorf("Invalid work notification " +
+							", should have 'params' field")
+						pc.cancel()
+						continue
+					}
+
+					header, ok := params["header"].(string)
+					if !ok {
+						log.Errorf("Invalid work notification " +
+							", 'params' should have 'header' field")
+						pc.cancel()
+						continue
+					}
+
+					hBytes := []byte(header)
+					dst := make([]byte, len(hBytes))
+					hex.Decode(dst, hBytes)
+					height := fetchBlockHeight(dst)
+					log.Debugf("block height is %v", height)
+				}
 			default:
 				log.Debugf("Unknowning message type received")
 			}
@@ -137,4 +164,32 @@ func dial(cfg *config) (*websocket.Conn, error) {
 	}
 
 	return wsConn, nil
+}
+
+// fetchBlockHeight retrieves the block height from the provided hex encoded
+// work data.
+func fetchBlockHeight(decodedWork []byte) uint32 {
+	return binary.LittleEndian.Uint32(decodedWork[128:133])
+}
+
+// fetchNonce retrieves the 10-byte nonce miners modify to mine a block via a
+// mining pool. This is sans the 2-byte mining pool assigned miner ID.
+func fetchNonce(decodedWork []byte) []byte {
+	return decodedWork[136:147]
+}
+
+// setNonce applies the 10-byte miner generated nonce to decoded work data.
+func setNonce(decodedWork []byte, nonce [10]byte) {
+	copy(decodedWork[140:171], nonce[:])
+}
+
+// fetchID retrieves the mining pool assigned 2-byte miner ID in decoded
+// work data.
+func fetchID(decodedWork []byte) []byte {
+	return decodedWork[140:171]
+}
+
+// setID applies the mining pool assigned 2-byte miner ID to decoded work data.
+func setID(decodedWork []byte, ID [2]byte) {
+	copy(decodedWork[140:171], ID[:])
 }

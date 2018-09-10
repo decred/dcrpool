@@ -21,6 +21,7 @@ const (
 const (
 	Ping = "ping"
 	Pong = "pong"
+	Work = "work"
 )
 
 // Message is the base interface messages exchanged between a websocket client
@@ -78,9 +79,6 @@ func IdentifyMessage(data []byte) (Message, string, error) {
 		return nil, "", err
 	}
 
-	if !req.HasID() {
-		return &resp, NotificationType, nil
-	}
 	return &resp, ResponseType, nil
 }
 
@@ -88,7 +86,7 @@ func IdentifyMessage(data []byte) (Message, string, error) {
 func PingRequest(id *uint64) *Request {
 	return &Request{
 		ID:     id,
-		Method: "ping",
+		Method: Ping,
 		Params: nil,
 	}
 }
@@ -98,7 +96,7 @@ func PongResponse(id *uint64) *Response {
 	return &Response{
 		ID:     id,
 		Error:  nil,
-		Result: "pong",
+		Result: Pong,
 	}
 }
 
@@ -117,7 +115,7 @@ func tooManyRequestsResponse(id *uint64) *Response {
 func WorkNotification(header string, target string) *Request {
 	return &Request{
 		ID:     nil,
-		Method: "work",
+		Method: Work,
 		Params: map[string]string{"header": header, "target": target},
 	}
 }

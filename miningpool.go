@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/bbolt"
@@ -47,14 +48,34 @@ func NewRPCClient(cfg *config, h *ws.Hub) (*rpcclient.Client, error) {
 	ntfnHandlers := &rpcclient.NotificationHandlers{
 		OnBlockConnected: func(blockHeader []byte, transactions [][]byte) {
 			pLog.Debugf("Block connected: %x", blockHeader)
+
+			connCount := atomic.LoadUint64(&h.ConnCount)
+			if connCount == 0 {
+				pLog.Debugf("No connected clients.")
+				return
+			}
 		},
 		OnBlockDisconnected: func(blockHeader []byte) {
 			pLog.Debugf("Block disconnected: %x", blockHeader)
+
+			connCount := atomic.LoadUint64(&h.ConnCount)
+			if connCount == 0 {
+				pLog.Debugf("No connected clients.")
+				return
+			}
 		},
 		OnWork: func(blockHeader string, target string) {
 			pLog.Debugf("New Work (header: %v , target: %v)", blockHeader,
 				target)
+
+			connCount := atomic.LoadUint64(&h.ConnCount)
+			if connCount == 0 {
+				pLog.Debugf("No connected clients.")
+				return
+			}
+
 			h.Broadcast <- ws.WorkNotification(blockHeader, target)
+
 		},
 		// TODO: possibly need to add new transaction notifications here as well.
 	}

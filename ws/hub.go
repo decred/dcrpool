@@ -15,6 +15,7 @@ type Hub struct {
 	httpc     *http.Client
 	limiter   *limiter.RateLimiter
 	Broadcast chan Message
+	ConnCount uint64
 }
 
 // NewHub initializes a hub.
@@ -24,6 +25,7 @@ func NewHub(bolt *bolt.DB, httpc *http.Client, limiter *limiter.RateLimiter) *Hu
 		httpc:     httpc,
 		limiter:   limiter,
 		Broadcast: make(chan Message),
+		ConnCount: 0,
 	}
 }
 

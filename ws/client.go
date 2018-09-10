@@ -26,6 +26,7 @@ type Client struct {
 // NewClient initializes a new websocket client.
 func NewClient(h *Hub, socket *websocket.Conn, ip string) *Client {
 	ctx, cancel := context.WithCancel(context.TODO())
+	atomic.AddUint64(&h.ConnCount, 1)
 	return &Client{
 		hub:         h,
 		ws:          socket,
@@ -45,6 +46,8 @@ out:
 	for {
 		select {
 		case <-ctx.Done():
+			// decrement the connection counter.
+			atomic.AddUint64(&c.hub.ConnCount, ^uint64(0))
 			break out
 		default:
 			// Wait for a message.
