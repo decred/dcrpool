@@ -13,12 +13,9 @@
   name = "github.com/jessevdk/go-flags"
 
 [[constraint]]
-  branch = "master"
-  name = "github.com/btcsuite/go-socks"
-
-[[constraint]]
   name = "github.com/decred/dcrd"
-  version = "1.2.0"
+  source = "github.com/dnldd/dcrd"
+  branch = "notifywork"
 
 [[constraint]]
   name = "github.com/decred/slog"

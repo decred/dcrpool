@@ -14,7 +14,7 @@ type Hub struct {
 	bolt      *bolt.DB
 	httpc     *http.Client
 	limiter   *limiter.RateLimiter
-	broadcast chan Message
+	Broadcast chan Message
 }
 
 // NewHub initializes a hub.
@@ -23,11 +23,11 @@ func NewHub(bolt *bolt.DB, httpc *http.Client, limiter *limiter.RateLimiter) *Hu
 		bolt:      bolt,
 		httpc:     httpc,
 		limiter:   limiter,
-		broadcast: make(chan Message),
+		Broadcast: make(chan Message),
 	}
 }
 
 // Close terminates all connected clients to the hub.
 func (h *Hub) Close() {
-	h.broadcast <- nil
+	h.Broadcast <- nil
 }

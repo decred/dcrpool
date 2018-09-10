@@ -93,7 +93,7 @@ func PingRequest(id *uint64) *Request {
 	}
 }
 
-// PongResponse is a convenience function for creating a pong responses.
+// PongResponse is a convenience function for creating a pong response.
 func PongResponse(id *uint64) *Response {
 	return &Response{
 		ID:     id,
@@ -103,12 +103,21 @@ func PongResponse(id *uint64) *Response {
 }
 
 // tooManyRequestsResponse is a convenience function for creating
-// TooManyRequests responses.
+// a TooManyRequests response.
 func tooManyRequestsResponse(id *uint64) *Response {
 	err := "too many requests"
 	return &Response{
 		ID:     id,
 		Error:  &err,
 		Result: nil,
+	}
+}
+
+// WorkNotification is a convenience function for creating a work notification.
+func WorkNotification(header string, target string) *Request {
+	return &Request{
+		ID:     nil,
+		Method: "work",
+		Params: map[string]string{"header": header, "target": target},
 	}
 }

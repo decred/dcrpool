@@ -421,7 +421,7 @@ func (p *MiningPool) handleUpdateAddress(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, http.StatusOK, account)
 }
 
-// handleUpdatePass handles address updates.
+// handleUpdatePass handles password updates.
 // endpoint: POST ip:port/update/pass
 // 		sample payload:
 // 			{

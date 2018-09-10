@@ -131,7 +131,7 @@ out:
 				c.cancel()
 				continue
 			}
-		case msg := <-c.hub.broadcast:
+		case msg := <-c.hub.Broadcast:
 			// Close the connection on receiving a nil message reference.
 			if msg == nil {
 				c.cancel()

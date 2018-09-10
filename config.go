@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -26,6 +27,7 @@ const (
 	defaultPort            = ":25000"
 	defaultRPCUser         = "dcrp"
 	defaultRPCPass         = "dcrppass"
+	defaultRPCHost         = "localhost:19109"
 	defaultMiningAddr      = "TsfDLrRkk9ciUuwfp2b8PawwnukYD7yAjGd"
 )
 
@@ -50,12 +52,14 @@ type config struct {
 	DebugLevel string `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir     string `long:"logdir" description:"Directory to log output."`
 	DBFile     string `long:"dbfile" description:"Path to the database file"`
+	RPCHost    string `long:"rpchost" description:"The ip address and port of the consensus daemon (dcrd) in the form ip:port"`
 	RPCUser    string `long:"rpcuser" description:"Username for RPC connections"`
 	RPCPass    string `long:"rpcpass" default-mask:"-" description:"Password for RPC connections"`
 	RPCCert    string `long:"rpccert" description:"The RPC certificate file"`
 	MiningAddr string `long:"miningaddr" description:"The payment address for generated blocks"`
 	Port       string `long:"port" description:"The listening port"`
 	miningAddr dcrutil.Address
+	rpccerts   []byte
 }
 
 // serviceOptions defines the configuration options for the daemon as a service on
@@ -227,6 +231,7 @@ func createConfigFile(preCfg config) error {
 	rpcUserRE := regexp.MustCompile(`(?m)^;\s*rpcuser=[^\s]*$`)
 	rpcPassRE := regexp.MustCompile(`(?m)^;\s*rpcpass=[^\s]*$`)
 	rpcCertRE := regexp.MustCompile(`(?m)^;\s*rpccert=[^\s]*$`)
+	rpcHostRE := regexp.MustCompile(`(?m)^;\s*rpchost=[^\s]*$`)
 	miningAddrRE := regexp.MustCompile(`(?m)^;\s*miningaddr=[^\s]*$`)
 	s := homeDirRE.ReplaceAllString(ConfigFileContents, fmt.Sprintf("homedir=%s", preCfg.HomeDir))
 	s = debugLevelRE.ReplaceAllString(s, fmt.Sprintf("debuglevel=%s", preCfg.DebugLevel))
@@ -238,6 +243,7 @@ func createConfigFile(preCfg config) error {
 	s = rpcUserRE.ReplaceAllString(s, fmt.Sprintf("rpcuser=%s", preCfg.RPCUser))
 	s = rpcPassRE.ReplaceAllString(s, fmt.Sprintf("rpcpass=%s", preCfg.RPCPass))
 	s = rpcCertRE.ReplaceAllString(s, fmt.Sprintf("rpccert=%s", preCfg.RPCCert))
+	s = rpcHostRE.ReplaceAllString(s, fmt.Sprintf("rpchost=%s", preCfg.RPCHost))
 	s = miningAddrRE.ReplaceAllString(s, fmt.Sprintf("miningaddr=%s", preCfg.MiningAddr))
 
 	// Create config file at the provided path.
@@ -276,6 +282,7 @@ func loadConfig() (*config, []string, error) {
 		RPCUser:    defaultRPCUser,
 		RPCPass:    defaultRPCPass,
 		RPCCert:    defaultRPCCertFile,
+		RPCHost:    defaultRPCHost,
 		MiningAddr: defaultMiningAddr,
 	}
 
@@ -444,6 +451,17 @@ func loadConfig() (*config, []string, error) {
 	// options. Note this should go directly before the return.
 	if configFileError != nil {
 		pLog.Warnf("%v", configFileError)
+	}
+
+	if !fileExists(cfg.RPCCert) {
+		return nil, nil,
+			fmt.Errorf("RPC certificate (%v) not found", cfg.RPCCert)
+	}
+
+	// Load the RPC certificate.
+	cfg.rpccerts, err = ioutil.ReadFile(cfg.RPCCert)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return &cfg, remainingArgs, nil

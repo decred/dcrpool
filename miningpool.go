@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/coreos/bbolt"
+	"github.com/decred/dcrd/rpcclient"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -28,22 +29,65 @@ var (
 
 // MiningPool represents a Proof-of-Work Mining pool for Decred.
 type MiningPool struct {
-	cfg      *config
-	db       *bolt.DB
-	server   *http.Server
-	httpc    *http.Client
-	ctx      context.Context
-	cancel   context.CancelFunc
-	hub      *ws.Hub
-	router   *mux.Router
-	limiter  *limiter.RateLimiter
-	upgrader websocket.Upgrader
+	cfg       *config
+	db        *bolt.DB
+	server    *http.Server
+	httpc     *http.Client
+	ctx       context.Context
+	cancel    context.CancelFunc
+	hub       *ws.Hub
+	router    *mux.Router
+	limiter   *limiter.RateLimiter
+	rpcclient *rpcclient.Client
+	upgrader  websocket.Upgrader
+}
+
+// NewRPCClient initializes an RPC connection to dcrd for chain notifications.
+func NewRPCClient(cfg *config, h *ws.Hub) (*rpcclient.Client, error) {
+	ntfnHandlers := &rpcclient.NotificationHandlers{
+		OnBlockConnected: func(blockHeader []byte, transactions [][]byte) {
+			pLog.Debugf("Block connected: %x", blockHeader)
+		},
+		OnBlockDisconnected: func(blockHeader []byte) {
+			pLog.Debugf("Block disconnected: %x", blockHeader)
+		},
+		OnWork: func(blockHeader string, target string) {
+			pLog.Debugf("New Work (header: %v , target: %v)", blockHeader,
+				target)
+			h.Broadcast <- ws.WorkNotification(blockHeader, target)
+		},
+		// TODO: possibly need to add new transaction notifications here as well.
+	}
+
+	rpcConfig := &rpcclient.ConnConfig{
+		Host:         cfg.RPCHost,
+		Endpoint:     "ws",
+		User:         cfg.RPCUser,
+		Pass:         cfg.RPCPass,
+		Certificates: cfg.rpccerts,
+	}
+
+	client, err := rpcclient.New(rpcConfig, ntfnHandlers)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := client.NotifyWork(); err != nil {
+		client.Shutdown()
+		return nil, err
+	}
+	if err := client.NotifyBlocks(); err != nil {
+		client.Shutdown()
+		return nil, err
+	}
+
+	return client, nil
 }
 
 // NewMiningPool initializes the mining pool.
-func NewMiningPool(config *config) (*MiningPool, error) {
+func NewMiningPool(cfg *config) (*MiningPool, error) {
 	p := new(MiningPool)
-	p.cfg = config
+	p.cfg = cfg
 
 	bolt, err := database.OpenDB(p.cfg.DBFile)
 	if err != nil {
@@ -54,10 +98,12 @@ func NewMiningPool(config *config) (*MiningPool, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	err = database.Upgrade(p.db)
 	if err != nil {
 		return nil, err
 	}
+
 	p.limiter = limiter.NewRateLimiter()
 	p.router = new(mux.Router)
 	p.setupRoutes()
@@ -70,6 +116,12 @@ func NewMiningPool(config *config) (*MiningPool, error) {
 	}
 	p.hub = ws.NewHub(p.db, p.httpc, p.limiter)
 	p.upgrader = websocket.Upgrader{}
+
+	p.rpcclient, err = NewRPCClient(p.cfg, p.hub)
+	if err != nil {
+		return nil, err
+	}
+
 	p.ctx, p.cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	return p, nil
 }
