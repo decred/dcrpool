@@ -2,6 +2,7 @@ package ws
 
 import (
 	"net/http"
+	"sync/atomic"
 
 	"github.com/coreos/bbolt"
 
@@ -32,4 +33,13 @@ func NewHub(bolt *bolt.DB, httpc *http.Client, limiter *limiter.RateLimiter) *Hu
 // Close terminates all connected clients to the hub.
 func (h *Hub) Close() {
 	h.Broadcast <- nil
+}
+
+// HasConnectedClients asserts the mining pool has connected miners.
+func (h *Hub) HasConnectedClients() bool {
+	connCount := atomic.LoadUint64(&h.ConnCount)
+	if connCount == 0 {
+		return false
+	}
+	return true
 }

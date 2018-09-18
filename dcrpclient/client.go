@@ -1,15 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"dnldd/dcrpool/ws"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/decred/dcrd/wire"
 
 	"github.com/gorilla/websocket"
 )
@@ -19,14 +24,24 @@ const (
 	endpoint = "ws"
 )
 
+// Work represents the data recieved from a work notification. It comprises of
+// hex encoded block header and target data.
+type Work struct {
+	header []byte
+	target []byte
+}
+
 // Client connects a miner to the mining pool for block template updates
 // and work submissions.
 type Client struct {
-	Config *config
-	closed uint64
-	ctx    context.Context
-	cancel context.CancelFunc
-	Conn   *websocket.Conn
+	currHeight uint32
+	currWork   *Work
+	config     *config
+	closed     uint64
+	ctx        context.Context
+	cancel     context.CancelFunc
+	Conn       *websocket.Conn
+	workMtx    sync.RWMutex
 }
 
 // newClient initializes a mining pool client.
@@ -38,7 +53,7 @@ func newClient(config *config) (*Client, error) {
 
 	ctx, cancel := context.WithCancel(context.TODO())
 	return &Client{
-		Config: config,
+		config: config,
 		Conn:   conn,
 		ctx:    ctx,
 		cancel: cancel,
@@ -93,27 +108,54 @@ out:
 				req := msg.(*ws.Request)
 				switch req.Method {
 				case ws.Work:
-					params, ok := req.Params.(map[string]interface{})
-					if !ok {
-						log.Errorf("Invalid work notification " +
-							", should have 'params' field")
+					work, err := parseWorkNotification(req)
+					if err != nil {
 						pc.cancel()
 						continue
 					}
 
-					header, ok := params["header"].(string)
-					if !ok {
-						log.Errorf("Invalid work notification " +
-							", 'params' should have 'header' field")
+					blkHeight, err := ws.FetchBlockHeight(work.header)
+					if err != nil {
 						pc.cancel()
 						continue
 					}
 
-					hBytes := []byte(header)
-					dst := make([]byte, len(hBytes))
-					hex.Decode(dst, hBytes)
-					height := fetchBlockHeight(dst)
-					log.Debugf("block height is %v", height)
+					currHeight := atomic.LoadUint32(&pc.currHeight)
+					// Accept the next expected work data with an
+					// incremented block height or updated work data
+					// at the current block height.
+					if blkHeight == currHeight+1 || blkHeight == currHeight {
+						pc.workMtx.Lock()
+						pc.currWork = work
+						pc.workMtx.Unlock()
+						atomic.StoreUint32(&pc.currHeight, blkHeight)
+					}
+
+				case ws.ConnectedBlock:
+					blkHeight, err := parseConnectedBlockNotification(req)
+					if err != nil {
+						pc.cancel()
+						continue
+					}
+
+					// Stop current work and wait for a new block template.
+					pc.workMtx.Lock()
+					pc.currWork = nil
+					pc.workMtx.Unlock()
+					atomic.StoreUint32(&pc.currHeight, blkHeight+1)
+
+				case ws.DisconnectedBlock:
+					blkHeight, err := parseDisconnectedBlockNotification(req)
+					if err != nil {
+						pc.cancel()
+						continue
+					}
+
+					// Stop current work and wait for a new block template.
+					pc.workMtx.Lock()
+					pc.currWork = nil
+					pc.workMtx.Unlock()
+					atomic.StoreUint32(&pc.currHeight, blkHeight)
 				}
 			default:
 				log.Debugf("Unknowning message type received")
@@ -166,30 +208,85 @@ func dial(cfg *config) (*websocket.Conn, error) {
 	return wsConn, nil
 }
 
-// fetchBlockHeight retrieves the block height from the provided hex encoded
-// work data.
-func fetchBlockHeight(decodedWork []byte) uint32 {
-	return binary.LittleEndian.Uint32(decodedWork[128:133])
+// parseWorkNotification parses a work notification message.
+func parseWorkNotification(req *ws.Request) (*Work, error) {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return nil, errors.New("Invalid work notification, should have " +
+			"'params' field")
+	}
+
+	header, ok := params["header"].(string)
+	if !ok {
+		return nil, errors.New("Invalid work notification, 'params' data " +
+			"should have 'header' field")
+	}
+
+	target, ok := params["target"].(string)
+	if !ok {
+		return nil, errors.New("Invalid work notification, 'params' data " +
+			"should have 'target' field")
+	}
+
+	return &Work{
+		header: []byte(header),
+		target: []byte(target),
+	}, nil
 }
 
-// fetchNonce retrieves the 10-byte nonce miners modify to mine a block via a
-// mining pool. This is sans the 2-byte mining pool assigned miner ID.
-func fetchNonce(decodedWork []byte) []byte {
-	return decodedWork[136:147]
+// parseConnectedBlockNotification parses a connected block notification
+// message.
+func parseConnectedBlockNotification(req *ws.Request) (uint32, error) {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return 0, errors.New("Invalid connected block notification, should " +
+			"have 'params' field")
+	}
+
+	height, ok := params["height"].(float64)
+	if !ok {
+		return 0, errors.New("Invalid connected block notification, " +
+			"'params' data should have 'height' field")
+	}
+
+	return uint32(height), nil
 }
 
-// setNonce applies the 10-byte miner generated nonce to decoded work data.
-func setNonce(decodedWork []byte, nonce [10]byte) {
-	copy(decodedWork[140:171], nonce[:])
+// parseDisconnectedBlockNotification parses a disconnected block notification
+// message.
+func parseDisconnectedBlockNotification(req *ws.Request) (uint32, error) {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return 0, errors.New("Invalid disconnected block notification, should " +
+			"have 'params' field")
+	}
+
+	height, ok := params["height"].(float64)
+	if !ok {
+		return 0, errors.New("Invalid disconnected block notification, " +
+			"'params' data should have 'height' field")
+	}
+
+	return uint32(height), nil
 }
 
-// fetchID retrieves the mining pool assigned 2-byte miner ID in decoded
-// work data.
-func fetchID(decodedWork []byte) []byte {
-	return decodedWork[140:171]
-}
+// fetchBlockHeader deserializes the block header from the provided hex
+// encoded header data.
+func fetchBlockHeader(encoded []byte) (*wire.BlockHeader, error) {
+	data := []byte(encoded)
+	decoded := make([]byte, len(data))
+	_, err := hex.Decode(decoded, data)
+	if err != nil {
+		return nil, err
+	}
 
-// setID applies the mining pool assigned 2-byte miner ID to decoded work data.
-func setID(decodedWork []byte, ID [2]byte) {
-	copy(decodedWork[140:171], ID[:])
+	// Deserialize the block header.
+	var header wire.BlockHeader
+	reader := bytes.NewReader(decoded[:180])
+	err = header.Deserialize(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	return &header, nil
 }

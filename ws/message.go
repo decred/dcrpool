@@ -1,6 +1,8 @@
 package ws
 
 import (
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 )
 
@@ -19,9 +21,11 @@ const (
 
 // Handler types.
 const (
-	Ping = "ping"
-	Pong = "pong"
-	Work = "work"
+	Ping              = "ping"
+	Pong              = "pong"
+	Work              = "work"
+	ConnectedBlock    = "connectedblock"
+	DisconnectedBlock = "disconnectedblock"
 )
 
 // Message is the base interface messages exchanged between a websocket client
@@ -116,6 +120,39 @@ func WorkNotification(header string, target string) *Request {
 	return &Request{
 		ID:     nil,
 		Method: Work,
-		Params: map[string]string{"header": header, "target": target},
+		Params: map[string]interface{}{"header": header, "target": target},
 	}
+}
+
+// ConnectedBlockNotification is a convenience function for creating a
+// connected block notification.
+func ConnectedBlockNotification(blkHeight uint32) *Request {
+	return &Request{
+		ID:     nil,
+		Method: ConnectedBlock,
+		Params: map[string]interface{}{"height": blkHeight},
+	}
+}
+
+// DisconnectedBlockNotification is a convenience function for creating a
+// disconnected block notification.
+func DisconnectedBlockNotification(blkHeight uint32) *Request {
+	return &Request{
+		ID:     nil,
+		Method: DisconnectedBlock,
+		Params: map[string]interface{}{"height": blkHeight},
+	}
+}
+
+// FetchBlockHeight retrieves the block height from the provided hex encoded
+// block header.
+func FetchBlockHeight(encoded []byte) (uint32, error) {
+	data := []byte(encoded)
+	decoded := make([]byte, len(data))
+	_, err := hex.Decode(decoded, data)
+	if err != nil {
+		return 0, err
+	}
+
+	return binary.LittleEndian.Uint32(decoded[128:133]), nil
 }
