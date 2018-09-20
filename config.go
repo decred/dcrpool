@@ -32,7 +32,7 @@ const (
 )
 
 var (
-	defaultHomeDir     = "deploy" // dcrutil.AppDataDir("dcrpool", false)
+	defaultHomeDir     = dcrutil.AppDataDir("dcrpool", false)
 	defaultConfigFile  = filepath.Join(defaultHomeDir, defaultConfigFilename)
 	defaultDataDir     = filepath.Join(defaultHomeDir, defaultDataDirname)
 	defaultDBFile      = filepath.Join(defaultDataDir, defaultDBFilename)

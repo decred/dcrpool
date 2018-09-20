@@ -34,7 +34,7 @@ type Work struct {
 // Client connects a miner to the mining pool for block template updates
 // and work submissions.
 type Client struct {
-	currHeight uint32
+	workHeight uint32
 	currWork   *Work
 	config     *config
 	closed     uint64
@@ -42,6 +42,7 @@ type Client struct {
 	cancel     context.CancelFunc
 	Conn       *websocket.Conn
 	workMtx    sync.RWMutex
+	CPUMiner   *CPUMiner
 }
 
 // newClient initializes a mining pool client.
@@ -52,12 +53,20 @@ func newClient(config *config) (*Client, error) {
 	}
 
 	ctx, cancel := context.WithCancel(context.TODO())
-	return &Client{
+	c := &Client{
 		config: config,
 		Conn:   conn,
 		ctx:    ctx,
 		cancel: cancel,
-	}, nil
+	}
+
+	if config.Generate {
+		c.CPUMiner = newCPUMiner(c)
+		c.CPUMiner.Start()
+		log.Info("Started CPU miner.")
+	}
+
+	return c, nil
 }
 
 // process fetches incoming messages and handles them accordingly.
@@ -120,15 +129,19 @@ out:
 						continue
 					}
 
-					currHeight := atomic.LoadUint32(&pc.currHeight)
-					// Accept the next expected work data with an
-					// incremented block height or updated work data
-					// at the current block height.
-					if blkHeight == currHeight+1 || blkHeight == currHeight {
+					workHeight := atomic.LoadUint32(&pc.workHeight)
+
+					// Accept the work data if the miner is currently starting
+					// out, if the received work data has an incremented block
+					// height, or if the received work data is an updated work
+					// data at the current height.
+					if workHeight == 0 || blkHeight == workHeight+1 || blkHeight == workHeight {
 						pc.workMtx.Lock()
 						pc.currWork = work
 						pc.workMtx.Unlock()
-						atomic.StoreUint32(&pc.currHeight, blkHeight)
+						atomic.StoreUint32(&pc.workHeight, blkHeight)
+						log.Debugf("Work data updated, current height is %v",
+							blkHeight)
 					}
 
 				case ws.ConnectedBlock:
@@ -142,7 +155,8 @@ out:
 					pc.workMtx.Lock()
 					pc.currWork = nil
 					pc.workMtx.Unlock()
-					atomic.StoreUint32(&pc.currHeight, blkHeight+1)
+
+					atomic.StoreUint32(&pc.workHeight, blkHeight+1)
 
 				case ws.DisconnectedBlock:
 					blkHeight, err := parseDisconnectedBlockNotification(req)
@@ -155,7 +169,8 @@ out:
 					pc.workMtx.Lock()
 					pc.currWork = nil
 					pc.workMtx.Unlock()
-					atomic.StoreUint32(&pc.currHeight, blkHeight)
+
+					atomic.StoreUint32(&pc.workHeight, blkHeight)
 				}
 			default:
 				log.Debugf("Unknowning message type received")

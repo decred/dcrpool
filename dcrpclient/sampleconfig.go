@@ -21,6 +21,16 @@ const ConfigFileContents = `[Application Options]
 ; pass=
 
 ; ------------------------------------------------------------------------------
+; CPU mining settings
+; ------------------------------------------------------------------------------
+; Enable built-in CPU mining.
+;
+; NOTE: This is typically only useful for testing purposes such as testnet or
+; simnet since the difficulty on mainnet is far too high for CPU mining to be
+; worth your while.
+; generate=false
+
+; ------------------------------------------------------------------------------
 ; Data settings
 ; ------------------------------------------------------------------------------
 ; The home directory of dcrpclient.

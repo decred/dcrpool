@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
 )
@@ -18,13 +19,13 @@ const (
 	defaultLogLevel       = "debug"
 	defaultConfigFilename = "dcrpclient.conf"
 	defaultHost           = "localhost:25000"
-	defaultEndpoint       = "wss"
 	defaultLogDirname     = "log"
 	defaultLogFilename    = "dcrpclient.log"
 )
 
 var (
-	defaultHomeDir    = "deploy" // dcrutil.AppDataDir("dcrpclient", false)
+	defaultHomeDir    = dcrutil.AppDataDir("dcrpclient", false)
+	defaultGenerate   = false
 	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFilename)
 	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogDirname)
 )
@@ -39,6 +40,7 @@ type config struct {
 	ConfigFile string `long:"configfile" description:"Path to configuration file"`
 	User       string `long:"user" description:"The username of the mining account"`
 	Pass       string `long:"pass" description:"The password of the mining account"`
+	Generate   bool   `long:"generate" description:"Generate (mine) coins using the CPU"`
 	Host       string `long:"host" description:"The ip address and port of the mining pool in the form ip:port"`
 	DebugLevel string `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir     string `long:"logdir" description:"The log output directory."`
@@ -208,11 +210,13 @@ func createConfigFile(preCfg config) error {
 	configFileRE := regexp.MustCompile(`(?m)^;\s*configfile=[^\s]*$`)
 	logDirRE := regexp.MustCompile(`(?m)^;\s*logdir=[^\s]*$`)
 	hostRE := regexp.MustCompile(`(?m)^;\s*host=[^\s]*$`)
+	generateRE := regexp.MustCompile(`(?m)^;\s*generate=[^\s]*$`)
 	s := homeDirRE.ReplaceAllString(ConfigFileContents, fmt.Sprintf("homedir=%s", preCfg.HomeDir))
 	s = debugLevelRE.ReplaceAllString(s, fmt.Sprintf("debuglevel=%s", preCfg.DebugLevel))
 	s = configFileRE.ReplaceAllString(s, fmt.Sprintf("configfile=%s", preCfg.ConfigFile))
 	s = hostRE.ReplaceAllString(s, fmt.Sprintf("host=%s", preCfg.Host))
 	s = logDirRE.ReplaceAllString(s, fmt.Sprintf("logdir=%s", preCfg.LogDir))
+	s = generateRE.ReplaceAllString(s, fmt.Sprintf("generate=%v", preCfg.Generate))
 
 	// Create config file at the provided path.
 	dest, err := os.OpenFile(preCfg.ConfigFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
@@ -245,6 +249,7 @@ func loadConfig() (*config, []string, error) {
 		Host:       defaultHost,
 		DebugLevel: defaultLogLevel,
 		LogDir:     defaultLogDir,
+		Generate:   defaultGenerate,
 		User:       "",
 		Pass:       "",
 	}
