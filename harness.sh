@@ -38,7 +38,7 @@ simnet=1
 logdir=./log
 datadir=./data
 debuglevel=debug
-txindex=true
+txindex=1
 listen=127.0.0.1:19555
 EOF
 cat > "${NODES_ROOT}/pnode.conf" <<EOF

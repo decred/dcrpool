@@ -3,10 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
-	"dnldd/dcrpool/ws"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -15,8 +13,9 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/wire"
-
 	"github.com/gorilla/websocket"
+
+	"dnldd/dcrpool/ws"
 )
 
 const (
@@ -35,14 +34,47 @@ type Work struct {
 // and work submissions.
 type Client struct {
 	workHeight uint32
+	id         uint64
+	req        map[uint64]string
+	reqMtx     sync.RWMutex
 	currWork   *Work
 	config     *config
 	closed     uint64
 	ctx        context.Context
 	cancel     context.CancelFunc
 	Conn       *websocket.Conn
+	connMtx    sync.Mutex
 	workMtx    sync.RWMutex
 	CPUMiner   *CPUMiner
+}
+
+// nextID returns the next message id for the client.
+func (pc *Client) nextID() *uint64 {
+	id := atomic.AddUint64(&pc.id, 1)
+	return &id
+}
+
+// recordRequest logs the client request as an id/method pair.
+func (pc *Client) recordRequest(id uint64, method string) {
+	pc.reqMtx.Lock()
+	pc.req[id] = method
+	pc.reqMtx.Unlock()
+}
+
+// fetchRequest fetches the request method of the provided request id.
+func (pc *Client) fetchRequest(id uint64) string {
+	var method string
+	pc.reqMtx.RLock()
+	method = pc.req[id]
+	pc.reqMtx.RUnlock()
+	return method
+}
+
+// deleteRequest removes the request referenced by the provided id.
+func (pc *Client) deleteRequest(id uint64) {
+	pc.reqMtx.Lock()
+	delete(pc.req, id)
+	pc.reqMtx.Unlock()
 }
 
 // newClient initializes a mining pool client.
@@ -58,6 +90,7 @@ func newClient(config *config) (*Client, error) {
 		Conn:   conn,
 		ctx:    ctx,
 		cancel: cancel,
+		req:    make(map[uint64]string, 0),
 	}
 
 	if config.Generate {
@@ -76,105 +109,136 @@ out:
 		select {
 		case <-pc.ctx.Done():
 			// Send a close message.
+			pc.connMtx.Lock()
 			pc.Conn.WriteMessage(websocket.CloseMessage,
 				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			pc.connMtx.Unlock()
 			time.Sleep(time.Second * 5)
 			break out
 		default:
-			_, data, err := pc.Conn.ReadMessage()
-			if err != nil {
-				if websocket.IsUnexpectedCloseError(err,
-					websocket.CloseGoingAway, websocket.CloseAbnormalClosure,
-					websocket.CloseNormalClosure) {
-					log.Errorf("Websocket read error: %v", err)
+			// Non blocking receive fallthrough.
+		}
+
+		_, data, err := pc.Conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err,
+				websocket.CloseGoingAway, websocket.CloseAbnormalClosure,
+				websocket.CloseNormalClosure) {
+				log.Errorf("Websocket read error: %v", err)
+			}
+			pc.cancel()
+			continue
+		}
+
+		// Identify the message type and proceed to handle accordingly.
+		msg, reqType, err := ws.IdentifyMessage(data)
+		if err != nil {
+			log.Errorf("Websocket message error: %v", err)
+			pc.cancel()
+			continue
+		}
+
+		switch reqType {
+		case ws.RequestType:
+			req := msg.(*ws.Request)
+			switch req.Method {
+			case ws.Ping:
+				pc.connMtx.Lock()
+				pc.Conn.WriteJSON(ws.PongResponse(req.ID))
+				pc.connMtx.Unlock()
+				if err != nil {
+					log.Errorf("Websockect write error: %v", err)
+					pc.cancel()
+					continue
 				}
-				pc.cancel()
+			}
+
+		case ws.ResponseType:
+			resp := msg.(*ws.Response)
+			method := pc.fetchRequest(*resp.ID)
+			if method == "" {
+				log.Error("No request found for received response "+
+					" with id: ", *resp.ID)
 				continue
 			}
 
-			// Identify the message type and proceed to handle accordingly.
-			msg, reqType, err := ws.IdentifyMessage(data)
-			if err != nil {
-				log.Errorf("Websocket message error: %v", err)
-				pc.cancel()
-				continue
+			switch method {
+			case ws.SubmittedWork:
+				pc.deleteRequest(*resp.ID)
+				accepted, err := ws.ParseEvaluatedWorkResponse(resp)
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+				log.Debugf("Evaluated work accepted: %v", accepted)
 			}
 
-			switch reqType {
-			case ws.RequestType:
-				req := msg.(*ws.Request)
-				switch req.Method {
-				case ws.Ping:
-					pc.Conn.WriteJSON(ws.PongResponse(req.ID))
-					if err != nil {
-						log.Errorf("Websockect write error: %v", err)
-						pc.cancel()
-						continue
-					}
+		case ws.NotificationType:
+			req := msg.(*ws.Request)
+			switch req.Method {
+			case ws.Work:
+				header, target, err := ws.ParseWorkNotification(req)
+				if err != nil {
+					pc.cancel()
+					continue
 				}
-			case ws.ResponseType:
-			case ws.NotificationType:
-				req := msg.(*ws.Request)
-				switch req.Method {
-				case ws.Work:
-					work, err := parseWorkNotification(req)
-					if err != nil {
-						pc.cancel()
-						continue
-					}
 
-					blkHeight, err := ws.FetchBlockHeight(work.header)
-					if err != nil {
-						pc.cancel()
-						continue
-					}
+				blkHeight, err := ws.FetchBlockHeight(header)
+				if err != nil {
+					pc.cancel()
+					continue
+				}
 
-					workHeight := atomic.LoadUint32(&pc.workHeight)
+				workHeight := atomic.LoadUint32(&pc.workHeight)
 
-					// Accept the work data if the miner is currently starting
-					// out, if the received work data has an incremented block
-					// height, or if the received work data is an updated work
-					// data at the current height.
-					if workHeight == 0 || blkHeight == workHeight+1 || blkHeight == workHeight {
-						pc.workMtx.Lock()
-						pc.currWork = work
-						pc.workMtx.Unlock()
-						atomic.StoreUint32(&pc.workHeight, blkHeight)
-						log.Debugf("Work data updated, current height is %v",
-							blkHeight)
-					}
-
-				case ws.ConnectedBlock:
-					blkHeight, err := parseConnectedBlockNotification(req)
-					if err != nil {
-						pc.cancel()
-						continue
-					}
-
-					// Stop current work and wait for a new block template.
+				// Accept the work data if the miner is currently starting
+				// out, if the received work data has an incremented block
+				// height, or if the received work data is an updated work
+				// data at the current height.
+				if workHeight == 0 || blkHeight == workHeight+1 ||
+					blkHeight == workHeight {
 					pc.workMtx.Lock()
-					pc.currWork = nil
-					pc.workMtx.Unlock()
-
-					atomic.StoreUint32(&pc.workHeight, blkHeight+1)
-
-				case ws.DisconnectedBlock:
-					blkHeight, err := parseDisconnectedBlockNotification(req)
-					if err != nil {
-						pc.cancel()
-						continue
+					pc.currWork = &Work{
+						header: header,
+						target: target,
 					}
-
-					// Stop current work and wait for a new block template.
-					pc.workMtx.Lock()
-					pc.currWork = nil
 					pc.workMtx.Unlock()
-
 					atomic.StoreUint32(&pc.workHeight, blkHeight)
+					log.Debugf("Work data updated, current height is %v",
+						blkHeight)
 				}
+
+			case ws.ConnectedBlock:
+				blkHeight, err := ws.ParseConnectedBlockNotification(req)
+				if err != nil {
+					pc.cancel()
+					continue
+				}
+
+				// Stop current work and wait for a new block template.
+				pc.workMtx.Lock()
+				pc.currWork = nil
+				pc.workMtx.Unlock()
+				atomic.StoreUint32(&pc.workHeight, blkHeight+1)
+
+			case ws.DisconnectedBlock:
+				blkHeight, err := ws.ParseDisconnectedBlockNotification(req)
+				if err != nil {
+					pc.cancel()
+					continue
+				}
+
+				// Stop current work and wait for a new block template.
+				pc.workMtx.Lock()
+				pc.currWork = nil
+				pc.workMtx.Unlock()
+				atomic.StoreUint32(&pc.workHeight, blkHeight)
 			default:
-				log.Debugf("Unknowning message type received")
+				log.Debugf("Unknowning notification type received")
 			}
+
+		default:
+			log.Debugf("Unknowning message type received")
 		}
 	}
 	os.Exit(1)
@@ -221,68 +285,6 @@ func dial(cfg *config) (*websocket.Conn, error) {
 	}
 
 	return wsConn, nil
-}
-
-// parseWorkNotification parses a work notification message.
-func parseWorkNotification(req *ws.Request) (*Work, error) {
-	params, ok := req.Params.(map[string]interface{})
-	if !ok {
-		return nil, errors.New("Invalid work notification, should have " +
-			"'params' field")
-	}
-
-	header, ok := params["header"].(string)
-	if !ok {
-		return nil, errors.New("Invalid work notification, 'params' data " +
-			"should have 'header' field")
-	}
-
-	target, ok := params["target"].(string)
-	if !ok {
-		return nil, errors.New("Invalid work notification, 'params' data " +
-			"should have 'target' field")
-	}
-
-	return &Work{
-		header: []byte(header),
-		target: []byte(target),
-	}, nil
-}
-
-// parseConnectedBlockNotification parses a connected block notification
-// message.
-func parseConnectedBlockNotification(req *ws.Request) (uint32, error) {
-	params, ok := req.Params.(map[string]interface{})
-	if !ok {
-		return 0, errors.New("Invalid connected block notification, should " +
-			"have 'params' field")
-	}
-
-	height, ok := params["height"].(float64)
-	if !ok {
-		return 0, errors.New("Invalid connected block notification, " +
-			"'params' data should have 'height' field")
-	}
-
-	return uint32(height), nil
-}
-
-// parseDisconnectedBlockNotification parses a disconnected block notification
-// message.
-func parseDisconnectedBlockNotification(req *ws.Request) (uint32, error) {
-	params, ok := req.Params.(map[string]interface{})
-	if !ok {
-		return 0, errors.New("Invalid disconnected block notification, should " +
-			"have 'params' field")
-	}
-
-	height, ok := params["height"].(float64)
-	if !ok {
-		return 0, errors.New("Invalid disconnected block notification, " +
-			"'params' data should have 'height' field")
-	}
-
-	return uint32(height), nil
 }
 
 // fetchBlockHeader deserializes the block header from the provided hex

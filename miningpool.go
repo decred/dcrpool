@@ -42,78 +42,6 @@ type MiningPool struct {
 	upgrader  websocket.Upgrader
 }
 
-// NewRPCClient initializes an RPC connection to dcrd for chain notifications.
-func NewRPCClient(cfg *config, h *ws.Hub) (*rpcclient.Client, error) {
-	ntfnHandlers := &rpcclient.NotificationHandlers{
-		OnBlockConnected: func(blkHeader []byte, transactions [][]byte) {
-			pLog.Debugf("Block connected: %x", blkHeader)
-
-			if !h.HasConnectedClients() {
-				return
-			}
-
-			blkHeight, err := ws.FetchBlockHeight(blkHeader)
-			if err != nil {
-				pLog.Error(err)
-				return
-			}
-
-			h.Broadcast <- ws.ConnectedBlockNotification(blkHeight)
-		},
-		OnBlockDisconnected: func(blkHeader []byte) {
-			pLog.Debugf("Block disconnected: %x", blkHeader)
-
-			if !h.HasConnectedClients() {
-				return
-			}
-
-			blkHeight, err := ws.FetchBlockHeight(blkHeader)
-			if err != nil {
-				pLog.Error(err)
-				return
-			}
-
-			h.Broadcast <- ws.DisconnectedBlockNotification(blkHeight)
-		},
-		OnWork: func(blkHeader string, target string) {
-			pLog.Debugf("New Work (header: %v , target: %v)", blkHeader,
-				target)
-
-			if !h.HasConnectedClients() {
-				return
-			}
-
-			h.Broadcast <- ws.WorkNotification(blkHeader, target)
-
-		},
-		// TODO: possibly need to add new transaction notifications here as well.
-	}
-
-	rpcConfig := &rpcclient.ConnConfig{
-		Host:         cfg.RPCHost,
-		Endpoint:     "ws",
-		User:         cfg.RPCUser,
-		Pass:         cfg.RPCPass,
-		Certificates: cfg.rpccerts,
-	}
-
-	client, err := rpcclient.New(rpcConfig, ntfnHandlers)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := client.NotifyWork(); err != nil {
-		client.Shutdown()
-		return nil, err
-	}
-	if err := client.NotifyBlocks(); err != nil {
-		client.Shutdown()
-		return nil, err
-	}
-
-	return client, nil
-}
-
 // NewMiningPool initializes the mining pool.
 func NewMiningPool(cfg *config) (*MiningPool, error) {
 	p := new(MiningPool)
@@ -144,10 +72,15 @@ func NewMiningPool(cfg *config) (*MiningPool, error) {
 			originsOk,
 			methodsOk)(p.limit(p.router)),
 	}
-	p.hub = ws.NewHub(p.db, p.httpc, p.limiter)
 	p.upgrader = websocket.Upgrader{}
-
-	p.rpcclient, err = NewRPCClient(p.cfg, p.hub)
+	rpccfg := &rpcclient.ConnConfig{
+		Host:         cfg.RPCHost,
+		Endpoint:     "ws",
+		User:         cfg.RPCUser,
+		Pass:         cfg.RPCPass,
+		Certificates: cfg.rpccerts,
+	}
+	p.hub, err = ws.NewHub(p.db, p.httpc, rpccfg, p.limiter)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +100,7 @@ func (p *MiningPool) listen() {
 
 // shutdown gracefully terminates the mining pool.
 func (p *MiningPool) shutdown() {
-	pLog.Info("Shutting down dcrpool...")
+	pLog.Info("Shutting down dcrpool.")
 	p.hub.Close()
 	p.db.Close()
 	defer p.cancel()

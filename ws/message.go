@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 )
 
 // Message types.
@@ -24,6 +25,8 @@ const (
 	Ping              = "ping"
 	Pong              = "pong"
 	Work              = "work"
+	SubmittedWork     = "submittedwork"
+	EvaluatedWork     = "evaluatedwork"
 	ConnectedBlock    = "connectedblock"
 	DisconnectedBlock = "disconnectedblock"
 )
@@ -51,8 +54,8 @@ func (req *Request) HasID() bool {
 // of the preceding request and any errors in processing the request, if any.
 type Response struct {
 	ID     *uint64     `json:"id"`
-	Error  *string     `json:"error"`
-	Result interface{} `json:"interface"`
+	Error  *string     `json:"error,omitempty"`
+	Result interface{} `json:"interface,omitempty"`
 }
 
 // HasID determines if the response has an ID.
@@ -124,6 +127,87 @@ func WorkNotification(header string, target string) *Request {
 	}
 }
 
+// ParseWorkNotification parses a work notification message.
+func ParseWorkNotification(req *Request) ([]byte, []byte, error) {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return nil, nil, errors.New("Invalid work notification, should have " +
+			"'params' field")
+	}
+
+	header, ok := params["header"].(string)
+	if !ok {
+		return nil, nil, errors.New("Invalid work notification, 'params' data " +
+			"should have 'header' field")
+	}
+
+	target, ok := params["target"].(string)
+	if !ok {
+		return nil, nil, errors.New("Invalid work notification, 'params' data " +
+			"should have 'target' field")
+	}
+
+	return []byte(header), []byte(target), nil
+}
+
+// WorkSubmissionRequest is a convenience function for creating a work
+// submision request.
+func WorkSubmissionRequest(id *uint64, header string) *Request {
+	return &Request{
+		ID:     id,
+		Method: SubmittedWork,
+		Params: map[string]interface{}{"header": header},
+	}
+}
+
+// ParseWorkSubmissionRequest parses a work submission request.
+func ParseWorkSubmissionRequest(req *Request) (*string, error) {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return nil, errors.New("Invalid work submission request, should " +
+			"have 'params' field")
+	}
+
+	header, ok := params["header"].(string)
+	if !ok {
+		return nil, errors.New("Invalid work submission request, " +
+			"'params' data should have 'header' field")
+	}
+
+	return &header, nil
+}
+
+// EvaluatedWorkResponse is a convenience function for creating an evaluated
+// work response.
+func EvaluatedWorkResponse(id *uint64, err *string, status bool) *Response {
+	return &Response{
+		ID:     id,
+		Error:  err,
+		Result: map[string]interface{}{"accepted": status},
+	}
+}
+
+// ParseEvaluatedWorkResponse parses an evaluated work response message.
+func ParseEvaluatedWorkResponse(resp *Response) (bool, error) {
+	params, ok := resp.Result.(map[string]interface{})
+	if !ok {
+		return false, errors.New("Invalid evaluated work response, should " +
+			"have 'result' field")
+	}
+
+	accepted, ok := params["accepted"].(bool)
+	if !ok {
+		return false, errors.New("Invalid evaluated work response, " +
+			"'result' data should have 'accepted' field")
+	}
+
+	if resp.Error != nil {
+		return accepted, errors.New(*resp.Error)
+	}
+
+	return accepted, nil
+}
+
 // ConnectedBlockNotification is a convenience function for creating a
 // connected block notification.
 func ConnectedBlockNotification(blkHeight uint32) *Request {
@@ -134,6 +218,24 @@ func ConnectedBlockNotification(blkHeight uint32) *Request {
 	}
 }
 
+// ParseConnectedBlockNotification parses a connected block notification
+// message.
+func ParseConnectedBlockNotification(req *Request) (uint32, error) {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return 0, errors.New("Invalid connected block notification, should " +
+			"have 'params' field")
+	}
+
+	height, ok := params["height"].(float64)
+	if !ok {
+		return 0, errors.New("Invalid connected block notification, " +
+			"'params' data should have 'height' field")
+	}
+
+	return uint32(height), nil
+}
+
 // DisconnectedBlockNotification is a convenience function for creating a
 // disconnected block notification.
 func DisconnectedBlockNotification(blkHeight uint32) *Request {
@@ -142,6 +244,24 @@ func DisconnectedBlockNotification(blkHeight uint32) *Request {
 		Method: DisconnectedBlock,
 		Params: map[string]interface{}{"height": blkHeight},
 	}
+}
+
+// ParseDisconnectedBlockNotification parses a disconnected block notification
+// message.
+func ParseDisconnectedBlockNotification(req *Request) (uint32, error) {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return 0, errors.New("Invalid disconnected block notification, should " +
+			"have 'params' field")
+	}
+
+	height, ok := params["height"].(float64)
+	if !ok {
+		return 0, errors.New("Invalid disconnected block notification, " +
+			"'params' data should have 'height' field")
+	}
+
+	return uint32(height), nil
 }
 
 // FetchBlockHeight retrieves the block height from the provided hex encoded

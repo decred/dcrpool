@@ -7,6 +7,13 @@ import (
 	"golang.org/x/time/rate"
 )
 
+const (
+	// tokenRate is the token usage allowed per second.
+	tokenRate = 4
+	// burst is the maximum token usage allowed per call.
+	burst = 2
+)
+
 // RequestLimiter represents a rate limiter for a connecting client. This identifies
 // clients by their IP addresses.
 type RequestLimiter struct {
@@ -35,7 +42,7 @@ func NewRateLimiter() *RateLimiter {
 func (r *RateLimiter) AddRequestLimiter(ip string) *RequestLimiter {
 	limiter := &RequestLimiter{
 		ip:                 ip,
-		limiter:            rate.NewLimiter(2, 4),
+		limiter:            rate.NewLimiter(tokenRate, burst),
 		lastAllowedRequest: 0,
 	}
 	r.mutex.Lock()

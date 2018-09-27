@@ -6,16 +6,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"sync/atomic"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
-
 	"github.com/decred/dcrd/blockchain"
-	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/wire"
+
+	"dnldd/dcrpool/ws"
 )
 
 const (
@@ -28,7 +29,7 @@ const (
 
 	// hpsUpdateSecs is the number of seconds to wait in between each
 	// update to the hash rate monitor.
-	hpsUpdateSecs = 15
+	hpsUpdateSecs = 5
 
 	// maxSimnetToMine is the maximum number of blocks to mine on HEAD~1
 	// for simnet so that you don't run out of memory if tickets for
@@ -50,12 +51,6 @@ type CPUMiner struct {
 	started      bool
 	rateCh       chan float64
 	updateHashes chan uint64
-	// This is a map that keeps track of how many blocks have
-	// been mined on each parent by the CPUMiner. It is only
-	// for use in simulation networks, to diminish memory
-	// exhaustion. It should not race because it's only
-	// accessed in a single threaded loop below.
-	minedOnParents map[chainhash.Hash]uint8
 }
 
 // hashRateMonitor tracks number of hashes per second the mining process is
@@ -81,7 +76,7 @@ out:
 			hashRate = (hashRate + curHashRate) / 2
 			totalHashes = 0
 			if hashRate != 0 {
-				log.Debugf("Hash rate: %6.0f kilohashes/s",
+				log.Infof("Hash rate: %6.0f kilohashes/s",
 					hashRate/1000)
 			}
 
@@ -167,7 +162,7 @@ func (m *CPUMiner) solveBlock(ctx context.Context, header *wire.BlockHeader, tic
 //
 // It must be run as a goroutine.
 func (m *CPUMiner) generateBlocks(ctx context.Context) {
-	log.Info("Starting generate blocks worker")
+	log.Info("Starting generate blocks worker.")
 
 	// Start a ticker which is used to signal checks for stale work and
 	// updates to the hash rate monitor.
@@ -201,26 +196,39 @@ out:
 			continue
 		}
 
-		// This prevents you from causing memory exhaustion issues
-		// when mining aggressively in a simulation network.
-		if m.minedOnParents[header.PrevBlock] >=
-			maxSimnetToMine {
-			log.Info("too many blocks mined on parent, stopping " +
-				"until there are enough votes on these to make a new " +
-				"block")
-			continue
-		}
-
-		// Attempt to solve the block.  The function will exit early
+		// Attempt to solve the block. The function will exit early
 		// with false when conditions that trigger a stale block, so
-		// a new block template can be generated.  When the return is
+		// a new block template can be generated. When the return is
 		// true a solution was found, so submit the solved block.
 		if m.solveBlock(ctx, header, ticker) {
-			log.Infof("Block solved: %v", spew.Sdump(header))
-			// block := dcrutil.NewBlock(template.Block)
-			// m.submitBlock(block)
-			m.minedOnParents[header.PrevBlock]++
-			break out
+			// Submit solved block.
+			buf := bytes.NewBuffer(make([]byte, 0))
+			err := header.Serialize(buf)
+			if err != nil {
+				log.Error(err)
+				return
+			}
+
+			encoded := []byte(hex.EncodeToString(buf.Bytes()))
+			headerTmpl := make([]byte, len(m.c.currWork.header))
+			copy(headerTmpl[:], m.c.currWork.header[:])
+			copy(headerTmpl[:len(encoded)], encoded[:])
+
+			id := m.c.nextID()
+			submission := ws.WorkSubmissionRequest(id, string(headerTmpl))
+
+			// record the request.
+			m.c.recordRequest(*id, ws.SubmittedWork)
+
+			m.c.connMtx.Lock()
+			err = m.c.Conn.WriteJSON(submission)
+			m.c.connMtx.Unlock()
+			if err != nil {
+				log.Debug(err)
+				continue
+			}
+
+			log.Debugf("Solved block (%v) submitted.", string(headerTmpl))
 		}
 	}
 
@@ -257,9 +265,8 @@ func (m *CPUMiner) HashesPerSecond() float64 {
 // Use Start to begin the mining process.
 func newCPUMiner(c *Client) *CPUMiner {
 	return &CPUMiner{
-		rateCh:         make(chan float64),
-		updateHashes:   make(chan uint64),
-		minedOnParents: make(map[chainhash.Hash]uint8),
-		c:              c,
+		rateCh:       make(chan float64),
+		updateHashes: make(chan uint64),
+		c:            c,
 	}
 }
