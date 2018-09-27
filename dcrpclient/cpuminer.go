@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
-	"sync/atomic"
 	"time"
 
 	"github.com/decred/dcrd/blockchain"
@@ -130,12 +129,10 @@ func (m *CPUMiner) solveBlock(ctx context.Context, header *wire.BlockHeader, tic
 					m.updateHashes <- hashesCompleted
 					hashesCompleted = 0
 
+				case <-m.c.chainCh:
 					// Stop current work if the chain updates or a new work
-					// data with an incremented height is received.
-					workHeight := atomic.LoadUint32(&m.c.workHeight)
-					if workHeight > header.Height {
-						return false
-					}
+					// is received.
+					return false
 
 				default:
 					// Non-blocking select to fall through
@@ -180,7 +177,7 @@ out:
 		}
 
 		m.c.workMtx.RLock()
-		workAvailable := m.c.currWork != nil
+		workAvailable := m.c.work != nil
 		m.c.workMtx.RUnlock()
 
 		// Only proceed to mine if there is a block template available.
@@ -189,7 +186,7 @@ out:
 		}
 
 		m.c.workMtx.Lock()
-		header, err := fetchBlockHeader(m.c.currWork.header)
+		header, err := fetchBlockHeader(m.c.work.header)
 		m.c.workMtx.Unlock()
 		if err != nil {
 			log.Error(err)
@@ -210,15 +207,15 @@ out:
 			}
 
 			encoded := []byte(hex.EncodeToString(buf.Bytes()))
-			headerTmpl := make([]byte, len(m.c.currWork.header))
-			copy(headerTmpl[:], m.c.currWork.header[:])
+			headerTmpl := make([]byte, len(m.c.work.header))
+			copy(headerTmpl[:], m.c.work.header[:])
 			copy(headerTmpl[:len(encoded)], encoded[:])
 
 			id := m.c.nextID()
 			submission := ws.WorkSubmissionRequest(id, string(headerTmpl))
 
 			// record the request.
-			m.c.recordRequest(*id, ws.SubmittedWork)
+			m.c.recordRequest(*id, ws.SubmitWork)
 
 			m.c.connMtx.Lock()
 			err = m.c.Conn.WriteJSON(submission)

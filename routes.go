@@ -15,10 +15,16 @@ import (
 	"dnldd/dcrpool/ws"
 )
 
-// errParamNotFound is returned when a provided parameter key does not map
+// errParamNotFound is returned when the provided parameter key does not map
 // to any value.
 func errParamNotFound(key string) error {
 	return fmt.Errorf("associated parameter for key '%v' not found", key)
+}
+
+// errHeaderNotFound is returned when the provided header key does not map
+// to any value.
+func errHeaderNotFound(key string) error {
+	return fmt.Errorf("associated header for key '%v' not found", key)
 }
 
 // setupRoutes configures the accessible routes of the mining pool.
@@ -70,7 +76,9 @@ func getBasicAuthorization(r *http.Request) (string, string, error) {
 
 // handleWS establishes websocket connections with clients.
 // endpoint: POST ip:port/ws
-// 	Authorization: Basic base64('user:pass')
+//  Header:
+// 			Authorization: Basic base64('user:pass')
+//  		Miner: "cpu"
 func (p *MiningPool) handleWS(w http.ResponseWriter, r *http.Request) {
 	name, pass, err := getBasicAuthorization(r)
 	if err != nil {
@@ -108,6 +116,12 @@ func (p *MiningPool) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	minerType := r.Header.Get("Miner")
+	if minerType == "" {
+		respondWithError(w, http.StatusBadRequest, errHeaderNotFound("Miner"))
+		return
+	}
+
 	// Upgrade the http request to a websocket connection.
 	conn, err := p.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -115,7 +129,7 @@ func (p *MiningPool) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c := ws.NewClient(p.hub, conn, r.RemoteAddr, p.hub.Ticker)
+	c := ws.NewClient(p.hub, conn, r.RemoteAddr, p.hub.Ticker, minerType)
 	go c.Process(c.Ctx)
 	go c.Send(c.Ctx)
 }

@@ -70,7 +70,7 @@ user=${MINING_USER}
 pass=${MINING_PASS}
 homedir=${NODES_ROOT}/client
 host=127.0.0.1:19576
-generate=1
+minertype=cpu
 EOF
 cat > "${NODES_ROOT}/dcrctl.conf" <<EOF
 rpcuser=${RPCUSER}

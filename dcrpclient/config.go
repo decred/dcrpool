@@ -1,6 +1,7 @@
 package main
 
 import (
+	"dnldd/dcrpool/ws"
 	"fmt"
 	"os"
 	"os/user"
@@ -21,6 +22,7 @@ const (
 	defaultHost           = "localhost:25000"
 	defaultLogDirname     = "log"
 	defaultLogFilename    = "dcrpclient.log"
+	defaultMinerType      = ws.CPU
 )
 
 var (
@@ -40,7 +42,7 @@ type config struct {
 	ConfigFile string `long:"configfile" description:"Path to configuration file"`
 	User       string `long:"user" description:"The username of the mining account"`
 	Pass       string `long:"pass" description:"The password of the mining account"`
-	Generate   bool   `long:"generate" description:"Generate (mine) coins using the CPU"`
+	MinerType  string `long:"minertype" description:"The miner type, refer to the miner list for options"`
 	Host       string `long:"host" description:"The ip address and port of the mining pool in the form ip:port"`
 	DebugLevel string `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir     string `long:"logdir" description:"The log output directory."`
@@ -216,7 +218,7 @@ func createConfigFile(preCfg config) error {
 	s = configFileRE.ReplaceAllString(s, fmt.Sprintf("configfile=%s", preCfg.ConfigFile))
 	s = hostRE.ReplaceAllString(s, fmt.Sprintf("host=%s", preCfg.Host))
 	s = logDirRE.ReplaceAllString(s, fmt.Sprintf("logdir=%s", preCfg.LogDir))
-	s = generateRE.ReplaceAllString(s, fmt.Sprintf("generate=%v", preCfg.Generate))
+	s = generateRE.ReplaceAllString(s, fmt.Sprintf("minertype=%v", preCfg.MinerType))
 
 	// Create config file at the provided path.
 	dest, err := os.OpenFile(preCfg.ConfigFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
@@ -249,7 +251,7 @@ func loadConfig() (*config, []string, error) {
 		Host:       defaultHost,
 		DebugLevel: defaultLogLevel,
 		LogDir:     defaultLogDir,
-		Generate:   defaultGenerate,
+		MinerType:  defaultMinerType,
 		User:       "",
 		Pass:       "",
 	}

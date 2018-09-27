@@ -25,10 +25,15 @@ const (
 	Ping              = "ping"
 	Pong              = "pong"
 	Work              = "work"
-	SubmittedWork     = "submittedwork"
+	SubmitWork        = "submitwork"
 	EvaluatedWork     = "evaluatedwork"
 	ConnectedBlock    = "connectedblock"
 	DisconnectedBlock = "disconnectedblock"
+)
+
+// Miner types.
+const (
+	CPU = "cpu"
 )
 
 // Message is the base interface messages exchanged between a websocket client
@@ -40,9 +45,9 @@ type Message interface {
 // Request defines a request message. It specifies the targetted processing
 // method and supplies the required parameters.
 type Request struct {
-	ID     *uint64     `json:"id"`
-	Method string      `json:"method"`
-	Params interface{} `json:"params"`
+	ID     *uint64                `json:"id"`
+	Method string                 `json:"method"`
+	Params map[string]interface{} `json:"params"`
 }
 
 // HasID determines if the request has an ID.
@@ -53,9 +58,9 @@ func (req *Request) HasID() bool {
 // Response defines a response message. It bundles the payload
 // of the preceding request and any errors in processing the request, if any.
 type Response struct {
-	ID     *uint64     `json:"id"`
-	Error  *string     `json:"error,omitempty"`
-	Result interface{} `json:"interface,omitempty"`
+	ID     *uint64                `json:"id"`
+	Error  *string                `json:"error,omitempty"`
+	Result map[string]interface{} `json:"result,omitempty"`
 }
 
 // HasID determines if the response has an ID.
@@ -103,7 +108,7 @@ func PongResponse(id *uint64) *Response {
 	return &Response{
 		ID:     id,
 		Error:  nil,
-		Result: Pong,
+		Result: map[string]interface{}{"response": Pong},
 	}
 }
 
@@ -119,7 +124,7 @@ func tooManyRequestsResponse(id *uint64) *Response {
 }
 
 // WorkNotification is a convenience function for creating a work notification.
-func WorkNotification(header string, target string) *Request {
+func WorkNotification(header string, target float64) *Request {
 	return &Request{
 		ID:     nil,
 		Method: Work,
@@ -128,26 +133,20 @@ func WorkNotification(header string, target string) *Request {
 }
 
 // ParseWorkNotification parses a work notification message.
-func ParseWorkNotification(req *Request) ([]byte, []byte, error) {
-	params, ok := req.Params.(map[string]interface{})
+func ParseWorkNotification(req *Request) ([]byte, uint32, error) {
+	header, ok := req.Params["header"].(string)
 	if !ok {
-		return nil, nil, errors.New("Invalid work notification, should have " +
-			"'params' field")
-	}
-
-	header, ok := params["header"].(string)
-	if !ok {
-		return nil, nil, errors.New("Invalid work notification, 'params' data " +
+		return nil, 0, errors.New("Invalid work notification, 'params' data " +
 			"should have 'header' field")
 	}
 
-	target, ok := params["target"].(string)
+	target, ok := req.Params["target"].(float64)
 	if !ok {
-		return nil, nil, errors.New("Invalid work notification, 'params' data " +
+		return nil, 0, errors.New("Invalid work notification, 'params' data " +
 			"should have 'target' field")
 	}
 
-	return []byte(header), []byte(target), nil
+	return []byte(header), uint32(target), nil
 }
 
 // WorkSubmissionRequest is a convenience function for creating a work
@@ -155,20 +154,14 @@ func ParseWorkNotification(req *Request) ([]byte, []byte, error) {
 func WorkSubmissionRequest(id *uint64, header string) *Request {
 	return &Request{
 		ID:     id,
-		Method: SubmittedWork,
+		Method: SubmitWork,
 		Params: map[string]interface{}{"header": header},
 	}
 }
 
 // ParseWorkSubmissionRequest parses a work submission request.
 func ParseWorkSubmissionRequest(req *Request) (*string, error) {
-	params, ok := req.Params.(map[string]interface{})
-	if !ok {
-		return nil, errors.New("Invalid work submission request, should " +
-			"have 'params' field")
-	}
-
-	header, ok := params["header"].(string)
+	header, ok := req.Params["header"].(string)
 	if !ok {
 		return nil, errors.New("Invalid work submission request, " +
 			"'params' data should have 'header' field")
@@ -189,13 +182,7 @@ func EvaluatedWorkResponse(id *uint64, err *string, status bool) *Response {
 
 // ParseEvaluatedWorkResponse parses an evaluated work response message.
 func ParseEvaluatedWorkResponse(resp *Response) (bool, error) {
-	params, ok := resp.Result.(map[string]interface{})
-	if !ok {
-		return false, errors.New("Invalid evaluated work response, should " +
-			"have 'result' field")
-	}
-
-	accepted, ok := params["accepted"].(bool)
+	accepted, ok := resp.Result["accepted"].(bool)
 	if !ok {
 		return false, errors.New("Invalid evaluated work response, " +
 			"'result' data should have 'accepted' field")
@@ -221,13 +208,7 @@ func ConnectedBlockNotification(blkHeight uint32) *Request {
 // ParseConnectedBlockNotification parses a connected block notification
 // message.
 func ParseConnectedBlockNotification(req *Request) (uint32, error) {
-	params, ok := req.Params.(map[string]interface{})
-	if !ok {
-		return 0, errors.New("Invalid connected block notification, should " +
-			"have 'params' field")
-	}
-
-	height, ok := params["height"].(float64)
+	height, ok := req.Params["height"].(float64)
 	if !ok {
 		return 0, errors.New("Invalid connected block notification, " +
 			"'params' data should have 'height' field")
@@ -249,13 +230,7 @@ func DisconnectedBlockNotification(blkHeight uint32) *Request {
 // ParseDisconnectedBlockNotification parses a disconnected block notification
 // message.
 func ParseDisconnectedBlockNotification(req *Request) (uint32, error) {
-	params, ok := req.Params.(map[string]interface{})
-	if !ok {
-		return 0, errors.New("Invalid disconnected block notification, should " +
-			"have 'params' field")
-	}
-
-	height, ok := params["height"].(float64)
+	height, ok := req.Params["height"].(float64)
 	if !ok {
 		return 0, errors.New("Invalid disconnected block notification, " +
 			"'params' data should have 'height' field")
@@ -275,4 +250,17 @@ func FetchBlockHeight(encoded []byte) (uint32, error) {
 	}
 
 	return binary.LittleEndian.Uint32(decoded[128:133]), nil
+}
+
+// FetchTargetDifficulty retrieves the target difficulty from the provided hex
+// encoded block header.
+func FetchTargetDifficulty(encoded []byte) (uint32, error) {
+	data := []byte(encoded)
+	decoded := make([]byte, len(data))
+	_, err := hex.Decode(decoded, data)
+	if err != nil {
+		return 0, err
+	}
+
+	return binary.LittleEndian.Uint32(decoded[116:121]), nil
 }

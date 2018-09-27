@@ -24,28 +24,28 @@ const (
 )
 
 // Work represents the data recieved from a work notification. It comprises of
-// hex encoded block header and target data.
+// hex encoded block header and pool target data.
 type Work struct {
 	header []byte
-	target []byte
+	target uint32
 }
 
 // Client connects a miner to the mining pool for block template updates
 // and work submissions.
 type Client struct {
-	workHeight uint32
-	id         uint64
-	req        map[uint64]string
-	reqMtx     sync.RWMutex
-	currWork   *Work
-	config     *config
-	closed     uint64
-	ctx        context.Context
-	cancel     context.CancelFunc
-	Conn       *websocket.Conn
-	connMtx    sync.Mutex
-	workMtx    sync.RWMutex
-	CPUMiner   *CPUMiner
+	id       uint64
+	req      map[uint64]string
+	reqMtx   sync.RWMutex
+	work     *Work
+	workMtx  sync.RWMutex
+	config   *config
+	closed   uint64
+	ctx      context.Context
+	cancel   context.CancelFunc
+	Conn     *websocket.Conn
+	connMtx  sync.Mutex
+	chainCh  chan struct{}
+	CPUMiner *CPUMiner
 }
 
 // nextID returns the next message id for the client.
@@ -86,14 +86,15 @@ func newClient(config *config) (*Client, error) {
 
 	ctx, cancel := context.WithCancel(context.TODO())
 	c := &Client{
-		config: config,
-		Conn:   conn,
-		ctx:    ctx,
-		cancel: cancel,
-		req:    make(map[uint64]string, 0),
+		config:  config,
+		Conn:    conn,
+		ctx:     ctx,
+		cancel:  cancel,
+		req:     make(map[uint64]string, 0),
+		chainCh: make(chan struct{}, 0),
 	}
 
-	if config.Generate {
+	if config.MinerType == ws.CPU {
 		c.CPUMiner = newCPUMiner(c)
 		c.CPUMiner.Start()
 		log.Info("Started CPU miner.")
@@ -163,7 +164,7 @@ out:
 			}
 
 			switch method {
-			case ws.SubmittedWork:
+			case ws.SubmitWork:
 				pc.deleteRequest(*resp.ID)
 				accepted, err := ws.ParseEvaluatedWorkResponse(resp)
 				if err != nil {
@@ -179,60 +180,28 @@ out:
 			case ws.Work:
 				header, target, err := ws.ParseWorkNotification(req)
 				if err != nil {
+					log.Error(err)
 					pc.cancel()
 					continue
 				}
 
-				blkHeight, err := ws.FetchBlockHeight(header)
-				if err != nil {
-					pc.cancel()
-					continue
-				}
-
-				workHeight := atomic.LoadUint32(&pc.workHeight)
-
-				// Accept the work data if the miner is currently starting
-				// out, if the received work data has an incremented block
-				// height, or if the received work data is an updated work
-				// data at the current height.
-				if workHeight == 0 || blkHeight == workHeight+1 ||
-					blkHeight == workHeight {
-					pc.workMtx.Lock()
-					pc.currWork = &Work{
-						header: header,
-						target: target,
-					}
-					pc.workMtx.Unlock()
-					atomic.StoreUint32(&pc.workHeight, blkHeight)
-					log.Debugf("Work data updated, current height is %v",
-						blkHeight)
-				}
-
-			case ws.ConnectedBlock:
-				blkHeight, err := ws.ParseConnectedBlockNotification(req)
-				if err != nil {
-					pc.cancel()
-					continue
-				}
-
-				// Stop current work and wait for a new block template.
 				pc.workMtx.Lock()
-				pc.currWork = nil
-				pc.workMtx.Unlock()
-				atomic.StoreUint32(&pc.workHeight, blkHeight+1)
-
-			case ws.DisconnectedBlock:
-				blkHeight, err := ws.ParseDisconnectedBlockNotification(req)
-				if err != nil {
-					pc.cancel()
-					continue
+				pc.work = &Work{
+					header: header,
+					target: target,
 				}
-
-				// Stop current work and wait for a new block template.
-				pc.workMtx.Lock()
-				pc.currWork = nil
 				pc.workMtx.Unlock()
-				atomic.StoreUint32(&pc.workHeight, blkHeight)
+
+				// Update miner of new block template.
+				pc.chainCh <- struct{}{}
+
+			case ws.ConnectedBlock, ws.DisconnectedBlock:
+				pc.workMtx.Lock()
+				pc.work = nil
+				pc.workMtx.Unlock()
+
+				// Update miner of connected/disconnected block.
+				pc.chainCh <- struct{}{}
 			default:
 				log.Debugf("Unknowning notification type received")
 			}
@@ -257,6 +226,9 @@ func dial(cfg *config) (*websocket.Conn, error) {
 	auth := "Basic " + base64.StdEncoding.EncodeToString([]byte(credentials))
 	header := make(http.Header)
 	header.Add("Authorization", auth)
+
+	// Set the miner type.
+	header.Add("Miner", cfg.MinerType)
 
 	// Dial the connection.
 	url := fmt.Sprintf("%s://%s/%s", scheme, cfg.Host, endpoint)

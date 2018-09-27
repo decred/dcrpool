@@ -12,6 +12,7 @@ import (
 // Client defines an established websocket connection.
 type Client struct {
 	hub         *Hub
+	minerType   string
 	id          uint64
 	ws          *websocket.Conn
 	wsMtx       sync.RWMutex
@@ -49,11 +50,12 @@ func (c *Client) deleteRequest(id uint64) {
 }
 
 // NewClient initializes a new websocket client.
-func NewClient(h *Hub, socket *websocket.Conn, ip string, ticker *time.Ticker) *Client {
+func NewClient(h *Hub, socket *websocket.Conn, ip string, ticker *time.Ticker, minerType string) *Client {
 	ctx, cancel := context.WithCancel(context.TODO())
 	atomic.AddUint64(&h.ConnCount, 1)
 	return &Client{
 		hub:         h,
+		minerType:   minerType,
 		ws:          socket,
 		ip:          ip,
 		ch:          make(chan Message),
@@ -120,7 +122,7 @@ out:
 		case RequestType:
 			req := msg.(*Request)
 			switch req.Method {
-			case SubmittedWork:
+			case SubmitWork:
 				header, err := ParseWorkSubmissionRequest(req)
 				if err != nil {
 					log.Debug(err)
@@ -156,6 +158,11 @@ out:
 			switch method {
 			case Ping:
 				c.deleteRequest(*resp.ID)
+				reply := resp.Result["response"].(string)
+				if reply != Pong {
+					continue
+				}
+
 				atomic.StoreUint64(&c.pingRetries, 0)
 			default:
 				log.Debugf("Unknowning response type received")
@@ -222,13 +229,45 @@ out:
 				continue
 			}
 
-			c.wsMtx.Lock()
-			err := c.ws.WriteJSON(msg)
-			c.wsMtx.Unlock()
-			if err != nil {
-				log.Error(err)
-				c.cancel()
-				continue
+			req := msg.(*Request)
+			switch req.Method {
+			case Work:
+				// Fetch the header of the work notification.
+				header, _, err := ParseWorkNotification(req)
+				if err != nil {
+					log.Error(err)
+					c.cancel()
+					continue
+				}
+
+				// Fetch the actual target for the client based on its
+				// miner type.
+				c.hub.poolTargetsMtx.RLock()
+				target := c.hub.poolTargets[c.minerType]
+				c.hub.poolTargetsMtx.RUnlock()
+
+				// Send an updated work notification per the client's miner type.
+				r := WorkNotification(string(header), float64(target))
+				c.wsMtx.Lock()
+				err = c.ws.WriteJSON(r)
+				c.wsMtx.Unlock()
+				if err != nil {
+					log.Error(err)
+					c.cancel()
+					continue
+				}
+
+			default:
+				// For all other message types forward the broadcasted message
+				// to the client.
+				c.wsMtx.Lock()
+				err := c.ws.WriteJSON(msg)
+				c.wsMtx.Unlock()
+				if err != nil {
+					log.Error(err)
+					c.cancel()
+					continue
+				}
 			}
 		}
 	}
