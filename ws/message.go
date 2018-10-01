@@ -1,8 +1,6 @@
 package ws
 
 import (
-	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 )
@@ -124,7 +122,7 @@ func tooManyRequestsResponse(id *uint64) *Response {
 }
 
 // WorkNotification is a convenience function for creating a work notification.
-func WorkNotification(header string, target float64) *Request {
+func WorkNotification(header string, target string) *Request {
 	return &Request{
 		ID:     nil,
 		Method: Work,
@@ -133,20 +131,20 @@ func WorkNotification(header string, target float64) *Request {
 }
 
 // ParseWorkNotification parses a work notification message.
-func ParseWorkNotification(req *Request) ([]byte, uint32, error) {
+func ParseWorkNotification(req *Request) ([]byte, []byte, error) {
 	header, ok := req.Params["header"].(string)
 	if !ok {
-		return nil, 0, errors.New("Invalid work notification, 'params' data " +
+		return nil, nil, errors.New("Invalid work notification, 'params' data " +
 			"should have 'header' field")
 	}
 
-	target, ok := req.Params["target"].(float64)
+	target, ok := req.Params["target"].(string)
 	if !ok {
-		return nil, 0, errors.New("Invalid work notification, 'params' data " +
+		return nil, nil, errors.New("Invalid work notification, 'params' data " +
 			"should have 'target' field")
 	}
 
-	return []byte(header), uint32(target), nil
+	return []byte(header), []byte(target), nil
 }
 
 // WorkSubmissionRequest is a convenience function for creating a work
@@ -237,30 +235,4 @@ func ParseDisconnectedBlockNotification(req *Request) (uint32, error) {
 	}
 
 	return uint32(height), nil
-}
-
-// FetchBlockHeight retrieves the block height from the provided hex encoded
-// block header.
-func FetchBlockHeight(encoded []byte) (uint32, error) {
-	data := []byte(encoded)
-	decoded := make([]byte, len(data))
-	_, err := hex.Decode(decoded, data)
-	if err != nil {
-		return 0, err
-	}
-
-	return binary.LittleEndian.Uint32(decoded[128:133]), nil
-}
-
-// FetchTargetDifficulty retrieves the target difficulty from the provided hex
-// encoded block header.
-func FetchTargetDifficulty(encoded []byte) (uint32, error) {
-	data := []byte(encoded)
-	decoded := make([]byte, len(data))
-	_, err := hex.Decode(decoded, data)
-	if err != nil {
-		return 0, err
-	}
-
-	return binary.LittleEndian.Uint32(decoded[116:121]), nil
 }

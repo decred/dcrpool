@@ -83,24 +83,22 @@ func NewHub(bolt *bolt.DB, httpc *http.Client, rpccfg *rpcclient.ConnConfig, lim
 
 			// Fetch the target difficulty.
 			header := []byte(blkHeader)
-			newTarget, err := FetchTargetDifficulty(header)
+			currTarget, err := FetchTargetDifficulty(header)
 			if err != nil {
 				log.Error(err)
 				return
 			}
 
-			// Broadcast a target notification if the new target is different
-			// from the current target.
-			if h.currTarget == 0 || h.currTarget != newTarget {
-				// update the current target and calculate the pool targetrs
-				// for all miner types.
-				atomic.StoreUint32(&h.currTarget, newTarget)
+			// Update the current target difficulty and calculate the pool
+			// targets for all miner types if the received target difficulty
+			// is not equal to the cached target difficulty.
+			if h.currTarget == 0 || h.currTarget != currTarget {
+				atomic.StoreUint32(&h.currTarget, currTarget)
 				h.calculatePoolTargets()
 			}
 
 			// Broadcast a work notification.
-
-			h.Broadcast <- WorkNotification(blkHeader, 0)
+			h.Broadcast <- WorkNotification(blkHeader, "")
 		},
 	}
 

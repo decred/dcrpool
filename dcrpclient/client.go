@@ -27,7 +27,7 @@ const (
 // hex encoded block header and pool target data.
 type Work struct {
 	header []byte
-	target uint32
+	target []byte
 }
 
 // Client connects a miner to the mining pool for block template updates

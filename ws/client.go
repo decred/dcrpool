@@ -2,11 +2,22 @@ package ws
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
+	"encoding/hex"
+	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/decred/dcrd/blockchain"
 	"github.com/gorilla/websocket"
+)
+
+const (
+	// uint256Size is the number of bytes needed to represent an unsigned
+	// 256-bit integer.
+	uint256Size = 32
 )
 
 // Client defines an established websocket connection.
@@ -240,14 +251,28 @@ out:
 					continue
 				}
 
-				// Fetch the actual target for the client based on its
+				// Fetch the pool target for the client based on its
 				// miner type.
 				c.hub.poolTargetsMtx.RLock()
 				target := c.hub.poolTargets[c.minerType]
 				c.hub.poolTargetsMtx.RUnlock()
 
+				// Set the miner's pool id.
+				id := GeneratePoolID()
+				updatedHeader, err := SetPoolID(header, id)
+				if err != nil {
+					log.Error(err)
+					c.cancel()
+					continue
+				}
+
+				// Covert the pool target to little endian hex encoded byte
+				// slice.
+				targetLE := bigToLEUint256(blockchain.CompactToBig(target))
+				t := hex.EncodeToString(targetLE[:])
+
 				// Send an updated work notification per the client's miner type.
-				r := WorkNotification(string(header), float64(target))
+				r := WorkNotification(string(updatedHeader), t)
 				c.wsMtx.Lock()
 				err = c.ws.WriteJSON(r)
 				c.wsMtx.Unlock()
@@ -277,4 +302,77 @@ out:
 func (c *Client) nextID() *uint64 {
 	id := atomic.AddUint64(&c.id, 1)
 	return &id
+}
+
+// FetchBlockHeight retrieves the block height from the provided hex encoded
+// block header.
+func FetchBlockHeight(encoded []byte) (uint32, error) {
+	data := []byte(encoded)
+	decoded := make([]byte, len(data))
+	_, err := hex.Decode(decoded, data)
+	if err != nil {
+		return 0, err
+	}
+
+	return binary.LittleEndian.Uint32(decoded[128:132]), nil
+}
+
+// FetchTargetDifficulty retrieves the target difficulty from the provided hex
+// encoded block header.
+func FetchTargetDifficulty(encoded []byte) (uint32, error) {
+	data := []byte(encoded)
+	decoded := make([]byte, len(data))
+	_, err := hex.Decode(decoded, data)
+	if err != nil {
+		return 0, err
+	}
+
+	return binary.LittleEndian.Uint32(decoded[116:120]), nil
+}
+
+// GeneratePoolID generates a random 4-byte slice. This is intended to be used
+// as the pool id for miners.
+func GeneratePoolID() []byte {
+	id := make([]byte, 4)
+	rand.Read(id)
+	return id
+}
+
+// SetPoolID sets the assigned pool id for a miner. This is to prevent
+// duplicate work.
+func SetPoolID(encoded []byte, id []byte) ([]byte, error) {
+	decoded := make([]byte, len(encoded))
+	_, err := hex.Decode(decoded, encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	copy(decoded[172:176], id[:])
+	data := make([]byte, hex.EncodedLen(len(encoded)))
+	_ = hex.Encode(data, decoded)
+	return data, nil
+}
+
+// bigToLEUint256 returns the passed big integer as an unsigned 256-bit integer
+// encoded as little-endian bytes.  Numbers which are larger than the max
+// unsigned 256-bit integer are truncated.
+func bigToLEUint256(n *big.Int) [uint256Size]byte {
+	// Pad or truncate the big-endian big int to correct number of bytes.
+	nBytes := n.Bytes()
+	nlen := len(nBytes)
+	pad := 0
+	start := 0
+	if nlen <= uint256Size {
+		pad = uint256Size - nlen
+	} else {
+		start = nlen - uint256Size
+	}
+	var buf [uint256Size]byte
+	copy(buf[pad:], nBytes[start:])
+
+	// Reverse the bytes to little endian and return them.
+	for i := 0; i < uint256Size/2; i++ {
+		buf[i], buf[uint256Size-1-i] = buf[uint256Size-1-i], buf[i]
+	}
+	return buf
 }
