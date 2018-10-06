@@ -10,12 +10,13 @@ import (
 	"github.com/decred/dcrd/rpcclient"
 
 	"dnldd/dcrpool/limiter"
+	"dnldd/dcrpool/worker"
 )
 
 // Hub maintains the set of active clients and facilitates message broadcasting
 // to all active clients.
 type Hub struct {
-	bolt           *bolt.DB
+	db             *bolt.DB
 	httpc          *http.Client
 	limiter        *limiter.RateLimiter
 	Broadcast      chan Message
@@ -29,9 +30,9 @@ type Hub struct {
 }
 
 // NewHub initializes a websocket hub.
-func NewHub(bolt *bolt.DB, httpc *http.Client, rpccfg *rpcclient.ConnConfig, limiter *limiter.RateLimiter) (*Hub, error) {
+func NewHub(db *bolt.DB, httpc *http.Client, rpccfg *rpcclient.ConnConfig, limiter *limiter.RateLimiter) (*Hub, error) {
 	h := &Hub{
-		bolt:        bolt,
+		db:          db,
 		httpc:       httpc,
 		limiter:     limiter,
 		currTarget:  0,
@@ -132,7 +133,7 @@ func (h *Hub) calculatePoolTargets() {
 	tdiff := atomic.LoadUint32(&h.currTarget)
 	h.poolTargetsMtx.Lock()
 	// 1 percent of the target diff for cpu miners.
-	h.poolTargets[CPU] = uint32(0.01 * float64(tdiff))
+	h.poolTargets[worker.CPU] = uint32(0.01 * float64(tdiff))
 	// TODO: add more miner types.
 	h.poolTargetsMtx.Unlock()
 }

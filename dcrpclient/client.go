@@ -15,6 +15,7 @@ import (
 	"github.com/decred/dcrd/wire"
 	"github.com/gorilla/websocket"
 
+	"dnldd/dcrpool/worker"
 	"dnldd/dcrpool/ws"
 )
 
@@ -94,7 +95,7 @@ func newClient(config *config) (*Client, error) {
 		chainCh: make(chan struct{}, 0),
 	}
 
-	if config.MinerType == ws.CPU {
+	if config.MinerType == worker.CPU {
 		c.CPUMiner = newCPUMiner(c)
 		c.CPUMiner.Start()
 		log.Info("Started CPU miner.")

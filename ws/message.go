@@ -29,11 +29,6 @@ const (
 	DisconnectedBlock = "disconnectedblock"
 )
 
-// Miner types.
-const (
-	CPU = "cpu"
-)
-
 // Message is the base interface messages exchanged between a websocket client
 // and the server must adhere to.
 type Message interface {

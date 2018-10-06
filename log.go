@@ -14,6 +14,7 @@ import (
 	"github.com/jrick/logrotate/rotator"
 
 	"dnldd/dcrpool/database"
+	"dnldd/dcrpool/worker"
 	"dnldd/dcrpool/ws"
 )
 
@@ -49,12 +50,14 @@ var (
 
 	pLog  = backendLog.Logger("MP")
 	wsLog = backendLog.Logger("WS")
+	wkLog = backendLog.Logger("WK")
 	dbLog = backendLog.Logger("DB")
 )
 
 // Initialize package-global logger variables.
 func init() {
 	ws.UseLogger(wsLog)
+	worker.UseLogger(wkLog)
 	database.UseLogger(dbLog)
 }
 
@@ -62,6 +65,7 @@ func init() {
 var subsystemLoggers = map[string]slog.Logger{
 	"MP": pLog,
 	"WS": wsLog,
+	"WK": wkLog,
 	"DB": dbLog,
 }
 

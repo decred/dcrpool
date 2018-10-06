@@ -16,6 +16,8 @@ var (
 	AccountBkt = []byte("accountbkt")
 	// NameIdxBkt is an index of all account names mapped to their ids.
 	NameIdxBkt = []byte("nameidxbkt")
+	// ShareBkt stores all client shares for the mining pool.
+	ShareBkt = []byte("sharebkt")
 
 	// VersionK is the key of the current version of the database.
 	VersionK = []byte("version")
@@ -67,6 +69,12 @@ func CreateBuckets(db *bolt.DB) error {
 		if err != nil {
 			return fmt.Errorf("failed to create '%v' bucket: %v",
 				string(AccountBkt), err)
+		}
+
+		_, err = pbkt.CreateBucketIfNotExists(ShareBkt)
+		if err != nil {
+			return fmt.Errorf("failed to create '%v' bucket: %v",
+				string(ShareBkt), err)
 		}
 
 		_, err = pbkt.CreateBucketIfNotExists(NameIdxBkt)

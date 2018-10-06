@@ -1,0 +1,184 @@
+package worker
+
+import (
+	"bytes"
+	"encoding/binary"
+	"encoding/json"
+	"fmt"
+	"math/big"
+	"time"
+
+	"github.com/coreos/bbolt"
+
+	"dnldd/dcrpool/database"
+)
+
+// Miner types lists all known DCR miners, in order of descending hash power
+const (
+	CPU           = "cpu"
+	ObeliskDCR1   = "obeliskdcr1"
+	WoodpeckerWB2 = "woodpeckerwb2"
+	FFMinerD18    = "ffminerd18"
+	InnosiliconD9 = "innosilicond9"
+	IbelinkDSM6T  = "ibelinkdsm6t"
+	AntiminerDR3  = "antminerdr3"
+	WhatsminerD1  = "whatsminerd1"
+)
+
+// Convenience variables
+var (
+	ZeroRat = new(big.Rat)
+)
+
+// ShareWeights reprsents the associated weights for each known DCR miner.
+// With the share weight of the lowest hash DCR miner (LHM) being 1, the
+// rest were calculated as :
+// 				(Hash of Miner X * Weight of LHM)/ Hash of LHM
+var ShareWeights = map[string]*big.Rat{
+	CPU:           new(big.Rat).SetFloat64(1.0), // Reserved for testing.
+	ObeliskDCR1:   new(big.Rat).SetFloat64(1.0),
+	WoodpeckerWB2: new(big.Rat).SetFloat64(1.25),
+	FFMinerD18:    new(big.Rat).SetFloat64(1.5),
+	InnosiliconD9: new(big.Rat).SetFloat64(2.0),
+	IbelinkDSM6T:  new(big.Rat).SetFloat64(5),
+	AntiminerDR3:  new(big.Rat).SetFloat64(6.5),
+	WhatsminerD1:  new(big.Rat).SetFloat64(36.667),
+}
+
+// Share represents verifiable work performed by a pool client.
+type Share struct {
+	Stakeholder string   `json:"stakeholder"`
+	Weight      *big.Rat `json:"weight"`
+	CreatedOn   int64    `json:"createdOn"`
+}
+
+// NewShare creates a share with the provided stakeholder and weight.
+func NewShare(stakeholder string, weight *big.Rat) *Share {
+	return &Share{
+		Stakeholder: stakeholder,
+		Weight:      weight,
+		CreatedOn:   time.Now().UnixNano(),
+	}
+}
+
+// ErrNotSupported is returned when an entity does not support an action.
+func ErrNotSupported(entity, action string) error {
+	return fmt.Errorf("action (%v) not supported for entity (%v)",
+		action, entity)
+}
+
+// NanoToBigEndianBytes returns an 8-byte big endian representation of
+// the provided nanosecond time.
+func NanoToBigEndianBytes(nano int64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(nano))
+	return b
+}
+
+// BigEndianBytesToNano returns nanosecond time of the provided 8-byte big
+// endian representation.
+func BigEndianBytesToNano(b []byte) int64 {
+	return int64(binary.BigEndian.Uint64(b[0:8]))
+}
+
+// Create persists a share to the database.
+func (s *Share) Create(db *bolt.DB) error {
+	err := db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+		bkt := pbkt.Bucket(database.ShareBkt)
+		if bkt == nil {
+			return database.ErrBucketNotFound(database.ShareBkt)
+		}
+		sBytes, err := json.Marshal(s)
+		if err != nil {
+			return err
+		}
+		err = bkt.Put(NanoToBigEndianBytes(s.CreatedOn), sBytes)
+		return err
+	})
+	return err
+}
+
+// Update is not supported for shares.
+func (s *Share) Update(db *bolt.DB) error {
+	return ErrNotSupported("share", "update")
+}
+
+// Delete purges the account from the database.
+func (s *Share) Delete(db *bolt.DB, state bool) error {
+	return ErrNotSupported("share", "delete")
+}
+
+// ErrDivideByZero is returned the divisor of division operation is zero.
+func ErrDivideByZero() error {
+	return fmt.Errorf("divide by zero: divisor is zero")
+}
+
+// FetchEligibleShares fetches all shares within the provided inclusive bounds.
+func FetchEligibleShares(db *bolt.DB, min []byte, max []byte) ([]*Share, error) {
+	eligibleShares := make([]*Share, 0)
+	err := db.View(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+		bkt := pbkt.Bucket(database.ShareBkt)
+		if bkt == nil {
+			return database.ErrBucketNotFound(database.ShareBkt)
+		}
+
+		c := bkt.Cursor()
+		for k, v := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, v = c.Next() {
+			var share Share
+			err := json.Unmarshal(v, &share)
+			if err != nil {
+				return err
+			}
+
+			eligibleShares = append(eligibleShares, &share)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return eligibleShares, err
+}
+
+// CalculateDividends calculates the dividends due each account according to
+// their share tallies.
+func CalculateDividends(shares []*Share) (map[string]*big.Rat, error) {
+	totalShares := new(big.Rat)
+	tally := make(map[string]*big.Rat)
+	dividends := make(map[string]*big.Rat)
+
+	// Tally all share weight for each share owner.
+	for _, share := range shares {
+		totalShares = totalShares.Add(totalShares, share.Weight)
+		if _, ok := tally[share.Stakeholder]; ok {
+			tally[share.Stakeholder] = tally[share.Stakeholder].
+				Add(tally[share.Stakeholder], share.Weight)
+			continue
+		}
+
+		tally[share.Stakeholder] = share.Weight
+	}
+
+	// Calculate each owner's portion to be claimed.
+	for stakeholder, shareCount := range tally {
+		if tally[stakeholder].Cmp(ZeroRat) == 0 {
+			return nil, ErrDivideByZero()
+		}
+
+		dividend := new(big.Rat).Quo(shareCount, totalShares)
+		dividends[stakeholder] = dividend
+	}
+
+	return dividends, nil
+}

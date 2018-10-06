@@ -12,6 +12,8 @@ import (
 
 	"github.com/decred/dcrd/blockchain"
 	"github.com/gorilla/websocket"
+
+	"dnldd/dcrpool/worker"
 )
 
 const (
@@ -34,6 +36,7 @@ type Client struct {
 	cancel      context.CancelFunc
 	ip          string
 	ticker      *time.Ticker
+	accountID   string
 	pingRetries uint64
 }
 
@@ -60,8 +63,18 @@ func (c *Client) deleteRequest(id uint64) {
 	c.reqMtx.Unlock()
 }
 
+// claimWeightedShare records a weighted share corresponding to the hash power
+// of the mining client for the account it is authenticated under. This serves
+// as proof of verifiable work contributed to the mining pool.
+func (c *Client) claimWeightedShare() {
+	weight := worker.ShareWeights[c.minerType]
+	share := worker.NewShare(c.accountID, weight)
+	share.Create(c.hub.db)
+}
+
 // NewClient initializes a new websocket client.
-func NewClient(h *Hub, socket *websocket.Conn, ip string, ticker *time.Ticker, minerType string) *Client {
+func NewClient(h *Hub, socket *websocket.Conn, ip string, ticker *time.Ticker,
+	minerType string, account string) *Client {
 	ctx, cancel := context.WithCancel(context.TODO())
 	atomic.AddUint64(&h.ConnCount, 1)
 	return &Client{
@@ -73,6 +86,7 @@ func NewClient(h *Hub, socket *websocket.Conn, ip string, ticker *time.Ticker, m
 		Ctx:         ctx,
 		cancel:      cancel,
 		ticker:      ticker,
+		accountID:   account,
 		req:         make(map[uint64]string, 0),
 		pingRetries: 0,
 	}
@@ -138,21 +152,21 @@ out:
 				if err != nil {
 					log.Debug(err)
 					msg := err.Error()
-
 					c.ch <- EvaluatedWorkResponse(req.ID, &msg, false)
+					continue
 				}
 
-				status, err := c.hub.SubmitWork(header)
-				log.Debugf("Submitted work status: %v", status)
-
-				var resp *Response
+				accepted, err := c.hub.SubmitWork(header)
 				if err != nil {
 					msg := err.Error()
-					resp = EvaluatedWorkResponse(req.ID, &msg, status)
+					c.ch <- EvaluatedWorkResponse(req.ID, &msg, false)
+					continue
 				}
 
-				resp = EvaluatedWorkResponse(req.ID, nil, status)
-				c.ch <- resp
+				c.ch <- EvaluatedWorkResponse(req.ID, nil, accepted)
+
+				// Claim a weighted share for work contributed to the pool.
+				c.claimWeightedShare()
 			default:
 				log.Debugf("Unknowning request type received")
 			}

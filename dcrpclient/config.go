@@ -1,7 +1,6 @@
 package main
 
 import (
-	"dnldd/dcrpool/ws"
 	"fmt"
 	"os"
 	"os/user"
@@ -14,6 +13,8 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
+
+	"dnldd/dcrpool/worker"
 )
 
 const (
@@ -22,7 +23,7 @@ const (
 	defaultHost           = "localhost:25000"
 	defaultLogDirname     = "log"
 	defaultLogFilename    = "dcrpclient.log"
-	defaultMinerType      = ws.CPU
+	defaultMinerType      = worker.CPU
 )
 
 var (

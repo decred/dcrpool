@@ -129,7 +129,8 @@ func (p *MiningPool) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c := ws.NewClient(p.hub, conn, r.RemoteAddr, p.hub.Ticker, minerType)
+	c := ws.NewClient(p.hub, conn, r.RemoteAddr, p.hub.Ticker,
+		minerType, account.UUID)
 	go c.Process(c.Ctx)
 	go c.Send(c.Ctx)
 }
