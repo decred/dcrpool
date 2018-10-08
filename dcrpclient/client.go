@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -262,18 +261,10 @@ func dial(cfg *config) (*websocket.Conn, error) {
 
 // fetchBlockHeader deserializes the block header from the provided hex
 // encoded header data.
-func fetchBlockHeader(encoded []byte) (*wire.BlockHeader, error) {
-	data := []byte(encoded)
-	decoded := make([]byte, len(data))
-	_, err := hex.Decode(decoded, data)
-	if err != nil {
-		return nil, err
-	}
-
-	// Deserialize the block header.
+func fetchBlockHeader(decoded []byte) (*wire.BlockHeader, error) {
 	var header wire.BlockHeader
 	reader := bytes.NewReader(decoded[:180])
-	err = header.Deserialize(reader)
+	err := header.Deserialize(reader)
 	if err != nil {
 		return nil, err
 	}

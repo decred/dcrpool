@@ -94,6 +94,7 @@ func NewClient(h *Hub, socket *websocket.Conn, ip string, ticker *time.Ticker,
 
 // Process parses and handles inbound client messages.
 func (c *Client) Process(ctx context.Context) {
+	// TODO: Assert the max message size currently being used.
 	c.ws.SetReadLimit(MaxMessageSize)
 out:
 	for {
@@ -273,12 +274,18 @@ out:
 
 				// Set the miner's pool id.
 				id := GeneratePoolID()
-				updatedHeader, err := SetPoolID(header, id)
+				decoded, err := DecodeHeader(header)
 				if err != nil {
 					log.Error(err)
 					c.cancel()
 					continue
 				}
+
+				// Set the pool id of the client.
+				setPoolID(decoded, id)
+
+				// Encode the updated haeader.
+				encoded := EncodeHeader(decoded)
 
 				// Covert the pool target to little endian hex encoded byte
 				// slice.
@@ -286,7 +293,7 @@ out:
 				t := hex.EncodeToString(targetLE[:])
 
 				// Send an updated work notification per the client's miner type.
-				r := WorkNotification(string(updatedHeader), t)
+				r := WorkNotification(string(encoded), t)
 				c.wsMtx.Lock()
 				err = c.ws.WriteJSON(r)
 				c.wsMtx.Unlock()
@@ -344,7 +351,7 @@ func FetchTargetDifficulty(encoded []byte) (uint32, error) {
 	return binary.LittleEndian.Uint32(decoded[116:120]), nil
 }
 
-// GeneratePoolID generates a random 4-byte slice. This is intended to be used
+// GeneratePoolID generates a random 4-byte slice.  This is intended to be used
 // as the pool id for miners.
 func GeneratePoolID() []byte {
 	id := make([]byte, 4)
@@ -352,19 +359,39 @@ func GeneratePoolID() []byte {
 	return id
 }
 
-// SetPoolID sets the assigned pool id for a miner. This is to prevent
+// The block header provides 12-bytes of nonce space which constitutes of
+// 8-bytes nonce and 4-bytes worker id to prevent duplicate work for mining
+// pools by haste semantics.
+// Format:
+// 	<0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00>, [0x00, 0x00, 0x00, 0x00]
+
+// setPoolID sets the assigned pool id for a miner.  This is to prevent
 // duplicate work.
-func SetPoolID(encoded []byte, id []byte) ([]byte, error) {
-	decoded := make([]byte, len(encoded))
+func setPoolID(decoded []byte, id []byte) {
+	copy(decoded[148:152], id[:])
+}
+
+// SetNonce sets the worker generated nonce for the decoded header data.
+func SetNonce(decoded []byte, nonce uint64) {
+	binary.LittleEndian.PutUint64(decoded[140:148], nonce)
+}
+
+// EncodeHeader encodes the decoded header data.
+func EncodeHeader(decoded []byte) []byte {
+	data := make([]byte, hex.EncodedLen(len(decoded)))
+	_ = hex.Encode(data, decoded)
+	return data
+}
+
+// DecodeHeader decodes the hex encoded header data.
+func DecodeHeader(encoded []byte) ([]byte, error) {
+	decoded := make([]byte, hex.DecodedLen(len(encoded)))
 	_, err := hex.Decode(decoded, encoded)
 	if err != nil {
 		return nil, err
 	}
 
-	copy(decoded[172:176], id[:])
-	data := make([]byte, hex.EncodedLen(len(encoded)))
-	_ = hex.Encode(data, decoded)
-	return data, nil
+	return decoded, nil
 }
 
 // bigToLEUint256 returns the passed big integer as an unsigned 256-bit integer

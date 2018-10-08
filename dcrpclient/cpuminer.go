@@ -6,40 +6,23 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/hex"
+	"github.com/davecgh/go-spew/spew"
 	"time"
 
 	"github.com/decred/dcrd/blockchain"
-	"github.com/decred/dcrd/wire"
 
 	"dnldd/dcrpool/ws"
 )
 
 const (
 	// maxNonce is the maximum value a nonce can be in a block header.
-	maxNonce = ^uint32(0) // 2^32 - 1
-
-	// maxExtraNonce is the maximum value an extra nonce used in a coinbase
-	// transaction can be.
-	maxExtraNonce = ^uint64(0) // 2^64 - 1
+	maxNonce = ^uint64(0) // 2^64 - 1
 
 	// hpsUpdateSecs is the number of seconds to wait in between each
 	// update to the hash rate monitor.
 	hpsUpdateSecs = 5
-
-	// maxSimnetToMine is the maximum number of blocks to mine on HEAD~1
-	// for simnet so that you don't run out of memory if tickets for
-	// some reason run out during simulations.
-	maxSimnetToMine uint8 = 4
-)
-
-var (
-	// littleEndian is a convenience variable since binary.LittleEndian is
-	// quite long.
-	littleEndian = binary.LittleEndian
 )
 
 // CPUMiner provides facilities for solving blocks using the CPU in a
@@ -85,70 +68,55 @@ out:
 	}
 }
 
-// solveBlock attempts to find some combination of a nonce, extra nonce, and
-// current timestamp which makes the passed block hash to a value less than the
-// target difficulty. The timestamp is updated periodically and the passed
-// block is modified with all tweaks during this process. This means that
-// when the function returns true, the block is ready for submission.
+// solveBlock attempts to find some combination of an 8-bytes nonce, the pool
+// assigned client pool id and current timestamp which makes the passed block
+// hash to a value less than the target difficulty.
 //
 // This function will return early with false when conditions that trigger a
 // stale block such as a new block showing up or periodically when there are
 // new transactions and enough time has elapsed without finding a solution.
-func (m *CPUMiner) solveBlock(ctx context.Context, header *wire.BlockHeader, ticker *time.Ticker) bool {
+func (m *CPUMiner) solveBlock(ctx context.Context, decoded []byte, ticker *time.Ticker) bool {
 	for {
-		// Choose a random extra nonce offset for this block template and
-		// worker. This should be done by the mining pool, it should assign a
-		// mining client ID.
-		enOffset, err := wire.RandomUint64()
-		if err != nil {
-			log.Infof("Unexpected error while generating random "+
-				"extra nonce offset: %v", err)
-			enOffset = 0
-		}
-
-		targetDifficulty := blockchain.CompactToBig(header.Bits)
 		hashesCompleted := uint64(0)
 
-		// Note that the entire extra nonce range is iterated and the offset is
-		// added relying on the fact that overflow will wrap around 0 as
-		// provided by the Go spec.
-		for extraNonce := uint64(0); extraNonce < maxExtraNonce; extraNonce++ {
-			// Update the extra nonce in the block template header with the
-			// new value.
-			littleEndian.PutUint64(header.ExtraData[:], extraNonce+enOffset)
+		// Search through the entire nonce range for a solution while
+		// periodically checking for early quit and stale block
+		// conditions along with updates to the speed monitor.
+		for nonce := uint64(0); nonce <= maxNonce; nonce++ {
+			select {
+			case <-m.c.ctx.Done():
+				return false
 
-			// Search through the entire nonce range for a solution while
-			// periodically checking for early quit and stale block
-			// conditions along with updates to the speed monitor.
-			for i := uint32(0); i <= maxNonce; i++ {
-				select {
-				case <-m.c.ctx.Done():
-					return false
+			case <-ticker.C:
+				m.updateHashes <- hashesCompleted
+				hashesCompleted = 0
 
-				case <-ticker.C:
-					m.updateHashes <- hashesCompleted
-					hashesCompleted = 0
+			case <-m.c.chainCh:
+				// Stop current work if the chain updates or a new work
+				// is received.
+				return false
 
-				case <-m.c.chainCh:
-					// Stop current work if the chain updates or a new work
-					// is received.
-					return false
+			default:
+				// Non-blocking select to fall through
+			}
 
-				default:
-					// Non-blocking select to fall through
-				}
+			ws.SetNonce(decoded, nonce)
+			header, err := fetchBlockHeader(decoded)
+			if err != nil {
+				log.Error(err)
+				return false
+			}
 
-				// Update the nonce and hash the block header.
-				header.Nonce = i
-				hash := header.BlockHash()
-				hashesCompleted++
+			hash := header.BlockHash()
+			targetDifficulty := blockchain.CompactToBig(header.Bits)
+			hashesCompleted++
 
-				// The block is solved when the new block hash is less
-				// than the target difficulty.
-				if blockchain.HashToBig(&hash).Cmp(targetDifficulty) <= 0 {
-					m.updateHashes <- hashesCompleted
-					return true
-				}
+			// The block is solved when the new block hash is less
+			// than the target difficulty.
+			if blockchain.HashToBig(&hash).Cmp(targetDifficulty) <= 0 {
+				m.updateHashes <- hashesCompleted
+				log.Debugf("Solved block header is %v", spew.Sdump(header))
+				return true
 			}
 		}
 	}
@@ -159,8 +127,6 @@ func (m *CPUMiner) solveBlock(ctx context.Context, header *wire.BlockHeader, tic
 //
 // It must be run as a goroutine.
 func (m *CPUMiner) generateBlocks(ctx context.Context) {
-	log.Info("Starting generate blocks worker.")
-
 	// Start a ticker which is used to signal checks for stale work and
 	// updates to the hash rate monitor.
 	ticker := time.NewTicker(333 * time.Millisecond)
@@ -186,50 +152,35 @@ out:
 		}
 
 		m.c.workMtx.Lock()
-		header, err := fetchBlockHeader(m.c.work.header)
+		decoded, err := ws.DecodeHeader(m.c.work.header)
 		m.c.workMtx.Unlock()
 		if err != nil {
 			log.Error(err)
-			continue
+			return
 		}
 
 		// Attempt to solve the block. The function will exit early
 		// with false when conditions that trigger a stale block, so
 		// a new block template can be generated. When the return is
 		// true a solution was found, so submit the solved block.
-		if m.solveBlock(ctx, header, ticker) {
-			// Submit solved block.
-			buf := bytes.NewBuffer(make([]byte, 0))
-			err := header.Serialize(buf)
-			if err != nil {
-				log.Error(err)
-				return
-			}
-
-			encoded := []byte(hex.EncodeToString(buf.Bytes()))
-			headerTmpl := make([]byte, len(m.c.work.header))
-			copy(headerTmpl[:], m.c.work.header[:])
-			copy(headerTmpl[:len(encoded)], encoded[:])
-
+		if m.solveBlock(ctx, decoded, ticker) {
 			id := m.c.nextID()
-			submission := ws.WorkSubmissionRequest(id, string(headerTmpl))
+			submission := ws.WorkSubmissionRequest(id,
+				hex.EncodeToString(decoded))
 
-			// record the request.
+			// Record the request.
 			m.c.recordRequest(*id, ws.SubmitWork)
 
+			// Submit solved block.
 			m.c.connMtx.Lock()
-			err = m.c.Conn.WriteJSON(submission)
+			err := m.c.Conn.WriteJSON(submission)
 			m.c.connMtx.Unlock()
 			if err != nil {
 				log.Debug(err)
-				continue
+				return
 			}
-
-			log.Debugf("Solved block (%v) submitted.", string(headerTmpl))
 		}
 	}
-
-	log.Info("Generate blocks worker done")
 }
 
 // Start begins the CPU mining process as well as the hash rate monitor.

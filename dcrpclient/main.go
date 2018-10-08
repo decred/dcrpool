@@ -1,6 +1,7 @@
 package main
 
 import (
+	"dnldd/dcrpool/worker"
 	"fmt"
 	"os"
 	"os/signal"
@@ -29,6 +30,11 @@ func main() {
 		}
 	}()
 
+	log.Infof("Version: %s", version())
+	log.Infof("Runtime: Go version %s", runtime.Version())
+	log.Infof("Home dir: %s", cfg.HomeDir)
+	log.Infof("Started dcrpclient.")
+
 	// Initialize the client.
 	pc, err := newClient(cfg)
 	if err != nil {
@@ -36,16 +42,14 @@ func main() {
 		return
 	}
 
-	log.Infof("Version: %s", version())
-	log.Infof("Runtime: Go version %s", runtime.Version())
-	log.Infof("Home dir: %s", cfg.HomeDir)
-	log.Infof("Started dcrpclient.")
-
 	go pc.processMessages()
 	for {
 		select {
 		case <-interrupt:
 			pc.cancel()
+			if cfg.MinerType == worker.CPU {
+				log.Info("CPU miner done.")
+			}
 			return
 		}
 	}

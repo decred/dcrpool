@@ -10,6 +10,7 @@ github.com/btcsuite/goleveldb v1.0.0/go.mod h1:QiK9vBlgftBg6rWQIj6wFzbPfRjiykIEh
 github.com/btcsuite/snappy-go v1.0.0/go.mod h1:8woku9dyThutzjeg+3xrA5iCpBRH8XEEg3lh6TiUghc=
 github.com/coreos/bbolt v1.3.0 h1:HIgH5xUWXT914HCI671AxuTTqjj64UOFr7pHn48LUTI=
 github.com/coreos/bbolt v1.3.0/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
+github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dchest/blake256 v1.0.0 h1:6gUgI5MHdz9g0TdrgKqXsoDX+Zjxmm1Sc6OsoGru50I=
 github.com/dchest/blake256 v1.0.0/go.mod h1:xXNWCE1jsAP8DAjP+rKw2MbeqLczjI3TRx2VK+9OEYY=
@@ -32,6 +33,8 @@ github.com/decred/dcrd/dcrec v0.0.0-20180801202239-0761de129164/go.mod h1:cRAH1S
 github.com/decred/dcrd/dcrec/edwards v0.0.0-20180721005212-59fe2b293f69/go.mod h1:+ehP0Hk/mesyZXttxCtBbhPX23BMpZJ1pcVBqUfbmvU=
 github.com/decred/dcrd/dcrec/edwards v0.0.0-20180721031028-5369a485acf6 h1:1T33paUnhZTyLN60k5DSy4CH9uTN4vQ9TdSyu4O1ox8=
 github.com/decred/dcrd/dcrec/edwards v0.0.0-20180721031028-5369a485acf6/go.mod h1:+ehP0Hk/mesyZXttxCtBbhPX23BMpZJ1pcVBqUfbmvU=
+github.com/decred/dcrd/dcrec/edwards v0.0.0-20181008154433-5b80187e6165 h1:oDVXkPQUp705OQvDZedQBouEHkm3KBWPdhAa6u0BKww=
+github.com/decred/dcrd/dcrec/edwards v0.0.0-20181008154433-5b80187e6165/go.mod h1:+ehP0Hk/mesyZXttxCtBbhPX23BMpZJ1pcVBqUfbmvU=
 github.com/decred/dcrd/dcrec/secp256k1 v1.0.0 h1:Le54WTGdTQv7XYXpS31uhFE8LZE7ypwsIL+FgDP2x5Q=
 github.com/decred/dcrd/dcrec/secp256k1 v1.0.0/go.mod h1:JPMFscGlgXTV684jxQNDijae2qrh0fLG7pJBimaYotE=
 github.com/decred/dcrd/dcrjson v1.0.0 h1:50DnA0XeV2JrQXoHh43TCKmH+kz2gHjZ1Mj/Pdk7Oz0=
