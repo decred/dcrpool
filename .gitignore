@@ -2,6 +2,7 @@ vendor
 .DS_Store
 tmp
 dcrpool
+/dcrpclient/dcrpclient
 deploy/*
 *.log
 *.conf
