@@ -72,6 +72,30 @@ func (c *Client) claimWeightedShare() {
 	share.Create(c.hub.db)
 }
 
+// bigToLEUint256 returns the passed big integer as an unsigned 256-bit integer
+// encoded as little-endian bytes.  Numbers which are larger than the max
+// unsigned 256-bit integer are truncated.
+func bigToLEUint256(n *big.Int) [uint256Size]byte {
+	// Pad or truncate the big-endian big int to correct number of bytes.
+	nBytes := n.Bytes()
+	nlen := len(nBytes)
+	pad := 0
+	start := 0
+	if nlen <= uint256Size {
+		pad = uint256Size - nlen
+	} else {
+		start = nlen - uint256Size
+	}
+	var buf [uint256Size]byte
+	copy(buf[pad:], nBytes[start:])
+
+	// Reverse the bytes to little endian and return them.
+	for i := 0; i < uint256Size/2; i++ {
+		buf[i], buf[uint256Size-1-i] = buf[uint256Size-1-i], buf[i]
+	}
+	return buf
+}
+
 // NewClient initializes a new websocket client.
 func NewClient(h *Hub, socket *websocket.Conn, ip string, ticker *time.Ticker,
 	minerType string, account string) *Client {
@@ -392,28 +416,4 @@ func DecodeHeader(encoded []byte) ([]byte, error) {
 	}
 
 	return decoded, nil
-}
-
-// bigToLEUint256 returns the passed big integer as an unsigned 256-bit integer
-// encoded as little-endian bytes.  Numbers which are larger than the max
-// unsigned 256-bit integer are truncated.
-func bigToLEUint256(n *big.Int) [uint256Size]byte {
-	// Pad or truncate the big-endian big int to correct number of bytes.
-	nBytes := n.Bytes()
-	nlen := len(nBytes)
-	pad := 0
-	start := 0
-	if nlen <= uint256Size {
-		pad = uint256Size - nlen
-	} else {
-		start = nlen - uint256Size
-	}
-	var buf [uint256Size]byte
-	copy(buf[pad:], nBytes[start:])
-
-	// Reverse the bytes to little endian and return them.
-	for i := 0; i < uint256Size/2; i++ {
-		buf[i], buf[uint256Size-1-i] = buf[uint256Size-1-i], buf[i]
-	}
-	return buf
 }

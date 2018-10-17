@@ -58,4 +58,13 @@ const ConfigFileContents = `[Application Options]
 ; ------------------------------------------------------------------------------
 ; An address to pay mining subsidy for mined blocks to.
 ; miningaddr=
+
+; ------------------------------------------------------------------------------
+; Pool settings
+; ------------------------------------------------------------------------------
+; The fee charged for pool participation.
+; poolfee=
+
+; The share creation target time for the pool in seconds.
+; sharetime=
 `

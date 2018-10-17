@@ -87,5 +87,38 @@ func TestCalculateDividend(t *testing.T) {
 			}
 		}
 	}
+}
+func TestCalculatePoolTarget(t *testing.T) {
+	set := []struct {
+		hashRate   *big.Int
+		targetTime *big.Int
+		expected   string
+	}{
+		{
+			new(big.Int).SetInt64(1.2E12),
+			new(big.Int).SetInt64(15),
+			"1381437475988024283268563409791075016144953" +
+				"2887812045339949604391304358105",
+		},
+		{
+			new(big.Int).SetInt64(1.2E12),
+			new(big.Int).SetInt64(10),
+			"2072156213982036424902845114686612524217429" +
+				"9331718068009924406586956537158",
+		},
+	}
 
+	for _, test := range set {
+		target := CalculatePoolTarget(test.hashRate, test.targetTime)
+		expected, success := new(big.Int).SetString(test.expected, 10)
+		if !success {
+			t.Errorf("Failed to parse (%v) as a big.Int", test.expected)
+		}
+
+		if target.Cmp(expected) != 0 {
+			t.Errorf("For a hashrate of (%v) and a target time of (%v) the "+
+				"expected target is (%v), got (%v).", test.hashRate,
+				test.targetTime, expected, target)
+		}
+	}
 }

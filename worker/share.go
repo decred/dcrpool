@@ -22,10 +22,25 @@ const (
 	InnosiliconD9 = "innosilicond9"
 	IbelinkDSM6T  = "ibelinkdsm6t"
 	AntiminerDR3  = "antminerdr3"
+	StrongUU1     = "stronguu1"
 	WhatsminerD1  = "whatsminerd1"
 )
 
-// Convenience variables
+// MinerHashes is a map of all known DCR miners and their coressponding
+// hashrates.
+var MinerHashes = map[string]*big.Int{
+	CPU:           new(big.Int).SetInt64(210E3),
+	ObeliskDCR1:   new(big.Int).SetInt64(1.2E12),
+	WoodpeckerWB2: new(big.Int).SetInt64(1.5E12),
+	FFMinerD18:    new(big.Int).SetInt64(1.8E12),
+	InnosiliconD9: new(big.Int).SetInt64(2.4E12),
+	IbelinkDSM6T:  new(big.Int).SetInt64(6E12),
+	AntiminerDR3:  new(big.Int).SetInt64(7.8E12),
+	StrongUU1:     new(big.Int).SetInt64(11E12),
+	WhatsminerD1:  new(big.Int).SetInt64(44E12),
+}
+
+// Convenience variables.
 var (
 	ZeroRat = new(big.Rat)
 )
@@ -43,6 +58,22 @@ var ShareWeights = map[string]*big.Rat{
 	IbelinkDSM6T:  new(big.Rat).SetFloat64(5),
 	AntiminerDR3:  new(big.Rat).SetFloat64(6.5),
 	WhatsminerD1:  new(big.Rat).SetFloat64(36.667),
+}
+
+// CalculatePoolTarget determines the target difficulty at which the provided
+// hashrate can generate a pool share by the provided target time.
+func CalculatePoolTarget(hashRate *big.Int, targetTimeSecs *big.Int) *big.Int {
+	bigOne := big.NewInt(1)
+
+	difficulty := new(big.Int).Div(
+		new(big.Int).Mul(hashRate, targetTimeSecs),
+		new(big.Int).Lsh(bigOne, 32))
+
+	// the difficulty is incremented by 1 to compensate for rounding-off errors.
+	target := new(big.Int).Div(
+		new(big.Int).Sub(new(big.Int).Lsh(bigOne, 255), bigOne),
+		new(big.Int).Add(difficulty, bigOne))
+	return target
 }
 
 // Share represents verifiable work performed by a pool client.

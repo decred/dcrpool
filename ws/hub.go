@@ -1,28 +1,37 @@
 package ws
 
 import (
+	"math/big"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/coreos/bbolt"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/decred/dcrd/blockchain"
 	"github.com/decred/dcrd/rpcclient"
 
 	"dnldd/dcrpool/limiter"
 	"dnldd/dcrpool/worker"
 )
 
+// HubConfig represents configuration details for the hub.
+type HubConfig struct {
+	PoolFee    *big.Rat
+	MaxGenTime *big.Int
+}
+
 // Hub maintains the set of active clients and facilitates message broadcasting
 // to all active clients.
 type Hub struct {
 	db             *bolt.DB
 	httpc          *http.Client
+	cfg            *HubConfig
 	limiter        *limiter.RateLimiter
 	Broadcast      chan Message
 	rpcc           *rpcclient.Client
 	rpccMtx        sync.Mutex
-	currTarget     uint32
 	poolTargets    map[string]uint32
 	poolTargetsMtx sync.RWMutex
 	ConnCount      uint64
@@ -30,17 +39,28 @@ type Hub struct {
 }
 
 // NewHub initializes a websocket hub.
-func NewHub(db *bolt.DB, httpc *http.Client, rpccfg *rpcclient.ConnConfig, limiter *limiter.RateLimiter) (*Hub, error) {
+func NewHub(db *bolt.DB, httpc *http.Client, rpccfg *rpcclient.ConnConfig, hcfg *HubConfig, limiter *limiter.RateLimiter) (*Hub, error) {
 	h := &Hub{
 		db:          db,
 		httpc:       httpc,
 		limiter:     limiter,
-		currTarget:  0,
-		poolTargets: make(map[string]uint32, 0),
+		cfg:         hcfg,
+		poolTargets: make(map[string]uint32),
 		Broadcast:   make(chan Message),
 		ConnCount:   0,
 		Ticker:      time.NewTicker(time.Second * 5),
 	}
+
+	// Calculate pool targets for all known miners.
+	h.poolTargetsMtx.Lock()
+	for miner, hashrate := range worker.MinerHashes {
+		target := worker.CalculatePoolTarget(hashrate, h.cfg.MaxGenTime)
+		compactTarget := blockchain.BigToCompact(target)
+		h.poolTargets[miner] = compactTarget
+	}
+	h.poolTargetsMtx.Unlock()
+
+	log.Debugf("Pool targets are: %v", spew.Sdump(h.poolTargets))
 
 	// Create handlers for chain notifications being subscribed for.
 	ntfnHandlers := &rpcclient.NotificationHandlers{
@@ -82,22 +102,6 @@ func NewHub(db *bolt.DB, httpc *http.Client, rpccfg *rpcclient.ConnConfig, limit
 				return
 			}
 
-			// Fetch the target difficulty.
-			header := []byte(blkHeader)
-			currTarget, err := FetchTargetDifficulty(header)
-			if err != nil {
-				log.Error(err)
-				return
-			}
-
-			// Update the current target difficulty and calculate the pool
-			// targets for all miner types if the received target difficulty
-			// is not equal to the cached target difficulty.
-			if h.currTarget == 0 || h.currTarget != currTarget {
-				atomic.StoreUint32(&h.currTarget, currTarget)
-				h.calculatePoolTargets()
-			}
-
 			// Broadcast a work notification.
 			h.Broadcast <- WorkNotification(blkHeader, "")
 		},
@@ -126,16 +130,6 @@ func NewHub(db *bolt.DB, httpc *http.Client, rpccfg *rpcclient.ConnConfig, limit
 // Close terminates all connected clients to the hub.
 func (h *Hub) Close() {
 	h.Broadcast <- nil
-}
-
-// calculatePoolTargets computes the pool targets for all miner types.
-func (h *Hub) calculatePoolTargets() {
-	tdiff := atomic.LoadUint32(&h.currTarget)
-	h.poolTargetsMtx.Lock()
-	// 1 percent of the target diff for cpu miners.
-	h.poolTargets[worker.CPU] = uint32(0.01 * float64(tdiff))
-	// TODO: add more miner types.
-	h.poolTargetsMtx.Unlock()
 }
 
 // HasConnectedClients asserts the mining pool has connected miners.

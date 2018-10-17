@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"math/big"
 	"net/http"
 	"time"
 
@@ -80,7 +81,12 @@ func NewMiningPool(cfg *config) (*MiningPool, error) {
 		Pass:         cfg.RPCPass,
 		Certificates: cfg.rpccerts,
 	}
-	p.hub, err = ws.NewHub(p.db, p.httpc, rpccfg, p.limiter)
+
+	hcfg := &ws.HubConfig{
+		PoolFee:    new(big.Rat).SetFloat64(cfg.PoolFee),
+		MaxGenTime: new(big.Int).SetUint64(cfg.MaxGenTime),
+	}
+	p.hub, err = ws.NewHub(p.db, p.httpc, rpccfg, hcfg, p.limiter)
 	if err != nil {
 		return nil, err
 	}
