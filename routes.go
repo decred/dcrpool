@@ -133,6 +133,9 @@ func (p *MiningPool) handleWS(w http.ResponseWriter, r *http.Request) {
 		minerType, account.UUID)
 	go c.Process(c.Ctx)
 	go c.Send(c.Ctx)
+
+	// Update the estimated pool hash rate.
+	p.hub.AddHashRate(minerType)
 }
 
 // limit ensures all incoming requests stay within the rate limit bounds

@@ -32,6 +32,8 @@ type Hub struct {
 	Broadcast      chan Message
 	rpcc           *rpcclient.Client
 	rpccMtx        sync.Mutex
+	hashRate       *big.Int
+	hashRateMtx    sync.Mutex
 	poolTargets    map[string]uint32
 	poolTargetsMtx sync.RWMutex
 	ConnCount      uint64
@@ -45,6 +47,7 @@ func NewHub(db *bolt.DB, httpc *http.Client, rpccfg *rpcclient.ConnConfig, hcfg 
 		httpc:       httpc,
 		limiter:     limiter,
 		cfg:         hcfg,
+		hashRate:    worker.ZeroInt,
 		poolTargets: make(map[string]uint32),
 		Broadcast:   make(chan Message),
 		ConnCount:   0,
@@ -147,4 +150,24 @@ func (h *Hub) SubmitWork(data *string) (bool, error) {
 	status, err := h.rpcc.GetWorkSubmit(*data)
 	h.rpccMtx.Unlock()
 	return status, err
+}
+
+// AddHashRate adds the hash power provided by the newly connected client
+//to the total estimated hash power of pool.
+func (h *Hub) AddHashRate(miner string) {
+	hash := worker.MinerHashes[miner]
+	h.hashRateMtx.Lock()
+	h.hashRate = new(big.Int).Add(h.hashRate, hash)
+	log.Debugf("Client connected, updated pool hash rate is %v", h.hashRate)
+	h.hashRateMtx.Unlock()
+}
+
+// RemoveHashRate removes the hash power previously provided by the
+// disconnected client from the total estimated hash power of the pool.
+func (h *Hub) RemoveHashRate(miner string) {
+	hash := worker.MinerHashes[miner]
+	h.hashRateMtx.Lock()
+	h.hashRate = new(big.Int).Sub(h.hashRate, hash)
+	log.Debugf("Client disconnected, updated pool hash rate is %v", h.hashRate)
+	h.hashRateMtx.Unlock()
 }

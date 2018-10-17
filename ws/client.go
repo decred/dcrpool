@@ -124,8 +124,12 @@ out:
 	for {
 		select {
 		case <-ctx.Done():
-			// decrement the connection counter.
+			// Decrement the connection counter.
 			atomic.AddUint64(&c.hub.ConnCount, ^uint64(0))
+
+			// Update the estimated hash rate of the pool.
+			c.hub.RemoveHashRate(c.minerType)
+
 			break out
 		default:
 			// Non-blocking receive fallthrough.

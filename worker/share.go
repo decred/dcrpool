@@ -43,6 +43,7 @@ var MinerHashes = map[string]*big.Int{
 // Convenience variables.
 var (
 	ZeroRat = new(big.Rat)
+	ZeroInt = new(big.Int)
 )
 
 // ShareWeights reprsents the associated weights for each known DCR miner.
