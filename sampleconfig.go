@@ -38,14 +38,15 @@ const ConfigFileContents = `[Application Options]
 ; ------------------------------------------------------------------------------
 ; RPC settings
 ; ------------------------------------------------------------------------------
-; The username and password to authenticate to a dcrd RPC server, dcrpool must 
-; listen in on block template regenerations and update connected miners
-; accordingly. 
+; The username and password to authenticate dcrd and wallet RPC servers.
 ; rpcuser=
 ; rpcpass=
 
-; The path to the dcrd RPC certificate file.
-; rpccert=
+; The ip:port to establish an RPC connection for dcrd.
+; dcrdrpchost=
+
+; The ip:port to establish a GRPC connection for the wallet.
+; walletgrpchost=
 
 ; ------------------------------------------------------------------------------
 ; Network settings

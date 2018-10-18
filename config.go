@@ -27,19 +27,23 @@ const (
 	defaultPort            = ":25000"
 	defaultRPCUser         = "dcrp"
 	defaultRPCPass         = "dcrppass"
-	defaultRPCHost         = "localhost:19109"
+	defaultDcrdRPCHost     = "localhost:19109"
+	defaultWalletGRPCHost  = "localhost:19558"
 	defaultMiningAddr      = "TsfDLrRkk9ciUuwfp2b8PawwnukYD7yAjGd"
 	defaultMaxGenTime      = 15
 	defaultPoolFee         = 0.01
 )
 
 var (
-	defaultHomeDir     = dcrutil.AppDataDir("dcrpool", false)
-	defaultConfigFile  = filepath.Join(defaultHomeDir, defaultConfigFilename)
-	defaultDataDir     = filepath.Join(defaultHomeDir, defaultDataDirname)
-	defaultDBFile      = filepath.Join(defaultDataDir, defaultDBFilename)
-	defaultRPCCertFile = filepath.Join(defaultDataDir, defaultRPCCertFilename)
-	defaultLogDir      = filepath.Join(defaultHomeDir, defaultLogDirname)
+	dcrpoolHomeDir    = dcrutil.AppDataDir("dcrpool", false)
+	dcrwalletHomeDir  = dcrutil.AppDataDir("dcrwallet", false)
+	dcrdHomeDir       = dcrutil.AppDataDir("dcrd", false)
+	defaultConfigFile = filepath.Join(dcrpoolHomeDir, defaultConfigFilename)
+	defaultDataDir    = filepath.Join(dcrpoolHomeDir, defaultDataDirname)
+	defaultDBFile     = filepath.Join(dcrpoolHomeDir, defaultDBFilename)
+	dcrdRPCCertFile   = filepath.Join(dcrdHomeDir, defaultRPCCertFilename)
+	walletRPCCertFile = filepath.Join(dcrwalletHomeDir, defaultRPCCertFilename)
+	defaultLogDir     = filepath.Join(dcrpoolHomeDir, defaultLogDirname)
 )
 
 // runServiceCommand is only set to a real function on Windows.  It is used
@@ -48,22 +52,22 @@ var runServiceCommand func(string) error
 
 // config defines the configuration options for hastepool.
 type config struct {
-	HomeDir    string  `long:"homedir" description:"Path to application home directory"`
-	ConfigFile string  `long:"configfile" description:"Path to configuration file"`
-	DataDir    string  `long:"datadir" description:"The data directory"`
-	DebugLevel string  `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
-	LogDir     string  `long:"logdir" description:"Directory to log output."`
-	DBFile     string  `long:"dbfile" description:"Path to the database file"`
-	RPCHost    string  `long:"rpchost" description:"The ip address and port of the consensus daemon (dcrd) in the form ip:port"`
-	RPCUser    string  `long:"rpcuser" description:"Username for RPC connections"`
-	RPCPass    string  `long:"rpcpass" default-mask:"-" description:"Password for RPC connections"`
-	RPCCert    string  `long:"rpccert" description:"The RPC certificate file"`
-	MiningAddr string  `long:"miningaddr" description:"The payment address for generated blocks"`
-	Port       string  `long:"port" description:"The listening port"`
-	PoolFee    float64 `long:"poolfee" description:"The fee charged for pool participation. eg 0.01 (1%), 0.05 (5%)."`
-	MaxGenTime uint64  `long:"maxgentime" decription:"The share creation target time for the pool in seconds."`
-	miningAddr dcrutil.Address
-	rpccerts   []byte
+	HomeDir        string  `long:"homedir" description:"Path to application home directory"`
+	ConfigFile     string  `long:"configfile" description:"Path to configuration file"`
+	DataDir        string  `long:"datadir" description:"The data directory"`
+	DebugLevel     string  `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
+	LogDir         string  `long:"logdir" description:"Directory to log output."`
+	DBFile         string  `long:"dbfile" description:"Path to the database file"`
+	DcrdRPCHost    string  `long:"dcrdrpchost" description:"The ip:port to establish an RPC connection for dcrd"`
+	WalletGRPCHost string  `long:"walletgrpchost" description:"The ip:port to establish a GRPC connection for the wallet"`
+	RPCUser        string  `long:"rpcuser" description:"Username for RPC connections"`
+	RPCPass        string  `long:"rpcpass" default-mask:"-" description:"Password for RPC connections"`
+	MiningAddr     string  `long:"miningaddr" description:"The payment address for generated blocks"`
+	Port           string  `long:"port" description:"The listening port"`
+	PoolFee        float64 `long:"poolfee" description:"The fee charged for pool participation. eg 0.01 (1%), 0.05 (5%)."`
+	MaxGenTime     uint64  `long:"maxgentime" decription:"The share creation target time for the pool in seconds."`
+	miningAddr     dcrutil.Address
+	dcrdRPCCerts   []byte
 }
 
 // serviceOptions defines the configuration options for the daemon as a service on
@@ -234,8 +238,8 @@ func createConfigFile(preCfg config) error {
 	portRE := regexp.MustCompile(`(?m)^;\s*port=[^\s]*$`)
 	rpcUserRE := regexp.MustCompile(`(?m)^;\s*rpcuser=[^\s]*$`)
 	rpcPassRE := regexp.MustCompile(`(?m)^;\s*rpcpass=[^\s]*$`)
-	rpcCertRE := regexp.MustCompile(`(?m)^;\s*rpccert=[^\s]*$`)
-	rpcHostRE := regexp.MustCompile(`(?m)^;\s*rpchost=[^\s]*$`)
+	dcrdRPCHostRE := regexp.MustCompile(`(?m)^;\s*dcrdrpchost=[^\s]*$`)
+	walletGRPCHostRE := regexp.MustCompile(`(?m)^;\s*walletgrpchost=[^\s]*$`)
 	miningAddrRE := regexp.MustCompile(`(?m)^;\s*miningaddr=[^\s]*$`)
 	poolFeeRE := regexp.MustCompile(`(?m)^;\s*poolfee=[^\s]*$`)
 	maxgenTimeRE := regexp.MustCompile(`(?m)^;\s*maxgentime=[^\s]*$`)
@@ -248,8 +252,8 @@ func createConfigFile(preCfg config) error {
 	s = portRE.ReplaceAllString(s, fmt.Sprintf("port=%s", preCfg.Port))
 	s = rpcUserRE.ReplaceAllString(s, fmt.Sprintf("rpcuser=%s", preCfg.RPCUser))
 	s = rpcPassRE.ReplaceAllString(s, fmt.Sprintf("rpcpass=%s", preCfg.RPCPass))
-	s = rpcCertRE.ReplaceAllString(s, fmt.Sprintf("rpccert=%s", preCfg.RPCCert))
-	s = rpcHostRE.ReplaceAllString(s, fmt.Sprintf("rpchost=%s", preCfg.RPCHost))
+	s = dcrdRPCHostRE.ReplaceAllString(s, fmt.Sprintf("dcrdrpchost=%s", preCfg.DcrdRPCHost))
+	s = walletGRPCHostRE.ReplaceAllString(s, fmt.Sprintf("walletgrpchost=%s", preCfg.WalletGRPCHost))
 	s = miningAddrRE.ReplaceAllString(s, fmt.Sprintf("miningaddr=%s", preCfg.MiningAddr))
 	s = poolFeeRE.ReplaceAllString(s, fmt.Sprintf("poolfee=%v", preCfg.PoolFee))
 	s = maxgenTimeRE.ReplaceAllString(s, fmt.Sprintf("maxgentime=%v", preCfg.MaxGenTime))
@@ -280,20 +284,20 @@ func createConfigFile(preCfg config) error {
 func loadConfig() (*config, []string, error) {
 	// Default config.
 	cfg := config{
-		HomeDir:    defaultHomeDir,
-		ConfigFile: defaultConfigFile,
-		DataDir:    defaultDataDir,
-		DBFile:     defaultDBFile,
-		DebugLevel: defaultLogLevel,
-		LogDir:     defaultLogDir,
-		Port:       defaultPort,
-		RPCUser:    defaultRPCUser,
-		RPCPass:    defaultRPCPass,
-		RPCCert:    defaultRPCCertFile,
-		RPCHost:    defaultRPCHost,
-		MiningAddr: defaultMiningAddr,
-		PoolFee:    defaultPoolFee,
-		MaxGenTime: defaultMaxGenTime,
+		HomeDir:        dcrpoolHomeDir,
+		ConfigFile:     defaultConfigFile,
+		DataDir:        defaultDataDir,
+		DBFile:         defaultDBFile,
+		DebugLevel:     defaultLogLevel,
+		LogDir:         defaultLogDir,
+		Port:           defaultPort,
+		RPCUser:        defaultRPCUser,
+		RPCPass:        defaultRPCPass,
+		DcrdRPCHost:    defaultDcrdRPCHost,
+		WalletGRPCHost: defaultWalletGRPCHost,
+		MiningAddr:     defaultMiningAddr,
+		PoolFee:        defaultPoolFee,
+		MaxGenTime:     defaultMaxGenTime,
 	}
 
 	// Service options which are only added on Windows.
@@ -349,11 +353,6 @@ func loadConfig() (*config, []string, error) {
 			cfg.DataDir = filepath.Join(cfg.HomeDir, defaultDataDirname)
 		} else {
 			cfg.DataDir = preCfg.DataDir
-		}
-		if preCfg.RPCCert == defaultRPCCertFile {
-			cfg.RPCCert = filepath.Join(cfg.DataDir, defaultRPCCertFilename)
-		} else {
-			cfg.RPCCert = preCfg.RPCCert
 		}
 		if preCfg.LogDir == defaultLogDir {
 			cfg.LogDir = filepath.Join(cfg.HomeDir, defaultLogDirname)
@@ -463,15 +462,21 @@ func loadConfig() (*config, []string, error) {
 		pLog.Warnf("%v", configFileError)
 	}
 
-	if !fileExists(cfg.RPCCert) {
+	// Load Dcrd RPC Certificate.
+	if !fileExists(dcrdRPCCertFile) {
 		return nil, nil,
-			fmt.Errorf("RPC certificate (%v) not found", cfg.RPCCert)
+			fmt.Errorf("Dcrd RPC certificate (%v) not found", dcrdRPCCertFile)
 	}
 
-	// Load the RPC certificate.
-	cfg.rpccerts, err = ioutil.ReadFile(cfg.RPCCert)
+	cfg.dcrdRPCCerts, err = ioutil.ReadFile(dcrdRPCCertFile)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// Assert the wallet's RPC certificate exists.
+	if !fileExists(walletRPCCertFile) {
+		return nil, nil,
+			fmt.Errorf("Wallet RPC certificate (%v) not found", walletRPCCertFile)
 	}
 
 	return &cfg, remainingArgs, nil

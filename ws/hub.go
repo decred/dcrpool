@@ -1,6 +1,8 @@
 package ws
 
 import (
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"math/big"
 	"net/http"
 	"sync"
@@ -11,6 +13,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/blockchain"
 	"github.com/decred/dcrd/rpcclient"
+	"github.com/decred/dcrwallet/rpc/walletrpc"
 
 	"dnldd/dcrpool/limiter"
 	"dnldd/dcrpool/worker"
@@ -18,8 +21,11 @@ import (
 
 // HubConfig represents configuration details for the hub.
 type HubConfig struct {
-	PoolFee    *big.Rat
-	MaxGenTime *big.Int
+	DcrdRPCCfg        *rpcclient.ConnConfig
+	PoolFee           *big.Rat
+	MaxGenTime        *big.Int
+	WalletRPCCertFile string
+	WalletGRPCHost    string
 }
 
 // Hub maintains the set of active clients and facilitates message broadcasting
@@ -32,6 +38,9 @@ type Hub struct {
 	Broadcast      chan Message
 	rpcc           *rpcclient.Client
 	rpccMtx        sync.Mutex
+	gConn          *grpc.ClientConn
+	grpc           walletrpc.WalletServiceClient
+	grpcMtx        sync.Mutex
 	hashRate       *big.Int
 	hashRateMtx    sync.Mutex
 	poolTargets    map[string]uint32
@@ -41,7 +50,7 @@ type Hub struct {
 }
 
 // NewHub initializes a websocket hub.
-func NewHub(db *bolt.DB, httpc *http.Client, rpccfg *rpcclient.ConnConfig, hcfg *HubConfig, limiter *limiter.RateLimiter) (*Hub, error) {
+func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *limiter.RateLimiter) (*Hub, error) {
 	h := &Hub{
 		db:          db,
 		httpc:       httpc,
@@ -110,7 +119,8 @@ func NewHub(db *bolt.DB, httpc *http.Client, rpccfg *rpcclient.ConnConfig, hcfg 
 		},
 	}
 
-	rpcc, err := rpcclient.New(rpccfg, ntfnHandlers)
+	// Establish RPC connection with dcrd.
+	rpcc, err := rpcclient.New(hcfg.DcrdRPCCfg, ntfnHandlers)
 	if err != nil {
 		return nil, err
 	}
@@ -118,21 +128,46 @@ func NewHub(db *bolt.DB, httpc *http.Client, rpccfg *rpcclient.ConnConfig, hcfg 
 	h.rpcc = rpcc
 
 	// Subscribe for chain notifications.
-	if err := rpcc.NotifyWork(); err != nil {
-		rpcc.Shutdown()
+	if err := h.rpcc.NotifyWork(); err != nil {
+		h.rpccMtx.Lock()
+		h.rpcc.Shutdown()
+		h.rpccMtx.Unlock()
 		return nil, err
 	}
-	if err := rpcc.NotifyBlocks(); err != nil {
-		rpcc.Shutdown()
+	if err := h.rpcc.NotifyBlocks(); err != nil {
+		h.rpccMtx.Lock()
+		h.rpcc.Shutdown()
+		h.rpccMtx.Unlock()
 		return nil, err
 	}
+
+	log.Debugf("RPC connection established with dcrd.")
+
+	// Establish GRPC connection with the wallet.
+	creds, err := credentials.NewClientTLSFromFile(hcfg.WalletRPCCertFile,
+		"localhost")
+	if err != nil {
+		return nil, err
+	}
+
+	h.gConn, err = grpc.Dial(hcfg.WalletGRPCHost,
+		grpc.WithTransportCredentials(creds))
+	if err != nil {
+		return nil, err
+	}
+
+	h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
+	log.Debugf("GRPC connection established with dcrwallet.")
 
 	return h, nil
 }
 
-// Close terminates all connected clients to the hub.
-func (h *Hub) Close() {
+// Shutdown terminates all connected clients to the hub and releases all
+// resources used.
+func (h *Hub) Shutdown() {
 	h.Broadcast <- nil
+	h.gConn.Close()
+	h.rpcc.Shutdown()
 }
 
 // HasConnectedClients asserts the mining pool has connected miners.
