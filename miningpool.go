@@ -74,19 +74,24 @@ func NewMiningPool(cfg *config) (*MiningPool, error) {
 			methodsOk)(p.limit(p.router)),
 	}
 	p.upgrader = websocket.Upgrader{}
-	rpccfg := &rpcclient.ConnConfig{
-		Host:         cfg.RPCHost,
+
+	dcrdRPCCfg := &rpcclient.ConnConfig{
+		Host:         cfg.DcrdRPCHost,
 		Endpoint:     "ws",
 		User:         cfg.RPCUser,
 		Pass:         cfg.RPCPass,
-		Certificates: cfg.rpccerts,
+		Certificates: cfg.dcrdRPCCerts,
 	}
 
 	hcfg := &ws.HubConfig{
-		PoolFee:    new(big.Rat).SetFloat64(cfg.PoolFee),
-		MaxGenTime: new(big.Int).SetUint64(cfg.MaxGenTime),
+		WalletRPCCertFile: walletRPCCertFile,
+		WalletGRPCHost:    cfg.WalletGRPCHost,
+		DcrdRPCCfg:        dcrdRPCCfg,
+		PoolFee:           new(big.Rat).SetFloat64(cfg.PoolFee),
+		MaxGenTime:        new(big.Int).SetUint64(cfg.MaxGenTime),
 	}
-	p.hub, err = ws.NewHub(p.db, p.httpc, rpccfg, hcfg, p.limiter)
+
+	p.hub, err = ws.NewHub(p.db, p.httpc, hcfg, p.limiter)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +112,7 @@ func (p *MiningPool) listen() {
 // shutdown gracefully terminates the mining pool.
 func (p *MiningPool) shutdown() {
 	pLog.Info("Shutting down dcrpool.")
-	p.hub.Close()
+	p.hub.Shutdown()
 	p.db.Close()
 	defer p.cancel()
 	if err := p.server.Shutdown(p.ctx); err != nil {
