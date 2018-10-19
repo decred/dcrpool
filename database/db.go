@@ -18,6 +18,9 @@ var (
 	NameIdxBkt = []byte("nameidxbkt")
 	// ShareBkt stores all client shares for the mining pool.
 	ShareBkt = []byte("sharebkt")
+	// WorkBkt stores work submissions from the pool accepted by the network,
+	// periodically pruned by the current chain tip height.
+	WorkBkt = []byte("workbkt")
 
 	// VersionK is the key of the current version of the database.
 	VersionK = []byte("version")
@@ -65,6 +68,7 @@ func CreateBuckets(db *bolt.DB) error {
 			pbkt.Put(VersionK, vbytes)
 		}
 
+		// Create all other buckets nested within.
 		_, err = pbkt.CreateBucketIfNotExists(AccountBkt)
 		if err != nil {
 			return fmt.Errorf("failed to create '%v' bucket: %v",
@@ -81,6 +85,12 @@ func CreateBuckets(db *bolt.DB) error {
 		if err != nil {
 			return fmt.Errorf("failed to create '%v' bucket: %v",
 				string(NameIdxBkt), err)
+		}
+
+		_, err = pbkt.CreateBucketIfNotExists(WorkBkt)
+		if err != nil {
+			return fmt.Errorf("failed to create '%v' bucket: %v",
+				string(WorkBkt), err)
 		}
 		return nil
 	})

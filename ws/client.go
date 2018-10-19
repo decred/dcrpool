@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/blockchain"
+	"github.com/decred/dcrd/wire"
 	"github.com/gorilla/websocket"
 
 	"dnldd/dcrpool/worker"
@@ -196,6 +198,26 @@ out:
 
 				// Claim a weighted share for work contributed to the pool.
 				c.claimWeightedShare()
+
+				// if the work is accepted, parse the embedded header and
+				// persist the accepted work created from it.
+				if accepted {
+					decoded, err := DecodeHeader([]byte(*header))
+					if err != nil {
+						log.Errorf("Failed to decode header: %v", err)
+						continue
+					}
+
+					h, err := ParseBlockHeader(decoded)
+					if err != nil {
+						log.Errorf("Failed to parse block header: %v", err)
+						continue
+					}
+
+					work := NewAcceptedWork(h.BlockHash().String(), h.Height)
+					work.Create(c.hub.db)
+				}
+
 			default:
 				log.Debugf("Unknowning request type received")
 			}
@@ -420,4 +442,17 @@ func DecodeHeader(encoded []byte) ([]byte, error) {
 	}
 
 	return decoded, nil
+}
+
+// ParseBlockHeader deserializes the block header from the provided hex
+// encoded header data.
+func ParseBlockHeader(decoded []byte) (*wire.BlockHeader, error) {
+	var header wire.BlockHeader
+	reader := bytes.NewReader(decoded[:180])
+	err := header.Deserialize(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	return &header, nil
 }
