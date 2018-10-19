@@ -54,6 +54,9 @@ const ConfigFileContents = `[Application Options]
 ; The listening port for incoming requests.  
 ; port=
 
+; The active network {simnet, testnet, mainnet}.
+; activenet=
+
 ; ------------------------------------------------------------------------------
 ; Mining settings
 ; ------------------------------------------------------------------------------

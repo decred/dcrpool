@@ -54,6 +54,7 @@ walletgrpchost=127.0.0.1:19558
 debuglevel=debug
 homedir=.
 port=:19576
+activenet=simnet
 miningaddr=${WALLET_MINING_ADDR}
 EOF
 cat > "${NODES_ROOT}/client.conf" <<EOF
