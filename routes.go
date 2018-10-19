@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/decred/dcrd/dcrutil"
 	"golang.org/x/crypto/bcrypt"
 
 	"dnldd/dcrpool/database"
@@ -204,7 +205,21 @@ func (p *MiningPool) handleCreateAccount(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// TODO: Verify the address provided is a valid decred address.
+	// Assert the payment address provided is for the active network.
+	addr, err := dcrutil.DecodeAddress(address)
+	if err != nil {
+		err := fmt.Errorf("failed to decode mining address (%s): %v",
+			address, err)
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if !addr.IsForNet(cfg.net) {
+		err := fmt.Errorf("mining address (%s) not on the active network (%s)",
+			addr, cfg.ActiveNet)
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
 
 	id, err := database.GetIndexValue(p.db, database.NameIdxBkt,
 		[]byte(strings.ToLower(name)))

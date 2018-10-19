@@ -1,7 +1,5 @@
 package main
 
-// TODO: implement the dcrpool server.
-
 import (
 	"context"
 	"math/big"

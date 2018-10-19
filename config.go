@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
@@ -35,6 +36,7 @@ const (
 )
 
 var (
+	defaultActiveNet  = chaincfg.SimNetParams.Name
 	dcrpoolHomeDir    = dcrutil.AppDataDir("dcrpool", false)
 	dcrwalletHomeDir  = dcrutil.AppDataDir("dcrwallet", false)
 	dcrdHomeDir       = dcrutil.AppDataDir("dcrd", false)
@@ -55,6 +57,7 @@ type config struct {
 	HomeDir        string  `long:"homedir" description:"Path to application home directory"`
 	ConfigFile     string  `long:"configfile" description:"Path to configuration file"`
 	DataDir        string  `long:"datadir" description:"The data directory"`
+	ActiveNet      string  `long:"activenet" description:"The active network being mined on. {simnet, testnet, mainnet}"`
 	DebugLevel     string  `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir         string  `long:"logdir" description:"Directory to log output."`
 	DBFile         string  `long:"dbfile" description:"Path to the database file"`
@@ -68,6 +71,7 @@ type config struct {
 	MaxGenTime     uint64  `long:"maxgentime" decription:"The share creation target time for the pool in seconds."`
 	miningAddr     dcrutil.Address
 	dcrdRPCCerts   []byte
+	net            *chaincfg.Params
 }
 
 // serviceOptions defines the configuration options for the daemon as a service on
@@ -243,6 +247,7 @@ func createConfigFile(preCfg config) error {
 	miningAddrRE := regexp.MustCompile(`(?m)^;\s*miningaddr=[^\s]*$`)
 	poolFeeRE := regexp.MustCompile(`(?m)^;\s*poolfee=[^\s]*$`)
 	maxgenTimeRE := regexp.MustCompile(`(?m)^;\s*maxgentime=[^\s]*$`)
+	activeNetRE := regexp.MustCompile(`(?m)^;\s*activenet=[^\s]*$`)
 	s := homeDirRE.ReplaceAllString(ConfigFileContents, fmt.Sprintf("homedir=%s", preCfg.HomeDir))
 	s = debugLevelRE.ReplaceAllString(s, fmt.Sprintf("debuglevel=%s", preCfg.DebugLevel))
 	s = dataDirRE.ReplaceAllString(s, fmt.Sprintf("datadir=%s", preCfg.DataDir))
@@ -257,6 +262,7 @@ func createConfigFile(preCfg config) error {
 	s = miningAddrRE.ReplaceAllString(s, fmt.Sprintf("miningaddr=%s", preCfg.MiningAddr))
 	s = poolFeeRE.ReplaceAllString(s, fmt.Sprintf("poolfee=%v", preCfg.PoolFee))
 	s = maxgenTimeRE.ReplaceAllString(s, fmt.Sprintf("maxgentime=%v", preCfg.MaxGenTime))
+	s = activeNetRE.ReplaceAllString(s, fmt.Sprintf("activenet=%v", preCfg.ActiveNet))
 
 	// Create config file at the provided path.
 	dest, err := os.OpenFile(preCfg.ConfigFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
@@ -298,6 +304,7 @@ func loadConfig() (*config, []string, error) {
 		MiningAddr:     defaultMiningAddr,
 		PoolFee:        defaultPoolFee,
 		MaxGenTime:     defaultMaxGenTime,
+		ActiveNet:      defaultActiveNet,
 	}
 
 	// Service options which are only added on Windows.
@@ -443,7 +450,17 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	// Check mining address is valid.
+	// Set the active network.
+	switch cfg.ActiveNet {
+	case chaincfg.SimNetParams.Name:
+		cfg.net = &chaincfg.SimNetParams
+	case chaincfg.TestNet3Params.Name:
+		cfg.net = &chaincfg.TestNet3Params
+	case chaincfg.MainNetParams.Name:
+		cfg.net = &chaincfg.MainNetParams
+	}
+
+	// Check mining address is valid and on the active network.
 	addr, err := dcrutil.DecodeAddress(cfg.MiningAddr)
 	if err != nil {
 		str := "%s: mining address '%s' failed to decode: %v"
@@ -452,8 +469,14 @@ func loadConfig() (*config, []string, error) {
 		fmt.Fprintln(os.Stderr, usageMessage)
 		return nil, nil, err
 	}
+
+	if !addr.IsForNet(cfg.net) {
+		return nil, nil,
+			fmt.Errorf("mining address (%s) not on the active network (%s)",
+				addr, cfg.ActiveNet)
+	}
+
 	cfg.miningAddr = addr
-	// TODO: ensure the mining address originates from the active network.
 
 	// Warn about missing config file only after all other configuration is
 	// done. This prevents the warning on help messages and invalid
