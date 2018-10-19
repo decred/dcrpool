@@ -101,7 +101,7 @@ func (m *CPUMiner) solveBlock(ctx context.Context, decoded []byte, ticker *time.
 			}
 
 			ws.SetNonce(decoded, nonce)
-			header, err := fetchBlockHeader(decoded)
+			header, err := ws.ParseBlockHeader(decoded)
 			if err != nil {
 				log.Error(err)
 				return false

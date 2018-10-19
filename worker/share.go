@@ -139,7 +139,7 @@ func (s *Share) Update(db *bolt.DB) error {
 	return ErrNotSupported("share", "update")
 }
 
-// Delete purges the account from the database.
+// Delete is not supported for shares.
 func (s *Share) Delete(db *bolt.DB, state bool) error {
 	return ErrNotSupported("share", "delete")
 }
