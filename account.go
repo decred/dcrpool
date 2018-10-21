@@ -102,7 +102,7 @@ func (acc *Account) Update(db *bolt.DB) error {
 	return acc.Create(db)
 }
 
-// Delete purges the account from the database.
+// Delete purges the referenced account from the database.
 func (acc *Account) Delete(db *bolt.DB, state bool) error {
 	return database.Delete(db, database.AccountBkt, []byte(acc.UUID))
 }
