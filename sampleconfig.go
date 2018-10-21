@@ -71,4 +71,7 @@ const ConfigFileContents = `[Application Options]
 
 ; The share creation target time for the pool in seconds.
 ; sharetime=
+
+; The payment method of the pool {pps, pplns}.
+; paymentmethod=
 `

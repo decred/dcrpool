@@ -1,6 +1,6 @@
 #!/bin/sh
 # Tmux script that creates a cpu mining test harness with 2 dcrd nodes, 
-# a dcrpool instance and a dcrpclient instance.
+# a dcrpool instance and a poolclient instance.
 # Network layout:
 # master [listen:19555]  <->  pnode [listen:19565, rpc:19566] <-> dcrctl
 #                                  \
@@ -150,6 +150,6 @@ tmux send-keys `curl -s POST http://127.0.0.1:19576/create/account \
   -d '{"name": "pcl", \
   "address":"SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc" ,"pass": "pass"}' \
   > /dev/null`
-tmux send-keys "dcrpclient --configfile ../client.conf " C-m
+tmux send-keys "poolclient --configfile ../client.conf " C-m
 
 tmux attach-session -t $SESSION

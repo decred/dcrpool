@@ -12,15 +12,22 @@ var (
 	// PoolBkt is the main bucket of mining pool, all other buckets
 	// are nested within it.
 	PoolBkt = []byte("poolbkt")
+
 	// AccountBkt stores all registered accounts for the mining pool.
 	AccountBkt = []byte("accountbkt")
+
 	// NameIdxBkt is an index of all account names mapped to their ids.
 	NameIdxBkt = []byte("nameidxbkt")
+
 	// ShareBkt stores all client shares for the mining pool.
 	ShareBkt = []byte("sharebkt")
+
 	// WorkBkt stores work submissions from the pool accepted by the network,
 	// periodically pruned by the current chain tip height.
 	WorkBkt = []byte("workbkt")
+
+	// PaymentBatchBkt stores all payment batches.
+	PaymentBatchBkt = []byte("paymentbatchbkt")
 
 	// VersionK is the key of the current version of the database.
 	VersionK = []byte("version")
@@ -92,6 +99,13 @@ func CreateBuckets(db *bolt.DB) error {
 			return fmt.Errorf("failed to create '%v' bucket: %v",
 				string(WorkBkt), err)
 		}
+
+		_, err = pbkt.CreateBucketIfNotExists(PaymentBatchBkt)
+		if err != nil {
+			return fmt.Errorf("failed to create '%v' bucket: %v",
+				string(PaymentBatchBkt), err)
+		}
+
 		return nil
 	})
 	return err

@@ -14,8 +14,8 @@ import (
 	"github.com/jrick/logrotate/rotator"
 
 	"dnldd/dcrpool/database"
-	"dnldd/dcrpool/worker"
-	"dnldd/dcrpool/ws"
+	"dnldd/dcrpool/dividend"
+	"dnldd/dcrpool/network"
 )
 
 // logWriter implements an io.Writer that outputs to both standard output and
@@ -48,25 +48,25 @@ var (
 	// application shutdown.
 	logRotator *rotator.Rotator
 
-	pLog  = backendLog.Logger("MP")
-	wsLog = backendLog.Logger("WS")
-	wkLog = backendLog.Logger("WK")
-	dbLog = backendLog.Logger("DB")
+	pLog   = backendLog.Logger("MP")
+	divLog = backendLog.Logger("DIV")
+	netLog = backendLog.Logger("NET")
+	dbLog  = backendLog.Logger("DB")
 )
 
 // Initialize package-global logger variables.
 func init() {
-	ws.UseLogger(wsLog)
-	worker.UseLogger(wkLog)
 	database.UseLogger(dbLog)
+	dividend.UseLogger(divLog)
+	network.UseLogger(netLog)
 }
 
 // subsystemLoggers maps each subsystem identifier to its associated logger.
 var subsystemLoggers = map[string]slog.Logger{
-	"MP": pLog,
-	"WS": wsLog,
-	"WK": wkLog,
-	"DB": dbLog,
+	"MP":  pLog,
+	"DIV": divLog,
+	"NET": netLog,
+	"DB":  dbLog,
 }
 
 // initLogRotator initializes the logging rotater to write logs to logFile and

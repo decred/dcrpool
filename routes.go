@@ -13,7 +13,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"dnldd/dcrpool/database"
-	"dnldd/dcrpool/ws"
+	"dnldd/dcrpool/network"
 )
 
 // errParamNotFound is returned when the provided parameter key does not map
@@ -29,7 +29,7 @@ func errHeaderNotFound(key string) error {
 }
 
 // setupRoutes configures the accessible routes of the mining pool.
-func (p *MiningPool) setupRoutes() {
+func (p *Pool) setupRoutes() {
 	p.router.HandleFunc("/create/account", p.handleCreateAccount).
 		Methods(http.MethodPost)
 	p.router.HandleFunc("/update/name", p.handleUpdateName).
@@ -80,7 +80,7 @@ func getBasicAuthorization(r *http.Request) (string, string, error) {
 //  Header:
 // 			Authorization: Basic base64('user:pass')
 //  		Miner: "cpu"
-func (p *MiningPool) handleWS(w http.ResponseWriter, r *http.Request) {
+func (p *Pool) handleWS(w http.ResponseWriter, r *http.Request) {
 	name, pass, err := getBasicAuthorization(r)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err)
@@ -130,7 +130,7 @@ func (p *MiningPool) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c := ws.NewClient(p.hub, conn, r.RemoteAddr, p.hub.Ticker,
+	c := network.NewClient(p.hub, conn, r.RemoteAddr, p.hub.Ticker,
 		minerType, account.UUID)
 	go c.Process(c.Ctx)
 	go c.Send(c.Ctx)
@@ -141,7 +141,7 @@ func (p *MiningPool) handleWS(w http.ResponseWriter, r *http.Request) {
 
 // limit ensures all incoming requests stay within the rate limit bounds
 // defined.
-func (p *MiningPool) limit(next http.Handler) http.Handler {
+func (p *Pool) limit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		allow := p.limiter.WithinLimit(r.RemoteAddr)
 		if !allow {
@@ -168,7 +168,7 @@ func (p *MiningPool) limit(next http.Handler) http.Handler {
 // 			"createdon": 1536186735,
 // 			"modifiedon": 0
 // 		}
-func (p *MiningPool) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
+func (p *Pool) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest,
@@ -214,9 +214,9 @@ func (p *MiningPool) handleCreateAccount(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !addr.IsForNet(cfg.net) {
+	if !addr.IsForNet(p.cfg.net) {
 		err := fmt.Errorf("mining address (%s) not on the active network (%s)",
-			addr, cfg.ActiveNet)
+			addr, p.cfg.ActiveNet)
 		respondWithError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -272,7 +272,7 @@ func (p *MiningPool) handleCreateAccount(w http.ResponseWriter, r *http.Request)
 // 			"createdon": 1536186735,
 // 			"modifiedon": 1536189736
 // 		}
-func (p *MiningPool) handleUpdateName(w http.ResponseWriter, r *http.Request) {
+func (p *Pool) handleUpdateName(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest,
@@ -377,7 +377,7 @@ func (p *MiningPool) handleUpdateName(w http.ResponseWriter, r *http.Request) {
 // 			"createdon": 1536233973,
 // 			"modifiedon": 1536233991
 // 		}
-func (p *MiningPool) handleUpdateAddress(w http.ResponseWriter, r *http.Request) {
+func (p *Pool) handleUpdateAddress(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest,
@@ -463,7 +463,7 @@ func (p *MiningPool) handleUpdateAddress(w http.ResponseWriter, r *http.Request)
 // 				"newpass": "h3ll0"
 // 			}
 // 		sample response: Status OK
-func (p *MiningPool) handleUpdatePass(w http.ResponseWriter, r *http.Request) {
+func (p *Pool) handleUpdatePass(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest,

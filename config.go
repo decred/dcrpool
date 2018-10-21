@@ -15,6 +15,8 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
+
+	"dnldd/dcrpool/dividend"
 )
 
 const (
@@ -36,16 +38,17 @@ const (
 )
 
 var (
-	defaultActiveNet  = chaincfg.SimNetParams.Name
-	dcrpoolHomeDir    = dcrutil.AppDataDir("dcrpool", false)
-	dcrwalletHomeDir  = dcrutil.AppDataDir("dcrwallet", false)
-	dcrdHomeDir       = dcrutil.AppDataDir("dcrd", false)
-	defaultConfigFile = filepath.Join(dcrpoolHomeDir, defaultConfigFilename)
-	defaultDataDir    = filepath.Join(dcrpoolHomeDir, defaultDataDirname)
-	defaultDBFile     = filepath.Join(dcrpoolHomeDir, defaultDBFilename)
-	dcrdRPCCertFile   = filepath.Join(dcrdHomeDir, defaultRPCCertFilename)
-	walletRPCCertFile = filepath.Join(dcrwalletHomeDir, defaultRPCCertFilename)
-	defaultLogDir     = filepath.Join(dcrpoolHomeDir, defaultLogDirname)
+	defaultActiveNet     = chaincfg.SimNetParams.Name
+	defaultPaymentMethod = dividend.PPS
+	dcrpoolHomeDir       = dcrutil.AppDataDir("dcrpool", false)
+	dcrwalletHomeDir     = dcrutil.AppDataDir("dcrwallet", false)
+	dcrdHomeDir          = dcrutil.AppDataDir("dcrd", false)
+	defaultConfigFile    = filepath.Join(dcrpoolHomeDir, defaultConfigFilename)
+	defaultDataDir       = filepath.Join(dcrpoolHomeDir, defaultDataDirname)
+	defaultDBFile        = filepath.Join(dcrpoolHomeDir, defaultDBFilename)
+	dcrdRPCCertFile      = filepath.Join(dcrdHomeDir, defaultRPCCertFilename)
+	walletRPCCertFile    = filepath.Join(dcrwalletHomeDir, defaultRPCCertFilename)
+	defaultLogDir        = filepath.Join(dcrpoolHomeDir, defaultLogDirname)
 )
 
 // runServiceCommand is only set to a real function on Windows.  It is used
@@ -69,6 +72,7 @@ type config struct {
 	Port           string  `long:"port" description:"The listening port"`
 	PoolFee        float64 `long:"poolfee" description:"The fee charged for pool participation. eg 0.01 (1%), 0.05 (5%)."`
 	MaxGenTime     uint64  `long:"maxgentime" decription:"The share creation target time for the pool in seconds."`
+	PaymentMethod  string  `long:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
 	miningAddr     dcrutil.Address
 	dcrdRPCCerts   []byte
 	net            *chaincfg.Params
@@ -225,7 +229,7 @@ func newConfigParser(cfg *config, so *serviceOptions, options flags.Options) *fl
 }
 
 // createConfigFile copies the sample config to the given destination path.
-func createConfigFile(preCfg config) error {
+func createConfigFile(preCfg *config) error {
 	// Create the destination directory if it does not exist.
 	err := os.MkdirAll(filepath.Dir(preCfg.ConfigFile), 0700)
 	if err != nil {
@@ -248,6 +252,7 @@ func createConfigFile(preCfg config) error {
 	poolFeeRE := regexp.MustCompile(`(?m)^;\s*poolfee=[^\s]*$`)
 	maxgenTimeRE := regexp.MustCompile(`(?m)^;\s*maxgentime=[^\s]*$`)
 	activeNetRE := regexp.MustCompile(`(?m)^;\s*activenet=[^\s]*$`)
+	paymentMethodRE := regexp.MustCompile(`(?m)^;\s*paymentmethod=[^\s]*$`)
 	s := homeDirRE.ReplaceAllString(ConfigFileContents, fmt.Sprintf("homedir=%s", preCfg.HomeDir))
 	s = debugLevelRE.ReplaceAllString(s, fmt.Sprintf("debuglevel=%s", preCfg.DebugLevel))
 	s = dataDirRE.ReplaceAllString(s, fmt.Sprintf("datadir=%s", preCfg.DataDir))
@@ -263,6 +268,7 @@ func createConfigFile(preCfg config) error {
 	s = poolFeeRE.ReplaceAllString(s, fmt.Sprintf("poolfee=%v", preCfg.PoolFee))
 	s = maxgenTimeRE.ReplaceAllString(s, fmt.Sprintf("maxgentime=%v", preCfg.MaxGenTime))
 	s = activeNetRE.ReplaceAllString(s, fmt.Sprintf("activenet=%v", preCfg.ActiveNet))
+	s = paymentMethodRE.ReplaceAllString(s, fmt.Sprintf("paymentmethod=%v", preCfg.PaymentMethod))
 
 	// Create config file at the provided path.
 	dest, err := os.OpenFile(preCfg.ConfigFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
@@ -305,6 +311,7 @@ func loadConfig() (*config, []string, error) {
 		PoolFee:        defaultPoolFee,
 		MaxGenTime:     defaultMaxGenTime,
 		ActiveNet:      defaultActiveNet,
+		PaymentMethod:  defaultPaymentMethod,
 	}
 
 	// Service options which are only added on Windows.
@@ -376,7 +383,7 @@ func loadConfig() (*config, []string, error) {
 	// Create a default config file when one does not exist and the user did
 	// not specify an override.
 	if !fileExists(preCfg.ConfigFile) {
-		err := createConfigFile(preCfg)
+		err := createConfigFile(&preCfg)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating a default "+
 				"config file: %v", err)
