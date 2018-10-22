@@ -42,6 +42,7 @@ const (
 var (
 	defaultActiveNet     = chaincfg.SimNetParams.Name
 	defaultPaymentMethod = dividend.PPS
+	defaultMinPayment    = 0.2
 	dcrpoolHomeDir       = dcrutil.AppDataDir("dcrpool", false)
 	dcrwalletHomeDir     = dcrutil.AppDataDir("dcrwallet", false)
 	dcrdHomeDir          = dcrutil.AppDataDir("dcrd", false)
@@ -77,6 +78,7 @@ type config struct {
 	PaymentMethod  string  `long:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
 	LastNPeriod    uint32  `long:"lastnperiod" description:"The period of interest when using the PPLNS payment scheme."`
 	WalletPass     string  `long:"walletpass" description:"The wallet passphrase."`
+	MinPayment     float64 `long:"minpayment" description:"The minimum payment to process for an account."`
 	miningAddr     dcrutil.Address
 	dcrdRPCCerts   []byte
 	net            *chaincfg.Params
@@ -259,6 +261,7 @@ func createConfigFile(preCfg *config) error {
 	paymentMethodRE := regexp.MustCompile(`(?m)^;\s*paymentmethod=[^\s]*$`)
 	lastNPeriodRE := regexp.MustCompile(`(?m)^;\s*lastnperiod=[^\s]*$`)
 	walletPassRE := regexp.MustCompile(`(?m)^;\s*walletpass=[^\s]*$`)
+	minPaymentRE := regexp.MustCompile(`(?m)^;\s*minpayment=[^\s]*$`)
 	s := homeDirRE.ReplaceAllString(ConfigFileContents,
 		fmt.Sprintf("homedir=%s", preCfg.HomeDir))
 	s = debugLevelRE.ReplaceAllString(s,
@@ -295,6 +298,8 @@ func createConfigFile(preCfg *config) error {
 		fmt.Sprintf("lastnperiod=%v", preCfg.LastNPeriod))
 	s = walletPassRE.ReplaceAllString(s,
 		fmt.Sprintf("walletpass=%v", preCfg.WalletPass))
+	s = minPaymentRE.ReplaceAllString(s,
+		fmt.Sprintf("minpayment=%v", preCfg.MinPayment))
 
 	// Create config file at the provided path.
 	dest, err := os.OpenFile(preCfg.ConfigFile,
@@ -341,6 +346,7 @@ func loadConfig() (*config, []string, error) {
 		PaymentMethod:  defaultPaymentMethod,
 		LastNPeriod:    defaultLastNPeriod,
 		WalletPass:     defaultWalletPass,
+		MinPayment:     defaultMinPayment,
 	}
 
 	// Service options which are only added on Windows.

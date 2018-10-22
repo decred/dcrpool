@@ -1,4 +1,4 @@
-package main
+package dividend
 
 import (
 	"encoding/json"
@@ -22,9 +22,9 @@ type Account struct {
 	ModifiedOn uint64 `json:"modifiedon"`
 }
 
-// bcryptHash generates a bcrypt hash from the supplied plaintext. This should
+// BcryptHash generates a bcrypt hash from the supplied plaintext. This should
 // be used to hash passwords before persisting in a database.
-func bcryptHash(plaintext string) ([]byte, error) {
+func BcryptHash(plaintext string) ([]byte, error) {
 	hashedPass, err := bcrypt.GenerateFromPassword([]byte(plaintext),
 		bcrypt.DefaultCost)
 	if err != nil {
@@ -39,7 +39,7 @@ func NewAccount(name string, address string, pass string) (*Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	hashedPass, err := bcryptHash(pass)
+	hashedPass, err := BcryptHash(pass)
 	if err != nil {
 		return nil, err
 	}

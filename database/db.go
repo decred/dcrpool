@@ -26,8 +26,8 @@ var (
 	// periodically pruned by the current chain tip height.
 	WorkBkt = []byte("workbkt")
 
-	// PaymentBatchBkt stores all payment batches.
-	PaymentBatchBkt = []byte("paymentbatchbkt")
+	// PaymentBkt stores all payments.
+	PaymentBkt = []byte("paymentbkt")
 
 	// VersionK is the key of the current version of the database.
 	VersionK = []byte("version")
@@ -100,10 +100,10 @@ func CreateBuckets(db *bolt.DB) error {
 				string(WorkBkt), err)
 		}
 
-		_, err = pbkt.CreateBucketIfNotExists(PaymentBatchBkt)
+		_, err = pbkt.CreateBucketIfNotExists(PaymentBkt)
 		if err != nil {
 			return fmt.Errorf("failed to create '%v' bucket: %v",
-				string(PaymentBatchBkt), err)
+				string(PaymentBkt), err)
 		}
 
 		return nil
