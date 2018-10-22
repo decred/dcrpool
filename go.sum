@@ -37,6 +37,8 @@ github.com/decred/dcrd/dcrec v0.0.0-20180801202239-0761de129164/go.mod h1:cRAH1S
 github.com/decred/dcrd/dcrec/edwards v0.0.0-20180721005212-59fe2b293f69/go.mod h1:+ehP0Hk/mesyZXttxCtBbhPX23BMpZJ1pcVBqUfbmvU=
 github.com/decred/dcrd/dcrec/edwards v0.0.0-20180721031028-5369a485acf6 h1:1T33paUnhZTyLN60k5DSy4CH9uTN4vQ9TdSyu4O1ox8=
 github.com/decred/dcrd/dcrec/edwards v0.0.0-20180721031028-5369a485acf6/go.mod h1:+ehP0Hk/mesyZXttxCtBbhPX23BMpZJ1pcVBqUfbmvU=
+github.com/decred/dcrd/dcrec/edwards v0.0.0-20181019170526-20631a1e7436 h1:F0foaSHKiCjxrPU9q15KTTk0TsBKEMjfnKU5vxAMm+I=
+github.com/decred/dcrd/dcrec/edwards v0.0.0-20181019170526-20631a1e7436/go.mod h1:+ehP0Hk/mesyZXttxCtBbhPX23BMpZJ1pcVBqUfbmvU=
 github.com/decred/dcrd/dcrec/secp256k1 v1.0.0 h1:Le54WTGdTQv7XYXpS31uhFE8LZE7ypwsIL+FgDP2x5Q=
 github.com/decred/dcrd/dcrec/secp256k1 v1.0.0/go.mod h1:JPMFscGlgXTV684jxQNDijae2qrh0fLG7pJBimaYotE=
 github.com/decred/dcrd/dcrjson v1.0.0 h1:50DnA0XeV2JrQXoHh43TCKmH+kz2gHjZ1Mj/Pdk7Oz0=
@@ -76,6 +78,8 @@ github.com/jrick/logrotate v1.0.0/go.mod h1:LNinyqDIJnpAur+b8yyulnQw/wDuN1+BYKlT
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/gomega v1.4.1/go.mod h1:C1qb7wdrVGGVU+Z6iS04AVkA3Q65CEZX59MT0QO5uiA=
+github.com/robfig/cron v0.0.0-20180505203441-b41be1df6967 h1:x7xEyJDP7Hv3LVgvWhzioQqbC/KtuUhTigKlH/8ehhE=
+github.com/robfig/cron v0.0.0-20180505203441-b41be1df6967/go.mod h1:JGuDeoQd7Z6yL4zQhZ3OPEVHB7fL6Ka6skscFHfmt2k=
 github.com/segmentio/ksuid v1.0.2 h1:9yBfKyw4ECGTdALaF09Snw3sLJmYIX6AbPJrAy6MrDc=
 github.com/segmentio/ksuid v1.0.2/go.mod h1:BXuJDr2byAiHuQaQtSKoXh1J0YmUDurywOXgB2w+OSU=
 golang.org/x/crypto v0.0.0-20180718160520-a2144134853f/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=

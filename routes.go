@@ -13,6 +13,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"dnldd/dcrpool/database"
+	"dnldd/dcrpool/dividend"
 	"dnldd/dcrpool/network"
 )
 
@@ -101,7 +102,7 @@ func (p *Pool) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := GetAccount(p.db, id)
+	account, err := dividend.GetAccount(p.db, id)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err)
 		return
@@ -234,7 +235,7 @@ func (p *Pool) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := NewAccount(name, address, pass)
+	account, err := dividend.NewAccount(name, address, pass)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, err)
 		return
@@ -323,7 +324,7 @@ func (p *Pool) handleUpdateName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := GetAccount(p.db, []byte(id))
+	account, err := dividend.GetAccount(p.db, []byte(id))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err)
 		return
@@ -428,7 +429,7 @@ func (p *Pool) handleUpdateAddress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := GetAccount(p.db, []byte(id))
+	account, err := dividend.GetAccount(p.db, []byte(id))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err)
 		return
@@ -514,7 +515,7 @@ func (p *Pool) handleUpdatePass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := GetAccount(p.db, []byte(id))
+	account, err := dividend.GetAccount(p.db, []byte(id))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err)
 		return
@@ -528,7 +529,7 @@ func (p *Pool) handleUpdatePass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashedPass, err := bcryptHash(newPass)
+	hashedPass, err := dividend.BcryptHash(newPass)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err)
 		return

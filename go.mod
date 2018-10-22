@@ -18,6 +18,7 @@ require (
 	github.com/gorilla/websocket v1.4.0
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/jrick/logrotate v1.0.0
+	github.com/robfig/cron v0.0.0-20180505203441-b41be1df6967
 	github.com/segmentio/ksuid v1.0.2
 	golang.org/x/crypto v0.0.0-20181015023909-0c41d7ab0a0e
 	golang.org/x/time v0.0.0-20180412165947-fbb02b2291d2

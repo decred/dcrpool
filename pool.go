@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/coreos/bbolt"
+	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -84,6 +85,11 @@ func NewPool(cfg *config) (*Pool, error) {
 		Certificates: cfg.dcrdRPCCerts,
 	}
 
+	minPmt, err := dcrutil.NewAmount(cfg.MinPayment)
+	if err != nil {
+		return nil, err
+	}
+
 	hcfg := &network.HubConfig{
 		ActiveNet:         cfg.net,
 		WalletRPCCertFile: walletRPCCertFile,
@@ -94,6 +100,7 @@ func NewPool(cfg *config) (*Pool, error) {
 		PaymentMethod:     cfg.PaymentMethod,
 		LastNPeriod:       cfg.LastNPeriod,
 		WalletPass:        cfg.WalletPass,
+		MinPayment:        minPmt,
 	}
 
 	p.hub, err = network.NewHub(p.db, p.httpc, hcfg, p.limiter)

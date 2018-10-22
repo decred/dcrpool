@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"dnldd/dcrpool/database"
 	"math/big"
 	"net/http"
 	"sync"
@@ -17,6 +18,7 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
 	"github.com/decred/dcrwallet/rpc/walletrpc"
+	"github.com/robfig/cron"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -34,6 +36,7 @@ type HubConfig struct {
 	PaymentMethod     string
 	LastNPeriod       uint32
 	WalletPass        string
+	MinPayment        dcrutil.Amount
 }
 
 // Hub maintains the set of active clients and facilitates message broadcasting
@@ -53,6 +56,7 @@ type Hub struct {
 	hashRateMtx    sync.Mutex
 	poolTargets    map[string]uint32
 	poolTargetsMtx sync.RWMutex
+	cron           *cron.Cron
 	ConnCount      uint64
 	Ticker         *time.Ticker
 }
@@ -66,6 +70,7 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 		cfg:         hcfg,
 		hashRate:    dividend.ZeroInt,
 		poolTargets: make(map[string]uint32),
+		cron:        cron.New(),
 		Broadcast:   make(chan Message),
 		ConnCount:   0,
 		Ticker:      time.NewTicker(time.Second * 5),
@@ -215,12 +220,17 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 	h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
 	log.Debugf("GRPC connection established with dcrwallet.")
 
+	h.StartPaymentCron()
+
 	return h, nil
 }
 
 // Shutdown terminates all connected clients to the hub and releases all
 // resources used.
 func (h *Hub) Shutdown() {
+	h.cron.Stop()
+	log.Debugf("Dividend payment cron stopped.")
+
 	h.Broadcast <- nil
 	h.gConn.Close()
 	h.rpcc.Shutdown()
@@ -276,12 +286,12 @@ func (h *Hub) RemoveHashRate(miner string) {
 	h.hashRateMtx.Unlock()
 }
 
-// PayoutDividends creates a transaction paying pool accounts for work done.
-func (h *Hub) PayoutDividends(payouts map[dcrutil.Address]dcrutil.Amount, targetAmt int64) error {
+// PublishDividendTx creates a transaction paying pool accounts for work done.
+func (h *Hub) PublishDividendTx(payouts map[dcrutil.Address]dcrutil.Amount, targetAmt dcrutil.Amount) error {
 	// Fund dividend payouts.
 	fundTxReq := &walletrpc.FundTransactionRequest{
 		RequiredConfirmations: int32(h.cfg.ActiveNet.CoinbaseMaturity),
-		TargetAmount:          targetAmt,
+		TargetAmount:          int64(targetAmt),
 		IncludeChangeScript:   false,
 	}
 
@@ -342,4 +352,88 @@ func (h *Hub) PayoutDividends(payouts map[dcrutil.Address]dcrutil.Amount, target
 	log.Debugf("Published tx hash is: %v", pubTxResp.TransactionHash)
 
 	return nil
+}
+
+// ProcessDividendPayments fetches all eligible payments and publishes a
+// transaction to the network paying dividends to participating accounts.
+func (h *Hub) ProcessDividendPayments() error {
+	now := time.Now().UnixNano()
+
+	// Fetch all eligible payments.
+	eligiblePmts, err := dividend.FetchEligiblePayments(h.db, h.cfg.MinPayment)
+	if err != nil {
+		return err
+	}
+
+	// Generate the address and payment amount kv pairs.
+	var targetAmt dcrutil.Amount
+	pmts := make(map[dcrutil.Address]dcrutil.Amount, 0)
+	for _, p := range eligiblePmts {
+		if p.Account == dividend.PoolFeesK {
+			// TODO: Pick a pool fees address and create a payment entry.
+			continue
+		}
+
+		id := dividend.GeneratePaymentID(p.Account, p.CreatedOn)
+		acc, err := dividend.GetAccount(h.db, id)
+		if err != nil {
+			return err
+		}
+
+		addr, err := dcrutil.DecodeAddress(acc.Address)
+		if err != nil {
+			return err
+		}
+
+		pmts[addr] = p.Amount
+		targetAmt += p.Amount
+	}
+
+	// Publish the dividend transaction.
+	err = h.PublishDividendTx(pmts, targetAmt)
+	if err != nil {
+		return err
+	}
+
+	// Update all eligible payments published by the tx as paid.
+	for _, p := range eligiblePmts {
+		p.PaidOn = now
+		err = p.Update(h.db)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update the last payment paid on time.
+	err = h.db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+
+		return pbkt.Put(dividend.LastPaymentPaidOn,
+			dividend.NanoToBigEndianBytes(now))
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// StartPaymentCron starts the dividend payment cron.
+func (h *Hub) StartPaymentCron() {
+	h.cron.AddFunc("@every 6h",
+		func() {
+			err := h.ProcessDividendPayments()
+			if err != nil {
+				log.Error("Failed to process dividend payments: %v", err)
+				return
+			}
+
+			log.Debugf("Sucessfully dividend payments processed.")
+		})
+	h.cron.Start()
+	log.Debugf("Started dividend payment cron.")
 }
