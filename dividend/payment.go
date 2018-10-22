@@ -29,13 +29,22 @@ func NewPayment(account string, amount dcrutil.Amount) *Payment {
 	}
 }
 
-// FutureTime extends a base time to a time in the future.
-func FutureTime(date *time.Time, days time.Duration, hours time.Duration,
+// futureTime extends a base time to a time in the future.
+func futureTime(date *time.Time, days time.Duration, hours time.Duration,
 	minutes time.Duration, seconds time.Duration) *time.Time {
 	duration := ((time.Hour * 24) * days) + (time.Hour * hours) +
 		(time.Minute * minutes) + (time.Second * seconds)
 	futureTime := date.Add(duration)
 	return &futureTime
+}
+
+// pastTime regresses a base time to a time in the past.
+func pastTime(date *time.Time, days time.Duration, hours time.Duration,
+	minutes time.Duration, seconds time.Duration) time.Time {
+	duration := ((time.Hour * 24) * days) + (time.Hour * hours) +
+		(time.Minute * minutes) + (time.Second * seconds)
+	pastTime := date.Add(-duration)
+	return pastTime
 }
 
 // PayPerShare generates a payment bundle comprised of payments to all
@@ -75,10 +84,6 @@ func PayPerShare(db *bolt.DB, amount dcrutil.Amount, poolFee float64, coinbaseMa
 		return err
 	}
 
-	if err != nil {
-		return err
-	}
-
 	// Deduct pool fees and calculate the payment due each participating
 	// account.
 	percentages, err := CalculateSharePercentages(shares)
@@ -91,7 +96,7 @@ func PayPerShare(db *bolt.DB, amount dcrutil.Amount, poolFee float64, coinbaseMa
 	// 30 minutes is added to the the estimated maturity as contingency for
 	// network delays.
 	estMaturity := (coinbaseMaturity * 5) + 30
-	estMaturityNano := FutureTime(&now, 0, 0, time.Duration(estMaturity),
+	estMaturityNano := futureTime(&now, 0, 0, time.Duration(estMaturity),
 		0).UnixNano()
 
 	// Persist the payment batch.
@@ -111,6 +116,42 @@ func PayPerShare(db *bolt.DB, amount dcrutil.Amount, poolFee float64, coinbaseMa
 	if err != nil {
 		log.Error(err)
 	}
+
+	return err
+}
+
+// PayPerLastNShares generates a payment bundle comprised of payments to all
+// participating accounts within the last n time period provided.
+func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, coinbaseMaturity uint16, periodSecs uint32) error {
+	now := time.Now()
+	startTime := pastTime(&now, 0, 0, 0, time.Duration(periodSecs))
+	nowNano := NanoToBigEndianBytes(now.UnixNano())
+	startNano := NanoToBigEndianBytes(startTime.UnixNano())
+
+	// Fetch all eligible shares within the specified period.
+	shares, err := FetchEligibleShares(db, startNano, nowNano)
+	if err != nil {
+		return err
+	}
+
+	// Deduct pool fees and calculate the payment due each participating
+	// account.
+	percentages, err := CalculateSharePercentages(shares)
+	if err != nil {
+		return err
+	}
+
+	payments, err := CalculatePayments(db, percentages, amount, poolFee)
+
+	// 30 minutes is added to the the estimated maturity as contingency for
+	// network delays.
+	estMaturity := (coinbaseMaturity * 5) + 30
+	estMaturityNano := futureTime(&now, 0, 0, time.Duration(estMaturity),
+		0).UnixNano()
+
+	// Persist the payment batch.
+	bundle := NewPaymentBatch(payments, estMaturityNano)
+	bundle.Create(db)
 
 	return err
 }

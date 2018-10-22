@@ -30,6 +30,7 @@ type HubConfig struct {
 	WalletRPCCertFile string
 	WalletGRPCHost    string
 	PaymentMethod     string
+	LastNPeriod       uint32
 }
 
 // Hub maintains the set of active clients and facilitates message broadcasting
@@ -115,15 +116,23 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 					return
 				}
 
+				// Pay dividends per the configured payment scheme.
 				switch h.cfg.PaymentMethod {
 				case dividend.PPS:
-					err := dividend.PayPerShare(h.db, *coinbase, h.cfg.PoolFee, h.cfg.ActiveNet.CoinbaseMaturity)
+					err := dividend.PayPerShare(h.db, *coinbase, h.cfg.PoolFee,
+						h.cfg.ActiveNet.CoinbaseMaturity)
 					if err != nil {
 						log.Error(err)
 						return
 					}
 				case dividend.PPLNS:
-					// pay per last share.
+					err := dividend.PayPerLastNShares(h.db, *coinbase,
+						h.cfg.PoolFee, h.cfg.ActiveNet.CoinbaseMaturity,
+						h.cfg.LastNPeriod)
+					if err != nil {
+						log.Error(err)
+						return
+					}
 				}
 			}
 

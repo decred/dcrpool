@@ -89,9 +89,10 @@ func NewPool(cfg *config) (*Pool, error) {
 		WalletRPCCertFile: walletRPCCertFile,
 		WalletGRPCHost:    cfg.WalletGRPCHost,
 		DcrdRPCCfg:        dcrdRPCCfg,
-		PoolFee:           new(big.Rat).SetFloat64(cfg.PoolFee),
+		PoolFee:           cfg.PoolFee,
 		MaxGenTime:        new(big.Int).SetUint64(cfg.MaxGenTime),
 		PaymentMethod:     cfg.PaymentMethod,
+		LastNPeriod:       cfg.LastNPeriod,
 	}
 
 	p.hub, err = network.NewHub(p.db, p.httpc, hcfg, p.limiter)

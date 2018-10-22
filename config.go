@@ -35,6 +35,7 @@ const (
 	defaultMiningAddr      = "TsfDLrRkk9ciUuwfp2b8PawwnukYD7yAjGd"
 	defaultMaxGenTime      = 15
 	defaultPoolFee         = 0.01
+	defaultLastNPeriod     = 86400 // 1 day
 )
 
 var (
@@ -73,6 +74,7 @@ type config struct {
 	PoolFee        float64 `long:"poolfee" description:"The fee charged for pool participation. eg 0.01 (1%), 0.05 (5%)."`
 	MaxGenTime     uint64  `long:"maxgentime" decription:"The share creation target time for the pool in seconds."`
 	PaymentMethod  string  `long:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
+	LastNPeriod    uint32  `long:"lastnperiod" description:"The period of interest when using the PPLNS payment scheme."`
 	miningAddr     dcrutil.Address
 	dcrdRPCCerts   []byte
 	net            *chaincfg.Params
@@ -253,25 +255,45 @@ func createConfigFile(preCfg *config) error {
 	maxgenTimeRE := regexp.MustCompile(`(?m)^;\s*maxgentime=[^\s]*$`)
 	activeNetRE := regexp.MustCompile(`(?m)^;\s*activenet=[^\s]*$`)
 	paymentMethodRE := regexp.MustCompile(`(?m)^;\s*paymentmethod=[^\s]*$`)
-	s := homeDirRE.ReplaceAllString(ConfigFileContents, fmt.Sprintf("homedir=%s", preCfg.HomeDir))
-	s = debugLevelRE.ReplaceAllString(s, fmt.Sprintf("debuglevel=%s", preCfg.DebugLevel))
-	s = dataDirRE.ReplaceAllString(s, fmt.Sprintf("datadir=%s", preCfg.DataDir))
-	s = configFileRE.ReplaceAllString(s, fmt.Sprintf("configfile=%s", preCfg.ConfigFile))
-	s = dbFileRE.ReplaceAllString(s, fmt.Sprintf("dbfile=%s", preCfg.DBFile))
-	s = logDirRE.ReplaceAllString(s, fmt.Sprintf("logdir=%s", preCfg.LogDir))
-	s = portRE.ReplaceAllString(s, fmt.Sprintf("port=%s", preCfg.Port))
-	s = rpcUserRE.ReplaceAllString(s, fmt.Sprintf("rpcuser=%s", preCfg.RPCUser))
-	s = rpcPassRE.ReplaceAllString(s, fmt.Sprintf("rpcpass=%s", preCfg.RPCPass))
-	s = dcrdRPCHostRE.ReplaceAllString(s, fmt.Sprintf("dcrdrpchost=%s", preCfg.DcrdRPCHost))
-	s = walletGRPCHostRE.ReplaceAllString(s, fmt.Sprintf("walletgrpchost=%s", preCfg.WalletGRPCHost))
-	s = miningAddrRE.ReplaceAllString(s, fmt.Sprintf("miningaddr=%s", preCfg.MiningAddr))
-	s = poolFeeRE.ReplaceAllString(s, fmt.Sprintf("poolfee=%v", preCfg.PoolFee))
-	s = maxgenTimeRE.ReplaceAllString(s, fmt.Sprintf("maxgentime=%v", preCfg.MaxGenTime))
-	s = activeNetRE.ReplaceAllString(s, fmt.Sprintf("activenet=%v", preCfg.ActiveNet))
-	s = paymentMethodRE.ReplaceAllString(s, fmt.Sprintf("paymentmethod=%v", preCfg.PaymentMethod))
+	lastNPeriodRE := regexp.MustCompile(`(?m)^;\s*lastnperiod=[^\s]*$`)
+	s := homeDirRE.ReplaceAllString(ConfigFileContents,
+		fmt.Sprintf("homedir=%s", preCfg.HomeDir))
+	s = debugLevelRE.ReplaceAllString(s,
+		fmt.Sprintf("debuglevel=%s", preCfg.DebugLevel))
+	s = dataDirRE.ReplaceAllString(s,
+		fmt.Sprintf("datadir=%s", preCfg.DataDir))
+	s = configFileRE.ReplaceAllString(s,
+		fmt.Sprintf("configfile=%s", preCfg.ConfigFile))
+	s = dbFileRE.ReplaceAllString(s,
+		fmt.Sprintf("dbfile=%s", preCfg.DBFile))
+	s = logDirRE.ReplaceAllString(s,
+		fmt.Sprintf("logdir=%s", preCfg.LogDir))
+	s = portRE.ReplaceAllString(s,
+		fmt.Sprintf("port=%s", preCfg.Port))
+	s = rpcUserRE.ReplaceAllString(s,
+		fmt.Sprintf("rpcuser=%s", preCfg.RPCUser))
+	s = rpcPassRE.ReplaceAllString(s,
+		fmt.Sprintf("rpcpass=%s", preCfg.RPCPass))
+	s = dcrdRPCHostRE.ReplaceAllString(s,
+		fmt.Sprintf("dcrdrpchost=%s", preCfg.DcrdRPCHost))
+	s = walletGRPCHostRE.ReplaceAllString(s,
+		fmt.Sprintf("walletgrpchost=%s", preCfg.WalletGRPCHost))
+	s = miningAddrRE.ReplaceAllString(s,
+		fmt.Sprintf("miningaddr=%s", preCfg.MiningAddr))
+	s = poolFeeRE.ReplaceAllString(s,
+		fmt.Sprintf("poolfee=%v", preCfg.PoolFee))
+	s = maxgenTimeRE.ReplaceAllString(s,
+		fmt.Sprintf("maxgentime=%v", preCfg.MaxGenTime))
+	s = activeNetRE.ReplaceAllString(s,
+		fmt.Sprintf("activenet=%v", preCfg.ActiveNet))
+	s = paymentMethodRE.ReplaceAllString(s,
+		fmt.Sprintf("paymentmethod=%v", preCfg.PaymentMethod))
+	s = lastNPeriodRE.ReplaceAllString(s,
+		fmt.Sprintf("lastnperiod=%v", preCfg.LastNPeriod))
 
 	// Create config file at the provided path.
-	dest, err := os.OpenFile(preCfg.ConfigFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	dest, err := os.OpenFile(preCfg.ConfigFile,
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
@@ -312,6 +334,7 @@ func loadConfig() (*config, []string, error) {
 		MaxGenTime:     defaultMaxGenTime,
 		ActiveNet:      defaultActiveNet,
 		PaymentMethod:  defaultPaymentMethod,
+		LastNPeriod:    defaultLastNPeriod,
 	}
 
 	// Service options which are only added on Windows.
