@@ -36,6 +36,7 @@ const (
 	defaultMaxGenTime      = 15
 	defaultPoolFee         = 0.01
 	defaultLastNPeriod     = 86400 // 1 day
+	defaultWalletPass      = ""
 )
 
 var (
@@ -75,6 +76,7 @@ type config struct {
 	MaxGenTime     uint64  `long:"maxgentime" decription:"The share creation target time for the pool in seconds."`
 	PaymentMethod  string  `long:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
 	LastNPeriod    uint32  `long:"lastnperiod" description:"The period of interest when using the PPLNS payment scheme."`
+	WalletPass     string  `long:"walletpass" description:"The wallet passphrase."`
 	miningAddr     dcrutil.Address
 	dcrdRPCCerts   []byte
 	net            *chaincfg.Params
@@ -256,6 +258,7 @@ func createConfigFile(preCfg *config) error {
 	activeNetRE := regexp.MustCompile(`(?m)^;\s*activenet=[^\s]*$`)
 	paymentMethodRE := regexp.MustCompile(`(?m)^;\s*paymentmethod=[^\s]*$`)
 	lastNPeriodRE := regexp.MustCompile(`(?m)^;\s*lastnperiod=[^\s]*$`)
+	walletPassRE := regexp.MustCompile(`(?m)^;\s*walletpass=[^\s]*$`)
 	s := homeDirRE.ReplaceAllString(ConfigFileContents,
 		fmt.Sprintf("homedir=%s", preCfg.HomeDir))
 	s = debugLevelRE.ReplaceAllString(s,
@@ -290,6 +293,8 @@ func createConfigFile(preCfg *config) error {
 		fmt.Sprintf("paymentmethod=%v", preCfg.PaymentMethod))
 	s = lastNPeriodRE.ReplaceAllString(s,
 		fmt.Sprintf("lastnperiod=%v", preCfg.LastNPeriod))
+	s = walletPassRE.ReplaceAllString(s,
+		fmt.Sprintf("walletpass=%v", preCfg.WalletPass))
 
 	// Create config file at the provided path.
 	dest, err := os.OpenFile(preCfg.ConfigFile,
@@ -335,6 +340,7 @@ func loadConfig() (*config, []string, error) {
 		ActiveNet:      defaultActiveNet,
 		PaymentMethod:  defaultPaymentMethod,
 		LastNPeriod:    defaultLastNPeriod,
+		WalletPass:     defaultWalletPass,
 	}
 
 	// Service options which are only added on Windows.

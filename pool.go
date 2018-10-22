@@ -93,6 +93,7 @@ func NewPool(cfg *config) (*Pool, error) {
 		MaxGenTime:        new(big.Int).SetUint64(cfg.MaxGenTime),
 		PaymentMethod:     cfg.PaymentMethod,
 		LastNPeriod:       cfg.LastNPeriod,
+		WalletPass:        cfg.WalletPass,
 	}
 
 	p.hub, err = network.NewHub(p.db, p.httpc, hcfg, p.limiter)
