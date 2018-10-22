@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"math/big"
 	"net/http"
 	"sync"
@@ -12,6 +13,7 @@ import (
 	"github.com/decred/dcrd/blockchain"
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
 	"github.com/decred/dcrwallet/rpc/walletrpc"
@@ -31,6 +33,7 @@ type HubConfig struct {
 	WalletGRPCHost    string
 	PaymentMethod     string
 	LastNPeriod       uint32
+	WalletPass        string
 }
 
 // Hub maintains the set of active clients and facilitates message broadcasting
@@ -271,4 +274,72 @@ func (h *Hub) RemoveHashRate(miner string) {
 	h.hashRate = new(big.Int).Sub(h.hashRate, hash)
 	log.Debugf("Client disconnected, updated pool hash rate is %v", h.hashRate)
 	h.hashRateMtx.Unlock()
+}
+
+// PayoutDividends creates a transaction paying pool accounts for work done.
+func (h *Hub) PayoutDividends(payouts map[dcrutil.Address]dcrutil.Amount, targetAmt int64) error {
+	// Fund dividend payouts.
+	fundTxReq := &walletrpc.FundTransactionRequest{
+		RequiredConfirmations: int32(h.cfg.ActiveNet.CoinbaseMaturity),
+		TargetAmount:          targetAmt,
+		IncludeChangeScript:   false,
+	}
+
+	fundTxResp, err := h.grpc.FundTransaction(context.TODO(), fundTxReq)
+	if err != nil {
+		return err
+	}
+
+	// Create the transaction.
+	txInputs := make([]dcrjson.TransactionInput, 0)
+	for _, utxo := range fundTxResp.SelectedOutputs {
+		in := dcrjson.TransactionInput{
+			Amount: float64(utxo.Amount),
+			Txid:   string(utxo.TransactionHash),
+			Vout:   utxo.OutputIndex,
+			Tree:   int8(utxo.Tree),
+		}
+		txInputs = append(txInputs, in)
+	}
+
+	h.rpccMtx.Lock()
+	msgTx, err := h.rpcc.CreateRawTransaction(txInputs, payouts, nil, nil)
+	h.rpccMtx.Unlock()
+	if err != nil {
+		return err
+	}
+
+	msgTxBytes, err := msgTx.Bytes()
+	if err != nil {
+		return err
+	}
+
+	// Sign the transaction.
+	signTxReq := &walletrpc.SignTransactionRequest{
+		SerializedTransaction: msgTxBytes,
+		Passphrase:            []byte(h.cfg.WalletPass),
+	}
+
+	h.grpcMtx.Lock()
+	signedTxResp, err := h.grpc.SignTransaction(context.TODO(), signTxReq)
+	h.grpcMtx.Unlock()
+	if err != nil {
+		return err
+	}
+
+	// Publish the transaction.
+	pubTxReq := &walletrpc.PublishTransactionRequest{
+		SignedTransaction: signedTxResp.Transaction,
+	}
+
+	h.grpcMtx.Lock()
+	pubTxResp, err := h.grpc.PublishTransaction(context.TODO(), pubTxReq)
+	h.grpcMtx.Unlock()
+	if err != nil {
+		return err
+	}
+
+	log.Debugf("Published tx hash is: %v", pubTxResp.TransactionHash)
+
+	return nil
 }

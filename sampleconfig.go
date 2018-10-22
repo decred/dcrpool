@@ -74,4 +74,10 @@ const ConfigFileContents = `[Application Options]
 
 ; The payment method of the pool {pps, pplns}.
 ; paymentmethod=
+
+; The period of interest when using the PPLNS payment scheme.
+; lastnperiod=
+
+; The pool wallet's passphrase.
+; walletpass=
 `
