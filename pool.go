@@ -101,6 +101,7 @@ func NewPool(cfg *config) (*Pool, error) {
 		LastNPeriod:       cfg.LastNPeriod,
 		WalletPass:        cfg.WalletPass,
 		MinPayment:        minPmt,
+		PoolFeeAddrs:      cfg.poolFeeAddrs,
 	}
 
 	p.hub, err = network.NewHub(p.db, p.httpc, hcfg, p.limiter)

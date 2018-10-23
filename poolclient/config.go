@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"regexp"
+	//"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -199,39 +199,6 @@ func newConfigParser(cfg *config, so *serviceOptions, options flags.Options) *fl
 	return parser
 }
 
-// createConfigFile copies the sample config to the given destination path.
-func createConfigFile(preCfg config) error {
-	// Create the destination directory if it does not exist.
-	err := os.MkdirAll(filepath.Dir(preCfg.ConfigFile), 0700)
-	if err != nil {
-		return err
-	}
-
-	// Replace the sample configuration file contents with the provided values.
-	debugLevelRE := regexp.MustCompile(`(?m)^;\s*debuglevel=[^\s]*$`)
-	homeDirRE := regexp.MustCompile(`(?m)^;\s*homedir=[^\s]*$`)
-	configFileRE := regexp.MustCompile(`(?m)^;\s*configfile=[^\s]*$`)
-	logDirRE := regexp.MustCompile(`(?m)^;\s*logdir=[^\s]*$`)
-	hostRE := regexp.MustCompile(`(?m)^;\s*host=[^\s]*$`)
-	generateRE := regexp.MustCompile(`(?m)^;\s*generate=[^\s]*$`)
-	s := homeDirRE.ReplaceAllString(ConfigFileContents, fmt.Sprintf("homedir=%s", preCfg.HomeDir))
-	s = debugLevelRE.ReplaceAllString(s, fmt.Sprintf("debuglevel=%s", preCfg.DebugLevel))
-	s = configFileRE.ReplaceAllString(s, fmt.Sprintf("configfile=%s", preCfg.ConfigFile))
-	s = hostRE.ReplaceAllString(s, fmt.Sprintf("host=%s", preCfg.Host))
-	s = logDirRE.ReplaceAllString(s, fmt.Sprintf("logdir=%s", preCfg.LogDir))
-	s = generateRE.ReplaceAllString(s, fmt.Sprintf("minertype=%v", preCfg.MinerType))
-
-	// Create config file at the provided path.
-	dest, err := os.OpenFile(preCfg.ConfigFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
-	defer dest.Close()
-
-	_, err = dest.WriteString(s)
-	return err
-}
-
 // loadConfig initializes and parses the config using a config file and command
 // line options.
 //
@@ -324,7 +291,8 @@ func loadConfig() (*config, []string, error) {
 	// Create a default config file when one does not exist and the user did
 	// not specify an override.
 	if !fileExists(preCfg.ConfigFile) {
-		err := createConfigFile(preCfg)
+		preIni := flags.NewIniParser(preParser)
+		err = preIni.WriteFile(preCfg.ConfigFile, flags.IniDefault)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating a default "+
 				"config file: %v", err)
