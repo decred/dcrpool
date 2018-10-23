@@ -16,6 +16,7 @@ MINING_USER="pcl"
 MINING_PASS="pass"
 WALLET_SEED="b280922d2cffda44648346412c5ec97f429938105003730414f10b01e1402eac"
 WALLET_MINING_ADDR="SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc" # NOTE: This must be changed if the seed is changed.
+WALLET_POOL_FEE_ADDR="Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS" # NOTE: This must be changed if the seed is changed.
 WALLET_XFER_ADDR="Sso52TPnorVkSaRYzHmi4FgU8F5BFEDZsiK" # same as above
 APPDATA=""
 case "$OSTYPE" in
@@ -55,7 +56,8 @@ debuglevel=debug
 homedir=.
 port=:19576
 activenet=simnet
-miningaddr=${WALLET_MINING_ADDR}
+miningaddrs=${WALLET_MINING_ADDR}
+poolfeeaddrs=${WALLET_POOL_FEE_ADDR}
 EOF
 cat > "${NODES_ROOT}/client.conf" <<EOF
 debuglevel=debug
@@ -147,8 +149,8 @@ tmux send-keys "cd ${NODES_ROOT}/client" C-m
 tmux send-keys `curl -s POST http://127.0.0.1:19576/create/account \
   -H 'Cache-Control: no-cache' \
   -H 'Content-Type: application/json' \
-  -d '{"name": "pcl", \
-  "address":"SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc" ,"pass": "pass"}' \
+  -d '{"name": "pcl", \ 
+  "address":"Sso52TPnorVkSaRYzHmi4FgU8F5BFEDZsiK" ,"pass": "pass"}' \
   > /dev/null`
 tmux send-keys "poolclient --configfile ../client.conf " C-m
 

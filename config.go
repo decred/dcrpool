@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -32,7 +31,8 @@ const (
 	defaultRPCPass         = "dcrppass"
 	defaultDcrdRPCHost     = "localhost:19109"
 	defaultWalletGRPCHost  = "localhost:19558"
-	defaultMiningAddr      = "TsfDLrRkk9ciUuwfp2b8PawwnukYD7yAjGd"
+	defaultMiningAddr      = "Sso52TPnorVkSaRYzHmi4FgU8F5BFEDZsiK"
+	defaultPoolFeeAddr     = "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
 	defaultMaxGenTime      = 15
 	defaultPoolFee         = 0.01
 	defaultLastNPeriod     = 86400 // 1 day
@@ -60,26 +60,28 @@ var runServiceCommand func(string) error
 
 // config defines the configuration options for hastepool.
 type config struct {
-	HomeDir        string  `long:"homedir" description:"Path to application home directory"`
-	ConfigFile     string  `long:"configfile" description:"Path to configuration file"`
-	DataDir        string  `long:"datadir" description:"The data directory"`
-	ActiveNet      string  `long:"activenet" description:"The active network being mined on. {simnet, testnet, mainnet}"`
-	DebugLevel     string  `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
-	LogDir         string  `long:"logdir" description:"Directory to log output."`
-	DBFile         string  `long:"dbfile" description:"Path to the database file"`
-	DcrdRPCHost    string  `long:"dcrdrpchost" description:"The ip:port to establish an RPC connection for dcrd"`
-	WalletGRPCHost string  `long:"walletgrpchost" description:"The ip:port to establish a GRPC connection for the wallet"`
-	RPCUser        string  `long:"rpcuser" description:"Username for RPC connections"`
-	RPCPass        string  `long:"rpcpass" default-mask:"-" description:"Password for RPC connections"`
-	MiningAddr     string  `long:"miningaddr" description:"The payment address for generated blocks"`
-	Port           string  `long:"port" description:"The listening port"`
-	PoolFee        float64 `long:"poolfee" description:"The fee charged for pool participation. eg 0.01 (1%), 0.05 (5%)."`
-	MaxGenTime     uint64  `long:"maxgentime" decription:"The share creation target time for the pool in seconds."`
-	PaymentMethod  string  `long:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
-	LastNPeriod    uint32  `long:"lastnperiod" description:"The period of interest when using the PPLNS payment scheme."`
-	WalletPass     string  `long:"walletpass" description:"The wallet passphrase."`
-	MinPayment     float64 `long:"minpayment" description:"The minimum payment to process for an account."`
-	miningAddr     dcrutil.Address
+	HomeDir        string   `long:"homedir" description:"Path to application home directory."`
+	ConfigFile     string   `long:"configfile" description:"Path to configuration file."`
+	DataDir        string   `long:"datadir" description:"The data directory."`
+	ActiveNet      string   `long:"activenet" description:"The active network being mined on. {simnet, testnet, mainnet}"`
+	DebugLevel     string   `long:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
+	LogDir         string   `long:"logdir" description:"Directory to log output."`
+	DBFile         string   `long:"dbfile" description:"Path to the database file."`
+	DcrdRPCHost    string   `long:"dcrdrpchost" description:"The ip:port to establish an RPC connection for dcrd."`
+	WalletGRPCHost string   `long:"walletgrpchost" description:"The ip:port to establish a GRPC connection for the wallet."`
+	RPCUser        string   `long:"rpcuser" description:"Username for RPC connections."`
+	RPCPass        string   `long:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
+	MiningAddrs    []string `long:"miningaddrs" description:"Payment addresses to use for generated blocks. These addresses should be generated on a different wallet account."`
+	PoolFeeAddrs   []string `long:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated on a different wallet account."`
+	Port           string   `long:"port" description:"The listening port."`
+	PoolFee        float64  `long:"poolfee" description:"The fee charged for pool participation. eg. 0.01 (1%), 0.05 (5%)."`
+	MaxGenTime     uint64   `long:"maxgentime" description:"The share creation target time for the pool in seconds."`
+	PaymentMethod  string   `long:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
+	LastNPeriod    uint32   `long:"lastnperiod" description:"The period of interest when using the PPLNS payment scheme."`
+	WalletPass     string   `long:"walletpass" description:"The wallet passphrase."`
+	MinPayment     float64  `long:"minpayment" description:"The minimum payment to process for an account."`
+	miningAddrs    []dcrutil.Address
+	poolFeeAddrs   []dcrutil.Address
 	dcrdRPCCerts   []byte
 	net            *chaincfg.Params
 }
@@ -234,85 +236,6 @@ func newConfigParser(cfg *config, so *serviceOptions, options flags.Options) *fl
 	return parser
 }
 
-// createConfigFile copies the sample config to the given destination path.
-func createConfigFile(preCfg *config) error {
-	// Create the destination directory if it does not exist.
-	err := os.MkdirAll(filepath.Dir(preCfg.ConfigFile), 0700)
-	if err != nil {
-		return err
-	}
-
-	// Replace the sample configuration file contents with the provided values.
-	debugLevelRE := regexp.MustCompile(`(?m)^;\s*debuglevel=[^\s]*$`)
-	homeDirRE := regexp.MustCompile(`(?m)^;\s*homedir=[^\s]*$`)
-	dataDirRE := regexp.MustCompile(`(?m)^;\s*datadir=[^\s]*$`)
-	configFileRE := regexp.MustCompile(`(?m)^;\s*configfile=[^\s]*$`)
-	dbFileRE := regexp.MustCompile(`(?m)^;\s*dbfile=[^\s]*$`)
-	logDirRE := regexp.MustCompile(`(?m)^;\s*logdir=[^\s]*$`)
-	portRE := regexp.MustCompile(`(?m)^;\s*port=[^\s]*$`)
-	rpcUserRE := regexp.MustCompile(`(?m)^;\s*rpcuser=[^\s]*$`)
-	rpcPassRE := regexp.MustCompile(`(?m)^;\s*rpcpass=[^\s]*$`)
-	dcrdRPCHostRE := regexp.MustCompile(`(?m)^;\s*dcrdrpchost=[^\s]*$`)
-	walletGRPCHostRE := regexp.MustCompile(`(?m)^;\s*walletgrpchost=[^\s]*$`)
-	miningAddrRE := regexp.MustCompile(`(?m)^;\s*miningaddr=[^\s]*$`)
-	poolFeeRE := regexp.MustCompile(`(?m)^;\s*poolfee=[^\s]*$`)
-	maxgenTimeRE := regexp.MustCompile(`(?m)^;\s*maxgentime=[^\s]*$`)
-	activeNetRE := regexp.MustCompile(`(?m)^;\s*activenet=[^\s]*$`)
-	paymentMethodRE := regexp.MustCompile(`(?m)^;\s*paymentmethod=[^\s]*$`)
-	lastNPeriodRE := regexp.MustCompile(`(?m)^;\s*lastnperiod=[^\s]*$`)
-	walletPassRE := regexp.MustCompile(`(?m)^;\s*walletpass=[^\s]*$`)
-	minPaymentRE := regexp.MustCompile(`(?m)^;\s*minpayment=[^\s]*$`)
-	s := homeDirRE.ReplaceAllString(ConfigFileContents,
-		fmt.Sprintf("homedir=%s", preCfg.HomeDir))
-	s = debugLevelRE.ReplaceAllString(s,
-		fmt.Sprintf("debuglevel=%s", preCfg.DebugLevel))
-	s = dataDirRE.ReplaceAllString(s,
-		fmt.Sprintf("datadir=%s", preCfg.DataDir))
-	s = configFileRE.ReplaceAllString(s,
-		fmt.Sprintf("configfile=%s", preCfg.ConfigFile))
-	s = dbFileRE.ReplaceAllString(s,
-		fmt.Sprintf("dbfile=%s", preCfg.DBFile))
-	s = logDirRE.ReplaceAllString(s,
-		fmt.Sprintf("logdir=%s", preCfg.LogDir))
-	s = portRE.ReplaceAllString(s,
-		fmt.Sprintf("port=%s", preCfg.Port))
-	s = rpcUserRE.ReplaceAllString(s,
-		fmt.Sprintf("rpcuser=%s", preCfg.RPCUser))
-	s = rpcPassRE.ReplaceAllString(s,
-		fmt.Sprintf("rpcpass=%s", preCfg.RPCPass))
-	s = dcrdRPCHostRE.ReplaceAllString(s,
-		fmt.Sprintf("dcrdrpchost=%s", preCfg.DcrdRPCHost))
-	s = walletGRPCHostRE.ReplaceAllString(s,
-		fmt.Sprintf("walletgrpchost=%s", preCfg.WalletGRPCHost))
-	s = miningAddrRE.ReplaceAllString(s,
-		fmt.Sprintf("miningaddr=%s", preCfg.MiningAddr))
-	s = poolFeeRE.ReplaceAllString(s,
-		fmt.Sprintf("poolfee=%v", preCfg.PoolFee))
-	s = maxgenTimeRE.ReplaceAllString(s,
-		fmt.Sprintf("maxgentime=%v", preCfg.MaxGenTime))
-	s = activeNetRE.ReplaceAllString(s,
-		fmt.Sprintf("activenet=%v", preCfg.ActiveNet))
-	s = paymentMethodRE.ReplaceAllString(s,
-		fmt.Sprintf("paymentmethod=%v", preCfg.PaymentMethod))
-	s = lastNPeriodRE.ReplaceAllString(s,
-		fmt.Sprintf("lastnperiod=%v", preCfg.LastNPeriod))
-	s = walletPassRE.ReplaceAllString(s,
-		fmt.Sprintf("walletpass=%v", preCfg.WalletPass))
-	s = minPaymentRE.ReplaceAllString(s,
-		fmt.Sprintf("minpayment=%v", preCfg.MinPayment))
-
-	// Create config file at the provided path.
-	dest, err := os.OpenFile(preCfg.ConfigFile,
-		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
-	defer dest.Close()
-
-	_, err = dest.WriteString(s)
-	return err
-}
-
 // loadConfig initializes and parses the config using a config file and command
 // line options.
 //
@@ -339,7 +262,8 @@ func loadConfig() (*config, []string, error) {
 		RPCPass:        defaultRPCPass,
 		DcrdRPCHost:    defaultDcrdRPCHost,
 		WalletGRPCHost: defaultWalletGRPCHost,
-		MiningAddr:     defaultMiningAddr,
+		MiningAddrs:    []string{defaultMiningAddr},
+		PoolFeeAddrs:   []string{defaultMiningAddr},
 		PoolFee:        defaultPoolFee,
 		MaxGenTime:     defaultMaxGenTime,
 		ActiveNet:      defaultActiveNet,
@@ -418,7 +342,8 @@ func loadConfig() (*config, []string, error) {
 	// Create a default config file when one does not exist and the user did
 	// not specify an override.
 	if !fileExists(preCfg.ConfigFile) {
-		err := createConfigFile(&preCfg)
+		preIni := flags.NewIniParser(preParser)
+		err = preIni.WriteFile(preCfg.ConfigFile, flags.IniDefault)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating a default "+
 				"config file: %v", err)
@@ -502,23 +427,48 @@ func loadConfig() (*config, []string, error) {
 		cfg.net = &chaincfg.MainNetParams
 	}
 
-	// Check mining address is valid and on the active network.
-	addr, err := dcrutil.DecodeAddress(cfg.MiningAddr)
-	if err != nil {
-		str := "%s: mining address '%s' failed to decode: %v"
-		err := fmt.Errorf(str, funcName, addr, err)
-		fmt.Fprintln(os.Stderr, err)
-		fmt.Fprintln(os.Stderr, usageMessage)
-		return nil, nil, err
+	// TODO: The pool does not need to track the mining addresses used by the
+	// mining node, setting a mining address might be unnecessary here.
+	// Probably need to remove this, will investigate further.
+	for _, mAddr := range cfg.MiningAddrs {
+		addr, err := dcrutil.DecodeAddress(mAddr)
+		if err != nil {
+			str := "%s: mining address '%s' failed to decode: %v"
+			err := fmt.Errorf(str, funcName, addr, err)
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
+			return nil, nil, err
+		}
+
+		// Ensure mining address is valid and on the active network.
+		if !addr.IsForNet(cfg.net) {
+			return nil, nil,
+				fmt.Errorf("mining address (%s) not on the active network (%s)",
+					addr, cfg.ActiveNet)
+		}
+
+		cfg.miningAddrs = append(cfg.miningAddrs, addr)
 	}
 
-	if !addr.IsForNet(cfg.net) {
-		return nil, nil,
-			fmt.Errorf("mining address (%s) not on the active network (%s)",
-				addr, cfg.ActiveNet)
-	}
+	for _, pAddr := range cfg.PoolFeeAddrs {
+		addr, err := dcrutil.DecodeAddress(pAddr)
+		if err != nil {
+			str := "%s: pool fee address '%s' failed to decode: %v"
+			err := fmt.Errorf(str, funcName, addr, err)
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
+			return nil, nil, err
+		}
 
-	cfg.miningAddr = addr
+		// Ensure pool fee address is valid and on the active network.
+		if !addr.IsForNet(cfg.net) {
+			return nil, nil,
+				fmt.Errorf("pool fee address (%s) not on the active network "+
+					"(%s)", addr, cfg.ActiveNet)
+		}
+
+		cfg.poolFeeAddrs = append(cfg.poolFeeAddrs, addr)
+	}
 
 	// Warn about missing config file only after all other configuration is
 	// done. This prevents the warning on help messages and invalid

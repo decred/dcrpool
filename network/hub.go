@@ -4,6 +4,7 @@ import (
 	"context"
 	"dnldd/dcrpool/database"
 	"math/big"
+	"math/rand"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -37,6 +38,7 @@ type HubConfig struct {
 	LastNPeriod       uint32
 	WalletPass        string
 	MinPayment        dcrutil.Amount
+	PoolFeeAddrs      []dcrutil.Address
 }
 
 // Hub maintains the set of active clients and facilitates message broadcasting
@@ -369,18 +371,25 @@ func (h *Hub) ProcessDividendPayments() error {
 	var targetAmt dcrutil.Amount
 	pmts := make(map[dcrutil.Address]dcrutil.Amount, 0)
 	for _, p := range eligiblePmts {
+		var addr dcrutil.Address
+
+		// For pool fee payments, fetch a pool fee address at random.
 		if p.Account == dividend.PoolFeesK {
-			// TODO: Pick a pool fees address and create a payment entry.
+			rand.Seed(time.Now().UnixNano())
+			addr = h.cfg.PoolFeeAddrs[rand.Intn(len(h.cfg.PoolFeeAddrs))]
+			pmts[addr] = p.Amount
+			targetAmt += p.Amount
 			continue
 		}
 
+		// For a dividend payment, fetch the corresponding account address.
 		id := dividend.GeneratePaymentID(p.Account, p.CreatedOn)
 		acc, err := dividend.GetAccount(h.db, id)
 		if err != nil {
 			return err
 		}
 
-		addr, err := dcrutil.DecodeAddress(acc.Address)
+		addr, err = dcrutil.DecodeAddress(acc.Address)
 		if err != nil {
 			return err
 		}
