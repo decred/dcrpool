@@ -31,7 +31,6 @@ const (
 	defaultRPCPass         = "dcrppass"
 	defaultDcrdRPCHost     = "localhost:19109"
 	defaultWalletGRPCHost  = "localhost:19558"
-	defaultMiningAddr      = "Sso52TPnorVkSaRYzHmi4FgU8F5BFEDZsiK"
 	defaultPoolFeeAddr     = "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
 	defaultMaxGenTime      = 15
 	defaultPoolFee         = 0.01
@@ -58,7 +57,7 @@ var (
 // to parse and execute service commands specified via the -s flag.
 var runServiceCommand func(string) error
 
-// config defines the configuration options for hastepool.
+// config defines the configuration options for the pool.
 type config struct {
 	HomeDir        string   `long:"homedir" description:"Path to application home directory."`
 	ConfigFile     string   `long:"configfile" description:"Path to configuration file."`
@@ -71,8 +70,7 @@ type config struct {
 	WalletGRPCHost string   `long:"walletgrpchost" description:"The ip:port to establish a GRPC connection for the wallet."`
 	RPCUser        string   `long:"rpcuser" description:"Username for RPC connections."`
 	RPCPass        string   `long:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
-	MiningAddrs    []string `long:"miningaddrs" description:"Payment addresses to use for generated blocks. These addresses should be generated on a different wallet account."`
-	PoolFeeAddrs   []string `long:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated on a different wallet account."`
+	PoolFeeAddrs   []string `long:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
 	Port           string   `long:"port" description:"The listening port."`
 	PoolFee        float64  `long:"poolfee" description:"The fee charged for pool participation. eg. 0.01 (1%), 0.05 (5%)."`
 	MaxGenTime     uint64   `long:"maxgentime" description:"The share creation target time for the pool in seconds."`
@@ -80,7 +78,6 @@ type config struct {
 	LastNPeriod    uint32   `long:"lastnperiod" description:"The period of interest when using the PPLNS payment scheme."`
 	WalletPass     string   `long:"walletpass" description:"The wallet passphrase."`
 	MinPayment     float64  `long:"minpayment" description:"The minimum payment to process for an account."`
-	miningAddrs    []dcrutil.Address
 	poolFeeAddrs   []dcrutil.Address
 	dcrdRPCCerts   []byte
 	net            *chaincfg.Params
@@ -262,8 +259,7 @@ func loadConfig() (*config, []string, error) {
 		RPCPass:        defaultRPCPass,
 		DcrdRPCHost:    defaultDcrdRPCHost,
 		WalletGRPCHost: defaultWalletGRPCHost,
-		MiningAddrs:    []string{defaultMiningAddr},
-		PoolFeeAddrs:   []string{defaultMiningAddr},
+		PoolFeeAddrs:   []string{defaultPoolFeeAddr},
 		PoolFee:        defaultPoolFee,
 		MaxGenTime:     defaultMaxGenTime,
 		ActiveNet:      defaultActiveNet,
@@ -425,29 +421,6 @@ func loadConfig() (*config, []string, error) {
 		cfg.net = &chaincfg.TestNet3Params
 	case chaincfg.MainNetParams.Name:
 		cfg.net = &chaincfg.MainNetParams
-	}
-
-	// TODO: The pool does not need to track the mining addresses used by the
-	// mining node, setting a mining address might be unnecessary here.
-	// Probably need to remove this, will investigate further.
-	for _, mAddr := range cfg.MiningAddrs {
-		addr, err := dcrutil.DecodeAddress(mAddr)
-		if err != nil {
-			str := "%s: mining address '%s' failed to decode: %v"
-			err := fmt.Errorf(str, funcName, addr, err)
-			fmt.Fprintln(os.Stderr, err)
-			fmt.Fprintln(os.Stderr, usageMessage)
-			return nil, nil, err
-		}
-
-		// Ensure mining address is valid and on the active network.
-		if !addr.IsForNet(cfg.net) {
-			return nil, nil,
-				fmt.Errorf("mining address (%s) not on the active network (%s)",
-					addr, cfg.ActiveNet)
-		}
-
-		cfg.miningAddrs = append(cfg.miningAddrs, addr)
 	}
 
 	for _, pAddr := range cfg.PoolFeeAddrs {
