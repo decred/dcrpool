@@ -102,11 +102,9 @@ func (payment *Payment) Delete(db *bolt.DB, state bool) error {
 	return ErrNotSupported("payment", "delete")
 }
 
-// FetchMaturePendingPayments fetches all payments past their estimated
-// maturities which have not been paid yet.
-func FetchMaturePendingPayments(db *bolt.DB) ([]*Payment, error) {
+// FetchPendingPayments fetches all unpaid payments.
+func FetchPendingPayments(db *bolt.DB) ([]*Payment, error) {
 	payments := make([]*Payment, 0)
-	now := time.Now().UnixNano()
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		if pbkt == nil {
@@ -118,14 +116,52 @@ func FetchMaturePendingPayments(db *bolt.DB) ([]*Payment, error) {
 		}
 
 		cursor := bkt.Cursor()
-		var payment Payment
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			var payment Payment
 			err := json.Unmarshal(v, &payment)
 			if err != nil {
 				return err
 			}
 
-			if payment.EstimatedMaturity < now && payment.PaidOn == 0 {
+			if payment.PaidOn == 0 {
+				payments = append(payments, &payment)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return payments, nil
+}
+
+// FetchMaturePendingPayments fetches all payments past their estimated
+// maturities which have not been paid yet.
+func FetchMaturePendingPayments(db *bolt.DB) ([]*Payment, error) {
+	payments := make([]*Payment, 0)
+	nowNano := time.Now().UnixNano()
+	err := db.View(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+		bkt := pbkt.Bucket(database.PaymentBkt)
+		if bkt == nil {
+			return database.ErrBucketNotFound(database.PaymentBkt)
+		}
+
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			var payment Payment
+			err := json.Unmarshal(v, &payment)
+			if err != nil {
+				return err
+			}
+
+			if payment.PaidOn == 0 && payment.EstimatedMaturity < nowNano {
 				payments = append(payments, &payment)
 			}
 		}
@@ -162,7 +198,7 @@ func FetchEligiblePayments(db *bolt.DB, minPayment dcrutil.Amount) ([]*Payment, 
 // payment recored is created if there is no existing payment record to
 // update.
 func UpdatePayments(db *bolt.DB, newPayments []*Payment) error {
-	payments, err := FetchMaturePendingPayments(db)
+	payments, err := FetchPendingPayments(db)
 	if err != nil {
 		return err
 	}
@@ -276,6 +312,10 @@ func PayPerShare(db *bolt.DB, amount dcrutil.Amount, poolFee float64, coinbaseMa
 		return err
 	}
 
+	if len(shares) == 0 {
+		return fmt.Errorf("no eligible shares found")
+	}
+
 	// Deduct pool fees and calculate the payment due each participating
 	// account.
 	percentages, err := CalculateSharePercentages(shares)
@@ -289,7 +329,7 @@ func PayPerShare(db *bolt.DB, amount dcrutil.Amount, poolFee float64, coinbaseMa
 	estMaturityNano := futureTime(&now, 0, 0, time.Duration(estMaturityTime),
 		0).UnixNano()
 
-	payments, err := CalculatePayments(db, percentages, amount, poolFee,
+	payments, err := CalculatePayments(percentages, amount, poolFee,
 		estMaturityNano)
 
 	// Update or create unpaid payment records for the participating accounts.
@@ -324,7 +364,7 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, coin
 	estMaturityNano := futureTime(&now, 0, 0, time.Duration(estMaturityTime),
 		0).UnixNano()
 
-	payments, err := CalculatePayments(db, percentages, amount, poolFee,
+	payments, err := CalculatePayments(percentages, amount, poolFee,
 		estMaturityNano)
 
 	// Update or create unpaid payment records for the participating accounts.

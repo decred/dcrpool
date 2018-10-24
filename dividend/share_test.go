@@ -2,8 +2,149 @@ package dividend
 
 import (
 	"math/big"
+	"os"
 	"testing"
+	"time"
+
+	"github.com/coreos/bbolt"
+
+	"dnldd/dcrpool/database"
 )
+
+var (
+	// TestDB reprsents the testing database.
+	TestDB = "testdb"
+)
+
+// setupDB initializes the pool database.
+func setupDB() (*bolt.DB, error) {
+	db, err := database.OpenDB(TestDB)
+	if err != nil {
+		return nil, err
+	}
+
+	err = database.CreateBuckets(db)
+	if err != nil {
+		return nil, err
+	}
+
+	err = database.Upgrade(db)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, err
+}
+
+// teardownDB closes the connection to the db and deletes the file.
+func teardownDB(db *bolt.DB) error {
+	err := db.Close()
+	if err != nil {
+		return err
+	}
+
+	err = os.Remove(TestDB)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// createPersistedShare creates a share with the provided stakeholder, weight
+// and created on time. The share is then persisted to the database.
+func createPersistedShare(db *bolt.DB, stakeholder string, weight *big.Rat,
+	createdOnNano int64) error {
+	share := &Share{
+		Stakeholder: stakeholder,
+		Weight:      weight,
+		CreatedOn:   createdOnNano,
+	}
+
+	return share.Create(db)
+}
+
+// createMultiplePersistedShares creates multiple shares per the count provided.
+func createMultiplePersistedShares(db *bolt.DB, stakeholder string, weight *big.Rat,
+	createdOnNano int64, count int) error {
+	for idx := 0; idx < count; idx++ {
+		err := createPersistedShare(db, stakeholder, weight, createdOnNano+int64(idx))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func TestShareRangeScan(t *testing.T) {
+	db, err := setupDB()
+	if err != nil {
+		t.Error(t)
+	}
+
+	now := time.Now()
+	minNano := pastTime(&now, 0, 0, time.Duration(30), 0).UnixNano()
+	belowMinNano := pastTime(&now, 0, 0, time.Duration(60), 0).UnixNano()
+	maxNano := pastTime(&now, 0, 0, 0, time.Duration(30)).UnixNano()
+	aboveMaxNano := futureTime(&now, 0, 0, time.Duration(30), 0).UnixNano()
+	weight := new(big.Rat).SetFloat64(1.0)
+	accOne := "dnldd"
+	accTwo := "tmmy"
+	err = createMultiplePersistedShares(db, accOne, weight, belowMinNano, 5)
+	if err != nil {
+		t.Error(t)
+	}
+
+	err = createMultiplePersistedShares(db, accOne, weight, minNano, 5)
+	if err != nil {
+		t.Error(t)
+	}
+
+	err = createMultiplePersistedShares(db, accTwo, weight, maxNano, 5)
+	if err != nil {
+		t.Error(t)
+	}
+
+	err = createMultiplePersistedShares(db, accTwo, weight, aboveMaxNano, 5)
+	if err != nil {
+		t.Error(t)
+	}
+
+	minNanoBytes := NanoToBigEndianBytes(minNano)
+	nowNanoBytes := NanoToBigEndianBytes(now.UnixNano())
+	shares, err := FetchEligibleShares(db, minNanoBytes, nowNanoBytes)
+	if err != nil {
+		t.Error(t)
+	}
+
+	if len(shares) != 10 {
+		t.Errorf("Expected %v eligible shares, got %v", 10, len(shares))
+	}
+
+	forAccOne := 0
+	forAccTwo := 0
+	for _, share := range shares {
+		if share.Stakeholder == accOne {
+			forAccOne++
+		}
+
+		if share.Stakeholder == accTwo {
+			forAccTwo++
+		}
+	}
+
+	if forAccOne != forAccTwo && (forAccOne != 5 || forAccTwo != 5) {
+		t.Errorf("Expected %v for account one, got %v. "+
+			"Expected %v for account two, got %v.",
+			5, forAccOne, 5, forAccTwo)
+	}
+
+	err = teardownDB(db)
+	if err != nil {
+		t.Error(t)
+	}
+}
 
 func TestCalculateDividend(t *testing.T) {
 	set := map[string]struct {
