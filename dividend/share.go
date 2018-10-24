@@ -228,7 +228,7 @@ func CalculateSharePercentages(shares []*Share) (map[string]*big.Rat, error) {
 }
 
 // CalculatePayments calculates the payments due participating accounts.
-func CalculatePayments(db *bolt.DB, percentages map[string]*big.Rat, amount dcrutil.Amount, poolFee float64, estMaturity int64) ([]*Payment, error) {
+func CalculatePayments(percentages map[string]*big.Rat, amount dcrutil.Amount, poolFee float64, estMaturity int64) ([]*Payment, error) {
 	// Deduct pool fee from the amount to be shared.
 	fee := amount.MulF64(poolFee)
 	amtSansFees := amount - fee
