@@ -13,13 +13,13 @@ import (
 	"dnldd/dcrpool/database"
 )
 
-// createShare creates a share with the provided stakeholder, weight and
+// createShare creates a share with the provided account, weight and
 // created on time.
-func createShare(db *bolt.DB, stakeholder string, weight *big.Rat, createdOnNano int64) *Share {
+func createShare(db *bolt.DB, account string, weight *big.Rat, createdOnNano int64) *Share {
 	share := &Share{
-		Stakeholder: stakeholder,
-		Weight:      weight,
-		CreatedOn:   createdOnNano,
+		Account:   account,
+		Weight:    weight,
+		CreatedOn: createdOnNano,
 	}
 
 	return share
@@ -37,11 +37,11 @@ func createPersistedAccount(db *bolt.DB, name string, address string, pass strin
 }
 
 // createMultipleShares creates multiple shares per the count provided.
-func createMultipleShares(db *bolt.DB, stakeholder string, weight *big.Rat,
+func createMultipleShares(db *bolt.DB, account string, weight *big.Rat,
 	createdOnNano int64, count int) []*Share {
 	shares := make([]*Share, 0)
 	for idx := 0; idx < count; idx++ {
-		share := createShare(db, stakeholder, weight, createdOnNano+int64(idx))
+		share := createShare(db, account, weight, createdOnNano+int64(idx))
 		shares = append(shares, share)
 	}
 

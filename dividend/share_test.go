@@ -51,24 +51,24 @@ func teardownDB(db *bolt.DB) error {
 	return nil
 }
 
-// createPersistedShare creates a share with the provided stakeholder, weight
+// createPersistedShare creates a share with the provided account, weight
 // and created on time. The share is then persisted to the database.
-func createPersistedShare(db *bolt.DB, stakeholder string, weight *big.Rat,
+func createPersistedShare(db *bolt.DB, account string, weight *big.Rat,
 	createdOnNano int64) error {
 	share := &Share{
-		Stakeholder: stakeholder,
-		Weight:      weight,
-		CreatedOn:   createdOnNano,
+		Account:   account,
+		Weight:    weight,
+		CreatedOn: createdOnNano,
 	}
 
 	return share.Create(db)
 }
 
 // createMultiplePersistedShares creates multiple shares per the count provided.
-func createMultiplePersistedShares(db *bolt.DB, stakeholder string, weight *big.Rat,
+func createMultiplePersistedShares(db *bolt.DB, account string, weight *big.Rat,
 	createdOnNano int64, count int) error {
 	for idx := 0; idx < count; idx++ {
-		err := createPersistedShare(db, stakeholder, weight, createdOnNano+int64(idx))
+		err := createPersistedShare(db, account, weight, createdOnNano+int64(idx))
 		if err != nil {
 			return err
 		}
@@ -125,11 +125,11 @@ func TestShareRangeScan(t *testing.T) {
 	forAccOne := 0
 	forAccTwo := 0
 	for _, share := range shares {
-		if share.Stakeholder == accOne {
+		if share.Account == accOne {
 			forAccOne++
 		}
 
-		if share.Stakeholder == accTwo {
+		if share.Account == accTwo {
 			forAccTwo++
 		}
 	}
@@ -220,10 +220,10 @@ func TestCalculateDividend(t *testing.T) {
 			}
 		}
 
-		for stakeholder, dividend := range test.output {
-			if actual[stakeholder].Cmp(dividend) != 0 {
-				t.Errorf("(%s): stakeholder (%v) dividend was (%v), "+
-					"expected (%v).", name, stakeholder, actual[stakeholder],
+		for account, dividend := range test.output {
+			if actual[account].Cmp(dividend) != 0 {
+				t.Errorf("(%s): account (%v) dividend was (%v), "+
+					"expected (%v).", name, account, actual[account],
 					dividend)
 			}
 		}
