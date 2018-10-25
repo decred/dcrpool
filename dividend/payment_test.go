@@ -169,6 +169,12 @@ func TestPayPerShare(t *testing.T) {
 			feePmt.Amount, expectedFeePmtAmt)
 	}
 
+	// Assert the sum of all payment amounts is equal to the initial amount.
+	sum := accOnePmt.Amount + accTwoPmt.Amount + feePmt.Amount
+	if sum != amt {
+		t.Errorf("Expected the sum of all payments to be %v, got %v", amt, sum)
+	}
+
 	err = teardownDB(db)
 	if err != nil {
 		t.Error(t)
@@ -295,6 +301,12 @@ func TestPayPerLastShare(t *testing.T) {
 	if feePmt.Amount != expectedFeePmtAmt {
 		t.Errorf("Expected %v fee payment amount, got %v",
 			feePmt.Amount, expectedFeePmtAmt)
+	}
+
+	// Assert the sum of all payment amounts is equal to the initial amount.
+	sum := accOnePmt.Amount + accTwoPmt.Amount + feePmt.Amount
+	if sum != amt {
+		t.Errorf("Expected the sum of all payments to be %v, got %v", amt, sum)
 	}
 
 	err = teardownDB(db)
