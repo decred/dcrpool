@@ -91,17 +91,17 @@ func CalculatePoolTarget(hashRate *big.Int, targetTimeSecs *big.Int) *big.Int {
 
 // Share represents verifiable work performed by a pool client.
 type Share struct {
-	Stakeholder string   `json:"stakeholder"`
-	Weight      *big.Rat `json:"weight"`
-	CreatedOn   int64    `json:"createdOn"`
+	Account   string   `json:"account"`
+	Weight    *big.Rat `json:"weight"`
+	CreatedOn int64    `json:"createdOn"`
 }
 
-// NewShare creates a share with the provided stakeholder and weight.
-func NewShare(stakeholder string, weight *big.Rat) *Share {
+// NewShare creates a shate with the provided account and weight.
+func NewShare(account string, weight *big.Rat) *Share {
 	return &Share{
-		Stakeholder: stakeholder,
-		Weight:      weight,
-		CreatedOn:   time.Now().UnixNano(),
+		Account:   account,
+		Weight:    weight,
+		CreatedOn: time.Now().UnixNano(),
 	}
 }
 
@@ -205,23 +205,23 @@ func CalculateSharePercentages(shares []*Share) (map[string]*big.Rat, error) {
 	// Tally all share weights for each participation account.
 	for _, share := range shares {
 		totalShares = totalShares.Add(totalShares, share.Weight)
-		if _, ok := tally[share.Stakeholder]; ok {
-			tally[share.Stakeholder] = tally[share.Stakeholder].
-				Add(tally[share.Stakeholder], share.Weight)
+		if _, ok := tally[share.Account]; ok {
+			tally[share.Account] = tally[share.Account].
+				Add(tally[share.Account], share.Weight)
 			continue
 		}
 
-		tally[share.Stakeholder] = share.Weight
+		tally[share.Account] = share.Weight
 	}
 
 	// Calculate each participating account to be claimed.
-	for stakeholder, shareCount := range tally {
-		if tally[stakeholder].Cmp(ZeroRat) == 0 {
+	for account, shareCount := range tally {
+		if tally[account].Cmp(ZeroRat) == 0 {
 			return nil, ErrDivideByZero()
 		}
 
 		dividend := new(big.Rat).Quo(shareCount, totalShares)
-		dividends[stakeholder] = dividend
+		dividends[account] = dividend
 	}
 
 	return dividends, nil
