@@ -56,7 +56,6 @@ debuglevel=debug
 homedir=.
 port=:19576
 activenet=simnet
-miningaddrs=${WALLET_MINING_ADDR}
 poolfeeaddrs=${WALLET_POOL_FEE_ADDR}
 EOF
 cat > "${NODES_ROOT}/client.conf" <<EOF

@@ -120,7 +120,6 @@ func NewClient(h *Hub, socket *websocket.Conn, ip string, ticker *time.Ticker,
 
 // Process parses and handles inbound client messages.
 func (c *Client) Process(ctx context.Context) {
-	// TODO: Assert the max message size currently being used.
 	c.ws.SetReadLimit(MaxMessageSize)
 out:
 	for {
@@ -143,7 +142,7 @@ out:
 			if websocket.IsUnexpectedCloseError(err,
 				websocket.CloseGoingAway, websocket.CloseAbnormalClosure,
 				websocket.CloseNormalClosure) {
-				log.Errorf("Websocket read error: %v", err)
+				log.Errorf("Websocket read error (pool client): %v", err)
 			}
 			c.cancel()
 			continue
@@ -156,23 +155,22 @@ out:
 			continue
 		}
 
-		// TODO: More research needs to be done before applying this.
-		// Ensure the requesting client is within their request limits.
-		// allow := c.hub.limiter.WithinLimit(c.ip)
-		// if !allow {
-		// 	switch reqType {
-		// 	case RequestType:
-		// 		req := msg.(*Request)
-		// 		c.ch <- tooManyRequestsResponse(req.ID)
-		// 	case ResponseType:
-		// 		resp := msg.(*Response)
-		// 		c.ch <- tooManyRequestsResponse(resp.ID)
-		// 	case NotificationType:
-		// 		// Clients are not allowed to send notifications.
-		// 		c.cancel()
-		// 		continue
-		// 	}
-		// }
+		// Ensure the requesting client is within their request limits, which
+		// applies for both websocket requests by the client as well as
+		// requests via the API.
+		allow := c.hub.limiter.WithinLimit(c.ip)
+		if !allow {
+			switch reqType {
+			case RequestType:
+				req := msg.(*Request)
+				c.ch <- tooManyRequestsResponse(req.ID)
+				continue
+			case NotificationType:
+				// Clients are not allowed to send notifications.
+				c.cancel()
+				continue
+			}
+		}
 
 		switch reqType {
 		case RequestType:
@@ -227,7 +225,7 @@ out:
 			method := c.fetchRequest(*resp.ID)
 			if method == "" {
 				log.Error("No request found for received response "+
-					" with id: ", *resp.ID)
+					"with id: ", *resp.ID)
 				continue
 			}
 
@@ -241,12 +239,16 @@ out:
 
 				atomic.StoreUint64(&c.pingRetries, 0)
 			default:
-				log.Debugf("Unknowning response type received")
+				log.Debugf("Unknown response type received")
+				c.cancel()
+				continue
 			}
 
 		case NotificationType:
 		default:
 			log.Errorf("Unknown message type received")
+			c.cancel()
+			continue
 		}
 	}
 }
