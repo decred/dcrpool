@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/websocket"
 
 	"dnldd/dcrpool/dividend"
@@ -157,7 +158,15 @@ out:
 			method := pc.fetchRequest(*resp.ID)
 			if method == "" {
 				log.Error("No request found for received response "+
-					" with id: ", *resp.ID)
+					"with id: ", *resp.ID, spew.Sdump(resp))
+				continue
+			}
+
+			// If the response is a too many requests response, remove the
+			// request entry and continue.
+			err := network.ParseTooManyRequestsResponse(resp)
+			if err == nil {
+				pc.deleteRequest(*resp.ID)
 				continue
 			}
 

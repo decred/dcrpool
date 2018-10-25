@@ -2,7 +2,6 @@ package network
 
 import (
 	"context"
-	"dnldd/dcrpool/database"
 	"math/big"
 	"math/rand"
 	"net/http"
@@ -23,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"dnldd/dcrpool/database"
 	"dnldd/dcrpool/dividend"
 )
 
@@ -219,8 +219,9 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 		return nil, err
 	}
 
-	h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
 	log.Debugf("GRPC connection established with dcrwallet.")
+
+	h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
 
 	h.StartPaymentCron()
 

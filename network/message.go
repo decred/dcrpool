@@ -12,9 +12,13 @@ const (
 	NotificationType = "notification"
 )
 
-// Thresholds.
 const (
-	MaxMessageSize = 1024
+	// MaxMessageSize represents the maximum message expected from clients,
+	// currently it is a work message.
+	MaxMessageSize = 511
+
+	// MaxPingRetries represents the maximum number of unanswered ping requests
+	// by a client before disconnection.
 	MaxPingRetries = 3
 )
 
@@ -27,6 +31,7 @@ const (
 	EvaluatedWork     = "evaluatedwork"
 	ConnectedBlock    = "connectedblock"
 	DisconnectedBlock = "disconnectedblock"
+	TooManyRequests   = "toomanyrequests"
 )
 
 // Message is the base interface messages exchanged between a websocket client
@@ -114,6 +119,21 @@ func tooManyRequestsResponse(id *uint64) *Response {
 		Error:  &err,
 		Result: nil,
 	}
+}
+
+// ParseTooManyRequestsResponse parses a too many requests response.
+func ParseTooManyRequestsResponse(resp *Response) error {
+	if resp.ID == nil {
+		return errors.New("Invalid too many requests response, " +
+			"'should have 'id' field set")
+	}
+
+	if resp.Error == nil {
+		return errors.New("Invalid too many requests response, " +
+			"should have 'error' field set")
+	}
+
+	return nil
 }
 
 // WorkNotification is a convenience function for creating a work notification.
