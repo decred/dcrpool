@@ -228,21 +228,21 @@ func CalculateSharePercentages(shares []*Share) (map[string]*big.Rat, error) {
 }
 
 // CalculatePayments calculates the payments due participating accounts.
-func CalculatePayments(percentages map[string]*big.Rat, amount dcrutil.Amount, poolFee float64, estMaturity int64) ([]*Payment, error) {
+func CalculatePayments(percentages map[string]*big.Rat, total dcrutil.Amount, poolFee float64, height uint32, estMaturity int64) ([]*Payment, error) {
 	// Deduct pool fee from the amount to be shared.
-	fee := amount.MulF64(poolFee)
-	amtSansFees := amount - fee
+	fee := total.MulF64(poolFee)
+	amtSansFees := total - fee
 
 	// Calculate each participating account's portion of the amount after fees.
 	payments := make([]*Payment, 0)
-	for id, percentage := range percentages {
+	for account, percentage := range percentages {
 		percent, _ := percentage.Float64()
 		amt := amtSansFees.MulF64(percent)
-		payments = append(payments, NewPayment(id, amt, estMaturity))
+		payments = append(payments, NewPayment(account, amt, height, estMaturity))
 	}
 
 	// Add a payout entry for pool fees.
-	payments = append(payments, NewPayment(PoolFeesK, fee, estMaturity))
+	payments = append(payments, NewPayment(PoolFeesK, fee, height, estMaturity))
 
 	return payments, nil
 }

@@ -25,25 +25,27 @@ var (
 type Payment struct {
 	Account           string         `json:"account"`
 	EstimatedMaturity int64          `json:"estimatedmaturity"`
+	Height            uint32         `json:"height"`
 	Amount            dcrutil.Amount `json:"amount"`
 	CreatedOn         int64          `json:"createdon"`
 	PaidOn            int64          `json:"paidon"`
 }
 
 // NewPayment creates a payment instance.
-func NewPayment(account string, amount dcrutil.Amount, estMaturity int64) *Payment {
+func NewPayment(account string, amount dcrutil.Amount, height uint32, estMaturity int64) *Payment {
 	return &Payment{
 		Account:           account,
-		EstimatedMaturity: estMaturity,
 		Amount:            amount,
+		Height:            height,
+		EstimatedMaturity: estMaturity,
 		CreatedOn:         time.Now().UnixNano(),
 	}
 }
 
-// GeneratePaymentID prefixes the provided account with the provided
-// created on nano time to generate a unique id for the payment.
-func GeneratePaymentID(account string, createdOnNano int64) []byte {
-	id := fmt.Sprintf("%v%v", NanoToBigEndianBytes(createdOnNano), account)
+// GeneratePaymentID generates a unique id using the provided account, created
+// on nano time and the block height.
+func GeneratePaymentID(createdOnNano int64, height uint32, account string) []byte {
+	id := fmt.Sprintf("%v%v%v", NanoToBigEndianBytes(createdOnNano), height, account)
 	return []byte(id)
 }
 
@@ -85,7 +87,8 @@ func (payment *Payment) Create(db *bolt.DB) error {
 			return err
 		}
 
-		id := GeneratePaymentID(payment.Account, payment.CreatedOn)
+		id := GeneratePaymentID(payment.CreatedOn, payment.Height,
+			payment.Account)
 		err = bkt.Put(id, paymentBytes)
 		return err
 	})
@@ -97,9 +100,77 @@ func (payment *Payment) Update(db *bolt.DB) error {
 	return payment.Create(db)
 }
 
-// Delete is not supported for payments.
+// Delete purges the referenced pending payment from the database.
 func (payment *Payment) Delete(db *bolt.DB, state bool) error {
-	return ErrNotSupported("payment", "delete")
+	if payment.PaidOn != 0 {
+		return fmt.Errorf("Cannot delete a paid payment record:"+
+			" (%v at height %v for account %v)", payment.Amount,
+			payment.Height, payment.Account)
+	}
+
+	id := GeneratePaymentID(payment.CreatedOn, payment.Height, payment.Account)
+	return database.Delete(db, database.PaymentBkt, id)
+}
+
+// PaymentBundle is a convenience type for grouping payments for an account.
+type PaymentBundle struct {
+	Account  string
+	Payments []*Payment
+}
+
+// NewPaymentBundle initializes a payment bundle instance.
+func NewPaymentBundle(account string) *PaymentBundle {
+	return &PaymentBundle{
+		Account:  account,
+		Payments: make([]*Payment, 0),
+	}
+}
+
+// Total returns the sum of all payments amount for the account.
+func (bundle *PaymentBundle) Total() dcrutil.Amount {
+	total := dcrutil.Amount(0)
+	for _, payment := range bundle.Payments {
+		total += payment.Amount
+	}
+
+	return total
+}
+
+// UpdateAsPaid updates all associated payments to a payment bundle as paid.
+func (bundle *PaymentBundle) UpdateAsPaid(db *bolt.DB, nowNano int64) error {
+	for _, payment := range bundle.Payments {
+		payment.PaidOn = nowNano
+		err := payment.Update(db)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GeneratePaymentBundles creates account payment bundles from the provided
+// set of payments.
+func GeneratePaymentBundles(payments []*Payment) []*PaymentBundle {
+	bundles := make([]*PaymentBundle, 0)
+	for _, payment := range payments {
+		match := false
+		for _, bdl := range bundles {
+			if payment.Account == bdl.Account {
+				bdl.Payments = append(bdl.Payments, payment)
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			bdl := NewPaymentBundle(payment.Account)
+			bdl.Payments = append(bdl.Payments, payment)
+			bundles = append(bundles, bdl)
+		}
+	}
+
+	return bundles
 }
 
 // FetchPendingPayments fetches all unpaid payments.
@@ -176,85 +247,59 @@ func FetchMaturePendingPayments(db *bolt.DB) ([]*Payment, error) {
 	return payments, nil
 }
 
+// FetchPendingPaymentsAtHeight fetches all pending payments at the provided
+// height.
+func FetchPendingPaymentsAtHeight(db *bolt.DB, height uint32) ([]*Payment, error) {
+	payments := make([]*Payment, 0)
+	err := db.View(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+		bkt := pbkt.Bucket(database.PaymentBkt)
+		if bkt == nil {
+			return database.ErrBucketNotFound(database.PaymentBkt)
+		}
+
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			var payment Payment
+			err := json.Unmarshal(v, &payment)
+			if err != nil {
+				return err
+			}
+
+			if payment.PaidOn == 0 && payment.Height == height {
+				payments = append(payments, &payment)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return payments, nil
+}
+
 // FetchEligiblePayments fetches all payments over the configured minimum
 // payment for the pool.
-func FetchEligiblePayments(db *bolt.DB, minPayment dcrutil.Amount) ([]*Payment, error) {
+func FetchEligiblePayments(db *bolt.DB, minPayment dcrutil.Amount) ([]*PaymentBundle, error) {
 	maturePayments, err := FetchMaturePendingPayments(db)
 	if err != nil {
 		return nil, err
 	}
 
-	eligiblePmts := make([]*Payment, 0)
-	for _, payment := range maturePayments {
-		if payment.Amount > minPayment {
-			eligiblePmts = append(eligiblePmts, payment)
+	bundles := GeneratePaymentBundles(maturePayments)
+	for idx := 0; idx < len(bundles); idx++ {
+		if bundles[idx].Total() < minPayment {
+			bundles = append(bundles[:idx], bundles[idx+1:]...)
 		}
 	}
 
-	return eligiblePmts, nil
-}
-
-// UpdatePayments updates payment records with the provided payments, a new
-// payment recored is created if there is no existing payment record to
-// update.
-func UpdatePayments(db *bolt.DB, newPayments []*Payment) error {
-	payments, err := FetchPendingPayments(db)
-	if err != nil {
-		return err
-	}
-
-	for _, newPayment := range newPayments {
-		updated := false
-		for _, payment := range payments {
-			if newPayment.Account == payment.Account {
-				payment.Amount += newPayment.Amount
-				payment.EstimatedMaturity = newPayment.EstimatedMaturity
-				err := payment.Update(db)
-				if err != nil {
-					return err
-				}
-
-				// Update the last payment created time.
-				err = db.Update(func(tx *bolt.Tx) error {
-					pbkt := tx.Bucket(database.PoolBkt)
-					if pbkt == nil {
-						return database.ErrBucketNotFound(database.PoolBkt)
-					}
-
-					return pbkt.Put(LastPaymentCreatedOn,
-						NanoToBigEndianBytes(newPayment.CreatedOn))
-				})
-
-				if err != nil {
-					return err
-				}
-
-				updated = true
-				break
-			}
-		}
-
-		// Create a payment record for the account if one does not exist.
-		if !updated {
-			err := newPayment.Create(db)
-			if err != nil {
-				return err
-			}
-
-			// Update the last payment created time.
-			err = db.Update(func(tx *bolt.Tx) error {
-				pbkt := tx.Bucket(database.PoolBkt)
-				if pbkt == nil {
-					return database.ErrBucketNotFound(database.PoolBkt)
-				}
-
-				return pbkt.Put(LastPaymentCreatedOn,
-					NanoToBigEndianBytes(newPayment.CreatedOn))
-			})
-		}
-	}
-
-	return nil
+	return bundles, nil
 }
 
 // futureTime extends a base time to a time in the future.
@@ -278,7 +323,7 @@ func pastTime(date *time.Time, days time.Duration, hours time.Duration,
 // PayPerShare generates a payment bundle comprised of payments to all
 // participating accounts. Payments are calculated based on work contributed
 // to the pool since the last payment batch.
-func PayPerShare(db *bolt.DB, amount dcrutil.Amount, poolFee float64, coinbaseMaturity uint16) error {
+func PayPerShare(db *bolt.DB, total dcrutil.Amount, poolFee float64, height uint32, coinbaseMaturity uint16) error {
 	now := time.Now()
 	nowNano := NanoToBigEndianBytes(now.UnixNano())
 
@@ -329,17 +374,38 @@ func PayPerShare(db *bolt.DB, amount dcrutil.Amount, poolFee float64, coinbaseMa
 	estMaturityNano := futureTime(&now, 0, 0, time.Duration(estMaturityTime),
 		0).UnixNano()
 
-	payments, err := CalculatePayments(percentages, amount, poolFee,
+	payments, err := CalculatePayments(percentages, total, poolFee, height,
 		estMaturityNano)
 
-	// Update or create unpaid payment records for the participating accounts.
-	err = UpdatePayments(db, payments)
+	// Persist all payments.
+	for _, payment := range payments {
+		err := payment.Create(db)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update the last payment created time.
+	err = db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+
+		return pbkt.Put(LastPaymentCreatedOn,
+			NanoToBigEndianBytes(payments[len(payments)-1].CreatedOn))
+	})
+
+	if err != nil {
+		return err
+	}
+
 	return err
 }
 
 // PayPerLastNShares generates a payment bundle comprised of payments to all
 // participating accounts within the last n time period provided.
-func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, coinbaseMaturity uint16, periodSecs uint32) error {
+func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, height uint32, coinbaseMaturity uint16, periodSecs uint32) error {
 	now := time.Now()
 	startTime := pastTime(&now, 0, 0, 0, time.Duration(periodSecs))
 	nowNano := NanoToBigEndianBytes(now.UnixNano())
@@ -364,10 +430,27 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, coin
 	estMaturityNano := futureTime(&now, 0, 0, time.Duration(estMaturityTime),
 		0).UnixNano()
 
-	payments, err := CalculatePayments(percentages, amount, poolFee,
+	payments, err := CalculatePayments(percentages, amount, poolFee, height,
 		estMaturityNano)
 
-	// Update or create unpaid payment records for the participating accounts.
-	err = UpdatePayments(db, payments)
+	// Persist all payments.
+	for _, payment := range payments {
+		err := payment.Create(db)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update the last payment created time.
+	err = db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+
+		return pbkt.Put(LastPaymentCreatedOn,
+			NanoToBigEndianBytes(payments[len(payments)-1].CreatedOn))
+	})
+
 	return err
 }
