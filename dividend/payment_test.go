@@ -25,8 +25,8 @@ func createShare(db *bolt.DB, account string, weight *big.Rat, createdOnNano int
 	return share
 }
 
-// createPersistedAccount creates a pool account with the provided details and
-// persists it to the database.
+// createPersistedAccount creates a pool account with the provided parameters
+// and persists it to the database.
 func createPersistedAccount(db *bolt.DB, name string, address string, pass string) error {
 	account, err := NewAccount(name, address, pass)
 	if err != nil {
@@ -60,29 +60,30 @@ func TestPayPerShare(t *testing.T) {
 	minBytes := NanoToBigEndianBytes(minNano)
 	maxNano := pastTime(&now, 0, 0, time.Duration(30), 0).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
-	accOne := "dnldd"
-	accTwo := "tmmy"
-	accOneAddr := "SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc"
-	accTwoAddr := "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
+	x := "dnldd"
+	y := "tmmy"
+	aAddr := "SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc"
+	bAddr := "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
 	pass := "pass"
 	shareCount := 10
+	height := uint32(20)
 
-	err = createPersistedAccount(db, accOne, accOneAddr, pass)
+	err = createPersistedAccount(db, x, aAddr, pass)
 	if err != nil {
 		t.Error(t)
 	}
 
-	err = createPersistedAccount(db, accTwo, accTwoAddr, pass)
+	err = createPersistedAccount(db, y, bAddr, pass)
 	if err != nil {
 		t.Error(t)
 	}
 
-	err = createMultiplePersistedShares(db, accOne, weight, minNano, shareCount)
+	err = createMultiplePersistedShares(db, x, weight, minNano, shareCount)
 	if err != nil {
 		t.Error(t)
 	}
 
-	err = createMultiplePersistedShares(db, accTwo, weight, maxNano, shareCount)
+	err = createMultiplePersistedShares(db, y, weight, maxNano, shareCount)
 	if err != nil {
 		t.Error(t)
 	}
@@ -103,7 +104,8 @@ func TestPayPerShare(t *testing.T) {
 	}
 
 	feePercent := 0.1
-	err = PayPerShare(db, amt, feePercent, chaincfg.SimNetParams.CoinbaseMaturity)
+	err = PayPerShare(db, amt, feePercent, height,
+		chaincfg.SimNetParams.CoinbaseMaturity)
 	if err != nil {
 		t.Error(t)
 	}
@@ -126,51 +128,53 @@ func TestPayPerShare(t *testing.T) {
 
 	if bytes.Compare(lastPaymentCreatedOn, nowBytes) < 0 {
 		t.Error("The last payment created on time is less than" +
-			"the current time")
+			" the current time")
 	}
 
-	// Assert there are three payments created by the payment scheme. That is,
-	// a payment for each account and a pool fee payment entry.
+	// Assert the payments created are for accounts x, y and a fee
+	// payment entry.
 	pmts, err := FetchPendingPayments(db)
 	if err != nil {
 		t.Error(t)
 	}
 
-	if len(pmts) != 3 {
-		t.Errorf("Expected %v payments created, got %v.", 3, len(pmts))
+	bundles := GeneratePaymentBundles(pmts)
+	if len(bundles) != 3 {
+		t.Errorf("Expected %v payment bundles, got %v.", 3, len(bundles))
 	}
 
-	var accOnePmt, accTwoPmt, feePmt *Payment
-	for idx := 0; idx < len(pmts); idx++ {
-		if pmts[idx].Account == accOne {
-			accOnePmt = pmts[idx]
+	var xb, yb, fb *PaymentBundle
+	for idx := 0; idx < len(bundles); idx++ {
+		if bundles[idx].Account == x {
+			xb = bundles[idx]
 		}
 
-		if pmts[idx].Account == accTwo {
-			accTwoPmt = pmts[idx]
+		if bundles[idx].Account == y {
+			yb = bundles[idx]
 		}
 
-		if pmts[idx].Account == PoolFeesK {
-			feePmt = pmts[idx]
+		if bundles[idx].Account == PoolFeesK {
+			fb = bundles[idx]
 		}
 	}
 
-	// Assert the two account payments have the same payments since they have
-	// the same share weights.
-	if accOnePmt.Amount != accTwoPmt.Amount {
-		t.Errorf("Expected equal account payments, %v != %v",
-			accOnePmt.Amount, accTwoPmt.Amount)
+	// Assert the two account payment bundles have the same payments since
+	// they have the same share weights.
+	if xb.Total() != yb.Total() {
+		t.Errorf("Expected equal account amounts, %v != %v",
+			xb.Total(), yb.Total())
 	}
 
 	// Assert the fee payment is the exact fee percentage of the total amount.
-	expectedFeePmtAmt := amt.MulF64(feePercent)
-	if feePmt.Amount != expectedFeePmtAmt {
+	expectedFeeAmt := amt.MulF64(feePercent)
+	if fb.Total() != expectedFeeAmt {
 		t.Errorf("Expected %v fee payment amount, got %v",
-			feePmt.Amount, expectedFeePmtAmt)
+			fb.Total(), expectedFeeAmt)
 	}
 
-	// Assert the sum of all payment amounts is equal to the initial amount.
-	sum := accOnePmt.Amount + accTwoPmt.Amount + feePmt.Amount
+	// Assert the sum of all payment bundle amounts is equal to the initial
+	// amount.
+	sum := xb.Total() + yb.Total() + fb.Total()
 	if sum != amt {
 		t.Errorf("Expected the sum of all payments to be %v, got %v", amt, sum)
 	}
@@ -193,29 +197,30 @@ func TestPayPerLastShare(t *testing.T) {
 	minBytes := NanoToBigEndianBytes(minNano)
 	maxNano := pastTime(&now, 0, 0, time.Duration(30), 0).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
-	accOne := "dnldd"
-	accTwo := "tmmy"
-	accOneAddr := "SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc"
-	accTwoAddr := "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
+	x := "dnldd"
+	y := "tmmy"
+	xAddr := "SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc"
+	yAddr := "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
 	pass := "pass"
 	shareCount := 10
+	height := uint32(20)
 
-	err = createPersistedAccount(db, accOne, accOneAddr, pass)
+	err = createPersistedAccount(db, x, xAddr, pass)
 	if err != nil {
 		t.Error(t)
 	}
 
-	err = createPersistedAccount(db, accTwo, accTwoAddr, pass)
+	err = createPersistedAccount(db, y, yAddr, pass)
 	if err != nil {
 		t.Error(t)
 	}
 
-	err = createMultiplePersistedShares(db, accOne, weight, minNano, shareCount)
+	err = createMultiplePersistedShares(db, x, weight, minNano, shareCount)
 	if err != nil {
 		t.Error(t)
 	}
 
-	err = createMultiplePersistedShares(db, accTwo, weight, maxNano, shareCount)
+	err = createMultiplePersistedShares(db, y, weight, maxNano, shareCount)
 	if err != nil {
 		t.Error(t)
 	}
@@ -237,7 +242,8 @@ func TestPayPerLastShare(t *testing.T) {
 
 	feePercent := 0.1
 	periodSecs := uint32(7200) // 2 hours.
-	err = PayPerLastNShares(db, amt, feePercent, chaincfg.SimNetParams.CoinbaseMaturity, periodSecs)
+	err = PayPerLastNShares(db, amt, feePercent, height,
+		chaincfg.SimNetParams.CoinbaseMaturity, periodSecs)
 	if err != nil {
 		t.Error(t)
 	}
@@ -263,48 +269,50 @@ func TestPayPerLastShare(t *testing.T) {
 			"the current time")
 	}
 
-	// Assert there are three payments created by the payment scheme. That is,
-	// a payment for each account and a pool fee payment entry.
+	// Assert the payments created are for accounts x, y and a fee
+	// payment entry.
 	pmts, err := FetchPendingPayments(db)
 	if err != nil {
 		t.Error(t)
 	}
 
-	if len(pmts) != 3 {
-		t.Errorf("Expected %v payments created, got %v.", 3, len(pmts))
+	bundles := GeneratePaymentBundles(pmts)
+	if len(bundles) != 3 {
+		t.Errorf("Expected %v payment bundles, got %v.", 3, len(bundles))
 	}
 
-	var accOnePmt, accTwoPmt, feePmt *Payment
-	for idx := 0; idx < len(pmts); idx++ {
-		if pmts[idx].Account == accOne {
-			accOnePmt = pmts[idx]
+	var xb, yb, fb *PaymentBundle
+	for idx := 0; idx < len(bundles); idx++ {
+		if bundles[idx].Account == x {
+			xb = bundles[idx]
 		}
 
-		if pmts[idx].Account == accTwo {
-			accTwoPmt = pmts[idx]
+		if bundles[idx].Account == y {
+			yb = bundles[idx]
 		}
 
-		if pmts[idx].Account == PoolFeesK {
-			feePmt = pmts[idx]
+		if bundles[idx].Account == PoolFeesK {
+			fb = bundles[idx]
 		}
 	}
 
-	// Assert the two account payments have the same payments since they have
-	// the same share weights.
-	if accOnePmt.Amount != accTwoPmt.Amount {
-		t.Errorf("Expected equal account payments, %v != %v",
-			accOnePmt.Amount, accTwoPmt.Amount)
+	// Assert the two account payment bundles have the same payments since
+	// they have the same share weights.
+	if xb.Total() != yb.Total() {
+		t.Errorf("Expected equal account amounts, %v != %v",
+			xb.Total(), yb.Total())
 	}
 
 	// Assert the fee payment is the exact fee percentage of the total amount.
-	expectedFeePmtAmt := amt.MulF64(feePercent)
-	if feePmt.Amount != expectedFeePmtAmt {
+	expectedFeeAmt := amt.MulF64(feePercent)
+	if fb.Total() != expectedFeeAmt {
 		t.Errorf("Expected %v fee payment amount, got %v",
-			feePmt.Amount, expectedFeePmtAmt)
+			fb.Total(), expectedFeeAmt)
 	}
 
-	// Assert the sum of all payment amounts is equal to the initial amount.
-	sum := accOnePmt.Amount + accTwoPmt.Amount + feePmt.Amount
+	// Assert the sum of all payment bundle amounts is equal to the initial
+	// amount.
+	sum := xb.Total() + yb.Total() + fb.Total()
 	if sum != amt {
 		t.Errorf("Expected the sum of all payments to be %v, got %v", amt, sum)
 	}

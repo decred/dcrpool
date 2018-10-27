@@ -120,6 +120,7 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 			if work != nil {
 				// Fetch the coinbase amount.
 				blockHash := header.BlockHash()
+				blockHeight := header.Height
 				coinbase, err := h.FetchCoinbaseValue(&blockHash)
 				if err != nil {
 					log.Error(err)
@@ -130,15 +131,15 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 				switch h.cfg.PaymentMethod {
 				case dividend.PPS:
 					err := dividend.PayPerShare(h.db, *coinbase, h.cfg.PoolFee,
-						h.cfg.ActiveNet.CoinbaseMaturity)
+						blockHeight, h.cfg.ActiveNet.CoinbaseMaturity)
 					if err != nil {
 						log.Error(err)
 						return
 					}
 				case dividend.PPLNS:
 					err := dividend.PayPerLastNShares(h.db, *coinbase,
-						h.cfg.PoolFee, h.cfg.ActiveNet.CoinbaseMaturity,
-						h.cfg.LastNPeriod)
+						h.cfg.PoolFee, blockHeight,
+						h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
 					if err != nil {
 						log.Error(err)
 						return
@@ -146,13 +147,7 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 				}
 			}
 
-			blkHeight, err := FetchBlockHeight(blkHeader)
-			if err != nil {
-				log.Error(err)
-				return
-			}
-
-			h.Broadcast <- ConnectedBlockNotification(blkHeight)
+			h.Broadcast <- ConnectedBlockNotification(header.Height)
 		},
 		OnBlockDisconnected: func(blkHeader []byte) {
 			log.Debugf("Block disconnected: %x", blkHeader)
@@ -360,8 +355,6 @@ func (h *Hub) PublishDividendTx(payouts map[dcrutil.Address]dcrutil.Amount, targ
 // ProcessDividendPayments fetches all eligible payments and publishes a
 // transaction to the network paying dividends to participating accounts.
 func (h *Hub) ProcessDividendPayments() error {
-	now := time.Now().UnixNano()
-
 	// Fetch all eligible payments.
 	eligiblePmts, err := dividend.FetchEligiblePayments(h.db, h.cfg.MinPayment)
 	if err != nil {
@@ -378,14 +371,15 @@ func (h *Hub) ProcessDividendPayments() error {
 		if p.Account == dividend.PoolFeesK {
 			rand.Seed(time.Now().UnixNano())
 			addr = h.cfg.PoolFeeAddrs[rand.Intn(len(h.cfg.PoolFeeAddrs))]
-			pmts[addr] = p.Amount
-			targetAmt += p.Amount
+
+			bundleAmt := p.Total()
+			pmts[addr] = bundleAmt
+			targetAmt += bundleAmt
 			continue
 		}
 
 		// For a dividend payment, fetch the corresponding account address.
-		id := dividend.GeneratePaymentID(p.Account, p.CreatedOn)
-		acc, err := dividend.GetAccount(h.db, id)
+		acc, err := dividend.GetAccount(h.db, []byte(p.Account))
 		if err != nil {
 			return err
 		}
@@ -395,8 +389,9 @@ func (h *Hub) ProcessDividendPayments() error {
 			return err
 		}
 
-		pmts[addr] = p.Amount
-		targetAmt += p.Amount
+		bundleAmt := p.Total()
+		pmts[addr] = bundleAmt
+		targetAmt += bundleAmt
 	}
 
 	// Publish the dividend transaction.
@@ -406,9 +401,9 @@ func (h *Hub) ProcessDividendPayments() error {
 	}
 
 	// Update all eligible payments published by the tx as paid.
-	for _, p := range eligiblePmts {
-		p.PaidOn = now
-		err = p.Update(h.db)
+	nowNano := time.Now().UnixNano()
+	for _, bundle := range eligiblePmts {
+		err = bundle.UpdateAsPaid(h.db, nowNano)
 		if err != nil {
 			return err
 		}
@@ -422,7 +417,7 @@ func (h *Hub) ProcessDividendPayments() error {
 		}
 
 		return pbkt.Put(dividend.LastPaymentPaidOn,
-			dividend.NanoToBigEndianBytes(now))
+			dividend.NanoToBigEndianBytes(nowNano))
 	})
 
 	if err != nil {
