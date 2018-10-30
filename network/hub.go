@@ -26,6 +26,13 @@ import (
 	"dnldd/dcrpool/dividend"
 )
 
+const (
+	// MaxReorgLimit is an estimated maximum chain reorganization limit.
+	// That is, it is highly improbable for the the chain to reorg beyond six
+	// blocks from the chain tip.
+	MaxReorgLimit = 6
+)
+
 // HubConfig represents configuration details for the hub.
 type HubConfig struct {
 	ActiveNet         *chaincfg.Params
@@ -101,15 +108,14 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 				return
 			}
 
-			header, err := ParseBlockHeader(decoded)
+			nonce := FetchNonce(decoded)
+			work, err := GetAcceptedWork(h.db, nonce)
 			if err != nil {
 				log.Error(err)
 				return
 			}
 
-			workID := GenerateAcceptedWorkID(header.BlockHash().String(),
-				header.Height)
-			work, err := GetAcceptedWork(h.db, workID)
+			header, err := ParseBlockHeader(decoded)
 			if err != nil {
 				log.Error(err)
 				return
@@ -145,6 +151,20 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 						return
 					}
 				}
+
+				// Update the accepted work record for the connected block.
+				work.Connected = true
+				work.ConnectedAtHeight = int64(header.Height)
+				work.Update(h.db)
+
+				// Prune accepted work that's recorded as connected to the
+				// chain and is below the estimated reorg limit.
+				err = PruneAcceptedWork(h.db,
+					int64(header.Height-MaxReorgLimit))
+				if err != nil {
+					log.Error(err)
+					return
+				}
 			}
 
 			h.Broadcast <- ConnectedBlockNotification(header.Height)
@@ -152,17 +172,38 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 		OnBlockDisconnected: func(blkHeader []byte) {
 			log.Debugf("Block disconnected: %x", blkHeader)
 
-			if !h.HasConnectedClients() {
-				return
-			}
-
-			blkHeight, err := FetchBlockHeight(blkHeader)
+			// Check if the accepted block was mined by the pool.
+			decoded, err := DecodeHeader(blkHeader)
 			if err != nil {
 				log.Error(err)
 				return
 			}
 
-			h.Broadcast <- DisconnectedBlockNotification(blkHeight)
+			nonce := FetchNonce(decoded)
+			work, err := GetAcceptedWork(h.db, nonce)
+			if err != nil {
+				log.Error(err)
+				return
+			}
+
+			// If the disconnected block is an accepted work from the pool
+			// update the state of the accepted work.
+			if work != nil {
+				work.Connected = false
+				work.ConnectedAtHeight = -1
+			}
+
+			if !h.HasConnectedClients() {
+				return
+			}
+
+			height, err := FetchBlockHeight(blkHeader)
+			if err != nil {
+				log.Error(err)
+				return
+			}
+
+			h.Broadcast <- DisconnectedBlockNotification(height)
 		},
 		OnWork: func(blkHeader string, target string) {
 			log.Debugf("New Work (header: %v , target: %v)", blkHeader,
