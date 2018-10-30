@@ -206,13 +206,10 @@ out:
 						continue
 					}
 
-					h, err := ParseBlockHeader(decoded)
-					if err != nil {
-						log.Errorf("Failed to parse block header: %v", err)
-						continue
-					}
-
-					work := NewAcceptedWork(h.BlockHash().String(), h.Height)
+					// Create an accepted work record with the nonce of the
+					// submitted work.
+					nonce := FetchNonce(decoded)
+					work := NewAcceptedWork(nonce)
 					work.Create(c.hub.db)
 				}
 
@@ -423,9 +420,15 @@ func setPoolID(decoded []byte, id []byte) {
 	copy(decoded[148:152], id[:])
 }
 
-// SetNonce sets the worker generated nonce for the decoded header data.
-func SetNonce(decoded []byte, nonce uint64) {
+// SetGeneratedNonce sets the worker generated nonce for the decoded header data.
+func SetGeneratedNonce(decoded []byte, nonce uint64) {
 	binary.LittleEndian.PutUint64(decoded[140:148], nonce)
+}
+
+// FetchNonce fetches the worker generated nonce and the assigned pool id
+// from the decoded header data.
+func FetchNonce(decoded []byte) []byte {
+	return decoded[140:152]
 }
 
 // EncodeHeader encodes the decoded header data.

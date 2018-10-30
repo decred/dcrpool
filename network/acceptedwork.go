@@ -1,9 +1,7 @@
 package network
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
 
 	"github.com/coreos/bbolt"
 
@@ -13,23 +11,18 @@ import (
 
 // AcceptedWork represents an accepted work submission to the network.
 type AcceptedWork struct {
-	Hash   string `json:"hash"`
-	Height uint32 `json:"height"`
+	Nonce             []byte `json:"nonce"`
+	Connected         bool   `json:"connected"`
+	ConnectedAtHeight int64  `json:"connectedatheight"`
 }
 
 // NewAcceptedWork creates an accepted work instance.
-func NewAcceptedWork(hash string, height uint32) *AcceptedWork {
+func NewAcceptedWork(nonce []byte) *AcceptedWork {
 	return &AcceptedWork{
-		Hash:   hash,
-		Height: height,
+		Nonce:             nonce,
+		Connected:         false,
+		ConnectedAtHeight: -1,
 	}
-}
-
-// GenerateAcceptedWorkID prefixes the provided block hash with the provided
-// block height to generate a unique id for the accepted work.
-func GenerateAcceptedWorkID(hash string, height uint32) []byte {
-	id := fmt.Sprintf("%v%v", height, hash)
-	return []byte(id)
 }
 
 // GetAcceptedWork fetches the accepted work referenced by the provided id.
@@ -70,16 +63,15 @@ func (work *AcceptedWork) Create(db *bolt.DB) error {
 			return err
 		}
 
-		id := GenerateAcceptedWorkID(work.Hash, work.Height)
-		err = bkt.Put(id, workBytes)
+		err = bkt.Put(work.Nonce[:], workBytes)
 		return err
 	})
 	return err
 }
 
-// Update is not supported for accepted work.
+// Update persists the updated accepted work to the database.
 func (work *AcceptedWork) Update(db *bolt.DB) error {
-	return dividend.ErrNotSupported("accepted work", "update")
+	return work.Create(db)
 }
 
 // Delete is not supported for accepted work.
@@ -87,9 +79,9 @@ func (work *AcceptedWork) Delete(db *bolt.DB, state bool) error {
 	return dividend.ErrNotSupported("accepted work", "delete")
 }
 
-// PruneWork removes all accepted work entries with heights less than
+// PruneAcceptedWork removes all accepted work entries with heights less than
 // or equal to the provided height.
-func PruneWork(db *bolt.DB, height uint32) error {
+func PruneAcceptedWork(db *bolt.DB, height int64) error {
 	err := db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		if pbkt == nil {
@@ -102,15 +94,22 @@ func PruneWork(db *bolt.DB, height uint32) error {
 
 		var err error
 		cursor := bkt.Cursor()
-		prefix := []byte(fmt.Sprintf("%v", height))
 		toPrune := make([][]byte, 0)
 
 		// Iterating and deleting in two steps to avoid:
 		// https://github.com/boltdb/bolt/issues/620
 		// TODO: test if this issue affects bbolt as well.
-		for k, _ := cursor.First(); k != nil &&
-			bytes.Compare(k[:len(prefix)], prefix) < 0; k, _ = cursor.Next() {
-			toPrune = append(toPrune, k)
+		for k, v := cursor.First(); k != nil; k, _ = cursor.Next() {
+			var work AcceptedWork
+			err := json.Unmarshal(v, work)
+			if err != nil {
+				return err
+			}
+
+			if work.Connected && (work.ConnectedAtHeight > -1 &&
+				work.ConnectedAtHeight < height) {
+				toPrune = append(toPrune, k)
+			}
 		}
 
 		for _, k := range toPrune {
