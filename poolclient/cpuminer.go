@@ -8,9 +8,10 @@ package main
 import (
 	"context"
 	"encoding/hex"
-	"github.com/davecgh/go-spew/spew"
+	"math/big"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/blockchain"
 
 	"dnldd/dcrpool/network"
@@ -75,7 +76,7 @@ out:
 // This function will return early with false when conditions that trigger a
 // stale block such as a new block showing up or periodically when there are
 // new transactions and enough time has elapsed without finding a solution.
-func (m *CPUMiner) solveBlock(ctx context.Context, decoded []byte, ticker *time.Ticker) bool {
+func (m *CPUMiner) solveBlock(ctx context.Context, decoded []byte, target *big.Int, ticker *time.Ticker) bool {
 	for {
 		hashesCompleted := uint64(0)
 
@@ -100,7 +101,7 @@ func (m *CPUMiner) solveBlock(ctx context.Context, decoded []byte, ticker *time.
 				// Non-blocking select to fall through
 			}
 
-			network.SetNonce(decoded, nonce)
+			network.SetGeneratedNonce(decoded, nonce)
 			header, err := network.ParseBlockHeader(decoded)
 			if err != nil {
 				log.Error(err)
@@ -108,12 +109,11 @@ func (m *CPUMiner) solveBlock(ctx context.Context, decoded []byte, ticker *time.
 			}
 
 			hash := header.BlockHash()
-			targetDifficulty := blockchain.CompactToBig(header.Bits)
 			hashesCompleted++
 
 			// The block is solved when the new block hash is less
 			// than the target difficulty.
-			if blockchain.HashToBig(&hash).Cmp(targetDifficulty) <= 0 {
+			if blockchain.HashToBig(&hash).Cmp(target) < 0 {
 				m.updateHashes <- hashesCompleted
 				log.Debugf("Solved block header is %v", spew.Sdump(header))
 				return true
@@ -153,6 +153,9 @@ out:
 
 		m.c.workMtx.Lock()
 		decoded, err := network.DecodeHeader(m.c.work.header)
+		var sizedTarget [32]byte
+		copy(sizedTarget[:], m.c.work.target)
+		target := network.LEUint256ToBig(sizedTarget)
 		m.c.workMtx.Unlock()
 		if err != nil {
 			log.Error(err)
@@ -163,7 +166,7 @@ out:
 		// with false when conditions that trigger a stale block, so
 		// a new block template can be generated. When the return is
 		// true a solution was found, so submit the solved block.
-		if m.solveBlock(ctx, decoded, ticker) {
+		if m.solveBlock(ctx, decoded, target, ticker) {
 			id := m.c.nextID()
 			submission := network.WorkSubmissionRequest(id,
 				hex.EncodeToString(decoded))

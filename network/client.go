@@ -74,10 +74,10 @@ func (c *Client) claimWeightedShare() {
 	share.Create(c.hub.db)
 }
 
-// bigToLEUint256 returns the passed big integer as an unsigned 256-bit integer
+// BigToLEUint256 returns the passed big integer as an unsigned 256-bit integer
 // encoded as little-endian bytes.  Numbers which are larger than the max
 // unsigned 256-bit integer are truncated.
-func bigToLEUint256(n *big.Int) [uint256Size]byte {
+func BigToLEUint256(n *big.Int) [uint256Size]byte {
 	// Pad or truncate the big-endian big int to correct number of bytes.
 	nBytes := n.Bytes()
 	nlen := len(nBytes)
@@ -96,6 +96,22 @@ func bigToLEUint256(n *big.Int) [uint256Size]byte {
 		buf[i], buf[uint256Size-1-i] = buf[uint256Size-1-i], buf[i]
 	}
 	return buf
+}
+
+// LEUint256ToBig returns the passed unsigned 256-bit integer
+// encoded as little-endian as a big integer.
+func LEUint256ToBig(n [uint256Size]byte) *big.Int {
+	var buf [uint256Size]byte
+	copy(buf[:], n[:])
+
+	// Reverse the bytes to big endian and create a big.Int.
+	for i := 0; i < uint256Size/2; i++ {
+		buf[i], buf[uint256Size-1-i] = buf[uint256Size-1-i], buf[i]
+	}
+
+	v := new(big.Int).SetBytes(buf[:])
+
+	return v
 }
 
 // NewClient initializes a new websocket client.
@@ -338,7 +354,7 @@ out:
 
 				// Covert the pool target to little endian hex encoded byte
 				// slice.
-				targetLE := bigToLEUint256(blockchain.CompactToBig(target))
+				targetLE := BigToLEUint256(blockchain.CompactToBig(target))
 				t := hex.EncodeToString(targetLE[:])
 
 				// Send an updated work notification per the client's miner type.
