@@ -88,7 +88,13 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 	// Calculate pool targets for all known miners.
 	h.poolTargetsMtx.Lock()
 	for miner, hashrate := range dividend.MinerHashes {
-		target := dividend.CalculatePoolTarget(hashrate, h.cfg.MaxGenTime)
+		target, err := dividend.CalculatePoolTarget(h.cfg.ActiveNet, hashrate,
+			h.cfg.MaxGenTime)
+		if err != nil {
+			log.Error(err)
+			return nil, err
+		}
+
 		compactTarget := blockchain.BigToCompact(target)
 		h.poolTargets[miner] = compactTarget
 	}

@@ -1,6 +1,7 @@
 package dividend
 
 import (
+	"github.com/decred/dcrd/chaincfg"
 	"math/big"
 	"os"
 	"testing"
@@ -12,7 +13,7 @@ import (
 )
 
 var (
-	// TestDB reprsents the testing database.
+	// TestDB represents the testing database.
 	TestDB = "testdb"
 )
 
@@ -229,6 +230,7 @@ func TestCalculateDividend(t *testing.T) {
 		}
 	}
 }
+
 func TestCalculatePoolTarget(t *testing.T) {
 	set := []struct {
 		hashRate   *big.Int
@@ -238,19 +240,22 @@ func TestCalculatePoolTarget(t *testing.T) {
 		{
 			new(big.Int).SetInt64(1.2E12),
 			new(big.Int).SetInt64(15),
-			"1381437475988024283268563409791075016144953" +
-				"2887812045339949604391304358105",
+			"6432893846517566412420610278260439325181665814757809113303199112",
 		},
 		{
 			new(big.Int).SetInt64(1.2E12),
 			new(big.Int).SetInt64(10),
-			"2072156213982036424902845114686612524217429" +
-				"9331718068009924406586956537158",
+			"9649340769776349618630915417390658987772498722136713669954798668",
 		},
 	}
 
 	for _, test := range set {
-		target := CalculatePoolTarget(test.hashRate, test.targetTime)
+		target, err := CalculatePoolTarget(&chaincfg.SimNetParams,
+			test.hashRate, test.targetTime)
+		if err != nil {
+			t.Error(err)
+		}
+
 		expected, success := new(big.Int).SetString(test.expected, 10)
 		if !success {
 			t.Errorf("Failed to parse (%v) as a big.Int", test.expected)

@@ -25,14 +25,16 @@ require (
 	google.golang.org/grpc v1.15.0
 )
 
-replace github.com/decred/dcrd/blockchain => ../dcrd/blockchain
+replace (
+	github.com/decred/dcrd/blockchain => ../dcrd/blockchain
 
-replace github.com/decred/dcrd/dcrutil => ../dcrd/dcrutil
+	github.com/decred/dcrd/chaincfg => ../dcrd/chaincfg
 
-replace github.com/decred/dcrd/rpcclient => ../dcrd/rpcclient
+	github.com/decred/dcrd/dcrjson => ../dcrd/dcrjson
 
-replace github.com/decred/dcrd/wire => ../dcrd/wire
+	github.com/decred/dcrd/dcrutil => ../dcrd/dcrutil
 
-replace github.com/decred/dcrd/dcrjson => ../dcrd/dcrjson
+	github.com/decred/dcrd/rpcclient => ../dcrd/rpcclient
 
-replace github.com/decred/dcrd/chaincfg => ../dcrd/chaincfg
+	github.com/decred/dcrd/wire => ../dcrd/wire
+)
