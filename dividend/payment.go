@@ -3,6 +3,7 @@ package dividend
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/coreos/bbolt"
@@ -453,4 +454,38 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, heig
 	})
 
 	return err
+}
+
+// GeneratePaymentDetails generates kv pair of addresses and payment amounts
+// from the provided eligible payments.
+func GeneratePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address, eligiblePmts []*PaymentBundle) (map[string]dcrutil.Amount, *dcrutil.Amount, error) {
+	// Generate the address and payment amount kv pairs.
+	var targetAmt dcrutil.Amount
+	pmts := make(map[string]dcrutil.Amount, 0)
+	for _, p := range eligiblePmts {
+		var addr dcrutil.Address
+
+		// For pool fee payments, fetch a pool fee address at random.
+		if p.Account == PoolFeesK {
+			rand.Seed(time.Now().UnixNano())
+			addr = poolFeeAddrs[rand.Intn(len(poolFeeAddrs))]
+
+			bundleAmt := p.Total()
+			pmts[addr.String()] = bundleAmt
+			targetAmt += bundleAmt
+			continue
+		}
+
+		// For a dividend payment, fetch the corresponding account address.
+		acc, err := GetAccount(db, GenerateAccountID(p.Account))
+		if err != nil {
+			return nil, nil, err
+		}
+
+		bundleAmt := p.Total()
+		pmts[acc.Address] = bundleAmt
+		targetAmt += bundleAmt
+	}
+
+	return pmts, &targetAmt, nil
 }

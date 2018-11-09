@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/coreos/bbolt"
-	"github.com/segmentio/ksuid"
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"golang.org/x/crypto/bcrypt"
 
 	"dnldd/dcrpool/database"
@@ -33,18 +33,21 @@ func BcryptHash(plaintext string) ([]byte, error) {
 	return hashedPass, nil
 }
 
+// GenerateAccountID generates a unique id for the account using the provided
+// account name.
+func GenerateAccountID(name string) []byte {
+	return chainhash.HashB([]byte(name))
+}
+
 // NewAccount generates a new account.
 func NewAccount(name string, address string, pass string) (*Account, error) {
-	id, err := ksuid.NewRandom()
-	if err != nil {
-		return nil, err
-	}
+
 	hashedPass, err := BcryptHash(pass)
 	if err != nil {
 		return nil, err
 	}
 	account := &Account{
-		UUID:       id.String(),
+		UUID:       string(GenerateAccountID(name)),
 		Name:       name,
 		Address:    address,
 		Pass:       string(hashedPass),

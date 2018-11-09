@@ -331,8 +331,8 @@ func (h *Hub) RemoveHashRate(miner string) {
 	h.hashRateMtx.Unlock()
 }
 
-// PublishDividendTx creates a transaction paying pool accounts for work done.
-func (h *Hub) PublishDividendTx(payouts map[dcrutil.Address]dcrutil.Amount, targetAmt dcrutil.Amount) error {
+// PublishTransaction creates a transaction paying pool accounts for work done.
+func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, targetAmt dcrutil.Amount) error {
 	// Fund dividend payouts.
 	fundTxReq := &walletrpc.FundTransactionRequest{
 		RequiredConfirmations: int32(h.cfg.ActiveNet.CoinbaseMaturity),
@@ -399,15 +399,9 @@ func (h *Hub) PublishDividendTx(payouts map[dcrutil.Address]dcrutil.Amount, targ
 	return nil
 }
 
-// ProcessDividendPayments fetches all eligible payments and publishes a
-// transaction to the network paying dividends to participating accounts.
-func (h *Hub) ProcessDividendPayments() error {
-	// Fetch all eligible payments.
-	eligiblePmts, err := dividend.FetchEligiblePayments(h.db, h.cfg.MinPayment)
-	if err != nil {
-		return err
-	}
-
+// GeneratePaymentDetails generates kv pair of addresses and payment amounts
+// from the provided eligible payments.
+func (h *Hub) GeneratePaymentDetails(eligiblePmts []*dividend.PaymentBundle) (map[dcrutil.Address]dcrutil.Amount, *dcrutil.Amount, error) {
 	// Generate the address and payment amount kv pairs.
 	var targetAmt dcrutil.Amount
 	pmts := make(map[dcrutil.Address]dcrutil.Amount, 0)
@@ -428,12 +422,12 @@ func (h *Hub) ProcessDividendPayments() error {
 		// For a dividend payment, fetch the corresponding account address.
 		acc, err := dividend.GetAccount(h.db, []byte(p.Account))
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 
 		addr, err = dcrutil.DecodeAddress(acc.Address)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 
 		bundleAmt := p.Total()
@@ -441,8 +435,26 @@ func (h *Hub) ProcessDividendPayments() error {
 		targetAmt += bundleAmt
 	}
 
-	// Publish the dividend transaction.
-	err = h.PublishDividendTx(pmts, targetAmt)
+	return pmts, &targetAmt, nil
+}
+
+// ProcessPayments fetches all eligible payments and publishes a
+// transaction to the network paying dividends to participating accounts.
+func (h *Hub) ProcessPayments() error {
+	// Fetch all eligible payments.
+	eligiblePmts, err := dividend.FetchEligiblePayments(h.db, h.cfg.MinPayment)
+	if err != nil {
+		return err
+	}
+
+	// Generate the payment details from the eligible payments fetched.
+	pmts, targetAmt, err := h.GeneratePaymentDetails(eligiblePmts)
+	if err != nil {
+		return err
+	}
+
+	// Publish the transaction.
+	err = h.PublishTransaction(pmts, *targetAmt)
 	if err != nil {
 		return err
 	}
@@ -478,13 +490,13 @@ func (h *Hub) ProcessDividendPayments() error {
 func (h *Hub) StartPaymentCron() {
 	h.cron.AddFunc("@every 6h",
 		func() {
-			err := h.ProcessDividendPayments()
+			err := h.ProcessPayments()
 			if err != nil {
-				log.Error("Failed to process dividend payments: %v", err)
+				log.Error("Failed to process payments: %v", err)
 				return
 			}
 
-			log.Debugf("Sucessfully dividend payments processed.")
+			log.Debugf("Sucessfully processed payments.")
 		})
 	h.cron.Start()
 	log.Debugf("Started dividend payment cron.")
