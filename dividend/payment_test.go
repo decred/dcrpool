@@ -60,30 +60,15 @@ func TestPayPerShare(t *testing.T) {
 	minBytes := NanoToBigEndianBytes(minNano)
 	maxNano := pastTime(&now, 0, 0, time.Duration(30), 0).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
-	x := "dnldd"
-	y := "tmmy"
-	aAddr := "SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc"
-	bAddr := "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
-	pass := "pass"
 	shareCount := 10
 	height := uint32(20)
 
-	err = createPersistedAccount(db, x, aAddr, pass)
+	err = createMultiplePersistedShares(db, accX, weight, minNano, shareCount)
 	if err != nil {
 		t.Error(t)
 	}
 
-	err = createPersistedAccount(db, y, bAddr, pass)
-	if err != nil {
-		t.Error(t)
-	}
-
-	err = createMultiplePersistedShares(db, x, weight, minNano, shareCount)
-	if err != nil {
-		t.Error(t)
-	}
-
-	err = createMultiplePersistedShares(db, y, weight, maxNano, shareCount)
+	err = createMultiplePersistedShares(db, accY, weight, maxNano, shareCount)
 	if err != nil {
 		t.Error(t)
 	}
@@ -145,11 +130,11 @@ func TestPayPerShare(t *testing.T) {
 
 	var xb, yb, fb *PaymentBundle
 	for idx := 0; idx < len(bundles); idx++ {
-		if bundles[idx].Account == x {
+		if bundles[idx].Account == accX {
 			xb = bundles[idx]
 		}
 
-		if bundles[idx].Account == y {
+		if bundles[idx].Account == accY {
 			yb = bundles[idx]
 		}
 
@@ -322,3 +307,113 @@ func TestPayPerLastShare(t *testing.T) {
 		t.Error(t)
 	}
 }
+
+// CreatePaymentBundle instantiates a payment bundle.
+func CreatePaymentBundle(account string, count uint32, paymentAmount dcrutil.Amount) *PaymentBundle {
+	bundle := NewPaymentBundle(account)
+	for idx := uint32(0); idx < count; idx++ {
+		payment := NewPayment(account, paymentAmount, 0, 0)
+		bundle.Payments = append(bundle.Payments, payment)
+	}
+	return bundle
+}
+
+func TestEqualPaymentDetailsGeneration(t *testing.T) {
+	db, err := setupDB()
+	if err != nil {
+		t.Error(t)
+	}
+
+	count := uint32(3)
+	pmtAmt, _ := dcrutil.NewAmount(10.5)
+	bundleX := CreatePaymentBundle(accX, count, pmtAmt)
+	bundleY := CreatePaymentBundle(accY, count, pmtAmt)
+	expectedTotal := pmtAmt.MulF64(6)
+
+	bundles := make([]*PaymentBundle, 0)
+	bundles = append(bundles, bundleX)
+	bundles = append(bundles, bundleY)
+
+	details, totalAmt, err := GeneratePaymentDetails(db,
+		[]dcrutil.Address{poolFeeAddrs}, bundles)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if expectedTotal != *totalAmt {
+		t.Errorf("Expected %v as total payment amount, got %v",
+			expectedTotal, *totalAmt)
+	}
+
+	if len(details) != 2 {
+		t.Errorf("Expected %v payment details generated, got %v",
+			2, len(details))
+	}
+
+	xAmt := details[xAddr]
+	yAmt := details[yAddr]
+	if xAmt != yAmt {
+		t.Errorf("Expected equal payment amounts for both accounts,"+
+			" got %v != %v", xAmt, yAmt)
+	}
+
+	err = teardownDB(db)
+	if err != nil {
+		t.Error(t)
+	}
+}
+
+func TestUnequalPaymentDetailsGeneration(t *testing.T) {
+	db, err := setupDB()
+	if err != nil {
+		t.Error(t)
+	}
+
+	count := uint32(2)
+	accXAmt, _ := dcrutil.NewAmount(9.5)
+	accYAmt, _ := dcrutil.NewAmount(4)
+	bundleX := CreatePaymentBundle(accX, count, accXAmt)
+	bundleY := CreatePaymentBundle(accY, count, accYAmt)
+	xTotal := accXAmt.MulF64(2)
+	yTotal := accYAmt.MulF64(2)
+	expectedTotal := xTotal + yTotal
+
+	bundles := make([]*PaymentBundle, 0)
+	bundles = append(bundles, bundleX)
+	bundles = append(bundles, bundleY)
+
+	details, totalAmt, err := GeneratePaymentDetails(db,
+		[]dcrutil.Address{poolFeeAddrs}, bundles)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if expectedTotal != *totalAmt {
+		t.Errorf("Expected %v as total payment amount, got %v",
+			expectedTotal, *totalAmt)
+	}
+
+	if len(details) != 2 {
+		t.Errorf("Expected %v payment details generated, got %v",
+			2, len(details))
+	}
+
+	xAmt := details[xAddr]
+	yAmt := details[yAddr]
+
+	if xAmt != xTotal {
+		t.Errorf("Expected %v for account X, got %v", yTotal, xAmt)
+	}
+
+	if yAmt != yTotal {
+		t.Errorf("Expected %v for account Y, got %v", yTotal, yAmt)
+	}
+
+	err = teardownDB(db)
+	if err != nil {
+		t.Error(t)
+	}
+}
+
+// Then create another test that creates eligible payments and ineligible
+// ones to check the eligibity calculations.

@@ -1,25 +1,36 @@
 package dividend
 
 import (
-	"github.com/decred/dcrd/chaincfg"
 	"math/big"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/coreos/bbolt"
+	"github.com/decred/dcrd/chaincfg"
+	"github.com/decred/dcrd/dcrutil"
 
 	"dnldd/dcrpool/database"
 )
 
 var (
 	// TestDB represents the testing database.
-	TestDB = "testdb"
+	testDB = "testdb"
+	// Account X.
+	accX = "x"
+	// Account X address.
+	xAddr = "SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc"
+	// Account Y.
+	accY = "y"
+	// Account Y address.
+	yAddr = "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
+	// Pool fee address.
+	poolFeeAddrs, _ = dcrutil.DecodeAddress("SsnbEmxCVXskgTHXvf3rEa17NA39qQuGHwQ")
 )
 
 // setupDB initializes the pool database.
 func setupDB() (*bolt.DB, error) {
-	db, err := database.OpenDB(TestDB)
+	db, err := database.OpenDB(testDB)
 	if err != nil {
 		return nil, err
 	}
@@ -34,6 +45,16 @@ func setupDB() (*bolt.DB, error) {
 		return nil, err
 	}
 
+	err = createPersistedAccount(db, accX, xAddr, accX)
+	if err != nil {
+		return nil, err
+	}
+
+	err = createPersistedAccount(db, accY, yAddr, accY)
+	if err != nil {
+		return nil, err
+	}
+
 	return db, err
 }
 
@@ -44,7 +65,7 @@ func teardownDB(db *bolt.DB) error {
 		return err
 	}
 
-	err = os.Remove(TestDB)
+	err = os.Remove(testDB)
 	if err != nil {
 		return err
 	}
@@ -90,24 +111,23 @@ func TestShareRangeScan(t *testing.T) {
 	maxNano := pastTime(&now, 0, 0, 0, time.Duration(30)).UnixNano()
 	aboveMaxNano := futureTime(&now, 0, 0, time.Duration(30), 0).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
-	accOne := "dnldd"
-	accTwo := "tmmy"
-	err = createMultiplePersistedShares(db, accOne, weight, belowMinNano, 5)
+
+	err = createMultiplePersistedShares(db, accX, weight, belowMinNano, 5)
 	if err != nil {
 		t.Error(t)
 	}
 
-	err = createMultiplePersistedShares(db, accOne, weight, minNano, 5)
+	err = createMultiplePersistedShares(db, accX, weight, minNano, 5)
 	if err != nil {
 		t.Error(t)
 	}
 
-	err = createMultiplePersistedShares(db, accTwo, weight, maxNano, 5)
+	err = createMultiplePersistedShares(db, accY, weight, maxNano, 5)
 	if err != nil {
 		t.Error(t)
 	}
 
-	err = createMultiplePersistedShares(db, accTwo, weight, aboveMaxNano, 5)
+	err = createMultiplePersistedShares(db, accY, weight, aboveMaxNano, 5)
 	if err != nil {
 		t.Error(t)
 	}
@@ -123,22 +143,22 @@ func TestShareRangeScan(t *testing.T) {
 		t.Errorf("Expected %v eligible shares, got %v", 10, len(shares))
 	}
 
-	forAccOne := 0
-	forAccTwo := 0
+	forAccX := 0
+	forAccY := 0
 	for _, share := range shares {
-		if share.Account == accOne {
-			forAccOne++
+		if share.Account == accX {
+			forAccX++
 		}
 
-		if share.Account == accTwo {
-			forAccTwo++
+		if share.Account == accY {
+			forAccY++
 		}
 	}
 
-	if forAccOne != forAccTwo && (forAccOne != 5 || forAccTwo != 5) {
+	if forAccX != forAccY && (forAccX != 5 || forAccY != 5) {
 		t.Errorf("Expected %v for account one, got %v. "+
 			"Expected %v for account two, got %v.",
-			5, forAccOne, 5, forAccTwo)
+			5, forAccX, 5, forAccY)
 	}
 
 	err = teardownDB(db)
