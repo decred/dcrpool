@@ -97,7 +97,7 @@ func TestPayPerShare(t *testing.T) {
 
 	// Assert the last payment created time was updated.
 	var lastPaymentCreatedOn []byte
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		if pbkt == nil {
 			return database.ErrBucketNotFound(database.PoolBkt)
@@ -182,30 +182,15 @@ func TestPayPerLastShare(t *testing.T) {
 	minBytes := NanoToBigEndianBytes(minNano)
 	maxNano := pastTime(&now, 0, 0, time.Duration(30), 0).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
-	x := "dnldd"
-	y := "tmmy"
-	xAddr := "SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc"
-	yAddr := "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
-	pass := "pass"
 	shareCount := 10
 	height := uint32(20)
 
-	err = createPersistedAccount(db, x, xAddr, pass)
+	err = createMultiplePersistedShares(db, accX, weight, minNano, shareCount)
 	if err != nil {
 		t.Error(t)
 	}
 
-	err = createPersistedAccount(db, y, yAddr, pass)
-	if err != nil {
-		t.Error(t)
-	}
-
-	err = createMultiplePersistedShares(db, x, weight, minNano, shareCount)
-	if err != nil {
-		t.Error(t)
-	}
-
-	err = createMultiplePersistedShares(db, y, weight, maxNano, shareCount)
+	err = createMultiplePersistedShares(db, accY, weight, maxNano, shareCount)
 	if err != nil {
 		t.Error(t)
 	}
@@ -235,7 +220,7 @@ func TestPayPerLastShare(t *testing.T) {
 
 	// Assert the last payment created time was updated.
 	var lastPaymentCreatedOn []byte
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		if pbkt == nil {
 			return database.ErrBucketNotFound(database.PoolBkt)
@@ -268,11 +253,11 @@ func TestPayPerLastShare(t *testing.T) {
 
 	var xb, yb, fb *PaymentBundle
 	for idx := 0; idx < len(bundles); idx++ {
-		if bundles[idx].Account == x {
+		if bundles[idx].Account == accX {
 			xb = bundles[idx]
 		}
 
-		if bundles[idx].Account == y {
+		if bundles[idx].Account == accY {
 			yb = bundles[idx]
 		}
 
@@ -417,3 +402,88 @@ func TestUnequalPaymentDetailsGeneration(t *testing.T) {
 
 // Then create another test that creates eligible payments and ineligible
 // ones to check the eligibity calculations.
+
+func TestImmaturePayments(t *testing.T) {
+	db, err := setupDB()
+	if err != nil {
+		t.Error(t)
+	}
+
+	weight := new(big.Rat).SetFloat64(1.0)
+	shareCount := 10
+	height := uint32(20)
+	feePercent := 0.1
+	amt, err := dcrutil.NewAmount(100.25)
+	if err != nil {
+		t.Error(t)
+	}
+
+	xNano := time.Now().UnixNano()
+	err = createMultiplePersistedShares(db, accX, weight, xNano, shareCount)
+	if err != nil {
+		t.Error(t)
+	}
+
+	// Create readily available payments for acount X.
+	err = PayPerShare(db, amt, feePercent, height, 0)
+	if err != nil {
+		t.Error(t)
+	}
+
+	time.Sleep(time.Second * 2)
+
+	yNano := time.Now().UnixNano()
+	err = createMultiplePersistedShares(db, accY, weight, yNano, shareCount)
+	if err != nil {
+		t.Error(t)
+	}
+
+	// Create immature payments for acount Y.
+	err = PayPerShare(db, amt, feePercent, height,
+		chaincfg.SimNetParams.CoinbaseMaturity)
+	if err != nil {
+		t.Error(t)
+	}
+
+	minPayment, err := dcrutil.NewAmount(0.2)
+	if err != nil {
+		t.Error(t)
+	}
+
+	pmts, err := FetchEligiblePayments(db, minPayment)
+	if err != nil {
+		t.Error(t)
+	}
+
+	if len(pmts) > 2 {
+		t.Errorf("Expected %v payment bundles, got %v", 2, len(pmts))
+	}
+
+	var accXBundle, feeBundle *PaymentBundle
+	for idx := 0; idx < len(pmts); idx++ {
+		if pmts[idx].Account == accX {
+			accXBundle = pmts[idx]
+		}
+
+		if pmts[idx].Account == PoolFeesK {
+			feeBundle = pmts[idx]
+		}
+	}
+
+	expectedXAmt := amt - amt.MulF64(feePercent)
+	if accXBundle.Total() != expectedXAmt {
+		t.Errorf("Expected account X's bundle to have %v, got %v",
+			expectedXAmt, accXBundle.Total())
+	}
+
+	expectedFeeAmt := amt.MulF64(feePercent)
+	if feeBundle.Total() != expectedFeeAmt {
+		t.Errorf("Expected pool fee's bundle to have %v, got %v",
+			expectedFeeAmt, feeBundle.Total())
+	}
+
+	err = teardownDB(db)
+	if err != nil {
+		t.Error(t)
+	}
+}

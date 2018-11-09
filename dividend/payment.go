@@ -369,11 +369,19 @@ func PayPerShare(db *bolt.DB, total dcrutil.Amount, poolFee float64, height uint
 		return err
 	}
 
-	// 30 minutes is added to the the estimated maturity as contingency for
-	// network delays.
-	estMaturityTime := (coinbaseMaturity * 5) + 30
-	estMaturityNano := futureTime(&now, 0, 0, time.Duration(estMaturityTime),
-		0).UnixNano()
+	var estMaturityNano int64
+	// Allow immediately mature payments for testing purposes.
+	if coinbaseMaturity == 0 {
+		estMaturityNano = now.UnixNano()
+	}
+
+	if coinbaseMaturity > 0 {
+		// the estimated maturity is extended by 30 minutes as contingency for
+		// network delays.
+		estMaturityTime := (coinbaseMaturity * 5) + 30
+		estMaturityNano = futureTime(&now, 0, 0, time.Duration(estMaturityTime),
+			0).UnixNano()
+	}
 
 	payments, err := CalculatePayments(percentages, total, poolFee, height,
 		estMaturityNano)
@@ -425,11 +433,19 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, heig
 		return err
 	}
 
-	// 30 minutes is added to the the estimated maturity as contingency for
-	// network delays.
-	estMaturityTime := (coinbaseMaturity * 5) + 30
-	estMaturityNano := futureTime(&now, 0, 0, time.Duration(estMaturityTime),
-		0).UnixNano()
+	var estMaturityNano int64
+	// Allow immediately mature payments for testing purposes.
+	if coinbaseMaturity == 0 {
+		estMaturityNano = now.UnixNano()
+	}
+
+	if coinbaseMaturity > 0 {
+		// the estimated maturity is extended by 30 minutes as contingency for
+		// network delays.
+		estMaturityTime := (coinbaseMaturity * 5) + 30
+		estMaturityNano = futureTime(&now, 0, 0, time.Duration(estMaturityTime),
+			0).UnixNano()
+	}
 
 	payments, err := CalculatePayments(percentages, amount, poolFee, height,
 		estMaturityNano)
