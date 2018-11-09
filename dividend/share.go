@@ -194,6 +194,13 @@ func BigEndianBytesToNano(b []byte) int64 {
 	return int64(binary.BigEndian.Uint64(b[0:8]))
 }
 
+// BigEndianBytesToTime returns a time instance of the provided 8-byte big
+// endian representation.
+func BigEndianBytesToTime(b []byte) *time.Time {
+	t := time.Unix(0, BigEndianBytesToNano(b))
+	return &t
+}
+
 // Create persists a share to the database.
 func (s *Share) Create(db *bolt.DB) error {
 	err := db.Update(func(tx *bolt.Tx) error {
