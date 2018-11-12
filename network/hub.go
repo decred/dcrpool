@@ -3,7 +3,6 @@ package network
 import (
 	"context"
 	"math/big"
-	"math/rand"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -399,45 +398,6 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 	return nil
 }
 
-// GeneratePaymentDetails generates kv pair of addresses and payment amounts
-// from the provided eligible payments.
-func (h *Hub) GeneratePaymentDetails(eligiblePmts []*dividend.PaymentBundle) (map[dcrutil.Address]dcrutil.Amount, *dcrutil.Amount, error) {
-	// Generate the address and payment amount kv pairs.
-	var targetAmt dcrutil.Amount
-	pmts := make(map[dcrutil.Address]dcrutil.Amount, 0)
-	for _, p := range eligiblePmts {
-		var addr dcrutil.Address
-
-		// For pool fee payments, fetch a pool fee address at random.
-		if p.Account == dividend.PoolFeesK {
-			rand.Seed(time.Now().UnixNano())
-			addr = h.cfg.PoolFeeAddrs[rand.Intn(len(h.cfg.PoolFeeAddrs))]
-
-			bundleAmt := p.Total()
-			pmts[addr] = bundleAmt
-			targetAmt += bundleAmt
-			continue
-		}
-
-		// For a dividend payment, fetch the corresponding account address.
-		acc, err := dividend.GetAccount(h.db, []byte(p.Account))
-		if err != nil {
-			return nil, nil, err
-		}
-
-		addr, err = dcrutil.DecodeAddress(acc.Address)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		bundleAmt := p.Total()
-		pmts[addr] = bundleAmt
-		targetAmt += bundleAmt
-	}
-
-	return pmts, &targetAmt, nil
-}
-
 // ProcessPayments fetches all eligible payments and publishes a
 // transaction to the network paying dividends to participating accounts.
 func (h *Hub) ProcessPayments() error {
@@ -448,9 +408,22 @@ func (h *Hub) ProcessPayments() error {
 	}
 
 	// Generate the payment details from the eligible payments fetched.
-	pmts, targetAmt, err := h.GeneratePaymentDetails(eligiblePmts)
+	details, targetAmt, err := dividend.GeneratePaymentDetails(h.db,
+		h.cfg.PoolFeeAddrs, eligiblePmts)
 	if err != nil {
 		return err
+	}
+
+	// Create address-amount kv pairs for the transaction, using the payment
+	// details.
+	var pmts map[dcrutil.Address]dcrutil.Amount
+	for addrStr, amt := range details {
+		addr, err := dcrutil.DecodeAddress(addrStr)
+		if err != nil {
+			return err
+		}
+
+		pmts[addr] = amt
 	}
 
 	// Publish the transaction.
