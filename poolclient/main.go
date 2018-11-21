@@ -34,7 +34,7 @@ func main() {
 	log.Infof("Version: %s", version())
 	log.Infof("Runtime: Go version %s", runtime.Version())
 	log.Infof("Home dir: %s", cfg.HomeDir)
-	log.Infof("Started dcrpclient.")
+	log.Infof("Started poolclient.")
 
 	// Initialize the client.
 	pc, err := newClient(cfg)
