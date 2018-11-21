@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"net/http"
 	"sync"
@@ -104,111 +105,91 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 	// Create handlers for chain notifications being subscribed for.
 	ntfnHandlers := &rpcclient.NotificationHandlers{
 		OnBlockConnected: func(blkHeader []byte, transactions [][]byte) {
-			log.Debugf("Block connected: %x", blkHeader)
-
-			// Check if the accepted block was mined by the pool.
-			decoded, err := DecodeHeader(blkHeader)
+			header, err := ParseBlockHeader(blkHeader)
 			if err != nil {
-				log.Error(err)
+				log.Errorf("failed to parse conected block header: %v", err)
 				return
 			}
 
-			nonce := FetchNonce(decoded)
-			work, err := GetAcceptedWork(h.db, nonce)
-			if err != nil {
-				log.Error(err)
-				return
-			}
+			log.Debugf("Block connected (hash: %v)", header.BlockHash())
 
-			header, err := ParseBlockHeader(decoded)
-			if err != nil {
-				log.Error(err)
-				return
-			}
+			// nonce := FetchNonce(blkHeader)
+
+			// TODO: Work in after sorting out block connected notifications.
+			// work, err := GetAcceptedWork(h.db, nonce)
+			// if err != nil {
+			// 	log.Errorf("failed to fetch accepted work: %v", err)
+			// 	return
+			// }
 
 			// If the connected block is an accepted work from the pool
 			// record payouts to participating accounts.
-			if work != nil {
-				// Fetch the coinbase amount.
-				blockHash := header.BlockHash()
-				blockHeight := header.Height
-				coinbase, err := h.FetchCoinbaseValue(&blockHash)
-				if err != nil {
-					log.Error(err)
-					return
-				}
+			// if work != nil {
+			// 	// Fetch the coinbase amount.
+			// 	blockHash := header.BlockHash()
+			// 	blockHeight := header.Height
+			// 	coinbase, err := h.FetchCoinbaseValue(&blockHash)
+			// 	if err != nil {
+			// 		log.Errorf("fetch coinbase: %v", err)
+			// 		return
+			// 	}
 
-				// Pay dividends per the configured payment scheme.
-				switch h.cfg.PaymentMethod {
-				case dividend.PPS:
-					err := dividend.PayPerShare(h.db, *coinbase, h.cfg.PoolFee,
-						blockHeight, h.cfg.ActiveNet.CoinbaseMaturity)
-					if err != nil {
-						log.Error(err)
-						return
-					}
-				case dividend.PPLNS:
-					err := dividend.PayPerLastNShares(h.db, *coinbase,
-						h.cfg.PoolFee, blockHeight,
-						h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
-					if err != nil {
-						log.Error(err)
-						return
-					}
-				}
+			// 	// Pay dividends per the configured payment scheme.
+			// 	switch h.cfg.PaymentMethod {
+			// 	case dividend.PPS:
+			// 		err := dividend.PayPerShare(h.db, *coinbase, h.cfg.PoolFee,
+			// 			blockHeight, h.cfg.ActiveNet.CoinbaseMaturity)
+			// 		if err != nil {
+			// 			log.Error(err)
+			// 			return
+			// 		}
+			// 	case dividend.PPLNS:
+			// 		err := dividend.PayPerLastNShares(h.db, *coinbase,
+			// 			h.cfg.PoolFee, blockHeight,
+			// 			h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
+			// 		if err != nil {
+			// 			log.Error(err)
+			// 			return
+			// 		}
+			// 	}
 
-				// Update the accepted work record for the connected block.
-				work.Connected = true
-				work.ConnectedAtHeight = int64(header.Height)
-				work.Update(h.db)
+			// 	// Update the accepted work record for the connected block.
+			// 	work.Connected = true
+			// 	work.ConnectedAtHeight = int64(header.Height)
+			// 	work.Update(h.db)
 
-				// Prune accepted work that's recorded as connected to the
-				// chain and is below the estimated reorg limit.
-				err = PruneAcceptedWork(h.db,
-					int64(header.Height-MaxReorgLimit))
-				if err != nil {
-					log.Error(err)
-					return
-				}
-			}
-
-			h.Broadcast <- ConnectedBlockNotification(header.Height)
+			// 	// Prune accepted work that's recorded as connected to the
+			// 	// chain and is below the estimated reorg limit.
+			// 	err = PruneAcceptedWork(h.db,
+			// 		int64(header.Height-MaxReorgLimit))
+			// 	if err != nil {
+			// 		log.Error(err)
+			// 		return
+			// 	}
+			// }
 		},
 		OnBlockDisconnected: func(blkHeader []byte) {
-			log.Debugf("Block disconnected: %x", blkHeader)
-
-			// Check if the accepted block was mined by the pool.
-			decoded, err := DecodeHeader(blkHeader)
+			header, err := ParseBlockHeader(blkHeader)
 			if err != nil {
-				log.Error(err)
+				log.Errorf("failed to parse disconnected block header: %v", err)
 				return
 			}
 
-			nonce := FetchNonce(decoded)
-			work, err := GetAcceptedWork(h.db, nonce)
-			if err != nil {
-				log.Error(err)
-				return
-			}
+			log.Debugf("Block disconnected (hash: %v)", header.BlockHash())
 
-			// If the disconnected block is an accepted work from the pool
-			// update the state of the accepted work.
-			if work != nil {
-				work.Connected = false
-				work.ConnectedAtHeight = -1
-			}
+			// nonce := FetchNonce(blkHeader)
+			// work, err := GetAcceptedWork(h.db, nonce)
+			// if err != nil {
+			// 	log.Error(err)
+			// 	return
+			// }
 
-			if !h.HasConnectedClients() {
-				return
-			}
-
-			height, err := FetchBlockHeight(blkHeader)
-			if err != nil {
-				log.Error(err)
-				return
-			}
-
-			h.Broadcast <- DisconnectedBlockNotification(height)
+			// // If the disconnected block is an accepted work from the pool
+			// // update the state of the accepted work.
+			// if work != nil {
+			// 	work.Connected = false
+			// 	work.ConnectedAtHeight = -1
+			// }
 		},
 		OnWork: func(blkHeader string, target string) {
 			log.Debugf("New Work (header: %v , target: %v)", blkHeader,
@@ -226,7 +207,7 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 	// Establish RPC connection with dcrd.
 	rpcc, err := rpcclient.New(hcfg.DcrdRPCCfg, ntfnHandlers)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("rpc error (dcrd): %v", err)
 	}
 
 	h.rpcc = rpcc
@@ -236,13 +217,13 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 		h.rpccMtx.Lock()
 		h.rpcc.Shutdown()
 		h.rpccMtx.Unlock()
-		return nil, err
+		return nil, fmt.Errorf("notify work rpc error (dcrd): %v", err)
 	}
 	if err := h.rpcc.NotifyBlocks(); err != nil {
 		h.rpccMtx.Lock()
 		h.rpcc.Shutdown()
 		h.rpccMtx.Unlock()
-		return nil, err
+		return nil, fmt.Errorf("notify blocks rpc error (dcrd): %v", err)
 	}
 
 	log.Debugf("RPC connection established with dcrd.")
@@ -251,16 +232,18 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 	creds, err := credentials.NewClientTLSFromFile(hcfg.WalletRPCCertFile,
 		"localhost")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("grpc tls error (dcrwallet): %v", err)
 	}
 
 	h.gConn, err = grpc.Dial(hcfg.WalletGRPCHost,
 		grpc.WithTransportCredentials(creds))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("grpc dial error (dcrwallet): %v", err)
 	}
 
-	log.Debugf("GRPC connection established with dcrwallet.")
+	if h.gConn == nil {
+		return nil, fmt.Errorf("Failed to establish grpc with the wallet")
+	}
 
 	h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
 
