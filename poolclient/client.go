@@ -138,11 +138,14 @@ out:
 			continue
 		}
 
+		log.Tracef("received: %v", spew.Sdump(msg))
+
 		switch reqType {
 		case network.RequestType:
 			req := msg.(*network.Request)
 			switch req.Method {
 			case network.Ping:
+				log.Debugf("ping received, responding")
 				pc.connMtx.Lock()
 				pc.Conn.WriteJSON(network.PongResponse(req.ID))
 				pc.connMtx.Unlock()
@@ -151,6 +154,8 @@ out:
 					pc.cancel()
 					continue
 				}
+			default:
+				log.Debugf("unknown message received: %v", spew.Sdump(req))
 			}
 
 		case network.ResponseType:
@@ -179,6 +184,8 @@ out:
 					continue
 				}
 				log.Debugf("Evaluated work accepted: %v", accepted)
+			default:
+				log.Debugf("unknown message received: %v", spew.Sdump(resp))
 			}
 
 		case network.NotificationType:
@@ -202,13 +209,6 @@ out:
 				// Update miner of new block template.
 				pc.chainCh <- struct{}{}
 
-			case network.ConnectedBlock, network.DisconnectedBlock:
-				pc.workMtx.Lock()
-				pc.work = nil
-				pc.workMtx.Unlock()
-
-				// Update miner of connected/disconnected block.
-				pc.chainCh <- struct{}{}
 			default:
 				log.Debugf("Unknowning notification type received")
 			}
