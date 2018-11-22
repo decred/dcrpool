@@ -193,7 +193,7 @@ out:
 			req := msg.(*Request)
 			switch req.Method {
 			case SubmitWork:
-				header, err := ParseWorkSubmissionRequest(req)
+				submission, err := ParseWorkSubmissionRequest(req)
 				if err != nil {
 					log.Debug(err)
 					msg := err.Error()
@@ -201,33 +201,44 @@ out:
 					continue
 				}
 
-				accepted, err := c.hub.SubmitWork(header)
+				decoded, err := DecodeHeader([]byte(*submission))
 				if err != nil {
-					msg := err.Error()
-					c.ch <- EvaluatedWorkResponse(req.ID, &msg, false)
+					log.Errorf("failed to decode header: %v", err)
 					continue
 				}
 
-				c.ch <- EvaluatedWorkResponse(req.ID, nil, accepted)
+				header, err := ParseBlockHeader(decoded)
+				if err != nil {
+					log.Errorf("failed to parse block header: %v", err)
+					return
+				}
 
-				// Claim a weighted share for work contributed to the pool.
-				c.claimWeightedShare()
-
-				// if the work is accepted, parse the embedded header and
-				// persist the accepted work created from it.
-				if accepted {
-					decoded, err := DecodeHeader([]byte(*header))
+				// Only submit work if the submitted blockhash is below the
+				// target difficulty.
+				hash := header.BlockHash()
+				hashNum := blockchain.HashToBig(&hash)
+				target := blockchain.CompactToBig(header.Bits)
+				if hashNum.Cmp(target) < 0 {
+					accepted, err := c.hub.SubmitWork(submission)
 					if err != nil {
-						log.Errorf("Failed to decode header: %v", err)
+						msg := err.Error()
+						c.ch <- EvaluatedWorkResponse(req.ID, &msg, false)
 						continue
 					}
 
-					// Create an accepted work record with the nonce of the
-					// submitted work.
-					nonce := FetchNonce(decoded)
-					work := NewAcceptedWork(nonce)
-					work.Create(c.hub.db)
+					// if the work is accepted, parse the embedded header and
+					// persist the accepted work created from it.
+					if accepted {
+						nonce := FetchNonce(decoded)
+						work := NewAcceptedWork(nonce)
+						work.Create(c.hub.db)
+					}
+
+					c.ch <- EvaluatedWorkResponse(req.ID, nil, accepted)
 				}
+
+				// Claim a weighted share for work contributed to the pool.
+				c.claimWeightedShare()
 
 			default:
 				log.Debugf("Unknowning request type received")
@@ -278,6 +289,7 @@ out:
 			c.wsMtx.Unlock()
 			close(c.ch)
 			break out
+
 		case <-c.ticker.C:
 			// Close the connection if unreachable after 3 pings.
 			retries := atomic.LoadUint64(&c.pingRetries)
@@ -298,6 +310,7 @@ out:
 				continue
 			}
 			atomic.AddUint64(&c.pingRetries, 1)
+
 		case msg := <-c.ch:
 			// Close the connection on receiving a nil message reference.
 			if msg == nil {
@@ -313,6 +326,7 @@ out:
 				c.cancel()
 				continue
 			}
+
 		case msg := <-c.hub.Broadcast:
 			// Close the connection on receiving a nil message reference.
 			if msg == nil {
@@ -394,7 +408,7 @@ func (c *Client) nextID() *uint64 {
 // block header.
 func FetchBlockHeight(encoded []byte) (uint32, error) {
 	data := []byte(encoded)
-	decoded := make([]byte, len(data))
+	decoded := make([]byte, hex.DecodedLen(len(encoded)))
 	_, err := hex.Decode(decoded, data)
 	if err != nil {
 		return 0, err
@@ -407,7 +421,7 @@ func FetchBlockHeight(encoded []byte) (uint32, error) {
 // encoded block header.
 func FetchTargetDifficulty(encoded []byte) (uint32, error) {
 	data := []byte(encoded)
-	decoded := make([]byte, len(data))
+	decoded := make([]byte, hex.DecodedLen(len(encoded)))
 	_, err := hex.Decode(decoded, data)
 	if err != nil {
 		return 0, err
