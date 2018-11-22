@@ -34,6 +34,7 @@ type CPUMiner struct {
 	started      bool
 	rateCh       chan float64
 	updateHashes chan uint64
+	prevNonce    uint64
 }
 
 // hashRateMonitor tracks number of hashes per second the mining process is
@@ -95,10 +96,11 @@ func (m *CPUMiner) solveBlock(ctx context.Context, decoded []byte, target *big.I
 			case <-m.c.chainCh:
 				// Stop current work if the chain updates or a new work
 				// is received.
+				m.prevNonce = uint64(0)
 				return false
 
 			default:
-				// Non-blocking select to fall through
+				// Non-blocking receive fallthrough.
 			}
 
 			network.SetGeneratedNonce(decoded, nonce)
@@ -111,11 +113,14 @@ func (m *CPUMiner) solveBlock(ctx context.Context, decoded []byte, target *big.I
 			hash := header.BlockHash()
 			hashesCompleted++
 
-			// The block is solved when the new block hash is less
-			// than the target difficulty.
-			if blockchain.HashToBig(&hash).Cmp(target) < 0 {
+			// The block is solved when the new block hash is less than the
+			// provided target difficulty, which is the pool target for the
+			// mining client here.
+			hashNum := blockchain.HashToBig(&hash)
+			if nonce > m.prevNonce && hashNum.Cmp(target) < 0 {
+				m.prevNonce = nonce
 				m.updateHashes <- hashesCompleted
-				log.Debugf("Solved block header is %v", spew.Sdump(header))
+				log.Tracef("Solved block header is %v", spew.Sdump(header))
 				return true
 			}
 		}
@@ -134,38 +139,31 @@ func (m *CPUMiner) generateBlocks(ctx context.Context) {
 
 out:
 	for {
-		// Quit when the miner is stopped.
 		select {
 		case <-ctx.Done():
 			break out
 		default:
-			// Non-blocking select to fall through
+			// Non-blocking receive fallthrough.
 		}
 
 		m.c.workMtx.RLock()
-		workAvailable := m.c.work != nil
-		m.c.workMtx.RUnlock()
-
-		// Only proceed to mine if there is a block template available.
-		if !workAvailable {
+		if m.c.work == nil {
+			m.c.workMtx.RUnlock()
 			continue
 		}
 
-		m.c.workMtx.Lock()
-		decoded, err := network.DecodeHeader(m.c.work.header)
 		var sizedTarget [32]byte
-		copy(sizedTarget[:], m.c.work.target)
-		target := network.LEUint256ToBig(sizedTarget)
-		m.c.workMtx.Unlock()
+		decoded, err := network.DecodeHeader(m.c.work.header)
 		if err != nil {
 			log.Error(err)
+			m.c.workMtx.RUnlock()
 			return
 		}
 
-		// Attempt to solve the block. The function will exit early
-		// with false when conditions that trigger a stale block, so
-		// a new block template can be generated. When the return is
-		// true a solution was found, so submit the solved block.
+		copy(sizedTarget[:], m.c.work.target)
+		target := network.LEUint256ToBig(sizedTarget)
+		m.c.workMtx.RUnlock()
+
 		if m.solveBlock(ctx, decoded, target, ticker) {
 			id := m.c.nextID()
 			submission := network.WorkSubmissionRequest(id,
