@@ -1,7 +1,6 @@
 module dnldd/dcrpool
 
 require (
-	github.com/boltdb/bolt v1.3.1
 	github.com/coreos/bbolt v1.3.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/decred/dcrd/blockchain v1.0.2
@@ -27,6 +26,8 @@ require (
 
 replace (
 	github.com/decred/dcrd/blockchain => ../dcrd/blockchain
+
+	github.com/decred/dcrd/blockchain/stake => ../dcrd/blockchain/stake
 
 	github.com/decred/dcrd/chaincfg => ../dcrd/chaincfg
 
