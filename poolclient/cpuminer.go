@@ -153,21 +153,16 @@ out:
 		}
 
 		var sizedTarget [32]byte
-		decoded, err := network.DecodeHeader(m.c.work.header)
-		if err != nil {
-			log.Error(err)
-			m.c.workMtx.RUnlock()
-			return
-		}
-
+		header := make([]byte, len(m.c.work.header))
+		copy(header, m.c.work.header)
 		copy(sizedTarget[:], m.c.work.target)
 		target := network.LEUint256ToBig(sizedTarget)
 		m.c.workMtx.RUnlock()
 
-		if m.solveBlock(ctx, decoded, target, ticker) {
+		if m.solveBlock(ctx, header, target, ticker) {
 			id := m.c.nextID()
 			submission := network.WorkSubmissionRequest(id,
-				hex.EncodeToString(decoded))
+				hex.EncodeToString(header))
 
 			// Record the request.
 			m.c.recordRequest(*id, network.SubmitWork)

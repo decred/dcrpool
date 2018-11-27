@@ -145,7 +145,6 @@ out:
 			req := msg.(*network.Request)
 			switch req.Method {
 			case network.Ping:
-				log.Debugf("ping received, responding")
 				pc.connMtx.Lock()
 				pc.Conn.WriteJSON(network.PongResponse(req.ID))
 				pc.connMtx.Unlock()

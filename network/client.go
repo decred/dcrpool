@@ -213,11 +213,26 @@ out:
 					return
 				}
 
-				// Only submit work if the submitted blockhash is below the
-				// target difficulty.
+				// Fetch the pool target for the client based on its
+				// miner type.
+				c.hub.poolTargetsMtx.RLock()
+				pTarget := c.hub.poolTargets[c.minerType]
+				c.hub.poolTargetsMtx.RUnlock()
+
+				target := blockchain.CompactToBig(header.Bits)
+				poolTarget := blockchain.CompactToBig(pTarget)
 				hash := header.BlockHash()
 				hashNum := blockchain.HashToBig(&hash)
-				target := blockchain.CompactToBig(header.Bits)
+
+				// Only submit work if the submitted blockhash is below the
+				// target difficulty and the specified pool target for the
+				// client.
+				if hashNum.Cmp(poolTarget) > 0 {
+					log.Errorf("submitted work (%v) is not less than the "+
+						"client's pool target (%v)", hashNum, poolTarget)
+					continue
+				}
+
 				if hashNum.Cmp(target) < 0 {
 					accepted, err := c.hub.SubmitWork(submission)
 					if err != nil {
@@ -353,18 +368,12 @@ out:
 
 				// Set the miner's pool id.
 				id := GeneratePoolID()
-				decoded, err := DecodeHeader(header)
-				if err != nil {
-					log.Error(err)
-					c.cancel()
-					continue
-				}
 
 				// Set the pool id of the client.
-				setPoolID(decoded, id)
+				setPoolID(header, id)
 
 				// Encode the updated haeader.
-				encoded := EncodeHeader(decoded)
+				encoded := EncodeHeader(header)
 
 				// Covert the pool target to little endian hex encoded byte
 				// slice.
