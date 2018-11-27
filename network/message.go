@@ -1,6 +1,7 @@
 package network
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 )
@@ -147,19 +148,29 @@ func WorkNotification(header string, target string) *Request {
 
 // ParseWorkNotification parses a work notification message.
 func ParseWorkNotification(req *Request) ([]byte, []byte, error) {
-	header, ok := req.Params["header"].(string)
+	headerEncoded, ok := req.Params["header"].(string)
 	if !ok {
 		return nil, nil, errors.New("Invalid work notification, 'params' data " +
 			"should have 'header' field")
 	}
 
-	target, ok := req.Params["target"].(string)
+	targetEncoded, ok := req.Params["target"].(string)
 	if !ok {
 		return nil, nil, errors.New("Invalid work notification, 'params' data " +
 			"should have 'target' field")
 	}
 
-	return []byte(header), []byte(target), nil
+	header, err := hex.DecodeString(headerEncoded)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	target, err := hex.DecodeString(targetEncoded)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return header, target, nil
 }
 
 // WorkSubmissionRequest is a convenience function for creating a work
