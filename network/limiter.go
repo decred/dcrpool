@@ -66,20 +66,11 @@ func (r *RateLimiter) GetRequestLimiter(ip string) *RequestLimiter {
 	return limiter
 }
 
-// pastTime regresses a base time to a time in the past.
-func pastTime(date *time.Time, days time.Duration, hours time.Duration,
-	minutes time.Duration, seconds time.Duration) time.Time {
-	duration := ((time.Hour * 24) * days) + (time.Hour * hours) +
-		(time.Minute * minutes) + (time.Second * seconds)
-	pastTime := date.Add(-duration)
-	return pastTime
-}
-
 // DiscardLimiters iterates through the limiters set and removes all
 // limiters that have not received a request in five minutes or more.
 func (r *RateLimiter) DiscardLimiters() {
 	now := time.Now()
-	fiveMinAgo := uint32(pastTime(&now, 0, 0, 5, 0).Unix())
+	fiveMinAgo := uint32(now.Add(-(time.Minute * 5)).Unix())
 	r.mutex.Lock()
 	for ip, limiter := range r.limiters {
 		if limiter.lastAllowedRequest < fiveMinAgo {
