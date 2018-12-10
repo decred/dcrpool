@@ -145,6 +145,7 @@ out:
 			req := msg.(*network.Request)
 			switch req.Method {
 			case network.Ping:
+				log.Tracef("ping")
 				pc.connMtx.Lock()
 				pc.Conn.WriteJSON(network.PongResponse(req.ID))
 				pc.connMtx.Unlock()
@@ -153,8 +154,9 @@ out:
 					pc.cancel()
 					continue
 				}
+				log.Tracef("pong")
 			default:
-				log.Debugf("unknown message received: %v", spew.Sdump(req))
+				log.Errorf("unknown message received: %v", spew.Sdump(req))
 			}
 
 		case network.ResponseType:
@@ -209,11 +211,11 @@ out:
 				pc.chainCh <- struct{}{}
 
 			default:
-				log.Debugf("Unknowning notification type received")
+				log.Errorf("Unknowning notification type received")
 			}
 
 		default:
-			log.Debugf("Unknowning message type received")
+			log.Errorf("Unknowning message type received")
 		}
 	}
 	os.Exit(1)

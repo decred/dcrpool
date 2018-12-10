@@ -127,7 +127,7 @@ func (p *Pool) handleWS(w http.ResponseWriter, r *http.Request) {
 	// Upgrade the http request to a websocket connection.
 	conn, err := p.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		pLog.Error(err)
+		respondWithError(w, http.StatusInternalServerError, err)
 		return
 	}
 

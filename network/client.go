@@ -173,7 +173,7 @@ out:
 
 		// Ensure the requesting client is within their request limits, which
 		// applies for both websocket requests by the client as well as
-		// requests via the API.
+		// requests via the api.
 		allow := c.hub.limiter.WithinLimit(c.ip)
 		if !allow {
 			switch reqType {
@@ -233,7 +233,17 @@ out:
 					continue
 				}
 
+				// Claim a weighted share for work contributed to the pool.
+				c.claimWeightedShare()
+
 				if hashNum.Cmp(target) < 0 {
+					// Persist the accepted work, this is being done here to
+					// have a record available when a block connected
+					// notification is received.
+					nonce := FetchNonce(decoded)
+					work := NewAcceptedWork(nonce)
+					work.Create(c.hub.db)
+
 					accepted, err := c.hub.SubmitWork(submission)
 					if err != nil {
 						msg := err.Error()
@@ -241,22 +251,17 @@ out:
 						continue
 					}
 
-					// if the work is accepted, parse the embedded header and
-					// persist the accepted work created from it.
-					if accepted {
-						nonce := FetchNonce(decoded)
-						work := NewAcceptedWork(nonce)
-						work.Create(c.hub.db)
-					}
-
 					c.ch <- EvaluatedWorkResponse(req.ID, nil, accepted)
+
+					// If the evaluated work is not accepted, remove it from
+					// the db.
+					if !accepted {
+						work.Delete(c.hub.db)
+					}
 				}
 
-				// Claim a weighted share for work contributed to the pool.
-				c.claimWeightedShare()
-
 			default:
-				log.Debugf("Unknowning request type received")
+				log.Errorf("Unknowning request type received")
 			}
 
 		case ResponseType:
@@ -276,9 +281,10 @@ out:
 					continue
 				}
 
+				log.Tracef("received pong")
 				atomic.StoreUint64(&c.pingRetries, 0)
 			default:
-				log.Debugf("Unknown response type received")
+				log.Errorf("Unknown response type received")
 				c.cancel()
 				continue
 			}

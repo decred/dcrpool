@@ -26,16 +26,17 @@ const (
 	defaultLogFilename     = "dcrpool.log"
 	defaultDBFilename      = "dcrpool.kv"
 	defaultRPCCertFilename = "rpc.cert"
-	defaultPort            = ":25000"
+	defaultPort            = ":82552"
 	defaultRPCUser         = "dcrp"
 	defaultRPCPass         = "dcrppass"
-	defaultDcrdRPCHost     = "localhost:19109"
-	defaultWalletGRPCHost  = "localhost:19558"
-	defaultPoolFeeAddr     = "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
+	defaultDcrdRPCHost     = "127.0.0.1:19109"
+	defaultWalletGRPCHost  = "127.0.0.1:51028"
+	defaultPoolFeeAddr     = ""
 	defaultMaxGenTime      = 15
 	defaultPoolFee         = 0.01
 	defaultLastNPeriod     = 86400 // 1 day
 	defaultWalletPass      = ""
+	defaultMaxTxFeeReserve = 0.1
 )
 
 var (
@@ -47,7 +48,7 @@ var (
 	dcrdHomeDir          = dcrutil.AppDataDir("dcrd", false)
 	defaultConfigFile    = filepath.Join(dcrpoolHomeDir, defaultConfigFilename)
 	defaultDataDir       = filepath.Join(dcrpoolHomeDir, defaultDataDirname)
-	defaultDBFile        = filepath.Join(dcrpoolHomeDir, defaultDBFilename)
+	defaultDBFile        = filepath.Join(defaultDataDir, defaultDBFilename)
 	dcrdRPCCertFile      = filepath.Join(dcrdHomeDir, defaultRPCCertFilename)
 	walletRPCCertFile    = filepath.Join(dcrwalletHomeDir, defaultRPCCertFilename)
 	defaultLogDir        = filepath.Join(dcrpoolHomeDir, defaultLogDirname)
@@ -59,28 +60,29 @@ var runServiceCommand func(string) error
 
 // config defines the configuration options for the pool.
 type config struct {
-	HomeDir        string   `long:"homedir" description:"Path to application home directory."`
-	ConfigFile     string   `long:"configfile" description:"Path to configuration file."`
-	DataDir        string   `long:"datadir" description:"The data directory."`
-	ActiveNet      string   `long:"activenet" description:"The active network being mined on. {simnet, testnet, mainnet}"`
-	DebugLevel     string   `long:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
-	LogDir         string   `long:"logdir" description:"Directory to log output."`
-	DBFile         string   `long:"dbfile" description:"Path to the database file."`
-	DcrdRPCHost    string   `long:"dcrdrpchost" description:"The ip:port to establish an RPC connection for dcrd."`
-	WalletGRPCHost string   `long:"walletgrpchost" description:"The ip:port to establish a GRPC connection for the wallet."`
-	RPCUser        string   `long:"rpcuser" description:"Username for RPC connections."`
-	RPCPass        string   `long:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
-	PoolFeeAddrs   []string `long:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
-	Port           string   `long:"port" description:"The listening port."`
-	PoolFee        float64  `long:"poolfee" description:"The fee charged for pool participation. eg. 0.01 (1%), 0.05 (5%)."`
-	MaxGenTime     uint64   `long:"maxgentime" description:"The share creation target time for the pool in seconds."`
-	PaymentMethod  string   `long:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
-	LastNPeriod    uint32   `long:"lastnperiod" description:"The period of interest when using the PPLNS payment scheme."`
-	WalletPass     string   `long:"walletpass" description:"The wallet passphrase."`
-	MinPayment     float64  `long:"minpayment" description:"The minimum payment to process for an account."`
-	poolFeeAddrs   []dcrutil.Address
-	dcrdRPCCerts   []byte
-	net            *chaincfg.Params
+	HomeDir         string   `long:"homedir" description:"Path to application home directory."`
+	ConfigFile      string   `long:"configfile" description:"Path to configuration file."`
+	DataDir         string   `long:"datadir" description:"The data directory."`
+	ActiveNet       string   `long:"activenet" description:"The active network being mined on. {simnet, testnet, mainnet}"`
+	DebugLevel      string   `long:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
+	LogDir          string   `long:"logdir" description:"Directory to log output."`
+	DBFile          string   `long:"dbfile" description:"Path to the database file."`
+	DcrdRPCHost     string   `long:"dcrdrpchost" description:"The ip:port to establish an RPC connection for dcrd."`
+	WalletGRPCHost  string   `long:"walletgrpchost" description:"The ip:port to establish a GRPC connection for the wallet."`
+	RPCUser         string   `long:"rpcuser" description:"Username for RPC connections."`
+	RPCPass         string   `long:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
+	PoolFeeAddrs    []string `long:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
+	Port            string   `long:"port" description:"The listening port."`
+	PoolFee         float64  `long:"poolfee" description:"The fee charged for pool participation. eg. 0.01 (1%), 0.05 (5%)."`
+	MaxTxFeeReserve float64  `long:"maxtxfeereserve" description:"The maximum amount reserved for transaction fees, in DCR."`
+	MaxGenTime      uint64   `long:"maxgentime" description:"The share creation target time for the pool in seconds."`
+	PaymentMethod   string   `long:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
+	LastNPeriod     uint32   `long:"lastnperiod" description:"The period of interest when using the PPLNS payment scheme."`
+	WalletPass      string   `long:"walletpass" description:"The wallet passphrase."`
+	MinPayment      float64  `long:"minpayment" description:"The minimum payment to process for an account."`
+	poolFeeAddrs    []dcrutil.Address
+	dcrdRPCCerts    []byte
+	net             *chaincfg.Params
 }
 
 // serviceOptions defines the configuration options for the daemon as a service on
@@ -248,25 +250,26 @@ func newConfigParser(cfg *config, so *serviceOptions, options flags.Options) *fl
 func loadConfig() (*config, []string, error) {
 	// Default config.
 	cfg := config{
-		HomeDir:        dcrpoolHomeDir,
-		ConfigFile:     defaultConfigFile,
-		DataDir:        defaultDataDir,
-		DBFile:         defaultDBFile,
-		DebugLevel:     defaultLogLevel,
-		LogDir:         defaultLogDir,
-		Port:           defaultPort,
-		RPCUser:        defaultRPCUser,
-		RPCPass:        defaultRPCPass,
-		DcrdRPCHost:    defaultDcrdRPCHost,
-		WalletGRPCHost: defaultWalletGRPCHost,
-		PoolFeeAddrs:   []string{defaultPoolFeeAddr},
-		PoolFee:        defaultPoolFee,
-		MaxGenTime:     defaultMaxGenTime,
-		ActiveNet:      defaultActiveNet,
-		PaymentMethod:  defaultPaymentMethod,
-		LastNPeriod:    defaultLastNPeriod,
-		WalletPass:     defaultWalletPass,
-		MinPayment:     defaultMinPayment,
+		HomeDir:         dcrpoolHomeDir,
+		ConfigFile:      defaultConfigFile,
+		DataDir:         defaultDataDir,
+		DBFile:          defaultDBFile,
+		DebugLevel:      defaultLogLevel,
+		LogDir:          defaultLogDir,
+		Port:            defaultPort,
+		RPCUser:         defaultRPCUser,
+		RPCPass:         defaultRPCPass,
+		DcrdRPCHost:     defaultDcrdRPCHost,
+		WalletGRPCHost:  defaultWalletGRPCHost,
+		PoolFeeAddrs:    []string{defaultPoolFeeAddr},
+		PoolFee:         defaultPoolFee,
+		MaxTxFeeReserve: defaultMaxTxFeeReserve,
+		MaxGenTime:      defaultMaxGenTime,
+		ActiveNet:       defaultActiveNet,
+		PaymentMethod:   defaultPaymentMethod,
+		LastNPeriod:     defaultLastNPeriod,
+		WalletPass:      defaultWalletPass,
+		MinPayment:      defaultMinPayment,
 	}
 
 	// Service options which are only added on Windows.
@@ -335,6 +338,26 @@ func loadConfig() (*config, []string, error) {
 		}
 	}
 
+	// Create the home directory if it doesn't already exist.
+	funcName := "loadConfig"
+	err = os.MkdirAll(cfg.HomeDir, 0700)
+	if err != nil {
+		// Show a nicer error message if it's because a symlink is
+		// linked to a directory that does not exist (probably because
+		// it's not mounted).
+		if e, ok := err.(*os.PathError); ok && os.IsExist(err) {
+			if link, lerr := os.Readlink(e.Path); lerr == nil {
+				str := "is symlink %s -> %s mounted?"
+				err = fmt.Errorf(str, e.Path, link)
+			}
+		}
+
+		str := "%s: failed to create home directory: %v"
+		err := fmt.Errorf(str, funcName, err)
+		fmt.Fprintln(os.Stderr, err)
+		return nil, nil, err
+	}
+
 	// Create a default config file when one does not exist and the user did
 	// not specify an override.
 	if !fileExists(preCfg.ConfigFile) {
@@ -371,26 +394,6 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	// Create the home directory if it doesn't already exist.
-	funcName := "loadConfig"
-	err = os.MkdirAll(cfg.HomeDir, 0700)
-	if err != nil {
-		// Show a nicer error message if it's because a symlink is
-		// linked to a directory that does not exist (probably because
-		// it's not mounted).
-		if e, ok := err.(*os.PathError); ok && os.IsExist(err) {
-			if link, lerr := os.Readlink(e.Path); lerr == nil {
-				str := "is symlink %s -> %s mounted?"
-				err = fmt.Errorf(str, e.Path, link)
-			}
-		}
-
-		str := "%s: failed to create home directory: %v"
-		err := fmt.Errorf(str, funcName, err)
-		fmt.Fprintln(os.Stderr, err)
-		return nil, nil, err
-	}
-
 	cfg.DataDir = cleanAndExpandPath(cfg.DataDir)
 	cfg.LogDir = cleanAndExpandPath(cfg.LogDir)
 	logRotator = nil
@@ -398,6 +401,14 @@ func loadConfig() (*config, []string, error) {
 	// Initialize log rotation.  After log rotation has been initialized, the
 	// logger variables may be used.
 	initLogRotator(filepath.Join(cfg.LogDir, defaultLogFilename))
+
+	// Create the data directory.
+	err = os.MkdirAll(cfg.DataDir, 0700)
+	if err != nil {
+		str := "%s: failed to create data directory: %v"
+		err := fmt.Errorf(str, funcName, err)
+		return nil, nil, err
+	}
 
 	// Special show command to list supported subsystems and exit.
 	if cfg.DebugLevel == "show" {

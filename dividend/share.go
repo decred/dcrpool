@@ -228,7 +228,7 @@ func (s *Share) Update(db *bolt.DB) error {
 }
 
 // Delete is not supported for shares.
-func (s *Share) Delete(db *bolt.DB, state bool) error {
+func (s *Share) Delete(db *bolt.DB) error {
 	return ErrNotSupported("share", "delete")
 }
 
@@ -237,8 +237,8 @@ func ErrDivideByZero() error {
 	return fmt.Errorf("divide by zero: divisor is zero")
 }
 
-// FetchEligibleShares fetches all shares within the provided inclusive bounds.
-func FetchEligibleShares(db *bolt.DB, min []byte, max []byte) ([]*Share, error) {
+// PPSEligibleShares fetches all shares within the provided inclusive bounds.
+func PPSEligibleShares(db *bolt.DB, min []byte, max []byte) ([]*Share, error) {
 	eligibleShares := make([]*Share, 0)
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
@@ -251,7 +251,55 @@ func FetchEligibleShares(db *bolt.DB, min []byte, max []byte) ([]*Share, error) 
 		}
 
 		c := bkt.Cursor()
-		for k, v := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, v = c.Next() {
+		if min == nil {
+			for k, v := c.First(); k != nil; k, v = c.Next() {
+				var share Share
+				err := json.Unmarshal(v, &share)
+				if err != nil {
+					return err
+				}
+
+				eligibleShares = append(eligibleShares, &share)
+			}
+		}
+
+		if min != nil {
+			for k, v := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, v = c.Next() {
+				var share Share
+				err := json.Unmarshal(v, &share)
+				if err != nil {
+					return err
+				}
+
+				eligibleShares = append(eligibleShares, &share)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return eligibleShares, err
+}
+
+// PPLNSEligibleShares fetches all shares keyed greater than the provided
+// minimum.
+func PPLNSEligibleShares(db *bolt.DB, min []byte) ([]*Share, error) {
+	eligibleShares := make([]*Share, 0)
+	err := db.View(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+		bkt := pbkt.Bucket(database.ShareBkt)
+		if bkt == nil {
+			return database.ErrBucketNotFound(database.ShareBkt)
+		}
+
+		c := bkt.Cursor()
+		for k, v := c.Last(); k != nil && bytes.Compare(k, min) > 0; k, v = c.Prev() {
 			var share Share
 			err := json.Unmarshal(v, &share)
 			if err != nil {
@@ -263,7 +311,6 @@ func FetchEligibleShares(db *bolt.DB, min []byte, max []byte) ([]*Share, error) 
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +351,7 @@ func CalculateSharePercentages(shares []*Share) (map[string]*big.Rat, error) {
 }
 
 // CalculatePayments calculates the payments due participating accounts.
-func CalculatePayments(percentages map[string]*big.Rat, total dcrutil.Amount, poolFee float64, height uint32, estMaturity int64) ([]*Payment, error) {
+func CalculatePayments(percentages map[string]*big.Rat, total dcrutil.Amount, poolFee float64, height uint32, estMaturity uint32) ([]*Payment, error) {
 	// Deduct pool fee from the amount to be shared.
 	fee := total.MulF64(poolFee)
 	amtSansFees := total - fee

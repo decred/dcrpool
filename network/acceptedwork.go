@@ -1,12 +1,12 @@
 package network
 
 import (
+	"encoding/hex"
 	"encoding/json"
 
 	"github.com/coreos/bbolt"
 
 	"dnldd/dcrpool/database"
-	"dnldd/dcrpool/dividend"
 )
 
 // AcceptedWork represents an accepted work submission to the network.
@@ -63,8 +63,9 @@ func (work *AcceptedWork) Create(db *bolt.DB) error {
 			return err
 		}
 
-		err = bkt.Put(work.Nonce[:], workBytes)
-		return err
+		encoded := make([]byte, hex.EncodedLen(len(work.Nonce[:])))
+		_ = hex.Encode(encoded, work.Nonce[:])
+		return bkt.Put(encoded, workBytes)
 	})
 	return err
 }
@@ -75,8 +76,10 @@ func (work *AcceptedWork) Update(db *bolt.DB) error {
 }
 
 // Delete is not supported for accepted work.
-func (work *AcceptedWork) Delete(db *bolt.DB, state bool) error {
-	return dividend.ErrNotSupported("accepted work", "delete")
+func (work *AcceptedWork) Delete(db *bolt.DB) error {
+	encoded := make([]byte, hex.EncodedLen(len(work.Nonce[:])))
+	_ = hex.Encode(encoded, work.Nonce[:])
+	return database.Delete(db, database.WorkBkt, encoded)
 }
 
 // PruneAcceptedWork removes all accepted work entries with heights less than
@@ -101,7 +104,7 @@ func PruneAcceptedWork(db *bolt.DB, height int64) error {
 		// TODO: test if this issue affects bbolt as well.
 		for k, v := cursor.First(); k != nil; k, _ = cursor.Next() {
 			var work AcceptedWork
-			err := json.Unmarshal(v, work)
+			err := json.Unmarshal(v, &work)
 			if err != nil {
 				return err
 			}
