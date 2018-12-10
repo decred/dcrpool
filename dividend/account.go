@@ -1,12 +1,12 @@
 package dividend
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/coreos/bbolt"
-	"github.com/decred/dcrd/chaincfg/chainhash"
 	"golang.org/x/crypto/bcrypt"
 
 	"dnldd/dcrpool/database"
@@ -33,21 +33,14 @@ func BcryptHash(plaintext string) ([]byte, error) {
 	return hashedPass, nil
 }
 
-// GenerateAccountID generates a unique id for the account using the provided
-// account name.
-func GenerateAccountID(name string) []byte {
-	return chainhash.HashB([]byte(name))
-}
-
 // NewAccount generates a new account.
 func NewAccount(name string, address string, pass string) (*Account, error) {
-
 	hashedPass, err := BcryptHash(pass)
 	if err != nil {
 		return nil, err
 	}
 	account := &Account{
-		UUID:       string(GenerateAccountID(name)),
+		UUID:       hex.EncodeToString([]byte(name)),
 		Name:       name,
 		Address:    address,
 		Pass:       string(hashedPass),
@@ -106,6 +99,6 @@ func (acc *Account) Update(db *bolt.DB) error {
 }
 
 // Delete purges the referenced account from the database.
-func (acc *Account) Delete(db *bolt.DB, state bool) error {
+func (acc *Account) Delete(db *bolt.DB) error {
 	return database.Delete(db, database.AccountBkt, []byte(acc.UUID))
 }

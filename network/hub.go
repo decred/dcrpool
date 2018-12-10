@@ -2,6 +2,8 @@ package network
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -13,8 +15,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/blockchain"
 	"github.com/decred/dcrd/chaincfg"
-	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
 	"github.com/decred/dcrwallet/rpc/walletrpc"
@@ -38,6 +38,7 @@ type HubConfig struct {
 	ActiveNet         *chaincfg.Params
 	DcrdRPCCfg        *rpcclient.ConnConfig
 	PoolFee           float64
+	MaxTxFeeReserve   dcrutil.Amount
 	MaxGenTime        *big.Int
 	WalletRPCCertFile string
 	WalletGRPCHost    string
@@ -68,10 +69,15 @@ type Hub struct {
 	cron           *cron.Cron
 	ConnCount      uint64
 	Ticker         *time.Ticker
+	connCh         chan []byte
+	discCh         chan []byte
+	ctx            context.Context
+	cancel         context.CancelFunc
+	txFeeReserve   dcrutil.Amount
 }
 
 // NewHub initializes a websocket hub.
-func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimiter) (*Hub, error) {
+func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimiter) (*Hub, error) {
 	h := &Hub{
 		db:          db,
 		httpc:       httpc,
@@ -83,7 +89,37 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 		Broadcast:   make(chan Message),
 		ConnCount:   0,
 		Ticker:      time.NewTicker(time.Second * 5),
+		connCh:      make(chan []byte),
+		discCh:      make(chan []byte),
+		ctx:         ctx,
+		cancel:      cancel,
 	}
+
+	log.Infof("Payment method is %v.", hcfg.PaymentMethod)
+
+	// Load the tx fee reserve.
+	err := db.View(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+
+		v := pbkt.Get(dividend.TxFeeReserve)
+		if v == nil {
+			log.Info("Tx fee reserve value not found in db, initializing.")
+			h.txFeeReserve = dcrutil.Amount(0)
+		}
+
+		if v != nil {
+			h.txFeeReserve = dcrutil.Amount(binary.LittleEndian.Uint32(v))
+		}
+
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	log.Tracef("Tx fee reserve is currently %v, with a max of %v",
+		h.txFeeReserve, h.cfg.MaxTxFeeReserve)
 
 	// Calculate pool targets for all known miners.
 	h.poolTargetsMtx.Lock()
@@ -100,99 +136,18 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 	}
 	h.poolTargetsMtx.Unlock()
 
-	log.Debugf("Pool targets are: %v", spew.Sdump(h.poolTargets))
+	log.Tracef("Pool targets are: %v", spew.Sdump(h.poolTargets))
 
 	// Create handlers for chain notifications being subscribed for.
 	ntfnHandlers := &rpcclient.NotificationHandlers{
 		OnBlockConnected: func(blkHeader []byte, transactions [][]byte) {
-			header, err := ParseBlockHeader(blkHeader)
-			if err != nil {
-				log.Errorf("failed to parse conected block header: %v", err)
-				return
-			}
-
-			log.Debugf("Block connected (hash: %v)", header.BlockHash())
-
-			// nonce := FetchNonce(blkHeader)
-
-			// TODO: Work in after sorting out block connected notifications.
-			// work, err := GetAcceptedWork(h.db, nonce)
-			// if err != nil {
-			// 	log.Errorf("failed to fetch accepted work: %v", err)
-			// 	return
-			// }
-
-			// If the connected block is an accepted work from the pool
-			// record payouts to participating accounts.
-			// if work != nil {
-			// 	// Fetch the coinbase amount.
-			// 	blockHash := header.BlockHash()
-			// 	blockHeight := header.Height
-			// 	coinbase, err := h.FetchCoinbaseValue(&blockHash)
-			// 	if err != nil {
-			// 		log.Errorf("fetch coinbase: %v", err)
-			// 		return
-			// 	}
-
-			// 	// Pay dividends per the configured payment scheme.
-			// 	switch h.cfg.PaymentMethod {
-			// 	case dividend.PPS:
-			// 		err := dividend.PayPerShare(h.db, *coinbase, h.cfg.PoolFee,
-			// 			blockHeight, h.cfg.ActiveNet.CoinbaseMaturity)
-			// 		if err != nil {
-			// 			log.Error(err)
-			// 			return
-			// 		}
-			// 	case dividend.PPLNS:
-			// 		err := dividend.PayPerLastNShares(h.db, *coinbase,
-			// 			h.cfg.PoolFee, blockHeight,
-			// 			h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
-			// 		if err != nil {
-			// 			log.Error(err)
-			// 			return
-			// 		}
-			// 	}
-
-			// 	// Update the accepted work record for the connected block.
-			// 	work.Connected = true
-			// 	work.ConnectedAtHeight = int64(header.Height)
-			// 	work.Update(h.db)
-
-			// 	// Prune accepted work that's recorded as connected to the
-			// 	// chain and is below the estimated reorg limit.
-			// 	err = PruneAcceptedWork(h.db,
-			// 		int64(header.Height-MaxReorgLimit))
-			// 	if err != nil {
-			// 		log.Error(err)
-			// 		return
-			// 	}
-			// }
+			h.connCh <- blkHeader
 		},
 		OnBlockDisconnected: func(blkHeader []byte) {
-			header, err := ParseBlockHeader(blkHeader)
-			if err != nil {
-				log.Errorf("failed to parse disconnected block header: %v", err)
-				return
-			}
-
-			log.Debugf("Block disconnected (hash: %v)", header.BlockHash())
-
-			// nonce := FetchNonce(blkHeader)
-			// work, err := GetAcceptedWork(h.db, nonce)
-			// if err != nil {
-			// 	log.Error(err)
-			// 	return
-			// }
-
-			// // If the disconnected block is an accepted work from the pool
-			// // update the state of the accepted work.
-			// if work != nil {
-			// 	work.Connected = false
-			// 	work.ConnectedAtHeight = -1
-			// }
+			h.discCh <- blkHeader
 		},
 		OnWork: func(blkHeader string, target string) {
-			log.Debugf("New Work (header: %v , target: %v)", blkHeader,
+			log.Tracef("New Work (header: %v , target: %v)", blkHeader,
 				target)
 
 			if !h.HasConnectedClients() {
@@ -247,20 +202,10 @@ func NewHub(db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimit
 
 	h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
 
-	h.StartPaymentCron()
+	go h.process()
+	// h.dividendPayments()
 
 	return h, nil
-}
-
-// Shutdown terminates all connected clients to the hub and releases all
-// resources used.
-func (h *Hub) Shutdown() {
-	h.cron.Stop()
-	log.Debugf("Dividend payment cron stopped.")
-
-	h.Broadcast <- nil
-	h.gConn.Close()
-	h.rpcc.Shutdown()
 }
 
 // HasConnectedClients asserts the mining pool has connected miners.
@@ -280,26 +225,13 @@ func (h *Hub) SubmitWork(data *string) (bool, error) {
 	return status, err
 }
 
-// FetchCoinbaseValue returns the coinbase value of the provided block hash.
-func (h *Hub) FetchCoinbaseValue(blockHash *chainhash.Hash) (*dcrutil.Amount, error) {
-	h.rpccMtx.Lock()
-	block, err := h.rpcc.GetBlock(blockHash)
-	if err != nil {
-		return nil, err
-	}
-	h.rpccMtx.Unlock()
-
-	coinbaseAmt := dcrutil.Amount(block.Transactions[0].TxIn[0].ValueIn)
-	return &coinbaseAmt, nil
-}
-
 // AddHashRate adds the hash power provided by the newly connected client
 //to the total estimated hash power of pool.
 func (h *Hub) AddHashRate(miner string) {
 	hash := dividend.MinerHashes[miner]
 	h.hashRateMtx.Lock()
 	h.hashRate = new(big.Int).Add(h.hashRate, hash)
-	log.Debugf("Client connected, updated pool hash rate is %v", h.hashRate)
+	log.Infof("Client connected, updated pool hash rate is %v", h.hashRate)
 	h.hashRateMtx.Unlock()
 }
 
@@ -309,51 +241,53 @@ func (h *Hub) RemoveHashRate(miner string) {
 	hash := dividend.MinerHashes[miner]
 	h.hashRateMtx.Lock()
 	h.hashRate = new(big.Int).Sub(h.hashRate, hash)
-	log.Debugf("Client disconnected, updated pool hash rate is %v", h.hashRate)
+	log.Infof("Client disconnected, updated pool hash rate is %v", h.hashRate)
 	h.hashRateMtx.Unlock()
+}
+
+// PersistTxFeeReserve saves the tx fee reserve to the database.
+func (h *Hub) PersistTxFeeReserve() error {
+	err := h.db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		vbytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(vbytes, uint32(h.txFeeReserve))
+		return pbkt.Put(dividend.TxFeeReserve, vbytes)
+	})
+	return err
 }
 
 // PublishTransaction creates a transaction paying pool accounts for work done.
 func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, targetAmt dcrutil.Amount) error {
-	// Fund dividend payouts.
-	fundTxReq := &walletrpc.FundTransactionRequest{
-		RequiredConfirmations: int32(h.cfg.ActiveNet.CoinbaseMaturity),
-		TargetAmount:          int64(targetAmt),
-		IncludeChangeScript:   false,
-	}
-
-	fundTxResp, err := h.grpc.FundTransaction(context.TODO(), fundTxReq)
-	if err != nil {
-		return err
-	}
-
-	// Create the transaction.
-	txInputs := make([]dcrjson.TransactionInput, 0)
-	for _, utxo := range fundTxResp.SelectedOutputs {
-		in := dcrjson.TransactionInput{
-			Amount: float64(utxo.Amount),
-			Txid:   string(utxo.TransactionHash),
-			Vout:   utxo.OutputIndex,
-			Tree:   int8(utxo.Tree),
+	outs := make([]*walletrpc.ConstructTransactionRequest_Output, 0, len(payouts))
+	for addr, amt := range payouts {
+		out := &walletrpc.ConstructTransactionRequest_Output{
+			Destination: &walletrpc.ConstructTransactionRequest_OutputDestination{
+				Address: addr.String(),
+			},
+			Amount: int64(amt),
 		}
-		txInputs = append(txInputs, in)
+
+		outs = append(outs, out)
 	}
 
-	h.rpccMtx.Lock()
-	msgTx, err := h.rpcc.CreateRawTransaction(txInputs, payouts, nil, nil)
-	h.rpccMtx.Unlock()
-	if err != nil {
-		return err
+	// Construct the transaction.
+	constructTxReq := &walletrpc.ConstructTransactionRequest{
+		SourceAccount:            0,
+		RequiredConfirmations:    6,
+		OutputSelectionAlgorithm: walletrpc.ConstructTransactionRequest_ALL,
+		NonChangeOutputs:         outs,
 	}
 
-	msgTxBytes, err := msgTx.Bytes()
+	h.grpcMtx.Lock()
+	constructTxResp, err := h.grpc.ConstructTransaction(context.TODO(), constructTxReq)
+	h.grpcMtx.Unlock()
 	if err != nil {
 		return err
 	}
 
 	// Sign the transaction.
 	signTxReq := &walletrpc.SignTransactionRequest{
-		SerializedTransaction: msgTxBytes,
+		SerializedTransaction: constructTxResp.UnsignedTransaction,
 		Passphrase:            []byte(h.cfg.WalletPass),
 	}
 
@@ -376,30 +310,192 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 		return err
 	}
 
-	log.Debugf("Published tx hash is: %v", pubTxResp.TransactionHash)
+	log.Tracef("Published tx hash is: %x", pubTxResp.TransactionHash)
 
 	return nil
 }
 
+func (h *Hub) process() {
+	log.Info("Started hub process handler.")
+out:
+	for {
+		select {
+		case <-h.ctx.Done():
+			h.cron.Stop()
+			log.Info("Dividend payment cron stopped.")
+
+			h.Broadcast <- nil
+			h.gConn.Close()
+			h.rpcc.Shutdown()
+			break out
+
+		case blkHeader := <-h.connCh:
+			header, err := ParseBlockHeader(blkHeader)
+			if err != nil {
+				log.Errorf("failed to parse conected block header: %v", err)
+				h.cancel()
+				continue
+			}
+
+			blockHash := header.BlockHash()
+			log.Tracef("Block connected (hash: %v, height: %v)",
+				blockHash, header.Height)
+
+			nonce := FetchNonce(blkHeader)
+			encoded := make([]byte, hex.EncodedLen(len(nonce)))
+			_ = hex.Encode(encoded, nonce)
+			work, err := GetAcceptedWork(h.db, encoded)
+			if err != nil {
+				log.Errorf("failed to fetch accepted work: %v", err)
+				h.cancel()
+				continue
+			}
+
+			// If the connected block is an accepted work from the pool,
+			// record payouts to participating accounts.
+			if work != nil {
+				// Fetch the associated coinbase amount for the block.
+				h.rpccMtx.Lock()
+				block, err := h.rpcc.GetBlock(&blockHash)
+				h.rpccMtx.Unlock()
+				if err != nil {
+					log.Error(err)
+					h.cancel()
+					continue
+				}
+
+				coinbase :=
+					dcrutil.Amount(block.Transactions[0].TxIn[0].ValueIn)
+
+				// Pay dividends per the configured payment scheme.
+				switch h.cfg.PaymentMethod {
+				case dividend.PPS:
+					err := dividend.PayPerShare(h.db, coinbase, h.cfg.PoolFee,
+						header.Height, h.cfg.ActiveNet.CoinbaseMaturity)
+					if err != nil {
+						log.Error(err)
+						h.cancel()
+						continue
+					}
+
+					log.Tracef("PPS payouts generated at height (%v), "+
+						"maturity at block height (%v)", header.Height,
+						header.Height+uint32(h.cfg.ActiveNet.CoinbaseMaturity))
+
+					// TODO: Remove after cron implementation.
+					err = h.ProcessPayments(uint32(header.Height))
+					if err != nil {
+						log.Error(err)
+					}
+
+				case dividend.PPLNS:
+					err := dividend.PayPerLastNShares(h.db, coinbase,
+						h.cfg.PoolFee, header.Height,
+						h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
+					if err != nil {
+						log.Error(err)
+						h.cancel()
+						continue
+					}
+
+					log.Tracef("PPLNS payouts generated at height (%v), "+
+						"maturity at block height (%v)", header.Height,
+						header.Height+uint32(h.cfg.ActiveNet.CoinbaseMaturity))
+
+					// TODO: Remove after cron implementation.
+					err = h.ProcessPayments(uint32(header.Height))
+					if err != nil {
+						log.Error(err)
+					}
+				}
+			}
+
+			// Update the accepted work record for the connected block.
+			work.Connected = true
+			work.ConnectedAtHeight = int64(header.Height)
+			work.Update(h.db)
+
+			// Prune accepted work that's recorded as connected to the
+			// chain and is below the estimated reorg limit.
+			err = PruneAcceptedWork(h.db, int64(header.Height-MaxReorgLimit))
+			if err != nil {
+				log.Error(err)
+				h.cancel()
+			}
+
+		case blkHeader := <-h.discCh:
+			header, err := ParseBlockHeader(blkHeader)
+			if err != nil {
+				log.Errorf("failed to parse disconnected block header: %v", err)
+				h.cancel()
+			}
+
+			log.Tracef("Block disconnected (hash: %v, height: %v)",
+				header.BlockHash(), header.Height)
+
+			nonce := FetchNonce(blkHeader)
+			work, err := GetAcceptedWork(h.db, nonce)
+			if err != nil {
+				log.Error(err)
+				h.cancel()
+			}
+
+			// If the disconnected block is an accepted work from the pool,
+			// delete all associated payments and update the state of the
+			// accepted work.
+			if work != nil {
+				work.Connected = false
+
+				payments, err := dividend.FetchPendingPaymentsAtHeight(h.db,
+					uint32(work.ConnectedAtHeight))
+				if err != nil {
+					log.Error(err)
+					h.cancel()
+				}
+
+				for _, pmt := range payments {
+					err = pmt.Delete(h.db)
+					if err != nil {
+						log.Error(err)
+						h.cancel()
+					}
+				}
+
+				work.ConnectedAtHeight = -1
+				work.Update(h.db)
+			}
+		}
+	}
+
+	log.Info("Hub process handler done.")
+}
+
 // ProcessPayments fetches all eligible payments and publishes a
 // transaction to the network paying dividends to participating accounts.
-func (h *Hub) ProcessPayments() error {
+func (h *Hub) ProcessPayments(height uint32) error {
 	// Fetch all eligible payments.
-	eligiblePmts, err := dividend.FetchEligiblePayments(h.db, h.cfg.MinPayment)
+	eligiblePmts, err := dividend.FetchEligiblePaymentBundles(h.db, height,
+		h.cfg.MinPayment)
 	if err != nil {
 		return err
+	}
+
+	if len(eligiblePmts) == 0 {
+		return fmt.Errorf("no eligible payments to process")
 	}
 
 	// Generate the payment details from the eligible payments fetched.
 	details, targetAmt, err := dividend.GeneratePaymentDetails(h.db,
-		h.cfg.PoolFeeAddrs, eligiblePmts)
+		h.cfg.PoolFeeAddrs, eligiblePmts, h.cfg.MaxTxFeeReserve, &h.txFeeReserve)
 	if err != nil {
 		return err
 	}
 
+	log.Tracef("Target amount is : %v", targetAmt)
+
 	// Create address-amount kv pairs for the transaction, using the payment
 	// details.
-	var pmts map[dcrutil.Address]dcrutil.Amount
+	pmts := make(map[dcrutil.Address]dcrutil.Amount, len(details))
 	for addrStr, amt := range details {
 		addr, err := dcrutil.DecodeAddress(addrStr)
 		if err != nil {
@@ -442,18 +538,18 @@ func (h *Hub) ProcessPayments() error {
 	return nil
 }
 
-// StartPaymentCron starts the dividend payment cron.
-func (h *Hub) StartPaymentCron() {
-	h.cron.AddFunc("@every 6h",
-		func() {
-			err := h.ProcessPayments()
-			if err != nil {
-				log.Error("Failed to process payments: %v", err)
-				return
-			}
+// dividendPayments runs the dividend payment cron.
+// func (h *Hub) dividendPayments() {
+// 	h.cron.AddFunc("@every 30s", /*"@every 6h"*/
+// 		func() {
+// 			err := h.ProcessPayments()
+// 			if err != nil {
+// 				log.Error("Failed to process payments: %v", err)
+// 				return
+// 			}
 
-			log.Debugf("Sucessfully processed payments.")
-		})
-	h.cron.Start()
-	log.Debugf("Started dividend payment cron.")
-}
+// 			log.Debugf("Sucessfully processed payments.")
+// 		})
+// 	h.cron.Start()
+// 	log.Debugf("Started dividend payment cron.")
+// }

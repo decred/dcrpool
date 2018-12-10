@@ -90,12 +90,20 @@ func NewPool(cfg *config) (*Pool, error) {
 		return nil, err
 	}
 
+	maxTxFeeReserve, err := dcrutil.NewAmount(cfg.MaxTxFeeReserve)
+	if err != nil {
+		return nil, err
+	}
+
+	p.ctx, p.cancel = context.WithCancel(context.Background())
+
 	hcfg := &network.HubConfig{
 		ActiveNet:         cfg.net,
 		WalletRPCCertFile: walletRPCCertFile,
 		WalletGRPCHost:    cfg.WalletGRPCHost,
 		DcrdRPCCfg:        dcrdRPCCfg,
 		PoolFee:           cfg.PoolFee,
+		MaxTxFeeReserve:   maxTxFeeReserve,
 		MaxGenTime:        new(big.Int).SetUint64(cfg.MaxGenTime),
 		PaymentMethod:     cfg.PaymentMethod,
 		LastNPeriod:       cfg.LastNPeriod,
@@ -104,12 +112,11 @@ func NewPool(cfg *config) (*Pool, error) {
 		PoolFeeAddrs:      cfg.poolFeeAddrs,
 	}
 
-	p.hub, err = network.NewHub(p.db, p.httpc, hcfg, p.limiter)
+	p.hub, err = network.NewHub(p.ctx, p.cancel, p.db, p.httpc, hcfg, p.limiter)
 	if err != nil {
 		return nil, err
 	}
 
-	p.ctx, p.cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	return p, nil
 }
 
@@ -125,10 +132,19 @@ func (p *Pool) listen() {
 // shutdown gracefully terminates the mining pool.
 func (p *Pool) shutdown() {
 	pLog.Info("Shutting down dcrpool.")
-	p.hub.Shutdown()
-	p.db.Close()
+	defer p.db.Close()
 	defer p.cancel()
-	if err := p.server.Shutdown(p.ctx); err != nil {
+
+	err := p.hub.PersistTxFeeReserve()
+	if err != nil {
+		pLog.Error(err)
+	}
+
+	// Create a timeout context to force termination if the http server stalls.
+	ctx, cl := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cl()
+
+	if err := p.server.Shutdown(ctx); err != nil {
 		pLog.Errorf("Shutdown error: %v", err)
 	}
 }

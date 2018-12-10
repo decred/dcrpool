@@ -7,8 +7,9 @@ RPCPASS="pass"
 MINING_USER="pcl"
 MINING_PASS="pass"
 WALLET_SEED="b280922d2cffda44648346412c5ec97f429938105003730414f10b01e1402eac"
-WALLET_MINING_ADDR="SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc" # NOTE: This must be changed if the seed is changed.
-WALLET_XFER_ADDR="Sso52TPnorVkSaRYzHmi4FgU8F5BFEDZsiK" # same as above
+MINING_ADDR="SspUvSyDGSzvPz2NfdZ5LW15uq6rmuGZyhL"
+PFEE_ADDR="SsVPfV8yoMu7AvF5fGjxTGmQ57pGkaY6n8z" 
+CLIENT_ADDR="SsZckVrqHRBtvhJA5UqLZ3MDXpZHi5mK6uU"
 
 if [ -d "${NODES_ROOT}" ] ; then
   rm -R "${NODES_ROOT}"
@@ -33,8 +34,8 @@ rpccert=${DCRD_RPC_CERT}
 simnet=1
 logdir=./log
 datadir=./data
-debuglevel=TXMP=debug,MINR=debug,BMGR=debug
-miningaddr=${WALLET_MINING_ADDR}
+debuglevel=TXMP=debug,MINR=debug,BMGR=debug,SRVR=debug
+miningaddr=${MINING_ADDR}
 EOF
 
 cat > "${NODES_ROOT}/dcrctl.conf" <<EOF
@@ -56,6 +57,7 @@ enablevoting=1
 enableticketbuyer=1
 ticketbuyer.nospreadticketpurchases=1
 ticketbuyer.maxperblock=5
+ticketbuyer.balancetomaintainrelative=0
 debuglevel=debug
 EOF
 
@@ -64,18 +66,21 @@ rpcuser=${RPCUSER}
 rpcpass=${RPCPASS}
 dcrdrpchost=127.0.0.1:19556
 walletgrpchost=127.0.0.1:19558
-debuglevel=debug
-homedir=.
+debuglevel=trace
+maxgentime=5
 port=:19560
+walletpass=123
 activenet=simnet
-poolfeeaddrs=${WALLET_MINING_ADDR}
+poolfeeaddrs=${PFEE_ADDR}
+paymentmethod=pplns
+lastnperiod=10
+; paymentmethod=pps
 EOF
 
 cat > "${NODES_ROOT}/client.conf" <<EOF
-debuglevel=debug
+debuglevel=trace
 user=${MINING_USER}
 pass=${MINING_PASS}
-homedir=.
 host=127.0.0.1:19560
 minertype=cpu
 EOF
@@ -117,12 +122,12 @@ tmux send-keys "cd ${NODES_ROOT}/master" C-m
 
 # mine the first block, this circumvents a wallet bug which occurs when the 
 # wallet is connected before block 1 is mined.
-tmux send-keys "./mine 1" C-m
+tmux send-keys "./mine 5" C-m
 
 ################################################################################
 # Setup the wallet.
 ################################################################################
-sleep 5
+sleep 10
 cat > "${NODES_ROOT}/wallet/ctl" <<EOF
 #!/bin/zsh
 dcrctl -C ../dcrctl.conf --wallet \$*
@@ -141,8 +146,17 @@ tmux send-keys "dcrwallet -C ../wallet.conf" C-m
 ################################################################################
 # Setup wctl.
 ################################################################################
+sleep 10
 tmux new-window -t $SESSION:4 -n 'wctl'
 tmux send-keys "cd ${NODES_ROOT}/wallet" C-m
+tmux send-keys "./ctl createnewaccount pfee" C-m
+sleep 1
+tmux send-keys "./ctl getnewaddress pfee" C-m
+sleep 1
+tmux send-keys "./ctl createnewaccount client" C-m
+sleep 1
+tmux send-keys "./ctl getnewaddress client" C-m
+sleep 1
 tmux send-keys "./ctl getbalance"
 
 ################################################################################
@@ -150,20 +164,20 @@ tmux send-keys "./ctl getbalance"
 ################################################################################
 tmux new-window -t $SESSION:5 -n 'pool'
 tmux send-keys "cd ${NODES_ROOT}/pool" C-m
-tmux send-keys "dcrpool --configfile ../pool.conf " C-m
+tmux send-keys "dcrpool --configfile ../pool.conf --homedir=." C-m
 
 ################################################################################
-# Setup the mining client.
+# Setup the mining client. 
 ################################################################################
-sleep 5
+sleep 1
 tmux new-window -t $SESSION:6 -n 'client'
 tmux send-keys "cd ${NODES_ROOT}/client" C-m
 tmux send-keys `curl -s POST http://127.0.0.1:19560/create/account \
   -H 'Cache-Control: no-cache' \
   -H 'Content-Type: application/json' \
-  -d '{"name": "pcl", \ 
-  "address":"SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc" ,"pass": "pass"}' \
+  -d '{"name": "pcl", "address": "SsZckVrqHRBtvhJA5UqLZ3MDXpZHi5mK6uU" ,"pass": "pass"}' \
   > /dev/null`
-tmux send-keys "poolclient --configfile ../client.conf " C-m
+sleep 2
+tmux send-keys "poolclient --configfile ../client.conf --homedir=." C-m
 
 tmux attach-session -t $SESSION
