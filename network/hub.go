@@ -18,7 +18,6 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
 	"github.com/decred/dcrwallet/rpc/walletrpc"
-	"github.com/robfig/cron"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -66,7 +65,6 @@ type Hub struct {
 	hashRateMtx    sync.Mutex
 	poolTargets    map[string]uint32
 	poolTargetsMtx sync.RWMutex
-	cron           *cron.Cron
 	ConnCount      uint64
 	Ticker         *time.Ticker
 	connCh         chan []byte
@@ -85,7 +83,6 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		cfg:         hcfg,
 		hashRate:    dividend.ZeroInt,
 		poolTargets: make(map[string]uint32),
-		cron:        cron.New(),
 		Broadcast:   make(chan Message),
 		ConnCount:   0,
 		Ticker:      time.NewTicker(time.Second * 5),
@@ -321,9 +318,6 @@ out:
 	for {
 		select {
 		case <-h.ctx.Done():
-			h.cron.Stop()
-			log.Info("Dividend payment cron stopped.")
-
 			h.Broadcast <- nil
 			h.gConn.Close()
 			h.rpcc.Shutdown()
@@ -367,7 +361,8 @@ out:
 				coinbase :=
 					dcrutil.Amount(block.Transactions[0].TxIn[0].ValueIn)
 
-				// Pay dividends per the configured payment scheme.
+				// Pay dividends per the configured payment scheme and process
+				// mature payments.
 				switch h.cfg.PaymentMethod {
 				case dividend.PPS:
 					err := dividend.PayPerShare(h.db, coinbase, h.cfg.PoolFee,
@@ -376,16 +371,6 @@ out:
 						log.Error(err)
 						h.cancel()
 						continue
-					}
-
-					log.Tracef("PPS payouts generated at height (%v), "+
-						"maturity at block height (%v)", header.Height,
-						header.Height+uint32(h.cfg.ActiveNet.CoinbaseMaturity))
-
-					// TODO: Remove after cron implementation.
-					err = h.ProcessPayments(uint32(header.Height))
-					if err != nil {
-						log.Error(err)
 					}
 
 				case dividend.PPLNS:
@@ -397,17 +382,13 @@ out:
 						h.cancel()
 						continue
 					}
-
-					log.Tracef("PPLNS payouts generated at height (%v), "+
-						"maturity at block height (%v)", header.Height,
-						header.Height+uint32(h.cfg.ActiveNet.CoinbaseMaturity))
-
-					// TODO: Remove after cron implementation.
-					err = h.ProcessPayments(uint32(header.Height))
-					if err != nil {
-						log.Error(err)
-					}
 				}
+			}
+
+			// Process matured payments.
+			err = h.ProcessPayments(uint32(header.Height))
+			if err != nil {
+				log.Error(err)
 			}
 
 			// Update the accepted work record for the connected block.
@@ -421,6 +402,40 @@ out:
 			if err != nil {
 				log.Error(err)
 				h.cancel()
+				continue
+			}
+
+			// Prune old processed payments.
+			var lastPaymentPruneHeight uint32
+			err = h.db.View(func(tx *bolt.Tx) error {
+				pbkt := tx.Bucket(database.PoolBkt)
+				if pbkt == nil {
+					return database.ErrBucketNotFound(database.PoolBkt)
+				}
+
+				v := pbkt.Get(dividend.LastPaymentPruneHeight)
+				if v != nil {
+					lastPaymentPruneHeight = binary.LittleEndian.Uint32(v)
+				}
+
+				return nil
+			})
+			if err != nil {
+				log.Error(err)
+				h.cancel()
+				continue
+			}
+
+			log.Tracef("last payments prune height is %v", lastPaymentPruneHeight)
+
+			heightDiff := header.Height - lastPaymentPruneHeight
+			if heightDiff >= dividend.DeleteThreshold {
+				err := dividend.PruneProcessedPayments(h.db, header.Height)
+				if err != nil {
+					log.Error(err)
+					h.cancel()
+					continue
+				}
 			}
 
 		case blkHeader := <-h.discCh:
@@ -512,15 +527,15 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	}
 
 	// Update all eligible payments published by the tx as paid.
-	nowNano := time.Now().UnixNano()
 	for _, bundle := range eligiblePmts {
-		err = bundle.UpdateAsPaid(h.db, nowNano)
+		err = bundle.UpdateAsPaid(h.db, height)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Update the last payment paid on time.
+	nowNano := time.Now().UnixNano()
 	err = h.db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		if pbkt == nil {
@@ -530,26 +545,9 @@ func (h *Hub) ProcessPayments(height uint32) error {
 		return pbkt.Put(dividend.LastPaymentPaidOn,
 			dividend.NanoToBigEndianBytes(nowNano))
 	})
-
 	if err != nil {
 		return err
 	}
 
 	return nil
 }
-
-// dividendPayments runs the dividend payment cron.
-// func (h *Hub) dividendPayments() {
-// 	h.cron.AddFunc("@every 30s", /*"@every 6h"*/
-// 		func() {
-// 			err := h.ProcessPayments()
-// 			if err != nil {
-// 				log.Error("Failed to process payments: %v", err)
-// 				return
-// 			}
-
-// 			log.Debugf("Sucessfully processed payments.")
-// 		})
-// 	h.cron.Start()
-// 	log.Debugf("Started dividend payment cron.")
-// }
