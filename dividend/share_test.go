@@ -1,6 +1,7 @@
 package dividend
 
 import (
+	"encoding/hex"
 	"math/big"
 	"os"
 	"testing"
@@ -18,10 +19,14 @@ var (
 	testDB = "testdb"
 	// Account X.
 	accX = "x"
+	// Account X id.
+	xID = hex.EncodeToString([]byte(accX))
 	// Account X address.
 	xAddr = "SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc"
 	// Account Y.
 	accY = "y"
+	// Account Y id.
+	yID = hex.EncodeToString([]byte(accY))
 	// Account Y address.
 	yAddr = "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
 	// Pool fee address.
@@ -30,6 +35,8 @@ var (
 
 // setupDB initializes the pool database.
 func setupDB() (*bolt.DB, error) {
+	os.Remove(testDB)
+
 	db, err := database.OpenDB(testDB)
 	if err != nil {
 		return nil, err
@@ -99,48 +106,60 @@ func createMultiplePersistedShares(db *bolt.DB, account string, weight *big.Rat,
 	return nil
 }
 
-func TestShareRangeScan(t *testing.T) {
+func TestPPSEligibleShares(t *testing.T) {
 	db, err := setupDB()
 	if err != nil {
-		t.Error(t)
+		t.Error(err)
 	}
+
+	td := func() {
+		err = teardownDB(db)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	defer td()
 
 	now := time.Now()
-	minNano := pastTime(&now, 0, 0, time.Duration(30), 0).UnixNano()
-	belowMinNano := pastTime(&now, 0, 0, time.Duration(60), 0).UnixNano()
-	maxNano := pastTime(&now, 0, 0, 0, time.Duration(30)).UnixNano()
-	aboveMaxNano := futureTime(&now, 0, 0, time.Duration(30), 0).UnixNano()
+	minNano := now.Add(-(time.Second * 60)).UnixNano()
+	belowMinNano := now.Add(-(time.Second * 80)).UnixNano()
+	maxNano := now.Add(-(time.Second * 30)).UnixNano()
+	aboveMaxNano := now.Add(time.Second * 10).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
+	shareCount := 5
+	expectedShareCount := 10
 
-	err = createMultiplePersistedShares(db, accX, weight, belowMinNano, 5)
+	err = createMultiplePersistedShares(db, xID, weight, belowMinNano, shareCount)
 	if err != nil {
-		t.Error(t)
+		t.Error(err)
 	}
 
-	err = createMultiplePersistedShares(db, accX, weight, minNano, 5)
+	err = createMultiplePersistedShares(db, xID, weight, minNano, shareCount)
 	if err != nil {
-		t.Error(t)
+		t.Error(err)
 	}
 
-	err = createMultiplePersistedShares(db, accY, weight, maxNano, 5)
+	err = createMultiplePersistedShares(db, yID, weight, maxNano, shareCount)
 	if err != nil {
-		t.Error(t)
+		t.Error(err)
 	}
 
-	err = createMultiplePersistedShares(db, accY, weight, aboveMaxNano, 5)
+	err = createMultiplePersistedShares(db, yID, weight, aboveMaxNano, shareCount)
 	if err != nil {
-		t.Error(t)
+		t.Error(err)
 	}
 
 	minNanoBytes := NanoToBigEndianBytes(minNano)
 	nowNanoBytes := NanoToBigEndianBytes(now.UnixNano())
-	shares, err := FetchEligibleShares(db, minNanoBytes, nowNanoBytes)
+	shares, err := PPSEligibleShares(db, minNanoBytes, nowNanoBytes)
 	if err != nil {
-		t.Error(t)
+		t.Error(err)
 	}
 
-	if len(shares) != 10 {
-		t.Errorf("Expected %v eligible shares, got %v", 10, len(shares))
+	if len(shares) != expectedShareCount {
+		t.Errorf("Expected %v eligible PPS shares, got %v",
+			expectedShareCount, len(shares))
 	}
 
 	forAccX := 0
@@ -155,15 +174,57 @@ func TestShareRangeScan(t *testing.T) {
 		}
 	}
 
-	if forAccX != forAccY && (forAccX != 5 || forAccY != 5) {
-		t.Errorf("Expected %v for account one, got %v. "+
-			"Expected %v for account two, got %v.",
-			5, forAccX, 5, forAccY)
+	if forAccX != forAccY && (forAccX != shareCount || forAccY != shareCount) {
+		t.Errorf("Expected %v shares for account one, got %v. "+
+			"Expected %v shares for account two, got %v.",
+			shareCount, forAccX, shareCount, forAccY)
+	}
+}
+
+func TestPPLNSEligibleShares(t *testing.T) {
+	db, err := setupDB()
+	if err != nil {
+		t.Error(err)
 	}
 
-	err = teardownDB(db)
+	td := func() {
+		err = teardownDB(db)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	defer td()
+
+	now := time.Now()
+	aboveMinNano := now.Add(-(time.Second * 20)).UnixNano()
+	minNano := now.Add(-(time.Second * 30)).UnixNano()
+	belowMinNano := now.Add(-(time.Second * 40)).UnixNano()
+	weight := new(big.Rat).SetFloat64(1.0)
+	shareCount := 10
+	expectedShareCount := 10
+
+	err = createMultiplePersistedShares(db, xID, weight, belowMinNano,
+		shareCount)
 	if err != nil {
-		t.Error(t)
+		t.Error(err)
+	}
+
+	err = createMultiplePersistedShares(db, yID, weight, aboveMinNano,
+		shareCount)
+	if err != nil {
+		t.Error(err)
+	}
+
+	minNanoBytes := NanoToBigEndianBytes(minNano)
+	shares, err := PPLNSEligibleShares(db, minNanoBytes)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(shares) != expectedShareCount {
+		t.Errorf("Expected %v eligible PPLNS shares, got %v",
+			expectedShareCount, len(shares))
 	}
 }
 

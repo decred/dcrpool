@@ -236,7 +236,7 @@ func FetchMaturePendingPayments(db *bolt.DB, height uint32) ([]*Payment, error) 
 				return err
 			}
 
-			if payment.PaidOn == 0 && payment.EstimatedMaturity < height {
+			if payment.PaidOn == 0 && payment.EstimatedMaturity <= height {
 				payments = append(payments, &payment)
 			}
 		}
@@ -302,24 +302,6 @@ func FetchEligiblePaymentBundles(db *bolt.DB, height uint32, minPayment dcrutil.
 	}
 
 	return bundles, nil
-}
-
-// futureTime extends a base time to a time in the future.
-func futureTime(date *time.Time, days time.Duration, hours time.Duration,
-	minutes time.Duration, seconds time.Duration) *time.Time {
-	duration := ((time.Hour * 24) * days) + (time.Hour * hours) +
-		(time.Minute * minutes) + (time.Second * seconds)
-	futureTime := date.Add(duration)
-	return &futureTime
-}
-
-// pastTime regresses a base time to a time in the past.
-func pastTime(date *time.Time, days time.Duration, hours time.Duration,
-	minutes time.Duration, seconds time.Duration) time.Time {
-	duration := ((time.Hour * 24) * days) + (time.Hour * hours) +
-		(time.Minute * minutes) + (time.Second * seconds)
-	pastTime := date.Add(-duration)
-	return pastTime
 }
 
 // replenishTxFeeReserve adjusts the pool fee amount supplied to leave the specified
@@ -416,7 +398,7 @@ func PayPerShare(db *bolt.DB, total dcrutil.Amount, poolFee float64, height uint
 // participating accounts within the last n time period provided.
 func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, height uint32, coinbaseMaturity uint16, periodSecs uint32) error {
 	now := time.Now()
-	min := pastTime(&now, 0, 0, 0, time.Duration(periodSecs))
+	min := now.Add(-(time.Second * time.Duration(periodSecs)))
 	minNano := NanoToBigEndianBytes(min.UnixNano())
 
 	// Fetch all eligible shares within the specified period.
@@ -502,11 +484,13 @@ func GeneratePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address, eligibl
 		targetAmt += bundleAmt
 	}
 
-	// replenish the tx fee reserve.
-	poolFee := pmts[addr.String()]
-	updatedPoolFee := replenishTxFeeReserve(maxTxFeeReserve, txFeeReserve,
-		poolFee)
-	pmts[addr.String()] = updatedPoolFee
+	// replenish the tx fee reserve if a pool fee bundle entry exists.
+	poolFee, ok := pmts[addr.String()]
+	if ok {
+		updatedPoolFee := replenishTxFeeReserve(maxTxFeeReserve, txFeeReserve,
+			poolFee)
+		pmts[addr.String()] = updatedPoolFee
+	}
 
 	return pmts, &targetAmt, nil
 }
