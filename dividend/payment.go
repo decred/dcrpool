@@ -1,12 +1,14 @@
 package dividend
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"time"
 
 	"github.com/coreos/bbolt"
+	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
 
 	"dnldd/dcrpool/database"
@@ -21,8 +23,15 @@ var (
 	// paid.
 	LastPaymentPaidOn = []byte("lastpaymentpaidon")
 
+	// LastPaymentPruneHeight is the last height at which old processed
+	// payments were pruned.
+	LastPaymentPruneHeight = []byte("lastpaymentpruneheight")
+
 	// TxFeeReserve is the key of the tx fee reserve.
 	TxFeeReserve = []byte("txfeereserve")
+
+	// DeleteThreshold is approximately 30 days with respect to blocks.
+	DeleteThreshold = uint32(chaincfg.SimNetParams.CoinbaseMaturity) //uint32(8640)
 )
 
 // Payment represents an outstanding payment for a pool account.
@@ -32,7 +41,7 @@ type Payment struct {
 	Height            uint32         `json:"height"`
 	Amount            dcrutil.Amount `json:"amount"`
 	CreatedOn         int64          `json:"createdon"`
-	PaidOn            int64          `json:"paidon"`
+	PaidOnHeight      uint32         `json:"paidonheight"`
 }
 
 // NewPayment creates a payment instance.
@@ -107,10 +116,11 @@ func (payment *Payment) Update(db *bolt.DB) error {
 
 // Delete purges the referenced pending payment from the database.
 func (payment *Payment) Delete(db *bolt.DB) error {
-	if payment.PaidOn != 0 {
-		return fmt.Errorf("Cannot delete a paid payment record: "+
-			"(%v at height %v for account %v)", payment.Amount,
-			payment.Height, payment.Account)
+	heightDiff := payment.PaidOnHeight - payment.Height
+	if payment.PaidOnHeight != 0 && heightDiff < DeleteThreshold {
+		return fmt.Errorf("Cannot delete a paid payment record below the "+
+			"delete threshold: (%v at height %v for account %v)",
+			payment.Amount, payment.Height, payment.Account)
 	}
 
 	id := GeneratePaymentID(payment.CreatedOn, payment.Height, payment.Account)
@@ -142,9 +152,9 @@ func (bundle *PaymentBundle) Total() dcrutil.Amount {
 }
 
 // UpdateAsPaid updates all associated payments to a payment bundle as paid.
-func (bundle *PaymentBundle) UpdateAsPaid(db *bolt.DB, nowNano int64) error {
+func (bundle *PaymentBundle) UpdateAsPaid(db *bolt.DB, height uint32) error {
 	for _, payment := range bundle.Payments {
-		payment.PaidOn = nowNano
+		payment.PaidOnHeight = height
 		err := payment.Update(db)
 		if err != nil {
 			return err
@@ -199,7 +209,7 @@ func FetchPendingPayments(db *bolt.DB) ([]*Payment, error) {
 				return err
 			}
 
-			if payment.PaidOn == 0 {
+			if payment.PaidOnHeight == 0 {
 				payments = append(payments, &payment)
 			}
 		}
@@ -236,7 +246,8 @@ func FetchMaturePendingPayments(db *bolt.DB, height uint32) ([]*Payment, error) 
 				return err
 			}
 
-			if payment.PaidOn == 0 && payment.EstimatedMaturity <= height {
+			if payment.PaidOnHeight == 0 &&
+				payment.EstimatedMaturity <= height {
 				payments = append(payments, &payment)
 			}
 		}
@@ -272,7 +283,7 @@ func FetchPendingPaymentsAtHeight(db *bolt.DB, height uint32) ([]*Payment, error
 				return err
 			}
 
-			if payment.PaidOn == 0 && payment.Height == height {
+			if payment.PaidOnHeight == 0 && payment.Height == height {
 				payments = append(payments, &payment)
 			}
 		}
@@ -380,6 +391,9 @@ func PayPerShare(db *bolt.DB, total dcrutil.Amount, poolFee float64, height uint
 		}
 	}
 
+	log.Tracef("new payouts (PPS) at height (%v), matures at height (%v).",
+		height, height+uint32(coinbaseMaturity))
+
 	// Update the last payment created time.
 	err = db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
@@ -439,6 +453,9 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, heig
 		}
 	}
 
+	log.Tracef("new payouts (PPLNS) at height (%v), matures at height (%v)",
+		height, height+uint32(coinbaseMaturity))
+
 	// Update the last payment created time.
 	err = db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
@@ -493,4 +510,62 @@ func GeneratePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address, eligibl
 	}
 
 	return pmts, &targetAmt, nil
+}
+
+// PruneProcessedPayments removes all old processed payments.
+func PruneProcessedPayments(db *bolt.DB, height uint32) error {
+	err := db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+		bkt := pbkt.Bucket(database.PaymentBkt)
+		if bkt == nil {
+			return database.ErrBucketNotFound(database.PaymentBkt)
+		}
+
+		var err error
+		cursor := bkt.Cursor()
+		toPrune := make([][]byte, 0)
+
+		// Iterating and deleting in two steps to avoid:
+		// https://github.com/boltdb/bolt/issues/620
+		// TODO: test if this issue affects bbolt as well.
+		for k, v := cursor.First(); k != nil; k, _ = cursor.Next() {
+			var payment Payment
+			err := json.Unmarshal(v, &payment)
+			if err != nil {
+				return err
+			}
+
+			if payment.PaidOnHeight != 0 {
+				heightDiff := payment.PaidOnHeight - payment.Height
+				if heightDiff >= DeleteThreshold {
+					toPrune = append(toPrune, k)
+				}
+			}
+		}
+
+		log.Tracef("pruning %v processed payments", len(toPrune))
+
+		for _, k := range toPrune {
+			err = bkt.Delete(k)
+			if err != nil {
+				break
+			}
+		}
+
+		if err != nil {
+			return err
+		}
+
+		log.Tracef("last payment prune height is now %v", height)
+
+		// Persist the last payment prune height.
+		vbytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(vbytes, height)
+		return pbkt.Put(LastPaymentPruneHeight, vbytes)
+	})
+
+	return err
 }
