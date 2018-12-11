@@ -31,7 +31,8 @@ var (
 	TxFeeReserve = []byte("txfeereserve")
 
 	// DeleteThreshold is approximately 30 days with respect to blocks.
-	DeleteThreshold = uint32(chaincfg.SimNetParams.CoinbaseMaturity) //uint32(8640)
+	// TODO: remove after tests
+	DeleteThreshold = uint32(chaincfg.SimNetParams.CoinbaseMaturity) // uint32(8640)
 )
 
 // Payment represents an outstanding payment for a pool account.
@@ -524,13 +525,8 @@ func PruneProcessedPayments(db *bolt.DB, height uint32) error {
 			return database.ErrBucketNotFound(database.PaymentBkt)
 		}
 
-		var err error
 		cursor := bkt.Cursor()
-		toPrune := make([][]byte, 0)
-
-		// Iterating and deleting in two steps to avoid:
-		// https://github.com/boltdb/bolt/issues/620
-		// TODO: test if this issue affects bbolt as well.
+		pruneCount := 0
 		for k, v := cursor.First(); k != nil; k, _ = cursor.Next() {
 			var payment Payment
 			err := json.Unmarshal(v, &payment)
@@ -541,25 +537,16 @@ func PruneProcessedPayments(db *bolt.DB, height uint32) error {
 			if payment.PaidOnHeight != 0 {
 				heightDiff := payment.PaidOnHeight - payment.Height
 				if heightDiff >= DeleteThreshold {
-					toPrune = append(toPrune, k)
+					err = cursor.Delete()
+					if err != nil {
+						return err
+					}
+					pruneCount++
 				}
 			}
 		}
 
-		log.Tracef("pruning %v processed payments", len(toPrune))
-
-		for _, k := range toPrune {
-			err = bkt.Delete(k)
-			if err != nil {
-				break
-			}
-		}
-
-		if err != nil {
-			return err
-		}
-
-		log.Tracef("last payment prune height is now %v", height)
+		log.Tracef("pruned %v processed payments", pruneCount)
 
 		// Persist the last payment prune height.
 		vbytes := make([]byte, 4)
