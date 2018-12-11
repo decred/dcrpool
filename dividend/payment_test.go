@@ -469,7 +469,7 @@ func TestPaymentsMaturity(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Millisecond * 200)
 
 	yNano := time.Now().UnixNano()
 	err = createMultiplePersistedShares(db, yID, weight, yNano, shareCount)

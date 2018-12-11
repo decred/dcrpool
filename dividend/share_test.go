@@ -165,19 +165,28 @@ func TestPPSEligibleShares(t *testing.T) {
 	forAccX := 0
 	forAccY := 0
 	for _, share := range shares {
-		if share.Account == accX {
+		if share.Account == xID {
 			forAccX++
 		}
 
-		if share.Account == accY {
+		if share.Account == yID {
 			forAccY++
 		}
 	}
 
-	if forAccX != forAccY && (forAccX != shareCount || forAccY != shareCount) {
-		t.Errorf("Expected %v shares for account one, got %v. "+
-			"Expected %v shares for account two, got %v.",
-			shareCount, forAccX, shareCount, forAccY)
+	if forAccX == 0 || forAccY == 0 {
+		t.Errorf("Expected shares for account X and Y, "+
+			"got %v (for x), %v (for y).", forAccX, forAccY)
+	}
+
+	if forAccX != forAccY {
+		t.Errorf("Expected equal shares for account X and Y, "+
+			"got %v (for x), %v (for y).", forAccX, forAccY)
+	}
+
+	if forAccX != shareCount && forAccY != shareCount {
+		t.Errorf("Expected share counts of %v for account X and Y, "+
+			"got %v (for x), %v (for y).", shareCount, forAccX, forAccY)
 	}
 }
 
@@ -347,5 +356,77 @@ func TestCalculatePoolTarget(t *testing.T) {
 				"expected target is (%v), got (%v).", test.hashRate,
 				test.targetTime, expected, target)
 		}
+	}
+}
+
+func TestBoltDBCursorDeletion(t *testing.T) {
+	db, err := setupDB()
+	if err != nil {
+		t.Error(err)
+	}
+
+	td := func() {
+		err = teardownDB(db)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	defer td()
+
+	nowNano := time.Now().UnixNano()
+	weight := new(big.Rat).SetFloat64(1.0)
+	shareCount := 10
+
+	err = createMultiplePersistedShares(db, xID, weight, nowNano, shareCount)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+		bkt := pbkt.Bucket(database.ShareBkt)
+		if bkt == nil {
+			return database.ErrBucketNotFound(database.ShareBkt)
+		}
+
+		c := bkt.Cursor()
+		iterations := 0
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			iterations++
+		}
+
+		if iterations != shareCount {
+			t.Errorf("Expected to iterate over %v k/v pairs, but "+
+				"iterated %v time(s)", shareCount, iterations)
+		}
+
+		// Test if the iterator can be used to delete each.
+		iterations = 0
+		c = bkt.Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			err = c.Delete()
+			if err != nil {
+				return err
+			}
+			iterations++
+		}
+		if iterations != shareCount {
+			t.Errorf("Expected to iterate over and delete %v k/v pairs, "+
+				"but iterated %v time(s)", shareCount, iterations)
+		}
+
+		c = bkt.Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			t.Errorf("Expected empty bucket, still has key %x", k)
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
 	}
 }

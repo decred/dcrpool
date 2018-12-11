@@ -95,13 +95,7 @@ func PruneAcceptedWork(db *bolt.DB, height int64) error {
 			return database.ErrBucketNotFound(database.WorkBkt)
 		}
 
-		var err error
 		cursor := bkt.Cursor()
-		toPrune := make([][]byte, 0)
-
-		// Iterating and deleting in two steps to avoid:
-		// https://github.com/boltdb/bolt/issues/620
-		// TODO: test if this issue affects bbolt as well.
 		for k, v := cursor.First(); k != nil; k, _ = cursor.Next() {
 			var work AcceptedWork
 			err := json.Unmarshal(v, &work)
@@ -111,18 +105,15 @@ func PruneAcceptedWork(db *bolt.DB, height int64) error {
 
 			if work.Connected && (work.ConnectedAtHeight > -1 &&
 				work.ConnectedAtHeight < height) {
-				toPrune = append(toPrune, k)
+				err = cursor.Delete()
+				if err != nil {
+					return err
+				}
 			}
 		}
 
-		for _, k := range toPrune {
-			err = bkt.Delete(k)
-			if err != nil {
-				break
-			}
-		}
-
-		return err
+		return nil
 	})
+
 	return err
 }
