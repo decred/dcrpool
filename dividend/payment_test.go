@@ -522,3 +522,60 @@ func TestPaymentsMaturity(t *testing.T) {
 			expectedFeeAmt, feeBundle.Total())
 	}
 }
+
+func TestArchivedPaymentsFiltering(t *testing.T) {
+	db, err := setupDB()
+	if err != nil {
+		t.Error(err)
+	}
+
+	td := func() {
+		err = teardownDB(db)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	defer td()
+
+	count := uint32(2)
+	amt, _ := dcrutil.NewAmount(5)
+
+	bx := CreatePaymentBundle(xID, count, amt)
+	bx.UpdateAsPaid(db, 10)
+	bx.ArchivePayments(db)
+
+	now := time.Now()
+	minNano := now.Add(time.Second * 3).UnixNano()
+	minBytes := NanoToBigEndianBytes(minNano)
+
+	time.Sleep(time.Second * 10)
+
+	bx = CreatePaymentBundle(yID, count, amt)
+	bx.UpdateAsPaid(db, 10)
+	bx.ArchivePayments(db)
+
+	// Fetch archived payments for account x.
+	pmts, err := FetchArchivedPaymentsForAccount(db, []byte(xID), minBytes)
+	if err != nil {
+		t.Error(err)
+	}
+
+	expectedPmts := 0
+	if len(pmts) != expectedPmts {
+		t.Logf("Expected %v archived payments for account x"+
+			" (per filter criteria), got %v", expectedPmts, len(pmts))
+	}
+
+	// Fetch archived payments for account y.
+	pmts, err = FetchArchivedPaymentsForAccount(db, []byte(yID), minBytes)
+	if err != nil {
+		t.Error(err)
+	}
+
+	expectedPmts = 2
+	if len(pmts) != expectedPmts {
+		t.Logf("Expected %v archived payments for account x"+
+			" (per filter criteria), got %v", expectedPmts, len(pmts))
+	}
+}

@@ -1,6 +1,7 @@
 package dividend
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -175,11 +176,13 @@ func (bundle *PaymentBundle) ArchivePayments(db *bolt.DB) error {
 				return err
 			}
 
+			pmt.CreatedOn = time.Now().UnixNano()
 			pmtBytes, err := json.Marshal(pmt)
 			if err != nil {
 				return err
 			}
 
+			id = GeneratePaymentID(pmt.CreatedOn, pmt.Height, pmt.Account)
 			err = abkt.Put(id, pmtBytes)
 			if err != nil {
 				return err
@@ -538,4 +541,39 @@ func GeneratePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address, eligibl
 	}
 
 	return pmts, &targetAmt, nil
+}
+
+// FetchArchivedPaymentsForAccount fetches archived payments for the provided
+// account that were created before the provided timestamp.
+func FetchArchivedPaymentsForAccount(db *bolt.DB, account []byte, minNano []byte) ([]*Payment, error) {
+	pmts := make([]*Payment, 0)
+	err := db.View(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+		abkt := pbkt.Bucket(database.PaymentArchiveBkt)
+		if abkt == nil {
+			return database.ErrBucketNotFound(database.PaymentArchiveBkt)
+		}
+
+		c := abkt.Cursor()
+		for k, v := c.Next(); k != nil && (bytes.Compare(k[12:], account) == 0 &&
+			bytes.Compare(k[:8], minNano) > 0); k, v = c.Next() {
+			var payment Payment
+			err := json.Unmarshal(v, &payment)
+			if err != nil {
+				return err
+			}
+
+			pmts = append(pmts, &payment)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return pmts, nil
 }
