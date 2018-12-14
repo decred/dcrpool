@@ -1,14 +1,12 @@
 package dividend
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"time"
 
 	"github.com/coreos/bbolt"
-	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
 
 	"dnldd/dcrpool/database"
@@ -23,16 +21,11 @@ var (
 	// paid.
 	LastPaymentPaidOn = []byte("lastpaymentpaidon")
 
-	// LastPaymentPruneHeight is the last height at which old processed
-	// payments were pruned.
-	LastPaymentPruneHeight = []byte("lastpaymentpruneheight")
+	// LastPaymentHeight is the key of the last payment height.
+	LastPaymentHeight = []byte("lastpaymentheight")
 
 	// TxFeeReserve is the key of the tx fee reserve.
 	TxFeeReserve = []byte("txfeereserve")
-
-	// DeleteThreshold is approximately 30 days with respect to blocks.
-	// TODO: remove after tests
-	DeleteThreshold = uint32(chaincfg.SimNetParams.CoinbaseMaturity) // uint32(8640)
 )
 
 // Payment represents an outstanding payment for a pool account.
@@ -83,6 +76,10 @@ func GetPayment(db *bolt.DB, id []byte) (*Payment, error) {
 		err := json.Unmarshal(v, &payment)
 		return err
 	})
+	if err != nil {
+		return nil, err
+	}
+
 	return &payment, err
 }
 
@@ -117,13 +114,6 @@ func (payment *Payment) Update(db *bolt.DB) error {
 
 // Delete purges the referenced pending payment from the database.
 func (payment *Payment) Delete(db *bolt.DB) error {
-	heightDiff := payment.PaidOnHeight - payment.Height
-	if payment.PaidOnHeight != 0 && heightDiff < DeleteThreshold {
-		return fmt.Errorf("Cannot delete a paid payment record below the "+
-			"delete threshold: (%v at height %v for account %v)",
-			payment.Amount, payment.Height, payment.Account)
-	}
-
 	id := GeneratePaymentID(payment.CreatedOn, payment.Height, payment.Account)
 	return database.Delete(db, database.PaymentBkt, id)
 }
@@ -152,17 +142,54 @@ func (bundle *PaymentBundle) Total() dcrutil.Amount {
 	return total
 }
 
-// UpdateAsPaid updates all associated payments to a payment bundle as paid.
-func (bundle *PaymentBundle) UpdateAsPaid(db *bolt.DB, height uint32) error {
-	for _, payment := range bundle.Payments {
-		payment.PaidOnHeight = height
-		err := payment.Update(db)
-		if err != nil {
-			return err
-		}
+// UpdateAsPaid updates all associated payments referenced by a payment bundle
+// as paid.
+func (bundle *PaymentBundle) UpdateAsPaid(db *bolt.DB, height uint32) {
+	for idx := 0; idx < len(bundle.Payments); idx++ {
+		bundle.Payments[idx].PaidOnHeight = height
 	}
+}
 
-	return nil
+// ArchivePayments removes all payments included in the payment bundle from the
+// payment bucket and archives them.
+func (bundle *PaymentBundle) ArchivePayments(db *bolt.DB) error {
+	err := db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+		pmtbkt := pbkt.Bucket(database.PaymentBkt)
+		if pmtbkt == nil {
+			return database.ErrBucketNotFound(database.PaymentBkt)
+		}
+
+		abkt := pbkt.Bucket(database.PaymentArchiveBkt)
+		if abkt == nil {
+			return database.ErrBucketNotFound(database.PaymentArchiveBkt)
+		}
+
+		for _, pmt := range bundle.Payments {
+			id := GeneratePaymentID(pmt.CreatedOn, pmt.Height, pmt.Account)
+			err := pmtbkt.Delete(id)
+			if err != nil {
+				return err
+			}
+
+			pmtBytes, err := json.Marshal(pmt)
+			if err != nil {
+				return err
+			}
+
+			err = abkt.Put(id, pmtBytes)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	return err
 }
 
 // GeneratePaymentBundles creates account payment bundles from the provided
@@ -511,48 +538,4 @@ func GeneratePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address, eligibl
 	}
 
 	return pmts, &targetAmt, nil
-}
-
-// PruneProcessedPayments removes all old processed payments.
-func PruneProcessedPayments(db *bolt.DB, height uint32) error {
-	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.PaymentBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.PaymentBkt)
-		}
-
-		cursor := bkt.Cursor()
-		pruneCount := 0
-		for k, v := cursor.First(); k != nil; k, _ = cursor.Next() {
-			var payment Payment
-			err := json.Unmarshal(v, &payment)
-			if err != nil {
-				return err
-			}
-
-			if payment.PaidOnHeight != 0 {
-				heightDiff := payment.PaidOnHeight - payment.Height
-				if heightDiff >= DeleteThreshold {
-					err = cursor.Delete()
-					if err != nil {
-						return err
-					}
-					pruneCount++
-				}
-			}
-		}
-
-		log.Tracef("pruned %v processed payments", pruneCount)
-
-		// Persist the last payment prune height.
-		vbytes := make([]byte, 4)
-		binary.LittleEndian.PutUint32(vbytes, height)
-		return pbkt.Put(LastPaymentPruneHeight, vbytes)
-	})
-
-	return err
 }

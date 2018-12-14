@@ -29,6 +29,9 @@ var (
 	// PaymentBkt stores all payments.
 	PaymentBkt = []byte("paymentbkt")
 
+	// PaymentArchiveBkt stores all processed payments for auditing purposes.
+	PaymentArchiveBkt = []byte("paymentarchivebkt")
+
 	// VersionK is the key of the current version of the database.
 	VersionK = []byte("version")
 )
@@ -104,6 +107,12 @@ func CreateBuckets(db *bolt.DB) error {
 		if err != nil {
 			return fmt.Errorf("failed to create '%v' bucket: %v",
 				string(PaymentBkt), err)
+		}
+
+		_, err = pbkt.CreateBucketIfNotExists(PaymentArchiveBkt)
+		if err != nil {
+			return fmt.Errorf("failed to create '%v' bucket: %v",
+				string(PaymentArchiveBkt), err)
 		}
 
 		return nil
