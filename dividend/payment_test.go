@@ -10,7 +10,7 @@ import (
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
 
-	"dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/database"
 )
 
 // createShare creates a share with the provided account, weight and

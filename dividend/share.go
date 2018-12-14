@@ -13,7 +13,7 @@ import (
 	"github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil"
 
-	"dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/database"
 )
 
 // Miner types lists all known DCR miners, in order of descending hash power

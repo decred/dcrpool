@@ -6,7 +6,7 @@ import (
 
 	"github.com/coreos/bbolt"
 
-	"dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/database"
 )
 
 // AcceptedWork represents an accepted work submission to the network.

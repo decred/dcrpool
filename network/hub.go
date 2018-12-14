@@ -21,8 +21,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"dnldd/dcrpool/database"
-	"dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/dividend"
 )
 
 const (

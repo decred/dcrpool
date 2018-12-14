@@ -13,7 +13,7 @@ import (
 	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
 
-	"dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/dividend"
 )
 
 const (

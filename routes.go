@@ -12,9 +12,9 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 	"golang.org/x/crypto/bcrypt"
 
-	"dnldd/dcrpool/database"
-	"dnldd/dcrpool/dividend"
-	"dnldd/dcrpool/network"
+	"github.com/dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/network"
 )
 
 // errParamNotFound is returned when the provided parameter key does not map

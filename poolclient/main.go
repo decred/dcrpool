@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"runtime"
 
-	"dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/dividend"
 )
 
 func main() {

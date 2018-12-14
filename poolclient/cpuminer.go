@@ -14,7 +14,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/blockchain"
 
-	"dnldd/dcrpool/network"
+	"github.com/dnldd/dcrpool/network"
 )
 
 const (

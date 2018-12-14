@@ -13,8 +13,8 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/websocket"
 
-	"dnldd/dcrpool/dividend"
-	"dnldd/dcrpool/network"
+	"github.com/dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/network"
 )
 
 const (

@@ -11,7 +11,7 @@ import (
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
 
-	"dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/database"
 )
 
 var (
