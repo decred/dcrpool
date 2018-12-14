@@ -15,7 +15,7 @@ import (
 	"github.com/decred/dcrd/wire"
 	"github.com/gorilla/websocket"
 
-	"dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/dividend"
 )
 
 const (

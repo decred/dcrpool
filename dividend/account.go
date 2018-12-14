@@ -9,7 +9,7 @@ import (
 	"github.com/coreos/bbolt"
 	"golang.org/x/crypto/bcrypt"
 
-	"dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/database"
 )
 
 // Account represents a mining pool user account.

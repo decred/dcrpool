@@ -17,8 +17,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 
-	"dnldd/dcrpool/database"
-	"dnldd/dcrpool/network"
+	"github.com/dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/network"
 )
 
 // CORS Rules.

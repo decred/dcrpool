@@ -13,9 +13,9 @@ import (
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
 
-	"dnldd/dcrpool/database"
-	"dnldd/dcrpool/dividend"
-	"dnldd/dcrpool/network"
+	"github.com/dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/network"
 )
 
 // logWriter implements an io.Writer that outputs to both standard output and

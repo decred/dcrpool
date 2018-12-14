@@ -9,7 +9,7 @@ import (
 	"github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil"
 
-	"dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/database"
 )
 
 var (

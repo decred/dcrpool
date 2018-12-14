@@ -7,7 +7,7 @@ import (
 	"github.com/decred/dcrd/blockchain"
 	"github.com/decred/dcrd/chaincfg"
 
-	"dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/dividend"
 )
 
 func TestTargetConversion(t *testing.T) {
