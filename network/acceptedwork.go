@@ -44,6 +44,10 @@ func GetAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
 		err := json.Unmarshal(v, &work)
 		return err
 	})
+	if err != nil {
+		return nil, err
+	}
+
 	return &work, err
 }
 

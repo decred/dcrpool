@@ -69,6 +69,10 @@ func GetAccount(db *bolt.DB, id []byte) (*Account, error) {
 		err := json.Unmarshal(v, &account)
 		return err
 	})
+	if err != nil {
+		return nil, err
+	}
+
 	return &account, err
 }
 

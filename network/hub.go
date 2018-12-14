@@ -51,27 +51,28 @@ type HubConfig struct {
 // Hub maintains the set of active clients and facilitates message broadcasting
 // to all active clients.
 type Hub struct {
-	db             *bolt.DB
-	httpc          *http.Client
-	cfg            *HubConfig
-	limiter        *RateLimiter
-	Broadcast      chan Message
-	rpcc           *rpcclient.Client
-	rpccMtx        sync.Mutex
-	gConn          *grpc.ClientConn
-	grpc           walletrpc.WalletServiceClient
-	grpcMtx        sync.Mutex
-	hashRate       *big.Int
-	hashRateMtx    sync.Mutex
-	poolTargets    map[string]uint32
-	poolTargetsMtx sync.RWMutex
-	ConnCount      uint64
-	Ticker         *time.Ticker
-	connCh         chan []byte
-	discCh         chan []byte
-	ctx            context.Context
-	cancel         context.CancelFunc
-	txFeeReserve   dcrutil.Amount
+	db                *bolt.DB
+	httpc             *http.Client
+	cfg               *HubConfig
+	limiter           *RateLimiter
+	Broadcast         chan Message
+	rpcc              *rpcclient.Client
+	rpccMtx           sync.Mutex
+	gConn             *grpc.ClientConn
+	grpc              walletrpc.WalletServiceClient
+	grpcMtx           sync.Mutex
+	hashRate          *big.Int
+	hashRateMtx       sync.Mutex
+	poolTargets       map[string]uint32
+	poolTargetsMtx    sync.RWMutex
+	ConnCount         uint64
+	Ticker            *time.Ticker
+	connCh            chan []byte
+	discCh            chan []byte
+	ctx               context.Context
+	cancel            context.CancelFunc
+	txFeeReserve      dcrutil.Amount
+	lastPaymentHeight uint32
 }
 
 // NewHub initializes a websocket hub.
@@ -94,7 +95,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 
 	log.Infof("Payment method is %v.", hcfg.PaymentMethod)
 
-	// Load the tx fee reserve.
+	// Load the tx fee reserve and last payment height.
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 
@@ -108,6 +109,17 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 			h.txFeeReserve = dcrutil.Amount(binary.LittleEndian.Uint32(v))
 		}
 
+		v = nil
+		v = pbkt.Get(dividend.LastPaymentHeight)
+		if v == nil {
+			log.Info("Last payment height value not found in db, initializing.")
+			h.lastPaymentHeight = 0
+		}
+
+		if v != nil {
+			h.lastPaymentHeight = binary.LittleEndian.Uint32(v)
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -117,6 +129,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 
 	log.Tracef("Tx fee reserve is currently %v, with a max of %v",
 		h.txFeeReserve, h.cfg.MaxTxFeeReserve)
+	log.Tracef("Last payment height is currently %v", h.lastPaymentHeight)
 
 	// Calculate pool targets for all known miners.
 	h.poolTargetsMtx.Lock()
@@ -242,14 +255,24 @@ func (h *Hub) RemoveHashRate(miner string) {
 	h.hashRateMtx.Unlock()
 }
 
-// PersistTxFeeReserve saves the tx fee reserve to the database.
-func (h *Hub) PersistTxFeeReserve() error {
+// Persist saves details of the hub to the database.
+func (h *Hub) Persist() error {
 	err := h.db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		vbytes := make([]byte, 4)
+
+		// Persist the tx fee reserve.
 		binary.LittleEndian.PutUint32(vbytes, uint32(h.txFeeReserve))
-		return pbkt.Put(dividend.TxFeeReserve, vbytes)
+		err := pbkt.Put(dividend.TxFeeReserve, vbytes)
+		if err != nil {
+			return err
+		}
+
+		// Persist the last payment height.
+		binary.LittleEndian.PutUint32(vbytes, uint32(h.lastPaymentHeight))
+		return pbkt.Put(dividend.LastPaymentHeight, vbytes)
 	})
+
 	return err
 }
 
@@ -270,7 +293,7 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 	// Construct the transaction.
 	constructTxReq := &walletrpc.ConstructTransactionRequest{
 		SourceAccount:            0,
-		RequiredConfirmations:    6,
+		RequiredConfirmations:    1,
 		OutputSelectionAlgorithm: walletrpc.ConstructTransactionRequest_ALL,
 		NonChangeOutputs:         outs,
 	}
@@ -340,56 +363,61 @@ out:
 			_ = hex.Encode(encoded, nonce)
 			work, err := GetAcceptedWork(h.db, encoded)
 			if err != nil {
-				log.Errorf("failed to fetch accepted work: %v", err)
-				h.cancel()
+				log.Error(err)
 				continue
 			}
 
 			// If the connected block is an accepted work from the pool,
 			// record payouts to participating accounts.
-			if work != nil {
-				// Fetch the associated coinbase amount for the block.
-				h.rpccMtx.Lock()
-				block, err := h.rpcc.GetBlock(&blockHash)
-				h.rpccMtx.Unlock()
+			h.rpccMtx.Lock()
+			block, err := h.rpcc.GetBlock(&blockHash)
+			h.rpccMtx.Unlock()
+			if err != nil {
+				log.Error(err)
+				h.cancel()
+				continue
+			}
+
+			coinbase :=
+				dcrutil.Amount(block.Transactions[0].TxOut[2].Value)
+
+			log.Debugf("accepted work (%v) at height %v has coinbase "+
+				"of %v", header.BlockHash(), header.Height, coinbase)
+
+			// Pay dividends per the configured payment scheme and process
+			// mature payments.
+			switch h.cfg.PaymentMethod {
+			case dividend.PPS:
+				err := dividend.PayPerShare(h.db, coinbase, h.cfg.PoolFee,
+					header.Height, h.cfg.ActiveNet.CoinbaseMaturity)
 				if err != nil {
 					log.Error(err)
 					h.cancel()
 					continue
 				}
 
-				coinbase :=
-					dcrutil.Amount(block.Transactions[0].TxIn[0].ValueIn)
-
-				// Pay dividends per the configured payment scheme and process
-				// mature payments.
-				switch h.cfg.PaymentMethod {
-				case dividend.PPS:
-					err := dividend.PayPerShare(h.db, coinbase, h.cfg.PoolFee,
-						header.Height, h.cfg.ActiveNet.CoinbaseMaturity)
-					if err != nil {
-						log.Error(err)
-						h.cancel()
-						continue
-					}
-
-				case dividend.PPLNS:
-					err := dividend.PayPerLastNShares(h.db, coinbase,
-						h.cfg.PoolFee, header.Height,
-						h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
-					if err != nil {
-						log.Error(err)
-						h.cancel()
-						continue
-					}
+			case dividend.PPLNS:
+				err := dividend.PayPerLastNShares(h.db, coinbase,
+					h.cfg.PoolFee, header.Height,
+					h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
+				if err != nil {
+					log.Error(err)
+					h.cancel()
+					continue
 				}
 			}
 
-			// Process matured payments.
-			err = h.ProcessPayments(uint32(header.Height))
-			if err != nil {
-				log.Error(err)
-			}
+			go func() {
+				// Idle to allow wallet updates before querying.
+				time.Sleep(time.Millisecond * 700)
+
+				// Process mature payments.
+				err = h.ProcessPayments(uint32(header.Height))
+				if err != nil {
+					log.Error(err)
+					h.cancel()
+				}
+			}()
 
 			// Update the accepted work record for the connected block.
 			work.Connected = true
@@ -405,44 +433,12 @@ out:
 				continue
 			}
 
-			// Prune old processed payments.
-			var lastPaymentPruneHeight uint32
-			err = h.db.View(func(tx *bolt.Tx) error {
-				pbkt := tx.Bucket(database.PoolBkt)
-				if pbkt == nil {
-					return database.ErrBucketNotFound(database.PoolBkt)
-				}
-
-				v := pbkt.Get(dividend.LastPaymentPruneHeight)
-				if v != nil {
-					lastPaymentPruneHeight = binary.LittleEndian.Uint32(v)
-				}
-
-				return nil
-			})
-			if err != nil {
-				log.Error(err)
-				h.cancel()
-				continue
-			}
-
-			log.Tracef("last payments prune height is %v", lastPaymentPruneHeight)
-
-			heightDiff := header.Height - lastPaymentPruneHeight
-			if heightDiff >= dividend.DeleteThreshold {
-				err := dividend.PruneProcessedPayments(h.db, header.Height)
-				if err != nil {
-					log.Error(err)
-					h.cancel()
-					continue
-				}
-			}
-
 		case blkHeader := <-h.discCh:
 			header, err := ParseBlockHeader(blkHeader)
 			if err != nil {
 				log.Errorf("failed to parse disconnected block header: %v", err)
 				h.cancel()
+				continue
 			}
 
 			log.Tracef("Block disconnected (hash: %v, height: %v)",
@@ -452,33 +448,33 @@ out:
 			work, err := GetAcceptedWork(h.db, nonce)
 			if err != nil {
 				log.Error(err)
-				h.cancel()
+				continue
 			}
 
 			// If the disconnected block is an accepted work from the pool,
 			// delete all associated payments and update the state of the
 			// accepted work.
-			if work != nil {
-				work.Connected = false
+			work.Connected = false
 
-				payments, err := dividend.FetchPendingPaymentsAtHeight(h.db,
-					uint32(work.ConnectedAtHeight))
+			payments, err := dividend.FetchPendingPaymentsAtHeight(h.db,
+				uint32(work.ConnectedAtHeight))
+			if err != nil {
+				log.Error(err)
+				h.cancel()
+				continue
+			}
+
+			for _, pmt := range payments {
+				err = pmt.Delete(h.db)
 				if err != nil {
 					log.Error(err)
 					h.cancel()
+					break
 				}
-
-				for _, pmt := range payments {
-					err = pmt.Delete(h.db)
-					if err != nil {
-						log.Error(err)
-						h.cancel()
-					}
-				}
-
-				work.ConnectedAtHeight = -1
-				work.Update(h.db)
 			}
+
+			work.ConnectedAtHeight = -1
+			work.Update(h.db)
 		}
 	}
 
@@ -488,6 +484,17 @@ out:
 // ProcessPayments fetches all eligible payments and publishes a
 // transaction to the network paying dividends to participating accounts.
 func (h *Hub) ProcessPayments(height uint32) error {
+	// Waiting two blocks after a successful payment before proceeding with
+	// another one because the reserved amount for transaction fees becomes
+	// change after a successful transaction. Change matures after the next
+	// block is processed. The second block is as a result of trying to
+	// maximize the transaction fee usage by processing mature payments
+	// after the transaction fees reserve has matured and ready for another
+	// transaction.
+	if h.lastPaymentHeight != 0 && (height-h.lastPaymentHeight) < 3 {
+		return nil
+	}
+
 	// Fetch all eligible payments.
 	eligiblePmts, err := dividend.FetchEligiblePaymentBundles(h.db, height,
 		h.cfg.MinPayment)
@@ -496,7 +503,8 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	}
 
 	if len(eligiblePmts) == 0 {
-		return fmt.Errorf("no eligible payments to process")
+		log.Infof("no eligible payments to process")
+		return nil
 	}
 
 	// Generate the payment details from the eligible payments fetched.
@@ -506,7 +514,7 @@ func (h *Hub) ProcessPayments(height uint32) error {
 		return err
 	}
 
-	log.Tracef("Target amount is : %v", targetAmt)
+	log.Tracef("mature rewards at height (%v) is %v", height, targetAmt)
 
 	// Create address-amount kv pairs for the transaction, using the payment
 	// details.
@@ -526,9 +534,10 @@ func (h *Hub) ProcessPayments(height uint32) error {
 		return err
 	}
 
-	// Update all eligible payments published by the tx as paid.
+	// Update all payments published by the tx as paid and archive them.
 	for _, bundle := range eligiblePmts {
-		err = bundle.UpdateAsPaid(h.db, height)
+		bundle.UpdateAsPaid(h.db, height)
+		err = bundle.ArchivePayments(h.db)
 		if err != nil {
 			return err
 		}
@@ -548,6 +557,8 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	if err != nil {
 		return err
 	}
+
+	h.lastPaymentHeight = height
 
 	return nil
 }

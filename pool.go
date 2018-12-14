@@ -135,7 +135,7 @@ func (p *Pool) shutdown() {
 	defer p.db.Close()
 	defer p.cancel()
 
-	err := p.hub.PersistTxFeeReserve()
+	err := p.hub.Persist()
 	if err != nil {
 		pLog.Error(err)
 	}
@@ -185,7 +185,7 @@ func main() {
 	for {
 		select {
 		case <-interrupt:
-			go p.shutdown()
+			p.shutdown()
 			return
 		}
 	}
