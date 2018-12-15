@@ -202,19 +202,14 @@ tmux send-keys "dcrwallet -C tbywallet.conf" C-m
 ################################################################################
 # Setup the pool wallet's dcrctl (wctl).
 ################################################################################
-sleep 20
+sleep 12
 tmux new-window -t $SESSION:6 -n 'wctl'
 tmux send-keys "cd ${NODES_ROOT}/wallet" C-m
 tmux send-keys "./ctl createnewaccount pfee" C-m
-sleep 1
 tmux send-keys "./ctl getnewaddress pfee" C-m
-sleep 1
 tmux send-keys "./ctl createnewaccount client" C-m
-sleep 1
 tmux send-keys "./ctl getnewaddress client" C-m
-sleep 1
 tmux send-keys "./ctl getnewaddress default" C-m
-sleep 1
 tmux send-keys "./ctl getbalance"
 
 ################################################################################
@@ -223,13 +218,11 @@ tmux send-keys "./ctl getbalance"
 tmux new-window -t $SESSION:7 -n 'tctl'
 tmux send-keys "cd ${NODES_ROOT}/tbywallet" C-m
 tmux send-keys "./ctl getnewaddress" C-m
-sleep 1
 tmux send-keys "./ctl getbalance"
 
 ################################################################################
 # Setup the cpu miner's dcrctl (cctl).
 ################################################################################
-sleep 1
 tmux new-window -t $SESSION:8 -n 'cctl'
 tmux send-keys "cd ${NODES_ROOT}/cpuminer" C-m
 
@@ -244,7 +237,7 @@ tmux send-keys "./mine 5" C-m
 tmux new-window -t $SESSION:9 -n 'pool'
 tmux send-keys "cd ${NODES_ROOT}/pool" C-m
 tmux send-keys "dcrpool --configfile pool.conf --homedir=." C-m
-sleep 2
+sleep 1
 tmux send-keys `curl -s POST http://127.0.0.1:19560/create/account \
   -H 'Cache-Control: no-cache' \
   -H 'Content-Type: application/json' \
@@ -254,7 +247,7 @@ tmux send-keys `curl -s POST http://127.0.0.1:19560/create/account \
 ################################################################################
 # Setup the mining client. 
 ################################################################################
-sleep 2
+sleep 1
 tmux new-window -t $SESSION:10 -n 'client'
 tmux send-keys "cd ${NODES_ROOT}/client" C-m
 tmux send-keys "poolclient --configfile client.conf --homedir=." C-m
