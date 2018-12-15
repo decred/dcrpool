@@ -213,7 +213,6 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 	h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
 
 	go h.process()
-	// h.dividendPayments()
 
 	return h, nil
 }
