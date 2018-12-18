@@ -1,9 +1,14 @@
 # dcrpool 
+
+[![Build Status](https://travis-ci.com/dnldd/dcrpool.svg?branch=master)](https://travis-ci.com/dnldd/dcrpool)
+
 dcrpool is a decred mining pool. The nonce space is defined by haste protocol 
 semantics which consistitutes 12-bytes of nonce space with an 8-bytes nonce 
 and a 4-bytes worker id:  
 
-`<0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00>, [0x00, 0x00, 0x00, 0x00]` 
+```sh
+<0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00>, [0x00, 0x00, 0x00, 0x00]
+``` 
 
 It supports both PPS (Pay Per Share) and PPLNS (Pay Per Last N Shares) payment 
 schemes. Clients require a registered account to the pool and must maintain a 
@@ -26,26 +31,31 @@ The pool using its gRPC connection with to the pool wallet publishes payout
 transactions to associated pool accounts when block rewards mature. Processed 
 payments are archived for auditing purposes. To install and run dcrpool:  
 
-`git clone https://github.com/dnldd/dcrpool.git`  
-`cd dcrpool`  
-`go build`  
-`go install`  
-`dcrpool --configfile path/to/config.conf`
+```sh
+git clone https://github.com/dnldd/dcrpool.git 
+cd dcrpool 
+go build 
+go install 
+dcrpool --configfile path/to/config.conf 
+```
 
 To install and run poolclient:  
-`cd dcrpool/poolclient`  
-`go build`  
-`go install`  
-`poolclient --configfile path/to/config.conf`
 
+```sh
+cd dcrpool/poolclient 
+go build 
+go install 
+poolclient --configfile path/to/config.conf 
+```
 
-## mining harness  
 The project has a tmux mining harness for testing purposes. The harness 
 consists of two dcrd nodes, two wallets, a mining pool and a pool client. Refer 
 to `harness.sh` for configuration details. The mining harness takes 10+ seconds 
 to start so give it some time, or take a look at the script and better it :). 
 To run the mining harness:  
 
-`harness.sh`  
+```sh
+harness.sh 
+```
 
 
