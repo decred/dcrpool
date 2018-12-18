@@ -109,7 +109,6 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 			h.txFeeReserve = dcrutil.Amount(binary.LittleEndian.Uint32(v))
 		}
 
-		v = nil
 		v = pbkt.Get(dividend.LastPaymentHeight)
 		if v == nil {
 			log.Info("Last payment height value not found in db, initializing.")

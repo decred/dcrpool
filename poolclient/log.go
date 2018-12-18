@@ -100,22 +100,3 @@ func setLogLevels(logLevel string) {
 		setLogLevel(subsystemID, logLevel)
 	}
 }
-
-// directionString is a helper function that returns a string that represents
-// the direction of a connection (inbound or outbound).
-func directionString(inbound bool) string {
-	if inbound {
-		return "inbound"
-	}
-	return "outbound"
-}
-
-// fatalf logs a string, then cleanly exits.
-func fatalf(str string) {
-	log.Errorf(str)
-	os.Stdout.Sync()
-	if logRotator != nil {
-		logRotator.Close()
-	}
-	os.Exit(1)
-}

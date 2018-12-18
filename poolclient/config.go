@@ -27,7 +27,6 @@ const (
 
 var (
 	defaultHomeDir    = dcrutil.AppDataDir("dcrpclient", false)
-	defaultGenerate   = false
 	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFilename)
 	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogDirname)
 )
