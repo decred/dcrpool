@@ -413,6 +413,9 @@ func PayPerShare(db *bolt.DB, total dcrutil.Amount, poolFee float64, height uint
 
 	payments, err := CalculatePayments(percentages, total, poolFee, height,
 		estMaturity)
+	if err != nil {
+		return err
+	}
 
 	// Persist all payments.
 	for _, payment := range payments {
@@ -475,6 +478,9 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, heig
 
 	payments, err := CalculatePayments(percentages, amount, poolFee, height,
 		estMaturity)
+	if err != nil {
+		return err
+	}
 
 	// Persist all payments.
 	for _, payment := range payments {

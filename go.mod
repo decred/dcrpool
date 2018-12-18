@@ -3,7 +3,7 @@ module github.com/dnldd/dcrpool
 require (
 	github.com/coreos/bbolt v1.3.0
 	github.com/davecgh/go-spew v1.1.0
-	github.com/decred/dcrd/blockchain v1.0.1
+	github.com/decred/dcrd/blockchain v1.1.1
 	github.com/decred/dcrd/chaincfg v1.2.1
 	github.com/decred/dcrd/dcrutil v1.2.0
 	github.com/decred/dcrd/rpcclient v1.1.0
@@ -21,17 +21,11 @@ require (
 )
 
 replace (
-	github.com/decred/dcrd/blockchain => ../dcrd/blockchain
-
-	github.com/decred/dcrd/blockchain/stake => ../dcrd/blockchain/stake
-
-	github.com/decred/dcrd/chaincfg => ../dcrd/chaincfg
-
-	github.com/decred/dcrd/dcrjson => ../dcrd/dcrjson
-
-	github.com/decred/dcrd/dcrutil => ../dcrd/dcrutil
-
-	github.com/decred/dcrd/rpcclient => ../dcrd/rpcclient
-
-	github.com/decred/dcrd/wire => ../dcrd/wire
+	github.com/decred/dcrd/blockchain => github.com/dnldd/dcrd/blockchain v0.0.0-20181119092801-71ca39f1d26d
+	github.com/decred/dcrd/blockchain/stake => github.com/dnldd/dcrd/blockchain/stake v0.0.0-20181119092801-71ca39f1d26d
+	github.com/decred/dcrd/chaincfg => github.com/dnldd/dcrd/chaincfg v0.0.0-20181119092801-71ca39f1d26d
+	github.com/decred/dcrd/dcrjson => github.com/dnldd/dcrd/dcrjson v0.0.0-20181119092801-71ca39f1d26d
+	github.com/decred/dcrd/dcrutil => github.com/dnldd/dcrd/dcrutil v0.0.0-20181119092801-71ca39f1d26d
+	github.com/decred/dcrd/rpcclient => github.com/dnldd/dcrd/rpcclient v0.0.0-20181119092801-71ca39f1d26d
+	github.com/decred/dcrd/wire => github.com/dnldd/dcrd/wire v0.0.0-20181119092801-71ca39f1d26d
 )
