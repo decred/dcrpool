@@ -26,9 +26,9 @@ const (
 	defaultLogFilename     = "dcrpool.log"
 	defaultDBFilename      = "dcrpool.kv"
 	defaultRPCCertFilename = "rpc.cert"
-	defaultPort            = ":82552"
 	defaultRPCUser         = "dcrp"
 	defaultRPCPass         = "dcrppass"
+	defaultDomain          = "127.0.0.1"
 	defaultDcrdRPCHost     = "127.0.0.1:19109"
 	defaultWalletGRPCHost  = "127.0.0.1:51028"
 	defaultPoolFeeAddr     = ""
@@ -72,7 +72,7 @@ type config struct {
 	RPCUser         string   `long:"rpcuser" description:"Username for RPC connections."`
 	RPCPass         string   `long:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
 	PoolFeeAddrs    []string `long:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
-	Port            string   `long:"port" description:"The listening port."`
+	Domain          string   `long:"domain" description:"The domain or ip of the the pool. eg. decred.org, 127.0.0.1"`
 	PoolFee         float64  `long:"poolfee" description:"The fee charged for pool participation. eg. 0.01 (1%), 0.05 (5%)."`
 	MaxTxFeeReserve float64  `long:"maxtxfeereserve" description:"The maximum amount reserved for transaction fees, in DCR."`
 	MaxGenTime      uint64   `long:"maxgentime" description:"The share creation target time for the pool in seconds."`
@@ -256,12 +256,12 @@ func loadConfig() (*config, []string, error) {
 		DBFile:          defaultDBFile,
 		DebugLevel:      defaultLogLevel,
 		LogDir:          defaultLogDir,
-		Port:            defaultPort,
 		RPCUser:         defaultRPCUser,
 		RPCPass:         defaultRPCPass,
 		DcrdRPCHost:     defaultDcrdRPCHost,
 		WalletGRPCHost:  defaultWalletGRPCHost,
 		PoolFeeAddrs:    []string{defaultPoolFeeAddr},
+		Domain:          defaultDomain,
 		PoolFee:         defaultPoolFee,
 		MaxTxFeeReserve: defaultMaxTxFeeReserve,
 		MaxGenTime:      defaultMaxGenTime,
@@ -437,7 +437,7 @@ func loadConfig() (*config, []string, error) {
 	for _, pAddr := range cfg.PoolFeeAddrs {
 		addr, err := dcrutil.DecodeAddress(pAddr)
 		if err != nil {
-			str := "%s: pool fee address '%s' failed to decode: %v"
+			str := "%s: pool fee address '%v' failed to decode: %v"
 			err := fmt.Errorf(str, funcName, addr, err)
 			fmt.Fprintln(os.Stderr, err)
 			fmt.Fprintln(os.Stderr, usageMessage)
@@ -447,7 +447,7 @@ func loadConfig() (*config, []string, error) {
 		// Ensure pool fee address is valid and on the active network.
 		if !addr.IsForNet(cfg.net) {
 			return nil, nil,
-				fmt.Errorf("pool fee address (%s) not on the active network "+
+				fmt.Errorf("pool fee address (%v) not on the active network "+
 					"(%s)", addr, cfg.ActiveNet)
 		}
 

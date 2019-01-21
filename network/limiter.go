@@ -8,6 +8,7 @@ import (
 )
 
 const (
+	// TODO: Update the comments accordingly.
 	// For a connected client within fifteen (15) seconds three (3) ping
 	// responses and a submit work request. The current limiter settings
 	// allows for thirty (30) tokens generated every fifteen (15) seconds.
@@ -15,7 +16,7 @@ const (
 	// well as requests vai the pool API.
 
 	// tokenRate is the token refill rate for the bucket per second.
-	tokenRate = 2
+	tokenRate = 5
 	// burst is the maximum token usage allowed per call.
 	burst = 3
 )

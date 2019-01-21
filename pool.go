@@ -2,32 +2,20 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
-	"time"
 
-	"github.com/coreos/bbolt"
+	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
-	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 
 	"github.com/dnldd/dcrpool/database"
 	"github.com/dnldd/dcrpool/network"
-)
-
-// CORS Rules.
-var (
-	headersOk = handlers.AllowedHeaders([]string{"X-Requested-With",
-		"Content-Type", "Authorization"})
-	originsOk = handlers.AllowedOrigins([]string{"*"})
-	methodsOk = handlers.AllowedMethods(
-		[]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
 )
 
 // Pool represents a Proof-of-Work Mining pool for Decred.
@@ -67,15 +55,6 @@ func NewPool(cfg *config) (*Pool, error) {
 
 	p.limiter = network.NewRateLimiter()
 	p.router = new(mux.Router)
-	p.setupRoutes()
-	p.server = &http.Server{
-		Addr: p.cfg.Port,
-		Handler: handlers.CORS(
-			headersOk,
-			originsOk,
-			methodsOk)(p.limit(p.router)),
-	}
-	p.upgrader = websocket.Upgrader{}
 
 	dcrdRPCCfg := &rpcclient.ConnConfig{
 		Host:         cfg.DcrdRPCHost,
@@ -96,13 +75,13 @@ func NewPool(cfg *config) (*Pool, error) {
 	}
 
 	p.ctx, p.cancel = context.WithCancel(context.Background())
-
 	hcfg := &network.HubConfig{
 		ActiveNet:         cfg.net,
 		WalletRPCCertFile: walletRPCCertFile,
 		WalletGRPCHost:    cfg.WalletGRPCHost,
 		DcrdRPCCfg:        dcrdRPCCfg,
 		PoolFee:           cfg.PoolFee,
+		Domain:            cfg.Domain,
 		MaxTxFeeReserve:   maxTxFeeReserve,
 		MaxGenTime:        new(big.Int).SetUint64(cfg.MaxGenTime),
 		PaymentMethod:     cfg.PaymentMethod,
@@ -120,15 +99,6 @@ func NewPool(cfg *config) (*Pool, error) {
 	return p, nil
 }
 
-// listen starts the mining pool server for incoming connections.
-func (p *Pool) listen() {
-	err := p.server.ListenAndServe()
-	if err != http.ErrServerClosed {
-		pLog.Error(err)
-		return
-	}
-}
-
 // shutdown gracefully terminates the mining pool.
 func (p *Pool) shutdown() {
 	pLog.Info("Shutting down dcrpool.")
@@ -138,14 +108,6 @@ func (p *Pool) shutdown() {
 	err := p.hub.Persist()
 	if err != nil {
 		pLog.Error(err)
-	}
-
-	// Create a timeout context to force termination if the http server stalls.
-	ctx, cl := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cl()
-
-	if err := p.server.Shutdown(ctx); err != nil {
-		pLog.Errorf("Shutdown error: %v", err)
 	}
 }
 
@@ -161,7 +123,6 @@ func main() {
 	// and configures it accordingly.
 	cfg, _, err := loadConfig()
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 	defer func() {
@@ -181,12 +142,13 @@ func main() {
 	pLog.Infof("Home dir: %s", cfg.HomeDir)
 	pLog.Infof("Started dcrpool.")
 
-	go p.listen()
 	for {
 		select {
-		case <-interrupt:
+		case <-p.ctx.Done():
 			p.shutdown()
 			return
+		case <-interrupt:
+			p.cancel()
 		}
 	}
 }

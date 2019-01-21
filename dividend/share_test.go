@@ -1,7 +1,6 @@
 package dividend
 
 import (
-	"encoding/hex"
 	"math/big"
 	"os"
 	"testing"
@@ -19,16 +18,16 @@ var (
 	testDB = "testdb"
 	// Account X.
 	accX = "x"
-	// Account X id.
-	xID = hex.EncodeToString([]byte(accX))
 	// Account X address.
 	xAddr = "SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc"
+	// Account X id.
+	xID = *AccountID(accX, xAddr)
 	// Account Y.
 	accY = "y"
-	// Account Y id.
-	yID = hex.EncodeToString([]byte(accY))
 	// Account Y address.
 	yAddr = "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
+	// Account Y id.
+	yID = *AccountID(accY, yAddr)
 	// Pool fee address.
 	poolFeeAddrs, _ = dcrutil.DecodeAddress("SsnbEmxCVXskgTHXvf3rEa17NA39qQuGHwQ")
 )
@@ -52,12 +51,12 @@ func setupDB() (*bolt.DB, error) {
 		return nil, err
 	}
 
-	err = createPersistedAccount(db, accX, xAddr, accX)
+	err = createPersistedAccount(db, accX, xAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	err = createPersistedAccount(db, accY, yAddr, accY)
+	err = createPersistedAccount(db, accY, yAddr)
 	if err != nil {
 		return nil, err
 	}

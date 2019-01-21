@@ -16,14 +16,15 @@ var (
 	// AccountBkt stores all registered accounts for the mining pool.
 	AccountBkt = []byte("accountbkt")
 
-	// NameIdxBkt is an index of all account names mapped to their ids.
-	NameIdxBkt = []byte("nameidxbkt")
-
 	// ShareBkt stores all client shares for the mining pool.
 	ShareBkt = []byte("sharebkt")
 
+	// JobBkt stores jobs delivered to clients, it is periodically pruned by the
+	// current chain tip height.
+	JobBkt = []byte("jobbkt")
+
 	// WorkBkt stores work submissions from the pool accepted by the network,
-	// periodically pruned by the current chain tip height.
+	// it is periodically pruned by the current chain tip height.
 	WorkBkt = []byte("workbkt")
 
 	// PaymentBkt stores all payments.
@@ -91,16 +92,16 @@ func CreateBuckets(db *bolt.DB) error {
 				string(ShareBkt), err)
 		}
 
-		_, err = pbkt.CreateBucketIfNotExists(NameIdxBkt)
-		if err != nil {
-			return fmt.Errorf("failed to create '%v' bucket: %v",
-				string(NameIdxBkt), err)
-		}
-
 		_, err = pbkt.CreateBucketIfNotExists(WorkBkt)
 		if err != nil {
 			return fmt.Errorf("failed to create '%v' bucket: %v",
 				string(WorkBkt), err)
+		}
+
+		_, err = pbkt.CreateBucketIfNotExists(JobBkt)
+		if err != nil {
+			return fmt.Errorf("failed to create '%v' bucket: %v",
+				string(JobBkt), err)
 		}
 
 		_, err = pbkt.CreateBucketIfNotExists(PaymentBkt)
@@ -130,60 +131,6 @@ func Delete(db *bolt.DB, bucket, key []byte) error {
 		}
 		b := pbkt.Bucket(bucket)
 		return b.Delete(key)
-	})
-	return err
-}
-
-// GetIndexValue asserts if a an index value exists in the provided bucket.
-func GetIndexValue(db *bolt.DB, bucket, key []byte) ([]byte, error) {
-	var value []byte
-	err := db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(PoolBkt)
-		if pbkt == nil {
-			return ErrBucketNotFound(bucket)
-		}
-		bkt := pbkt.Bucket(bucket)
-		if bkt == nil {
-			return ErrBucketNotFound(bucket)
-		}
-		value = bkt.Get(key)
-		return nil
-	})
-	return value, err
-}
-
-// UpdateIndex updates an index entry in the provided bucket.
-func UpdateIndex(db *bolt.DB, bucket []byte, key []byte, value []byte) error {
-	// Update the username index.
-	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(PoolBkt)
-		if pbkt == nil {
-			return ErrBucketNotFound(bucket)
-		}
-		bkt := pbkt.Bucket(bucket)
-		if bkt == nil {
-			return ErrBucketNotFound(bucket)
-		}
-		err := bkt.Put(key, value)
-		return err
-	})
-	return err
-}
-
-// RemoveIndex deletes an index entry in the provided bucket.
-func RemoveIndex(db *bolt.DB, bucket []byte, key []byte) error {
-	// Update the username index.
-	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(PoolBkt)
-		if pbkt == nil {
-			return ErrBucketNotFound(bucket)
-		}
-		bkt := pbkt.Bucket(bucket)
-		if bkt == nil {
-			return ErrBucketNotFound(bucket)
-		}
-		err := bkt.Delete(key)
-		return err
 	})
 	return err
 }

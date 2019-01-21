@@ -44,7 +44,7 @@ var (
 	// application shutdown.
 	logRotator *rotator.Rotator
 
-	log = backendLog.Logger("CL")
+	log = backendLog.Logger("MN")
 )
 
 // Initialize package-global logger variables.

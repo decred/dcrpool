@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -11,12 +12,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/coreos/bbolt"
-	"github.com/davecgh/go-spew/spew"
+	"github.com/decred/dcrd/chaincfg/chainhash"
+
+	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/blockchain"
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
+	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/rpc/walletrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -30,6 +33,24 @@ const (
 	// That is, it is highly improbable for the the chain to reorg beyond six
 	// blocks from the chain tip.
 	MaxReorgLimit = 6
+
+	// uint256Size is the number of bytes needed to represent an unsigned
+	// 256-bit integer.
+	uint256Size = 32
+
+	// getworkDataLen is the length of the data field of the getwork RPC.
+	// It consists of the serialized block header plus the internal blake256
+	// padding.  The internal blake256 padding consists of a single 1 bit
+	// followed by zeros and a final 1 bit in order to pad the message out
+	// to 56 bytes followed by length of the message in bits encoded as a
+	// big-endian uint64 (8 bytes).  Thus, the resulting length is a
+	// multiple of the blake256 block size (64 bytes).  Given the padding
+	// requires at least a 1 bit and 64 bits for the padding, the following
+	// converts the block header length and hash block size to bits in order
+	// to ensure the correct number of hash blocks are calculated and then
+	// multiplies the result by the block hash block size in bytes.
+	getworkDataLen = (1 + ((wire.MaxBlockHeaderPayload*8 + 65) /
+		(chainhash.HashBlockSize * 8))) * chainhash.HashBlockSize
 )
 
 // HubConfig represents configuration details for the hub.
@@ -37,6 +58,7 @@ type HubConfig struct {
 	ActiveNet         *chaincfg.Params
 	DcrdRPCCfg        *rpcclient.ConnConfig
 	PoolFee           float64
+	Domain            string
 	MaxTxFeeReserve   dcrutil.Amount
 	MaxGenTime        *big.Int
 	WalletRPCCertFile string
@@ -65,14 +87,42 @@ type Hub struct {
 	hashRateMtx       sync.Mutex
 	poolTargets       map[string]uint32
 	poolTargetsMtx    sync.RWMutex
-	ConnCount         uint64
+	connCount         uint32
 	Ticker            *time.Ticker
 	connCh            chan []byte
 	discCh            chan []byte
 	ctx               context.Context
 	cancel            context.CancelFunc
 	txFeeReserve      dcrutil.Amount
+	lastWorkHeight    uint32
 	lastPaymentHeight uint32
+	endpoints         []*Endpoint
+	blake256Pad       []byte
+}
+
+// CreateListeners sets up endpoints and listeners for each known pool client.
+func (h *Hub) CreateListeners() error {
+	for miner, port := range dividend.MinerPorts {
+		endpoint, err := NewEndpoint(h, port, miner)
+		if err != nil {
+			return err
+		}
+
+		go endpoint.Listen()
+		h.endpoints = append(h.endpoints, endpoint)
+	}
+
+	return nil
+}
+
+// GenerateBlake256Pad generates the extra padding needed for work submission
+// over the getwork RPC.
+func (h *Hub) GenerateBlake256Pad() {
+	h.blake256Pad = make([]byte, getworkDataLen-wire.MaxBlockHeaderPayload)
+	h.blake256Pad[0] = 0x80
+	h.blake256Pad[len(h.blake256Pad)-9] |= 0x01
+	binary.BigEndian.PutUint64(h.blake256Pad[len(h.blake256Pad)-8:],
+		wire.MaxBlockHeaderPayload*8)
 }
 
 // NewHub initializes a websocket hub.
@@ -85,13 +135,15 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		hashRate:    dividend.ZeroInt,
 		poolTargets: make(map[string]uint32),
 		Broadcast:   make(chan Message),
-		ConnCount:   0,
+		connCount:   0,
 		Ticker:      time.NewTicker(time.Second * 5),
 		connCh:      make(chan []byte),
 		discCh:      make(chan []byte),
 		ctx:         ctx,
 		cancel:      cancel,
 	}
+
+	h.GenerateBlake256Pad()
 
 	log.Infof("Payment method is %v.", hcfg.PaymentMethod)
 
@@ -122,7 +174,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		return nil
 	})
 	if err != nil {
-		log.Error(err)
+		log.Errorf("Failed to load cached values: %v", err)
 		return nil, err
 	}
 
@@ -136,7 +188,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		target, err := dividend.CalculatePoolTarget(h.cfg.ActiveNet, hashrate,
 			h.cfg.MaxGenTime)
 		if err != nil {
-			log.Error(err)
+			log.Error("Failed to calculate pool target for miner (%v): %v", err)
 			return nil, err
 		}
 
@@ -145,26 +197,75 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 	}
 	h.poolTargetsMtx.Unlock()
 
-	log.Tracef("Pool targets are: %v", spew.Sdump(h.poolTargets))
+	log.Tracef("Mining pool domain is %v", h.cfg.Domain)
+
+	// Setup listeners for all known pool clients.
+	err = h.CreateListeners()
+	if err != nil {
+		log.Error("Failed to create listeners: %v", err)
+		return nil, err
+	}
 
 	// Create handlers for chain notifications being subscribed for.
 	ntfnHandlers := &rpcclient.NotificationHandlers{
-		OnBlockConnected: func(blkHeader []byte, transactions [][]byte) {
-			h.connCh <- blkHeader
+		OnBlockConnected: func(headerB []byte, transactions [][]byte) {
+			h.connCh <- headerB
 		},
-		OnBlockDisconnected: func(blkHeader []byte) {
-			h.discCh <- blkHeader
+
+		OnBlockDisconnected: func(headerB []byte) {
+			h.discCh <- headerB
 		},
-		OnWork: func(blkHeader string, target string) {
-			log.Tracef("New Work (header: %v , target: %v)", blkHeader,
+
+		OnWork: func(headerE string, target string) {
+			log.Tracef("New Work (header: %v , target: %v)", headerE,
 				target)
 
-			if !h.HasConnectedClients() {
+			heightD, err := hex.DecodeString(headerE[256:264])
+			if err != nil {
+				log.Errorf("Failed to decode block height: %v", err)
 				return
 			}
 
-			// Broadcast a work notification.
-			h.Broadcast <- WorkNotification(blkHeader, "")
+			height := binary.LittleEndian.Uint32(heightD)
+			cleanJob := true
+			if height == h.lastWorkHeight {
+				cleanJob = false
+			}
+
+			if cleanJob {
+				h.lastWorkHeight = height
+			}
+
+			if !h.HasClients() {
+				return
+			}
+
+			// The mining.notify message is constructed per the nicehash spec:
+			// https://github.com/nicehash/Specifications/blob/master/Decred_NiceHash.txt
+
+			blockVersion := headerE[:8]
+			prevBlock := headerE[8:72]
+			genTx1 := headerE[72:272]
+			nTime := headerE[272:280]
+			genTx2 := headerE[352:360]
+
+			// Create a job for the received work.
+			job, err := NewJob(headerE, height)
+			if err != nil {
+				log.Errorf("Failed to create job: %v", err)
+				return
+			}
+
+			err = job.Create(db)
+			if err != nil {
+				log.Errorf("Failed to persist job: %v", err)
+				return
+			}
+
+			workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
+				blockVersion, nTime, cleanJob)
+
+			h.Broadcast <- workNotif
 		},
 	}
 
@@ -216,9 +317,44 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 	return h, nil
 }
 
-// HasConnectedClients asserts the mining pool has connected miners.
-func (h *Hub) HasConnectedClients() bool {
-	connCount := atomic.LoadUint64(&h.ConnCount)
+// GenerateExtraNonce1 a generated 4-byte pool id.
+func GenerateExtraNonce1() string {
+	id := make([]byte, 4)
+	rand.Read(id)
+	return hex.EncodeToString(id[:])
+}
+
+// AddClient records a connected client and the hash rate it contributes to
+// to the pool.
+func (h *Hub) AddClient(miner string) {
+	// Increment the client count.
+	atomic.AddUint32(&h.connCount, 1)
+
+	// Add the client's hash rate.
+	hash := dividend.MinerHashes[miner]
+	h.hashRateMtx.Lock()
+	h.hashRate = new(big.Int).Add(h.hashRate, hash)
+	log.Infof("Client connected, updated pool hash rate is %v", h.hashRate)
+	h.hashRateMtx.Unlock()
+}
+
+// RemoveClient removes a disconnected client and the hash rate it contributed to
+// the pool.
+func (h *Hub) RemoveClient(miner string) {
+	// Decrement the client count
+	atomic.AddUint32(&h.connCount, ^uint32(0))
+
+	// Remove the client's hash rate
+	hash := dividend.MinerHashes[miner]
+	h.hashRateMtx.Lock()
+	h.hashRate = new(big.Int).Sub(h.hashRate, hash)
+	log.Infof("Client disconnected, updated pool hash rate is %v", h.hashRate)
+	h.hashRateMtx.Unlock()
+}
+
+// HasClients asserts the mining pool has clients.
+func (h *Hub) HasClients() bool {
+	connCount := atomic.LoadUint32(&h.connCount)
 	if connCount == 0 {
 		return false
 	}
@@ -231,26 +367,6 @@ func (h *Hub) SubmitWork(data *string) (bool, error) {
 	status, err := h.rpcc.GetWorkSubmit(*data)
 	h.rpccMtx.Unlock()
 	return status, err
-}
-
-// AddHashRate adds the hash power provided by the newly connected client
-//to the total estimated hash power of pool.
-func (h *Hub) AddHashRate(miner string) {
-	hash := dividend.MinerHashes[miner]
-	h.hashRateMtx.Lock()
-	h.hashRate = new(big.Int).Add(h.hashRate, hash)
-	log.Infof("Client connected, updated pool hash rate is %v", h.hashRate)
-	h.hashRateMtx.Unlock()
-}
-
-// RemoveHashRate removes the hash power previously provided by the
-// disconnected client from the total estimated hash power of the pool.
-func (h *Hub) RemoveHashRate(miner string) {
-	hash := dividend.MinerHashes[miner]
-	h.hashRateMtx.Lock()
-	h.hashRate = new(big.Int).Sub(h.hashRate, hash)
-	log.Infof("Client disconnected, updated pool hash rate is %v", h.hashRate)
-	h.hashRateMtx.Unlock()
 }
 
 // Persist saves details of the hub to the database.
@@ -335,43 +451,55 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 
 func (h *Hub) process() {
 	log.Info("Started hub process handler.")
-out:
+
 	for {
 		select {
 		case <-h.ctx.Done():
-			h.Broadcast <- nil
 			h.gConn.Close()
 			h.rpcc.Shutdown()
-			break out
+			close(h.Broadcast)
+			log.Info("Hub process handler done.")
+			return
 
-		case blkHeader := <-h.connCh:
-			header, err := ParseBlockHeader(blkHeader)
-			if err != nil {
-				log.Errorf("failed to parse conected block header: %v", err)
-				h.cancel()
-				continue
+		case headerB := <-h.connCh:
+			height := binary.LittleEndian.Uint32(headerB[128:132])
+			log.Infof("Block connected at height %v", height)
+
+			if height > MaxReorgLimit {
+				pruneLimit := height - MaxReorgLimit
+				err := PruneJobs(h.db, pruneLimit)
+				if err != nil {
+					log.Errorf("Failed to prune jobs to height %d: %v",
+						pruneLimit, err)
+					h.cancel()
+					continue
+				}
 			}
 
-			blockHash := header.BlockHash()
-			log.Tracef("Block connected (hash: %v, height: %v)",
-				blockHash, header.Height)
-
-			nonce := FetchNonce(blkHeader)
-			encoded := make([]byte, hex.EncodedLen(len(nonce)))
-			_ = hex.Encode(encoded, nonce)
-			work, err := GetAcceptedWork(h.db, encoded)
+			id := hex.EncodeToString(headerB[140:152])
+			log.Tracef("Accepted work id is %v", id)
+			work, err := FetchAcceptedWork(h.db, []byte(id))
 			if err != nil {
-				log.Error(err)
+				log.Errorf("Failed to fetch connected accepted work: %v", err)
 				continue
 			}
 
 			// If the connected block is an accepted work from the pool,
 			// record payouts to participating accounts.
+			var header wire.BlockHeader
+			err = header.FromBytes(headerB)
+			if err != nil {
+				log.Errorf("Failed to create header from bytes: %v", err)
+				h.cancel()
+				continue
+			}
+
+			blockHash := header.BlockHash()
 			h.rpccMtx.Lock()
 			block, err := h.rpcc.GetBlock(&blockHash)
 			h.rpccMtx.Unlock()
 			if err != nil {
-				log.Error(err)
+				log.Errorf("Failed to fetch block: %v", err)
 				h.cancel()
 				continue
 			}
@@ -389,7 +517,7 @@ out:
 				err := dividend.PayPerShare(h.db, coinbase, h.cfg.PoolFee,
 					header.Height, h.cfg.ActiveNet.CoinbaseMaturity)
 				if err != nil {
-					log.Error(err)
+					log.Error("Failed to process generate PPS shares: %v", err)
 					h.cancel()
 					continue
 				}
@@ -399,53 +527,46 @@ out:
 					h.cfg.PoolFee, header.Height,
 					h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
 				if err != nil {
-					log.Error(err)
+					log.Error("Failed to generate PPLNS shares: %v", err)
 					h.cancel()
 					continue
 				}
 			}
 
-			go func() {
-				// Idle to allow wallet updates before querying.
-				time.Sleep(time.Millisecond * 700)
-
-				// Process mature payments.
-				err = h.ProcessPayments(uint32(header.Height))
-				if err != nil {
-					log.Error(err)
-					h.cancel()
-				}
-			}()
+			// Process mature payments.
+			err = h.ProcessPayments(uint32(header.Height))
+			if err != nil {
+				log.Errorf("Failed to process payments: %v", err)
+				h.cancel()
+			}
 
 			// Update the accepted work record for the connected block.
 			work.Connected = true
-			work.ConnectedAtHeight = int64(header.Height)
+			work.ConnectedAtHeight = header.Height
 			work.Update(h.db)
 
-			// Prune accepted work that's recorded as connected to the
+			// Prune accepted work that is recorded as connected to the
 			// chain and is below the estimated reorg limit.
-			err = PruneAcceptedWork(h.db, int64(header.Height-MaxReorgLimit))
-			if err != nil {
-				log.Error(err)
-				h.cancel()
-				continue
+			if height > MaxReorgLimit {
+				pruneLimit := height - MaxReorgLimit
+				err = PruneAcceptedWork(h.db, pruneLimit)
+				if err != nil {
+					log.Errorf("Failed to prune accepted work below height (%v)"+
+						": %v", pruneLimit, err)
+					h.cancel()
+					continue
+				}
 			}
 
-		case blkHeader := <-h.discCh:
-			header, err := ParseBlockHeader(blkHeader)
+		case headerB := <-h.discCh:
+			height := binary.LittleEndian.Uint32(headerB[128:132])
+			log.Infof("Block disconnected at height %v", height)
+
+			id := hex.EncodeToString(headerB[140:152])
+			work, err := FetchAcceptedWork(h.db, []byte(id))
 			if err != nil {
-				log.Errorf("failed to parse disconnected block header: %v", err)
+				log.Errorf("Failed to fetch disconnected accepted work: %v", err)
 				h.cancel()
-				continue
-			}
-
-			log.Tracef("Block disconnected (hash: %v, height: %v)",
-				header.BlockHash(), header.Height)
-
-			nonce := FetchNonce(blkHeader)
-			work, err := GetAcceptedWork(h.db, nonce)
-			if err != nil {
-				log.Error(err)
 				continue
 			}
 
@@ -453,11 +574,11 @@ out:
 			// delete all associated payments and update the state of the
 			// accepted work.
 			work.Connected = false
-
 			payments, err := dividend.FetchPendingPaymentsAtHeight(h.db,
 				uint32(work.ConnectedAtHeight))
 			if err != nil {
-				log.Error(err)
+				log.Errorf("Failed to fetch pending payments at height (%v):"+
+					" %v", work.ConnectedAtHeight, err)
 				h.cancel()
 				continue
 			}
@@ -465,18 +586,16 @@ out:
 			for _, pmt := range payments {
 				err = pmt.Delete(h.db)
 				if err != nil {
-					log.Error(err)
+					log.Errorf("Failed to delete payment", err)
 					h.cancel()
 					break
 				}
 			}
 
-			work.ConnectedAtHeight = -1
+			work.ConnectedAtHeight = 0
 			work.Update(h.db)
 		}
 	}
-
-	log.Info("Hub process handler done.")
 }
 
 // ProcessPayments fetches all eligible payments and publishes a
@@ -559,4 +678,44 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	h.lastPaymentHeight = height
 
 	return nil
+}
+
+// BigToLEUint256 returns the passed big integer as an unsigned 256-bit integer
+// encoded as little-endian bytes.  Numbers which are larger than the max
+// unsigned 256-bit integer are truncated.
+func BigToLEUint256(n *big.Int) [uint256Size]byte {
+	// Pad or truncate the big-endian big int to correct number of bytes.
+	nBytes := n.Bytes()
+	nlen := len(nBytes)
+	pad := 0
+	start := 0
+	if nlen <= uint256Size {
+		pad = uint256Size - nlen
+	} else {
+		start = nlen - uint256Size
+	}
+	var buf [uint256Size]byte
+	copy(buf[pad:], nBytes[start:])
+
+	// Reverse the bytes to little endian and return them.
+	for i := 0; i < uint256Size/2; i++ {
+		buf[i], buf[uint256Size-1-i] = buf[uint256Size-1-i], buf[i]
+	}
+	return buf
+}
+
+// LEUint256ToBig returns the passed unsigned 256-bit integer
+// encoded as little-endian as a big integer.
+func LEUint256ToBig(n [uint256Size]byte) *big.Int {
+	var buf [uint256Size]byte
+	copy(buf[:], n[:])
+
+	// Reverse the bytes to big endian and create a big.Int.
+	for i := 0; i < uint256Size/2; i++ {
+		buf[i], buf[uint256Size-1-i] = buf[uint256Size-1-i], buf[i]
+	}
+
+	v := new(big.Int).SetBytes(buf[:])
+
+	return v
 }

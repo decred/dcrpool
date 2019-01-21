@@ -7,7 +7,9 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/coreos/bbolt"
+	"github.com/davecgh/go-spew/spew"
+
+	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil"
 
 	"github.com/dnldd/dcrpool/database"
@@ -400,6 +402,8 @@ func PayPerShare(db *bolt.DB, total dcrutil.Amount, poolFee float64, height uint
 		return err
 	}
 
+	log.Tracef("Share percentages are: %v", spew.Sdump(percentages))
+
 	var estMaturity uint32
 
 	// Allow immediately mature payments for testing purposes.
@@ -466,7 +470,10 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, heig
 		return err
 	}
 
+	log.Tracef("Share percentages are: %v", spew.Sdump(percentages))
+
 	var estMaturity uint32
+
 	// Allow immediately mature payments for testing purposes.
 	if coinbaseMaturity == 0 {
 		estMaturity = height
@@ -528,9 +535,9 @@ func GeneratePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address, eligibl
 		}
 
 		// For a dividend payment, fetch the corresponding account address.
-		acc, err := GetAccount(db, []byte(p.Account))
+		acc, err := FetchAccount(db, []byte(p.Account))
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("Failed to fetch account: %v", err)
 		}
 
 		bundleAmt := p.Total()
