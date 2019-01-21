@@ -5,8 +5,6 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
-
-	"github.com/dnldd/dcrpool/dividend"
 )
 
 func main() {
@@ -37,20 +35,20 @@ func main() {
 	log.Infof("Started poolclient.")
 
 	// Initialize the client.
-	pc, err := newClient(cfg)
+	miner, err := NewMiner(cfg)
 	if err != nil {
-		log.Errorf("Failed to create client: %v", err)
+		log.Errorf("Failed to create miner: %v", err)
 		return
 	}
 
-	go pc.processMessages()
+	go miner.Listen()
 	for {
 		select {
 		case <-interrupt:
-			pc.cancel()
-			if cfg.MinerType == dividend.CPU {
-				log.Info("CPU miner done.")
-			}
+			miner.cancel()
+
+		case <-miner.ctx.Done():
+			miner.conn.Close()
 			return
 		}
 	}

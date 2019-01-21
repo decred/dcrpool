@@ -1,9 +1,15 @@
 package network
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/decred/dcrd/chaincfg"
+	"github.com/decred/dcrd/wire"
+	"github.com/dnldd/dcrpool/dividend"
 )
 
 // Message types.
@@ -13,58 +19,120 @@ const (
 	NotificationType = "notification"
 )
 
-const (
-	// MaxMessageSize represents the maximum message expected from clients,
-	// currently it is a work message.
-	MaxMessageSize = 511
-
-	// MaxPingRetries represents the maximum number of unanswered ping requests
-	// by a client before disconnection.
-	MaxPingRetries = 3
-)
-
 // Handler types.
 const (
-	Ping              = "ping"
-	Pong              = "pong"
-	Work              = "work"
-	SubmitWork        = "submitwork"
-	EvaluatedWork     = "evaluatedwork"
-	ConnectedBlock    = "connectedblock"
-	DisconnectedBlock = "disconnectedblock"
-	TooManyRequests   = "toomanyrequests"
+	Authorize     = "mining.authorize"
+	Subscribe     = "mining.subscribe"
+	SetDifficulty = "mining.set_difficulty"
+	Notify        = "mining.notify"
+	Submit        = "mining.submit"
 )
 
-// Message is the base interface messages exchanged between a websocket client
-// and the server must adhere to.
+// Error codes.
+const (
+	Unknown            = 20
+	StaleJob           = 21
+	DuplicateShare     = 22
+	LowDifficultyShare = 23
+	UnauthorizedWorker = 24
+	NotSubscribed      = 25
+)
+
+// Stratum constants.
+const (
+	ExtraNonce2Size = 8
+)
+
+// NewStratumError creates a stratum error instance.
+func NewStratumError(code uint64) []interface{} {
+	errData := make([]interface{}, 3, 3)
+	errData[0] = code
+	errData[2] = nil
+
+	switch code {
+	case StaleJob:
+		errData[1] = "Stale Job"
+	case DuplicateShare:
+		errData[1] = "Duplicate share"
+	case LowDifficultyShare:
+		errData[1] = "Low difficulty share"
+	case UnauthorizedWorker:
+		errData[1] = "Unauthorized worker"
+	case NotSubscribed:
+		errData[1] = "Not subscribed"
+	default:
+		errData[1] = "Other/Unknown"
+	}
+
+	return errData
+}
+
+// ParseStratumError resolves a stratum error into its components.
+func ParseStratumError(err []interface{}) (uint64, string, error) {
+	if err == nil {
+		return 0, "", fmt.Errorf("nil stratum error provided")
+	}
+
+	errCode, ok := err[0].(float64)
+	if !ok {
+		return 0, "", fmt.Errorf("failed to parse error code parameter")
+	}
+
+	code := uint64(errCode)
+
+	message, ok := err[1].(string)
+	if !ok {
+		return 0, "", fmt.Errorf("failed to parse message parameter")
+	}
+
+	return code, message, nil
+}
+
+// Message defines a message interface.
 type Message interface {
-	HasID() bool
+	MessageType() string
 }
 
-// Request defines a request message. It specifies the targetted processing
-// method and supplies the required parameters.
+// Request defines a request message.
 type Request struct {
-	ID     *uint64                `json:"id"`
-	Method string                 `json:"method"`
-	Params map[string]interface{} `json:"params"`
+	ID     *uint64     `json:"id"`
+	Method string      `json:"method"`
+	Params interface{} `json:"params"`
 }
 
-// HasID determines if the request has an ID.
-func (req *Request) HasID() bool {
-	return req.ID != nil
+// MessageType returns the request message type.
+func (req *Request) MessageType() string {
+	return RequestType
 }
 
-// Response defines a response message. It bundles the payload
-// of the preceding request and any errors in processing the request, if any.
+// NewRequest creates a request instance.
+func NewRequest(id *uint64, method string, params interface{}) *Request {
+	return &Request{
+		ID:     id,
+		Method: method,
+		Params: params,
+	}
+}
+
+// Response defines a response message.
 type Response struct {
-	ID     *uint64                `json:"id"`
-	Error  *string                `json:"error,omitempty"`
-	Result map[string]interface{} `json:"result,omitempty"`
+	ID     *uint64       `json:"id"`
+	Error  []interface{} `json:"error,omitempty"`
+	Result interface{}   `json:"result,omitempty"`
 }
 
-// HasID determines if the response has an ID.
-func (resp *Response) HasID() bool {
-	return resp.ID != nil
+// MessageType returns the response message type.
+func (req *Response) MessageType() string {
+	return ResponseType
+}
+
+// NewResponse creates a response instance.
+func NewResponse(id *uint64, result interface{}, err []interface{}) *Response {
+	return &Response{
+		ID:     id,
+		Error:  err,
+		Result: result,
+	}
 }
 
 // IdentifyMessage determines the received message type. It returns the message
@@ -77,10 +145,9 @@ func IdentifyMessage(data []byte) (Message, string, error) {
 	}
 
 	if req.Method != "" {
-		if !req.HasID() {
+		if req.ID == nil {
 			return &req, NotificationType, nil
 		}
-
 		return &req, RequestType, nil
 	}
 
@@ -93,172 +160,368 @@ func IdentifyMessage(data []byte) (Message, string, error) {
 	return &resp, ResponseType, nil
 }
 
-// PingRequest is a convenince function for creating ping requests.
-func PingRequest(id *uint64) *Request {
+// AuthorizeRequest creates an authorize request message.
+func AuthorizeRequest(id *uint64, name string, address string) *Request {
+	user := fmt.Sprintf("%s.%s", address, name)
 	return &Request{
 		ID:     id,
-		Method: Ping,
-		Params: nil,
+		Method: Authorize,
+		Params: []string{user, ""},
 	}
 }
 
-// PongResponse is a convenience function for creating a pong response.
-func PongResponse(id *uint64) *Response {
+// ParseAuthorizeRequest resolves an authorize request into its components.
+func ParseAuthorizeRequest(req *Request) (string, error) {
+	if req.Method != Authorize {
+		return "", fmt.Errorf("request method is not authorize")
+	}
+
+	auth, ok := req.Params.([]interface{})
+	if !ok {
+		return "", fmt.Errorf("failed to parse authorize parameters")
+	}
+
+	username, ok := auth[0].(string)
+	if !ok {
+		return "", fmt.Errorf("failed to parse username parameter")
+	}
+
+	return username, nil
+}
+
+// AuthorizeResponse creates an authorize response.
+func AuthorizeResponse(id *uint64, status bool, err []interface{}) *Response {
 	return &Response{
 		ID:     id,
-		Error:  nil,
-		Result: map[string]interface{}{"response": Pong},
+		Error:  err,
+		Result: status,
 	}
 }
 
-// tooManyRequestsResponse is a convenience function for creating
-// a TooManyRequests response.
-func tooManyRequestsResponse(id *uint64) *Response {
-	err := "too many requests"
-	return &Response{
+// ParseAuthorizeResponse resolves an authorize response into its components.
+func ParseAuthorizeResponse(resp *Response) (bool, []interface{}, error) {
+	status, ok := resp.Result.(bool)
+	if !ok {
+		return false, nil, fmt.Errorf("failed to parse result parameter")
+	}
+
+	return status, resp.Error, nil
+}
+
+// SubscribeRequest creates a subscribe request message.
+func SubscribeRequest(id *uint64) *Request {
+	return &Request{
 		ID:     id,
-		Error:  &err,
-		Result: nil,
+		Method: Subscribe,
+		Params: []string{},
 	}
 }
 
-// ParseTooManyRequestsResponse parses a too many requests response.
-func ParseTooManyRequestsResponse(resp *Response) error {
-	if resp.ID == nil {
-		return errors.New("Invalid too many requests response, " +
-			"'should have 'id' field set")
-	}
-
-	if resp.Error == nil {
-		return errors.New("Invalid too many requests response, " +
-			"should have 'error' field set")
+// ParseSubscribeRequest resolves a subscribe request into its components.
+func ParseSubscribeRequest(req *Request) error {
+	if req.Method != Subscribe {
+		return fmt.Errorf("request method is not subscribe")
 	}
 
 	return nil
 }
 
-// WorkNotification is a convenience function for creating a work notification.
-func WorkNotification(header string, target string) *Request {
-	return &Request{
-		ID:     nil,
-		Method: Work,
-		Params: map[string]interface{}{"header": header, "target": target},
-	}
-}
-
-// ParseWorkNotification parses a work notification message.
-func ParseWorkNotification(req *Request) ([]byte, []byte, error) {
-	headerEncoded, ok := req.Params["header"].(string)
-	if !ok {
-		return nil, nil, errors.New("Invalid work notification, 'params' data " +
-			"should have 'header' field")
-	}
-
-	targetEncoded, ok := req.Params["target"].(string)
-	if !ok {
-		return nil, nil, errors.New("Invalid work notification, 'params' data " +
-			"should have 'target' field")
-	}
-
-	header, err := hex.DecodeString(headerEncoded)
+// SubscribeResponse creates a subscribe response.
+func SubscribeResponse(id *uint64, extraNonce1 string, err []interface{}) *Response {
 	if err != nil {
-		return nil, nil, err
+		return &Response{
+			ID:     id,
+			Error:  err,
+			Result: nil,
+		}
 	}
 
-	target, err := hex.DecodeString(targetEncoded)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return header, target, nil
-}
-
-// WorkSubmissionRequest is a convenience function for creating a work
-// submision request.
-func WorkSubmissionRequest(id *uint64, header string) *Request {
-	return &Request{
-		ID:     id,
-		Method: SubmitWork,
-		Params: map[string]interface{}{"header": header},
+	// TODO: set the difficulty and notify ids when it's supported.
+	return &Response{
+		ID:    id,
+		Error: nil,
+		Result: []interface{}{[][]string{
+			{"mining.set_difficulty", "not supported"},
+			{"mining.notify", "not supported"}},
+			extraNonce1, ExtraNonce2Size},
 	}
 }
 
-// ParseWorkSubmissionRequest parses a work submission request.
-func ParseWorkSubmissionRequest(req *Request) (*string, error) {
-	header, ok := req.Params["header"].(string)
+// ParseSubscribeResponse resolves a subscribe response into its components.
+func ParseSubscribeResponse(resp *Response) (string, string, string, uint64, error) {
+	if resp.Error != nil {
+		return "", "", "", 0, fmt.Errorf("%s", resp.Error)
+	}
+
+	res, ok := resp.Result.([]interface{})
 	if !ok {
-		return nil, errors.New("Invalid work submission request, " +
-			"'params' data should have 'header' field")
+		return "", "", "", 0, fmt.Errorf("failed to parse result parameter")
+	}
+
+	subs, ok := res[0].([]interface{})
+	if !ok {
+		return "", "", "", 0, fmt.Errorf("failed to parse subscription details")
+	}
+
+	diff, ok := subs[0].([]interface{})
+	if !ok {
+		return "", "", "", 0, fmt.Errorf("failed to parse difficulty id details")
+	}
+
+	diffID, ok := diff[1].(string)
+	if !ok {
+		return "", "", "", 0, fmt.Errorf("failed to parse difficulty id")
+	}
+
+	notify, ok := subs[1].([]interface{})
+	if !ok {
+		return "", "", "", 0, fmt.Errorf("failed to parse notify id details")
+	}
+
+	notifyID, ok := notify[1].(string)
+	if !ok {
+		return "", "", "", 0, fmt.Errorf("failed to parse notify id")
+	}
+
+	extraNonce1, ok := res[1].(string)
+	if !ok {
+		return "", "", "", 0,
+			fmt.Errorf("failed to parse ExtraNonce1 parameter")
+	}
+
+	nonce2Size, ok := res[2].(float64)
+	if !ok {
+		return "", "", "", 0,
+			fmt.Errorf("failed to parse ExtraNonce2Size parameter")
+	}
+
+	extraNonce2Size := uint64(nonce2Size)
+
+	return diffID, notifyID, extraNonce1, extraNonce2Size, nil
+}
+
+// SetDifficultyNotification creates a set difficulty notification message.
+func SetDifficultyNotification(net *chaincfg.Params, target uint32) (*Request, error) {
+	difficulty, err := dividend.TargetToDifficulty(net, target)
+	if err != nil {
+		return nil, err
+	}
+	return &Request{
+		Method: SetDifficulty,
+		Params: []uint64{difficulty},
+	}, nil
+}
+
+// ParseSetDifficultyNotification resolves a set difficulty notification into
+// its components.
+func ParseSetDifficultyNotification(req *Request) (uint64, error) {
+	if req.Method != SetDifficulty {
+		return 0, fmt.Errorf("notification method is not set difficulty")
+	}
+
+	params, ok := req.Params.([]interface{})
+	if !ok {
+		return 0, fmt.Errorf("failed to parse set difficulty parameters")
+	}
+
+	return uint64(params[0].(float64)), nil
+}
+
+// WorkNotification creates a work notification message.
+func WorkNotification(jobID string, prevHash string, genTx1 string, genTx2 string, blockVersion string, nTime string, cleanJob bool) *Request {
+	return &Request{
+		Method: Notify,
+		Params: []interface{}{jobID, prevHash, genTx1, genTx2, []string{},
+			blockVersion, "", nTime, cleanJob},
+	}
+}
+
+// ParseWorkNotification resolves a work notification message into its components.
+func ParseWorkNotification(req *Request) (string, string, string, string, string, string, bool, error) {
+	if req.Method != Notify {
+		return "", "", "", "", "", "", false,
+			fmt.Errorf("notification method is not notify")
+	}
+
+	params, ok := req.Params.([]interface{})
+	if !ok {
+		return "", "", "", "", "", "", false,
+			fmt.Errorf("failed to parse work parameters")
+	}
+
+	jobID, ok := params[0].(string)
+	if !ok {
+		return "", "", "", "", "", "", false,
+			fmt.Errorf("failed to parse jobID parameter")
+	}
+
+	prevBlock, ok := params[1].(string)
+	if !ok {
+		return "", "", "", "", "", "", false,
+			fmt.Errorf("failed to parse prevBlock parameter")
+	}
+
+	genTx1, ok := params[2].(string)
+	if !ok {
+		return "", "", "", "", "", "", false,
+			fmt.Errorf("failed to parse genTx1 parameter")
+	}
+
+	genTx2, ok := params[3].(string)
+	if !ok {
+		return "", "", "", "", "", "", false,
+			fmt.Errorf("failed to parse genTx2 parameter")
+	}
+
+	blockVersion, ok := params[5].(string)
+	if !ok {
+		return "", "", "", "", "", "", false,
+			fmt.Errorf("failed to parse blockVersion parameter")
+	}
+
+	nTime, ok := params[7].(string)
+	if !ok {
+		return "", "", "", "", "", "", false,
+			fmt.Errorf("failed to parse nTime parameter")
+	}
+
+	cleanJob, ok := params[8].(bool)
+	if !ok {
+		return "", "", "", "", "", "", false,
+			fmt.Errorf("failed to parse cleanJob parameter")
+	}
+
+	return jobID, prevBlock, genTx1, genTx2, blockVersion, nTime, cleanJob, nil
+}
+
+// GenerateBlockHeader creates a block header from a mining.notify
+// message and the extraNonce1 of the client.
+func GenerateBlockHeader(blockVersionE string, prevBlockE string, genTx1E string, nTimeE string, extraNonce1E string, genTx2E string) (*wire.BlockHeader, error) {
+	buf := bytes.NewBufferString("")
+	buf.WriteString(blockVersionE)
+	buf.WriteString(prevBlockE)
+	buf.WriteString(genTx1E)
+	buf.WriteString(nTimeE)
+	buf.WriteString(strings.Repeat("0", 8))
+	buf.WriteString(extraNonce1E)
+	buf.WriteString(strings.Repeat("0", 56))
+	buf.WriteString(genTx2E)
+	headerE := buf.String()
+
+	headerD, err := hex.DecodeString(headerE)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode block header: %v", err)
+	}
+
+	var header wire.BlockHeader
+	err = header.FromBytes(headerD)
+	if err != nil {
+		return nil, err
 	}
 
 	return &header, nil
 }
 
-// EvaluatedWorkResponse is a convenience function for creating an evaluated
-// work response.
-func EvaluatedWorkResponse(id *uint64, err *string, status bool) *Response {
+// GenerateSolvedBlockHeader create a block header from a mining.submit message
+// and its associated job. It returns the solved block header and the entire
+// nonce space.
+func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E string, nTimeE string, nonceE string) (*wire.BlockHeader, []byte, error) {
+	buf := bytes.NewBufferString("")
+	buf.WriteString(headerE[:272])
+	buf.WriteString(nTimeE)
+	buf.WriteString(nonceE)
+	buf.WriteString(extraNonce1E)
+	buf.WriteString(extraNonce2E)
+	buf.WriteString(headerE[304:])
+	solvedHeaderE := buf.String()
+
+	solvedHeaderD, err := hex.DecodeString(solvedHeaderE)
+	if err != nil {
+		return nil, nil,
+			fmt.Errorf("failed to decode solved block header: %v", err)
+	}
+
+	var solvedHeader wire.BlockHeader
+	err = solvedHeader.FromBytes(solvedHeaderD)
+	if err != nil {
+		return nil, nil,
+			fmt.Errorf("failed to create block header from bytes:%v", err)
+	}
+
+	nonceSpace := solvedHeaderD[140:152]
+
+	return &solvedHeader, nonceSpace, nil
+}
+
+// SubmitWorkRequest creates a submit request message.
+func SubmitWorkRequest(id *uint64, workerName string, jobID string, extraNonce2 string, nTime string, nonce string) *Request {
+	return &Request{
+		ID:     id,
+		Method: Submit,
+		Params: []string{workerName, jobID, extraNonce2, nTime, nonce},
+	}
+}
+
+// ParseSubmitWorkRequest resolves a submit work request into its components.
+func ParseSubmitWorkRequest(req *Request) (string, string, string, string, string, error) {
+	if req.Method != Submit {
+		return "", "", "", "", "", fmt.Errorf("request method is not submit")
+	}
+
+	params, ok := req.Params.([]interface{})
+	if !ok {
+		return "", "", "", "", "",
+			fmt.Errorf("failed to parse submit work parameters")
+	}
+
+	workerName, ok := params[0].(string)
+	if !ok {
+		return "", "", "", "", "",
+			fmt.Errorf("failed to parse workerName parameter")
+	}
+
+	jobID, ok := params[1].(string)
+	if !ok {
+		return "", "", "", "", "",
+			fmt.Errorf("failed to parse jobID parameter")
+	}
+
+	extraNonce2, ok := params[2].(string)
+	if !ok {
+		return "", "", "", "", "",
+			fmt.Errorf("failed to parse extraNonce2 parameter")
+	}
+
+	nTime, ok := params[3].(string)
+	if !ok {
+		return "", "", "", "", "",
+			fmt.Errorf("failed to parse nTime parameter")
+	}
+
+	nonce, ok := params[4].(string)
+	if !ok {
+		return "", "", "", "", "",
+			fmt.Errorf("failed to parse nonce parameter")
+	}
+
+	return workerName, jobID, extraNonce2, nTime, nonce, nil
+}
+
+// SubmitWorkResponse creates a submit response.
+func SubmitWorkResponse(id *uint64, status bool, err []interface{}) *Response {
 	return &Response{
 		ID:     id,
 		Error:  err,
-		Result: map[string]interface{}{"accepted": status},
+		Result: status,
 	}
 }
 
-// ParseEvaluatedWorkResponse parses an evaluated work response message.
-func ParseEvaluatedWorkResponse(resp *Response) (bool, error) {
-	accepted, ok := resp.Result["accepted"].(bool)
+// ParseSubmitWorkResponse resolves a submit response into its components.
+func ParseSubmitWorkResponse(resp *Response) (bool, []interface{}, error) {
+	status, ok := resp.Result.(bool)
 	if !ok {
-		return false, errors.New("Invalid evaluated work response, " +
-			"'result' data should have 'accepted' field")
+		return false, nil, fmt.Errorf("failed to parse result parameter")
 	}
 
-	if resp.Error != nil {
-		return accepted, errors.New(*resp.Error)
-	}
-
-	return accepted, nil
-}
-
-// ConnectedBlockNotification is a convenience function for creating a
-// connected block notification.
-func ConnectedBlockNotification(blkHeight uint32) *Request {
-	return &Request{
-		ID:     nil,
-		Method: ConnectedBlock,
-		Params: map[string]interface{}{"height": blkHeight},
-	}
-}
-
-// ParseConnectedBlockNotification parses a connected block notification
-// message.
-func ParseConnectedBlockNotification(req *Request) (uint32, error) {
-	height, ok := req.Params["height"].(float64)
-	if !ok {
-		return 0, errors.New("Invalid connected block notification, " +
-			"'params' data should have 'height' field")
-	}
-
-	return uint32(height), nil
-}
-
-// DisconnectedBlockNotification is a convenience function for creating a
-// disconnected block notification.
-func DisconnectedBlockNotification(blkHeight uint32) *Request {
-	return &Request{
-		ID:     nil,
-		Method: DisconnectedBlock,
-		Params: map[string]interface{}{"height": blkHeight},
-	}
-}
-
-// ParseDisconnectedBlockNotification parses a disconnected block notification
-// message.
-func ParseDisconnectedBlockNotification(req *Request) (uint32, error) {
-	height, ok := req.Params["height"].(float64)
-	if !ok {
-		return 0, errors.New("Invalid disconnected block notification, " +
-			"'params' data should have 'height' field")
-	}
-
-	return uint32(height), nil
+	return status, resp.Error, nil
 }

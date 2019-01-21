@@ -1,57 +1,48 @@
 package dividend
 
 import (
+	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/coreos/bbolt"
-	"golang.org/x/crypto/bcrypt"
+	bolt "github.com/coreos/bbolt"
 
 	"github.com/dnldd/dcrpool/database"
 )
 
-// Account represents a mining pool user account.
+// Account represents an anonymous mining pool account.
 type Account struct {
-	UUID       string `json:"uuid"`
-	Name       string `json:"name"`
-	Address    string `json:"address"`
-	Pass       string `json:"pass,omitempty"`
-	CreatedOn  uint64 `json:"createdon"`
-	ModifiedOn uint64 `json:"modifiedon"`
+	UUID      string `json:"uuid"`
+	Name      string `json:"name"`
+	Address   string `json:"address"`
+	CreatedOn uint64 `json:"createdon"`
 }
 
-// BcryptHash generates a bcrypt hash from the supplied plaintext. This should
-// be used to hash passwords before persisting in a database.
-func BcryptHash(plaintext string) ([]byte, error) {
-	hashedPass, err := bcrypt.GenerateFromPassword([]byte(plaintext),
-		bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash plaintext: %v", err)
-	}
-	return hashedPass, nil
+// AccountID forms a unique id for an account using the provided name
+// and address.
+func AccountID(name, address string) *string {
+	hasher := sha1.New()
+	hasher.Write([]byte(fmt.Sprintf("%s.%s", address, name)))
+	id := hex.EncodeToString(hasher.Sum(nil))
+	return &id
 }
 
 // NewAccount generates a new account.
-func NewAccount(name string, address string, pass string) (*Account, error) {
-	hashedPass, err := BcryptHash(pass)
-	if err != nil {
-		return nil, err
-	}
+func NewAccount(name string, address string) (*Account, error) {
+	id := AccountID(name, address)
 	account := &Account{
-		UUID:       hex.EncodeToString([]byte(name)),
-		Name:       name,
-		Address:    address,
-		Pass:       string(hashedPass),
-		CreatedOn:  uint64(time.Now().Unix()),
-		ModifiedOn: 0,
+		UUID:      *id,
+		Name:      name,
+		Address:   address,
+		CreatedOn: uint64(time.Now().Unix()),
 	}
 	return account, nil
 }
 
-// GetAccount fetches the account referenced by the provided id.
-func GetAccount(db *bolt.DB, id []byte) (*Account, error) {
+// FetchAccount fetches the account referenced by the provided id.
+func FetchAccount(db *bolt.DB, id []byte) (*Account, error) {
 	var account Account
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
@@ -97,9 +88,9 @@ func (acc *Account) Create(db *bolt.DB) error {
 	return err
 }
 
-// Update persists the updated account to the database.
+// Update is not supported for accounts.
 func (acc *Account) Update(db *bolt.DB) error {
-	return acc.Create(db)
+	return ErrNotSupported("account", "update")
 }
 
 // Delete purges the referenced account from the database.

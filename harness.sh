@@ -4,8 +4,6 @@ SESSION="harness"
 NODES_ROOT=~/harness
 RPCUSER="user"
 RPCPASS="pass"
-MINING_USER="pcl"
-MINING_PASS="pass"
 WALLET_SEED="b280922d2cffda44648346412c5ec97f429938105003730414f10b01e1402eac"
 TBY_WALLET_SEED="1111111111111111111111111111111111111111111111111111111111111111"
 POOL_MINING_ADDR="SspUvSyDGSzvPz2NfdZ5LW15uq6rmuGZyhL"
@@ -17,18 +15,18 @@ if [ -d "${NODES_ROOT}" ] ; then
   rm -R "${NODES_ROOT}"
 fi
 
-case "$OSTYPE" in
-  solaris*) APPDATA="${HOME}" ;;
-  darwin*)  APPDATA="${HOME}/Library/Application Support" ;; 
-  linux*)   APPDATA="${HOME}" ;;
-  bsd*)     APPDATA="${HOME}" ;;
-esac
 
-DCRD_RPC_CERT="${APPDATA}/Dcrd/rpc.cert"
-DCRW_RPC_CERT="${APPDATA}/Dcrwallet/rpc.cert"
-DCRW_RPC_KEY="${APPDATA}/Dcrwallet/rpc.key"
+DCRD_RPC_CERT="${HOME}/.dcrd/rpc.cert"
+DCRW_RPC_CERT="${HOME}/.dcrwallet/rpc.cert"
+DCRW_RPC_KEY="${HOME}/.dcrwallet/rpc.key"
 
-mkdir -p "${NODES_ROOT}/"{master,cpuminer,wallet,tbywallet,pool,client}
+mkdir -p "${NODES_ROOT}/master"
+mkdir -p "${NODES_ROOT}/cpuminer"
+mkdir -p "${NODES_ROOT}/wallet"
+mkdir -p "${NODES_ROOT}/tbywallet"
+mkdir -p "${NODES_ROOT}/pool"
+mkdir -p "${NODES_ROOT}/client"
+
 cat > "${NODES_ROOT}/master/dcrd.conf" <<EOF
 rpcuser=${RPCUSER}
 rpcpass=${RPCPASS}
@@ -36,7 +34,7 @@ rpccert=${DCRD_RPC_CERT}
 simnet=1
 logdir=./log
 datadir=./data
-debuglevel=TXMP=debug,MINR=debug,BMGR=debug,SRVR=debug
+debuglevel=RPCS=debug,MINR=debug,BMGR=debug,SRVR=debug
 miningaddr=${POOL_MINING_ADDR}
 EOF
 
@@ -49,7 +47,7 @@ logdir=./log
 datadir=./data
 rpclisten=127.0.0.1:18556
 connect=127.0.0.1:18555
-debuglevel=TXMP=debug,MINR=debug,BMGR=debug,SRVR=debug
+debuglevel=RPCS=debug,MINR=debug,BMGR=debug,SRVR=debug
 miningaddr=${MINING_ADDR}
 EOF
 
@@ -98,7 +96,7 @@ dcrdrpchost=127.0.0.1:19556
 walletgrpchost=127.0.0.1:19558
 debuglevel=trace
 maxgentime=5
-port=:19560
+domain=127.0.0.1
 walletpass=123
 activenet=simnet
 poolfeeaddrs=${PFEE_ADDR}
@@ -109,10 +107,10 @@ EOF
 
 cat > "${NODES_ROOT}/client/client.conf" <<EOF
 debuglevel=trace
-user=${MINING_USER}
-pass=${MINING_PASS}
-host=127.0.0.1:19560
-minertype=cpu
+activenet=simnet
+user=miner
+address=${CLIENT_ADDR}
+pool=127.0.0.1:5550
 EOF
 
 cd ${NODES_ROOT} && tmux new-session -d -s $SESSION
@@ -202,7 +200,7 @@ tmux send-keys "dcrwallet -C tbywallet.conf" C-m
 ################################################################################
 # Setup the pool wallet's dcrctl (wctl).
 ################################################################################
-sleep 12
+sleep 2
 tmux new-window -t $SESSION:6 -n 'wctl'
 tmux send-keys "cd ${NODES_ROOT}/wallet" C-m
 tmux send-keys "./ctl createnewaccount pfee" C-m
@@ -215,6 +213,7 @@ tmux send-keys "./ctl getbalance"
 ################################################################################
 # Setup ticket buying wallet's dcrctl (tctl).
 ################################################################################
+sleep 4
 tmux new-window -t $SESSION:7 -n 'tctl'
 tmux send-keys "cd ${NODES_ROOT}/tbywallet" C-m
 tmux send-keys "./ctl getnewaddress" C-m
@@ -237,12 +236,6 @@ tmux send-keys "./mine 5" C-m
 tmux new-window -t $SESSION:9 -n 'pool'
 tmux send-keys "cd ${NODES_ROOT}/pool" C-m
 tmux send-keys "dcrpool --configfile pool.conf --homedir=." C-m
-sleep 1
-tmux send-keys `curl -s POST http://127.0.0.1:19560/create/account \
-  -H 'Cache-Control: no-cache' \
-  -H 'Content-Type: application/json' \
-  -d '{"name": "pcl", "address": "SsZckVrqHRBtvhJA5UqLZ3MDXpZHi5mK6uU" ,"pass": "pass"}' \
-  > /dev/null`
 
 ################################################################################
 # Setup the mining client. 
@@ -250,6 +243,6 @@ tmux send-keys `curl -s POST http://127.0.0.1:19560/create/account \
 sleep 1
 tmux new-window -t $SESSION:10 -n 'client'
 tmux send-keys "cd ${NODES_ROOT}/client" C-m
-tmux send-keys "poolclient --configfile client.conf --homedir=." C-m
+tmux send-keys "miner --configfile client.conf --homedir=." C-m
 
 tmux attach-session -t $SESSION

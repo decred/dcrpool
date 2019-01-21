@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coreos/bbolt"
+	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
 
@@ -27,8 +27,8 @@ func createShare(db *bolt.DB, account string, weight *big.Rat, createdOnNano int
 
 // createPersistedAccount creates a pool account with the provided parameters
 // and persists it to the database.
-func createPersistedAccount(db *bolt.DB, name string, address string, pass string) error {
-	account, err := NewAccount(name, address, pass)
+func createPersistedAccount(db *bolt.DB, name string, address string) error {
+	account, err := NewAccount(name, address)
 	if err != nil {
 		return err
 	}

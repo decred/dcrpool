@@ -1,416 +1,82 @@
 package network
 
 import (
-	"bytes"
+	"bufio"
 	"context"
-	"crypto/rand"
-	"encoding/binary"
 	"encoding/hex"
-	"math/big"
+	"encoding/json"
+	"io"
+	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
+
+	"github.com/decred/dcrd/wire"
 
 	"github.com/decred/dcrd/blockchain"
-	"github.com/decred/dcrd/wire"
-	"github.com/gorilla/websocket"
 
+	"github.com/davecgh/go-spew/spew"
+	"github.com/decred/dcrd/dcrutil"
+	"github.com/dnldd/dcrpool/database"
 	"github.com/dnldd/dcrpool/dividend"
 )
 
-const (
-	// uint256Size is the number of bytes needed to represent an unsigned
-	// 256-bit integer.
-	uint256Size = 32
-)
-
-// Client defines an established websocket connection.
+// Client represents a client connection.
 type Client struct {
-	hub         *Hub
-	minerType   string
-	id          uint64
-	ws          *websocket.Conn
-	wsMtx       sync.RWMutex
-	req         map[uint64]string
-	reqMtx      sync.RWMutex
-	ch          chan Message
-	Ctx         context.Context
-	cancel      context.CancelFunc
-	ip          string
-	ticker      *time.Ticker
-	accountID   string
-	pingRetries uint64
+	conn           *net.TCPConn
+	endpoint       *Endpoint
+	encoder        *json.Encoder
+	reader         *bufio.Reader
+	ctx            context.Context
+	cancel         context.CancelFunc
+	ip             string
+	id             uint64
+	extraNonce1    string
+	ch             chan Message
+	req            map[uint64]string
+	reqMtx         sync.RWMutex
+	account        string
+	authorized     bool
+	subscribed     bool
+	lastWorkHeight uint32
 }
 
-// recordRequest logs the client request as an id/method pair.
+// NewClient creates client connection instance.
+func NewClient(conn *net.TCPConn, endpoint *Endpoint, ip string) *Client {
+	ctx, cancel := context.WithCancel(context.TODO())
+	endpoint.hub.AddClient(endpoint.miner)
+	return &Client{
+		conn:     conn,
+		endpoint: endpoint,
+		ctx:      ctx,
+		cancel:   cancel,
+		ch:       make(chan Message),
+		encoder:  json.NewEncoder(conn),
+		reader:   bufio.NewReader(conn),
+		ip:       ip,
+	}
+}
+
+// recordRequest logs a request as an id/method pair.
 func (c *Client) recordRequest(id uint64, method string) {
 	c.reqMtx.Lock()
 	c.req[id] = method
 	c.reqMtx.Unlock()
 }
 
-// fetchRequest fetches the request method of the provided request id.
+// fetchRequest fetches the method of the recorded request id.
 func (c *Client) fetchRequest(id uint64) string {
-	var method string
 	c.reqMtx.RLock()
-	method = c.req[id]
+	method := c.req[id]
 	c.reqMtx.RUnlock()
 	return method
 }
 
-// deleteRequest removes the request referenced by the provided id.
+// deleteRequest removes the recorded request referenced by the provided id.
 func (c *Client) deleteRequest(id uint64) {
 	c.reqMtx.Lock()
 	delete(c.req, id)
 	c.reqMtx.Unlock()
-}
-
-// claimWeightedShare records a weighted share corresponding to the hash power
-// of the mining client for the account it is authenticated under. This serves
-// as proof of verifiable work contributed to the mining pool.
-func (c *Client) claimWeightedShare() {
-	weight := dividend.ShareWeights[c.minerType]
-	share := dividend.NewShare(c.accountID, weight)
-	share.Create(c.hub.db)
-}
-
-// BigToLEUint256 returns the passed big integer as an unsigned 256-bit integer
-// encoded as little-endian bytes.  Numbers which are larger than the max
-// unsigned 256-bit integer are truncated.
-func BigToLEUint256(n *big.Int) [uint256Size]byte {
-	// Pad or truncate the big-endian big int to correct number of bytes.
-	nBytes := n.Bytes()
-	nlen := len(nBytes)
-	pad := 0
-	start := 0
-	if nlen <= uint256Size {
-		pad = uint256Size - nlen
-	} else {
-		start = nlen - uint256Size
-	}
-	var buf [uint256Size]byte
-	copy(buf[pad:], nBytes[start:])
-
-	// Reverse the bytes to little endian and return them.
-	for i := 0; i < uint256Size/2; i++ {
-		buf[i], buf[uint256Size-1-i] = buf[uint256Size-1-i], buf[i]
-	}
-	return buf
-}
-
-// LEUint256ToBig returns the passed unsigned 256-bit integer
-// encoded as little-endian as a big integer.
-func LEUint256ToBig(n [uint256Size]byte) *big.Int {
-	var buf [uint256Size]byte
-	copy(buf[:], n[:])
-
-	// Reverse the bytes to big endian and create a big.Int.
-	for i := 0; i < uint256Size/2; i++ {
-		buf[i], buf[uint256Size-1-i] = buf[uint256Size-1-i], buf[i]
-	}
-
-	v := new(big.Int).SetBytes(buf[:])
-
-	return v
-}
-
-// NewClient initializes a new websocket client.
-func NewClient(h *Hub, socket *websocket.Conn, ip string, ticker *time.Ticker,
-	minerType string, account string) *Client {
-	ctx, cancel := context.WithCancel(context.TODO())
-	atomic.AddUint64(&h.ConnCount, 1)
-	return &Client{
-		hub:         h,
-		minerType:   minerType,
-		ws:          socket,
-		ip:          ip,
-		ch:          make(chan Message),
-		Ctx:         ctx,
-		cancel:      cancel,
-		ticker:      ticker,
-		accountID:   account,
-		req:         make(map[uint64]string, 0),
-		pingRetries: 0,
-	}
-}
-
-// Process parses and handles inbound client messages.
-func (c *Client) Process(ctx context.Context) {
-	c.ws.SetReadLimit(MaxMessageSize)
-out:
-	for {
-		select {
-		case <-ctx.Done():
-			// Decrement the connection counter.
-			atomic.AddUint64(&c.hub.ConnCount, ^uint64(0))
-
-			// Update the estimated hash rate of the pool.
-			c.hub.RemoveHashRate(c.minerType)
-
-			break out
-		default:
-			// Non-blocking receive fallthrough.
-		}
-
-		// Wait for a message.
-		_, data, err := c.ws.ReadMessage()
-		if err != nil {
-			if websocket.IsUnexpectedCloseError(err,
-				websocket.CloseGoingAway, websocket.CloseAbnormalClosure,
-				websocket.CloseNormalClosure) {
-				log.Errorf("Websocket read error (pool client): %v", err)
-			}
-			c.cancel()
-			continue
-		}
-
-		msg, reqType, err := IdentifyMessage(data)
-		if err != nil {
-			log.Debug(err)
-			c.cancel()
-			continue
-		}
-
-		// Ensure the requesting client is within their request limits, which
-		// applies for both websocket requests by the client as well as
-		// requests via the api.
-		allow := c.hub.limiter.WithinLimit(c.ip)
-		if !allow {
-			switch reqType {
-			case RequestType:
-				req := msg.(*Request)
-				c.ch <- tooManyRequestsResponse(req.ID)
-				continue
-			case NotificationType:
-				// Clients are not allowed to send notifications.
-				c.cancel()
-				continue
-			}
-		}
-
-		switch reqType {
-		case RequestType:
-			req := msg.(*Request)
-			switch req.Method {
-			case SubmitWork:
-				submission, err := ParseWorkSubmissionRequest(req)
-				if err != nil {
-					log.Debug(err)
-					msg := err.Error()
-					c.ch <- EvaluatedWorkResponse(req.ID, &msg, false)
-					continue
-				}
-
-				decoded, err := DecodeHeader([]byte(*submission))
-				if err != nil {
-					log.Errorf("failed to decode header: %v", err)
-					continue
-				}
-
-				header, err := ParseBlockHeader(decoded)
-				if err != nil {
-					log.Errorf("failed to parse block header: %v", err)
-					return
-				}
-
-				// Fetch the pool target for the client based on its
-				// miner type.
-				c.hub.poolTargetsMtx.RLock()
-				pTarget := c.hub.poolTargets[c.minerType]
-				c.hub.poolTargetsMtx.RUnlock()
-
-				target := blockchain.CompactToBig(header.Bits)
-				poolTarget := blockchain.CompactToBig(pTarget)
-				hash := header.BlockHash()
-				hashNum := blockchain.HashToBig(&hash)
-
-				// Only submit work if the submitted blockhash is below the
-				// target difficulty and the specified pool target for the
-				// client.
-				if hashNum.Cmp(poolTarget) > 0 {
-					log.Errorf("submitted work (%v) is not less than the "+
-						"client's pool target (%v)", hashNum, poolTarget)
-					continue
-				}
-
-				// Claim a weighted share for work contributed to the pool.
-				c.claimWeightedShare()
-
-				if hashNum.Cmp(target) < 0 {
-					// Persist the accepted work, this is being done here to
-					// have a record available when a block connected
-					// notification is received.
-					nonce := FetchNonce(decoded)
-					work := NewAcceptedWork(nonce)
-					work.Create(c.hub.db)
-
-					accepted, err := c.hub.SubmitWork(submission)
-					if err != nil {
-						msg := err.Error()
-						c.ch <- EvaluatedWorkResponse(req.ID, &msg, false)
-						continue
-					}
-
-					c.ch <- EvaluatedWorkResponse(req.ID, nil, accepted)
-
-					// If the evaluated work is not accepted, remove it from
-					// the db.
-					if !accepted {
-						work.Delete(c.hub.db)
-					}
-				}
-
-			default:
-				log.Errorf("Unknowning request type received")
-			}
-
-		case ResponseType:
-			resp := msg.(*Response)
-			method := c.fetchRequest(*resp.ID)
-			if method == "" {
-				log.Error("No request found for received response "+
-					"with id: ", *resp.ID)
-				continue
-			}
-
-			switch method {
-			case Ping:
-				c.deleteRequest(*resp.ID)
-				reply := resp.Result["response"].(string)
-				if reply != Pong {
-					continue
-				}
-
-				log.Tracef("received pong")
-				atomic.StoreUint64(&c.pingRetries, 0)
-			default:
-				log.Errorf("Unknown response type received")
-				c.cancel()
-				continue
-			}
-
-		case NotificationType:
-		default:
-			log.Errorf("Unknown message type received")
-			c.cancel()
-			continue
-		}
-	}
-}
-
-// Send messages to a client.
-func (c *Client) Send(ctx context.Context) {
-out:
-	for {
-		select {
-		case <-ctx.Done():
-			c.wsMtx.Lock()
-			c.ws.WriteMessage(websocket.CloseMessage,
-				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			c.wsMtx.Unlock()
-			close(c.ch)
-			break out
-
-		case <-c.ticker.C:
-			// Close the connection if unreachable after 3 pings.
-			retries := atomic.LoadUint64(&c.pingRetries)
-			if retries == MaxPingRetries {
-				log.Debugf("Client %v unreachable, closing connection.", c.ip)
-				c.cancel()
-				continue
-			}
-
-			id := c.nextID()
-			c.recordRequest(*id, Ping)
-			c.wsMtx.Lock()
-			err := c.ws.WriteJSON(PingRequest(id))
-			c.wsMtx.Unlock()
-			if err != nil {
-				log.Error(err)
-				c.cancel()
-				continue
-			}
-			atomic.AddUint64(&c.pingRetries, 1)
-
-		case msg := <-c.ch:
-			// Close the connection on receiving a nil message reference.
-			if msg == nil {
-				c.cancel()
-				continue
-			}
-
-			c.wsMtx.Lock()
-			err := c.ws.WriteJSON(msg)
-			c.wsMtx.Unlock()
-			if err != nil {
-				log.Error(err)
-				c.cancel()
-				continue
-			}
-
-		case msg := <-c.hub.Broadcast:
-			// Close the connection on receiving a nil message reference.
-			if msg == nil {
-				c.cancel()
-				continue
-			}
-
-			req := msg.(*Request)
-			switch req.Method {
-			case Work:
-				// Fetch the header of the work notification.
-				header, _, err := ParseWorkNotification(req)
-				if err != nil {
-					log.Error(err)
-					c.cancel()
-					continue
-				}
-
-				// Fetch the pool target for the client based on its
-				// miner type.
-				c.hub.poolTargetsMtx.RLock()
-				target := c.hub.poolTargets[c.minerType]
-				c.hub.poolTargetsMtx.RUnlock()
-
-				// Set the miner's pool id.
-				id := GeneratePoolID()
-
-				// Set the pool id of the client.
-				setPoolID(header, id)
-
-				// Encode the updated haeader.
-				encoded := EncodeHeader(header)
-
-				// Covert the pool target to little endian hex encoded byte
-				// slice.
-				targetLE := BigToLEUint256(blockchain.CompactToBig(target))
-				t := hex.EncodeToString(targetLE[:])
-
-				// Send an updated work notification per the client's miner type.
-				r := WorkNotification(string(encoded), t)
-				c.wsMtx.Lock()
-				err = c.ws.WriteJSON(r)
-				c.wsMtx.Unlock()
-				if err != nil {
-					log.Error(err)
-					c.cancel()
-					continue
-				}
-
-			default:
-				// For all other message types forward the broadcasted message
-				// to the client.
-				c.wsMtx.Lock()
-				err := c.ws.WriteJSON(msg)
-				c.wsMtx.Unlock()
-				if err != nil {
-					log.Error(err)
-					c.cancel()
-					continue
-				}
-			}
-		}
-	}
 }
 
 // nextID returns the next message id for the client.
@@ -419,90 +85,358 @@ func (c *Client) nextID() *uint64 {
 	return &id
 }
 
-// FetchBlockHeight retrieves the block height from the provided hex encoded
-// block header.
-func FetchBlockHeight(encoded []byte) (uint32, error) {
-	data := []byte(encoded)
-	decoded := make([]byte, hex.DecodedLen(len(encoded)))
-	_, err := hex.Decode(decoded, data)
+// Shutdown terminates all client processes and established connections.
+func (c *Client) Shutdown() {
+	c.endpoint.hub.RemoveClient(c.endpoint.miner)
+	close(c.ch)
+	err := c.conn.Close()
 	if err != nil {
-		return 0, err
+		log.Errorf("Client connection close error: %v", err)
+	}
+}
+
+// claimWeightedShare records a weighted share for the pool client. This serves
+// as proof of verifiable work contributed to the mining pool.
+func (c *Client) claimWeightedShare() {
+	weight := dividend.ShareWeights[c.endpoint.miner]
+	share := dividend.NewShare(c.account, weight)
+	share.Create(c.endpoint.hub.db)
+}
+
+// handleAuthorizeRequest processes authorize request messages received.
+func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
+	if !allowed {
+		err := NewStratumError(Unknown)
+		resp := AuthorizeResponse(req.ID, false, err)
+		c.ch <- resp
+		return
 	}
 
-	return binary.LittleEndian.Uint32(decoded[128:132]), nil
-}
-
-// FetchTargetDifficulty retrieves the target difficulty from the provided hex
-// encoded block header.
-func FetchTargetDifficulty(encoded []byte) (uint32, error) {
-	data := []byte(encoded)
-	decoded := make([]byte, hex.DecodedLen(len(encoded)))
-	_, err := hex.Decode(decoded, data)
+	username, err := ParseAuthorizeRequest(req)
 	if err != nil {
-		return 0, err
+		log.Errorf("Failed to parse authorize request: %v", err)
+		err := NewStratumError(Unknown)
+		resp := AuthorizeResponse(req.ID, false, err)
+		c.ch <- resp
+		return
 	}
 
-	return binary.LittleEndian.Uint32(decoded[116:120]), nil
-}
+	parts := strings.Split(username, ".")
+	name := parts[1]
+	address := parts[0]
 
-// GeneratePoolID generates a random 4-byte slice.  This is intended to be used
-// as the pool id for miners.
-func GeneratePoolID() []byte {
-	id := make([]byte, 4)
-	rand.Read(id)
-	return id
-}
-
-// The block header provides 12-bytes of nonce space which constitutes of
-// 8-bytes nonce and 4-bytes worker id to prevent duplicate work for mining
-// pools by haste semantics.
-// Format:
-// 	<0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00>, [0x00, 0x00, 0x00, 0x00]
-
-// setPoolID sets the assigned pool id for a miner.  This is to prevent
-// duplicate work.
-func setPoolID(decoded []byte, id []byte) {
-	copy(decoded[148:152], id[:])
-}
-
-// SetGeneratedNonce sets the worker generated nonce for the decoded header data.
-func SetGeneratedNonce(decoded []byte, nonce uint64) {
-	binary.LittleEndian.PutUint64(decoded[140:148], nonce)
-}
-
-// FetchNonce fetches the worker generated nonce and the assigned pool id
-// from the decoded header data.
-func FetchNonce(decoded []byte) []byte {
-	return decoded[140:152]
-}
-
-// EncodeHeader encodes the decoded header data.
-func EncodeHeader(decoded []byte) []byte {
-	data := make([]byte, hex.EncodedLen(len(decoded)))
-	_ = hex.Encode(data, decoded)
-	return data
-}
-
-// DecodeHeader decodes the hex encoded header data.
-func DecodeHeader(encoded []byte) ([]byte, error) {
-	decoded := make([]byte, hex.DecodedLen(len(encoded)))
-	_, err := hex.Decode(decoded, encoded)
+	// Ensure the provided address is valid.
+	_, err = dcrutil.DecodeAddress(address)
 	if err != nil {
-		return nil, err
+		log.Errorf("Failed to decode address: %v", err)
+		err := NewStratumError(Unknown)
+		resp := AuthorizeResponse(req.ID, false, err)
+		c.ch <- resp
+		return
 	}
 
-	return decoded, nil
-}
-
-// ParseBlockHeader deserializes the block header from the provided hex
-// encoded header data.
-func ParseBlockHeader(decoded []byte) (*wire.BlockHeader, error) {
-	var header wire.BlockHeader
-	reader := bytes.NewReader(decoded[:180])
-	err := header.Deserialize(reader)
-	if err != nil {
-		return nil, err
+	id := dividend.AccountID(name, address)
+	_, err = dividend.FetchAccount(c.endpoint.hub.db, []byte(*id))
+	if err != nil && err.Error() !=
+		database.ErrValueNotFound([]byte(*id)).Error() {
+		log.Errorf("Failed to fetch account: %v", err)
+		err := NewStratumError(Unknown)
+		resp := AuthorizeResponse(req.ID, false, err)
+		c.ch <- resp
+		return
 	}
 
-	return &header, nil
+	// Create the account if it does not already exist.
+	account, err := dividend.NewAccount(name, address)
+	if err != nil {
+		log.Errorf("Failed to create account: %v", err)
+		err := NewStratumError(Unknown)
+		resp := AuthorizeResponse(req.ID, false, err)
+		c.ch <- resp
+		return
+	}
+
+	err = account.Create(c.endpoint.hub.db)
+	if err != nil {
+		log.Errorf("Failed to persist account: %v", err)
+		err := NewStratumError(Unknown)
+		resp := AuthorizeResponse(req.ID, false, err)
+		c.ch <- resp
+		return
+	}
+
+	c.authorized = true
+	c.account = *id
+	resp := AuthorizeResponse(req.ID, true, nil)
+	c.ch <- resp
+}
+
+// handleSubscribeRequest processes subscription request messages received.
+func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
+	if !allowed {
+		err := NewStratumError(Unknown)
+		resp := SubscribeResponse(req.ID, "", err)
+		c.ch <- resp
+		return
+	}
+
+	err := ParseSubscribeRequest(req)
+	if err != nil {
+		log.Errorf("Failed to parse subscribe request: %v", err)
+		err := NewStratumError(Unknown)
+		resp := SubscribeResponse(req.ID, "", err)
+		c.ch <- resp
+		return
+	}
+
+	c.extraNonce1 = GenerateExtraNonce1()
+	resp := SubscribeResponse(req.ID, c.extraNonce1, nil)
+	c.ch <- resp
+	c.subscribed = true
+
+	c.endpoint.clientsMtx.Lock()
+	c.endpoint.clients = append(c.endpoint.clients, c)
+	c.endpoint.clientsMtx.Unlock()
+}
+
+// handleSubmitWorkRequest processes work submission request messages received.
+func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
+	if !allowed {
+		err := NewStratumError(Unknown)
+		resp := SubmitWorkResponse(req.ID, false, err)
+		c.ch <- resp
+		return
+	}
+
+	_, jobID, extraNonce2E, nTimeE, nonceE, err := ParseSubmitWorkRequest(req)
+	if err != nil {
+		log.Errorf("Failed to parse submit work request: %v", err)
+		err := NewStratumError(Unknown)
+		resp := SubmitWorkResponse(req.ID, false, err)
+		c.ch <- resp
+		return
+	}
+
+	job, err := FetchJob(c.endpoint.hub.db, []byte(jobID))
+	if err != nil {
+		log.Errorf("Failed to fetch job: %v", err)
+		err := NewStratumError(Unknown)
+		resp := SubmitWorkResponse(req.ID, false, err)
+		c.ch <- resp
+		return
+	}
+
+	header, nonceSpace, err := GenerateSolvedBlockHeader(job.Header,
+		c.extraNonce1, extraNonce2E, nTimeE, nonceE)
+	if err != nil {
+		log.Errorf("Failed to generate solved bloch header: %v", err)
+		err := NewStratumError(Unknown)
+		resp := SubmitWorkResponse(req.ID, false, err)
+		c.ch <- resp
+		return
+	}
+
+	log.Tracef("solved block header is %v", spew.Sdump(header))
+
+	poolTarget := blockchain.CompactToBig(c.endpoint.target)
+	target := blockchain.CompactToBig(header.Bits)
+	hash := header.BlockHash()
+	hashNum := blockchain.HashToBig(&hash)
+
+	// Only submit work to the network if the submitted blockhash is
+	// below the target difficulty and the specified pool target
+	// for the client.
+	if hashNum.Cmp(poolTarget) > 0 {
+		log.Errorf("submitted work (%v) is not less than the "+
+			"client's (%v) pool target (%v)", c.endpoint.miner,
+			hashNum, poolTarget)
+		err := NewStratumError(Unknown)
+		resp := SubmitWorkResponse(req.ID, false, err)
+		c.ch <- resp
+		return
+	}
+
+	// Claim a weighted share for work contributed to the pool.
+	c.claimWeightedShare()
+
+	if hashNum.Cmp(target) < 0 {
+		// Persist the accepted work, this is a workaround for having
+		// an accepted work record available when a block connected
+		// notification is received.
+
+		work := NewAcceptedWork(nonceSpace)
+		work.Create(c.endpoint.hub.db)
+
+		// Generate and send the work submission.
+		headerB, err := header.Bytes()
+		if err != nil {
+			log.Errorf("Failed to fetch block header bytes: %v", err)
+			err := NewStratumError(Unknown)
+			resp := SubmitWorkResponse(req.ID, false, err)
+			c.ch <- resp
+			return
+		}
+
+		submissionB := make([]byte, getworkDataLen)
+		copy(submissionB[:wire.MaxBlockHeaderPayload], headerB)
+		copy(submissionB[wire.MaxBlockHeaderPayload:],
+			c.endpoint.hub.blake256Pad)
+		submission := hex.EncodeToString(submissionB)
+		accepted, err := c.endpoint.hub.SubmitWork(&submission)
+		if err != nil {
+			log.Errorf("Failed to submit work request: %v", err)
+			err := NewStratumError(Unknown)
+			resp := SubmitWorkResponse(req.ID, false, err)
+			c.ch <- resp
+			return
+		}
+
+		if !accepted {
+			work.Delete(c.endpoint.hub.db)
+			err := NewStratumError(LowDifficultyShare)
+			resp := SubmitWorkResponse(req.ID, accepted, err)
+			c.ch <- resp
+			return
+		}
+
+		c.ch <- SubmitWorkResponse(req.ID, accepted, nil)
+	}
+}
+
+// Listen reads and processes incoming messages from the connected pool client.
+func (c *Client) Listen() {
+	//TODO: work in a read timeout max bytex for the tcp connection.
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+
+		default:
+			// Non-blocking receive fallthrough.
+		}
+
+		data, err := c.reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				log.Tracef("Client connection lost with %v", c.ip)
+				c.cancel()
+				continue
+			}
+		}
+
+		msg, reqType, err := IdentifyMessage(data)
+		if err != nil {
+			log.Errorf("Failed to identify message: %v", err)
+			c.cancel()
+			continue
+		}
+
+		// Ensure the requesting client is within their request limits.
+		allowed := c.endpoint.hub.limiter.WithinLimit(c.ip)
+
+		switch reqType {
+		case RequestType:
+			req := msg.(*Request)
+			switch req.Method {
+			case Authorize:
+				c.handleAuthorizeRequest(req, allowed)
+
+			case Subscribe:
+				c.handleSubscribeRequest(req, allowed)
+
+				if allowed {
+					// Send a set difficulty notification.
+					diffNotif, err := SetDifficultyNotification(
+						c.endpoint.hub.cfg.ActiveNet, c.endpoint.target)
+					if err != nil {
+						log.Errorf("Failed to calculate diff from target: %v",
+							err)
+						continue
+					}
+					c.ch <- diffNotif
+				}
+			case Submit:
+				c.handleSubmitWorkRequest(req, allowed)
+
+			default:
+				log.Errorf("Unknown request method for request: %s", req.Method)
+			}
+
+		case ResponseType:
+			resp := msg.(*Response)
+			method := c.fetchRequest(*resp.ID)
+			if method == "" {
+				log.Errorf("No request found for response with id: ", resp.ID,
+					spew.Sdump(resp))
+				c.cancel()
+				continue
+			}
+
+			switch method {
+			default:
+				log.Errorf("Unknown request method for response: %s", method)
+			}
+
+		default:
+			log.Errorf("Unknown message type received: %s", reqType)
+		}
+	}
+}
+
+// Send dispatches messages to a pool client. It must be run as a goroutine.
+func (c *Client) Send() {
+	for {
+		select {
+		case <-c.ctx.Done():
+			c.Shutdown()
+			return
+
+		case msg := <-c.ch:
+			if msg == nil {
+				continue
+			}
+
+			err := c.encoder.Encode(msg)
+			if err != nil {
+				log.Errorf("Message encoding error: %v", err)
+				c.cancel()
+				continue
+			}
+
+		case msg := <-c.endpoint.hub.Broadcast:
+			if msg == nil {
+				continue
+			}
+
+			err := c.encoder.Encode(msg)
+			if err != nil {
+				log.Errorf("Message encoding error: %v", err)
+				c.cancel()
+				continue
+			}
+
+			// TODO: reconstruct the work notification based on the miner then
+			// send.
+			// req := msg.(*Request)
+			// switch req.Method {
+			// case Notify:
+			// 	jobID, prevBlock, genTxOne, genTxTwo, blockVersion, nBits,
+			// 		nTime, cleanJob, err := ParseWorkNotification(req)
+			// 	if err != nil {
+			// 		log.Errorf("Failed to parse mining.notify message: %v", err)
+			// 	}
+
+			// 	// TODO: Update the work notification components per the
+			// 	// specification of the endpoint and send it.
+
+			// default:
+			// 	err := c.encoder.Encode(msg)
+			// 	if err != nil {
+			// 		log.Errorf("Broadcast message encoding error: %v", err)
+			// 		c.cancel()
+			// 		continue
+			// 	}
+			// }
+		}
+	}
 }

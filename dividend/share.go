@@ -5,12 +5,14 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/decred/dcrd/chaincfg"
 	"math"
 	"math/big"
 	"time"
 
-	"github.com/coreos/bbolt"
+	bolt "github.com/coreos/bbolt"
+	"github.com/decred/dcrd/blockchain"
+	"github.com/decred/dcrd/chaincfg"
+
 	"github.com/decred/dcrd/dcrutil"
 
 	"github.com/dnldd/dcrpool/database"
@@ -72,7 +74,7 @@ func fetchPOWLimit(net *chaincfg.Params) (*big.Int, error) {
 // MinerHashes is a map of all known DCR miners and their coressponding
 // hashrates.
 var MinerHashes = map[string]*big.Int{
-	CPU:           new(big.Int).SetInt64(210E3),
+	CPU:           new(big.Int).SetInt64(150E3),
 	ObeliskDCR1:   new(big.Int).SetInt64(1.2E12),
 	WoodpeckerWB2: new(big.Int).SetInt64(1.5E12),
 	FFMinerD18:    new(big.Int).SetInt64(1.8E12),
@@ -81,6 +83,20 @@ var MinerHashes = map[string]*big.Int{
 	AntiminerDR3:  new(big.Int).SetInt64(7.8E12),
 	StrongUU1:     new(big.Int).SetInt64(11E12),
 	WhatsminerD1:  new(big.Int).SetInt64(44E12),
+}
+
+// MinerPorts is a map of all known DCR miners and the coressponding
+// ports configured to be connected on.
+var MinerPorts = map[string]uint32{
+	CPU:           5550,
+	ObeliskDCR1:   5551,
+	WoodpeckerWB2: 5552,
+	FFMinerD18:    5553,
+	InnosiliconD9: 5554,
+	IbelinkDSM6T:  5555,
+	AntiminerDR3:  5556,
+	StrongUU1:     5557,
+	WhatsminerD1:  5558,
 }
 
 // Convenience variables.
@@ -115,17 +131,16 @@ var ShareWeights = map[string]*big.Rat{
 	WhatsminerD1:  new(big.Rat).SetFloat64(36.667),
 }
 
-// CalculatePoolTarget determines the target difficulty at which the provided
+// CalculatePoolDifficulty determines the difficulty at which the provided
 // hashrate can generate a pool share by the provided target time.
-func CalculatePoolTarget(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) (*big.Int, error) {
+func CalculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) (*big.Rat, error) {
 	hashesPerTargetTime := new(big.Int).Mul(hashRate, targetTimeSecs)
 	powLimit, err := fetchPOWLimit(net)
 	if err != nil {
-		return ZeroInt, err
+		return nil, err
 	}
 
 	powLimitFloat, _ := new(big.Float).SetInt(powLimit).Float64()
-	powLimitRat := new(big.Rat).SetInt(powLimit)
 
 	// The number of possible iterations is calculated as:
 	//
@@ -139,12 +154,26 @@ func CalculatePoolTarget(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs
 	difficulty := new(big.Rat).Quo(new(big.Rat).SetInt(hashesPerTargetTime),
 		new(big.Rat).SetFloat64(iterations))
 
+	return difficulty, nil
+}
+
+// DifficultyToTarget converts the provided difficulty to a target based on the
+// active network.
+func DifficultyToTarget(net *chaincfg.Params, difficulty *big.Int) (*big.Int, error) {
+	powLimit, err := fetchPOWLimit(net)
+	if err != nil {
+		return ZeroInt, err
+	}
+
+	powLimitRat := new(big.Rat).SetInt(powLimit)
+	difficultyRat := new(big.Rat).SetInt(difficulty)
+
 	// The corresponding target is calculated as:
 	//
 	//    target = pow_limit / difficulty
 	//
 	// The result is clamped to the pow limit if it exceeds it.
-	target := new(big.Rat).Quo(powLimitRat, difficulty)
+	target := new(big.Rat).Quo(powLimitRat, difficultyRat)
 
 	if target.Cmp(powLimitRat) > 0 {
 		target = powLimitRat
@@ -156,6 +185,36 @@ func CalculatePoolTarget(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs
 	}
 
 	return new(big.Int).Quo(target.Num(), target.Denom()), nil
+}
+
+// TargetToDifficulty converts the provided target to a difficulty based on the
+// active network provided.
+func TargetToDifficulty(net *chaincfg.Params, tgt uint32) (uint64, error) {
+	powLimit, err := fetchPOWLimit(net)
+	if err != nil {
+		return 0, err
+	}
+
+	target := blockchain.CompactToBig(tgt)
+
+	// The corresponding difficuly is calculated as:
+	//
+	//    difficulty = pow_limit / target
+	difficulty := new(big.Int).Quo(powLimit, target)
+	return difficulty.Uint64(), nil
+}
+
+// CalculatePoolTarget determines the target difficulty at which the provided
+// hashrate can generate a pool share by the provided target time.
+func CalculatePoolTarget(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) (*big.Int, error) {
+	difficulty, err := CalculatePoolDifficulty(net, hashRate, targetTimeSecs)
+	if err != nil {
+		return ZeroInt, err
+	}
+
+	target, err := DifficultyToTarget(net,
+		new(big.Int).Quo(difficulty.Num(), difficulty.Denom()))
+	return target, err
 }
 
 // Share represents verifiable work performed by a pool client.

@@ -9,24 +9,23 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/decred/dcrd/chaincfg"
+
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
-
-	"github.com/dnldd/dcrpool/dividend"
 )
 
 const (
 	defaultLogLevel       = "debug"
-	defaultConfigFilename = "dcrpclient.conf"
-	defaultHost           = "localhost:25000"
+	defaultConfigFilename = "miner.conf"
 	defaultLogDirname     = "log"
-	defaultLogFilename    = "dcrpclient.log"
-	defaultMinerType      = dividend.CPU
+	defaultLogFilename    = "miner.log"
 )
 
 var (
-	defaultHomeDir    = dcrutil.AppDataDir("dcrpclient", false)
+	defaultActiveNet  = chaincfg.SimNetParams.Name
+	defaultHomeDir    = dcrutil.AppDataDir("miner", false)
 	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFilename)
 	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogDirname)
 )
@@ -39,12 +38,14 @@ var runServiceCommand func(string) error
 type config struct {
 	HomeDir    string `long:"homedir" description:"Path to application home directory"`
 	ConfigFile string `long:"configfile" description:"Path to configuration file"`
+	ActiveNet  string `long:"activenet" description:"The active network being mined on. {simnet, testnet, mainnet}"`
 	User       string `long:"user" description:"The username of the mining account"`
-	Pass       string `long:"pass" description:"The password of the mining account"`
-	MinerType  string `long:"minertype" description:"The miner type, refer to the miner list for options"`
-	Host       string `long:"host" description:"The ip address and port of the mining pool in the form ip:port"`
+	Address    string `long:"address" description:"The address of the mining account"`
+	Pool       string `long:"pool" description:"The stratum domain and port of the mining pool to connect to. eg. dcrpool.com:4445"`
 	DebugLevel string `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir     string `long:"logdir" description:"The log output directory."`
+
+	net *chaincfg.Params
 }
 
 // serviceOptions defines the configuration options for the daemon as a service on
@@ -213,13 +214,12 @@ func loadConfig() (*config, []string, error) {
 	// Default config.
 	cfg := config{
 		HomeDir:    defaultHomeDir,
+		ActiveNet:  defaultActiveNet,
 		ConfigFile: defaultConfigFile,
-		Host:       defaultHost,
 		DebugLevel: defaultLogLevel,
 		LogDir:     defaultLogDir,
-		MinerType:  defaultMinerType,
 		User:       "",
-		Pass:       "",
+		Address:    "",
 	}
 
 	// Service options which are only added on Windows.
@@ -361,6 +361,16 @@ func loadConfig() (*config, []string, error) {
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)
 		return nil, nil, err
+	}
+
+	// Set the active network.
+	switch cfg.ActiveNet {
+	case chaincfg.SimNetParams.Name:
+		cfg.net = &chaincfg.SimNetParams
+	case chaincfg.TestNet3Params.Name:
+		cfg.net = &chaincfg.TestNet3Params
+	case chaincfg.MainNetParams.Name:
+		cfg.net = &chaincfg.MainNetParams
 	}
 
 	// Warn about missing config file only after all other configuration is

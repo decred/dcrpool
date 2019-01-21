@@ -4,29 +4,31 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	"github.com/coreos/bbolt"
-
+	bolt "github.com/coreos/bbolt"
 	"github.com/dnldd/dcrpool/database"
 )
 
 // AcceptedWork represents an accepted work submission to the network.
 type AcceptedWork struct {
+	UUID              string `json:"uuid"`
 	Nonce             []byte `json:"nonce"`
 	Connected         bool   `json:"connected"`
-	ConnectedAtHeight int64  `json:"connectedatheight"`
+	ConnectedAtHeight uint32 `json:"connectedatheight"`
 }
 
 // NewAcceptedWork creates an accepted work instance.
-func NewAcceptedWork(nonce []byte) *AcceptedWork {
+func NewAcceptedWork(idB []byte) *AcceptedWork {
+	id := hex.EncodeToString(idB)
 	return &AcceptedWork{
-		Nonce:             nonce,
+		UUID:              id,
+		Nonce:             idB,
 		Connected:         false,
-		ConnectedAtHeight: -1,
+		ConnectedAtHeight: 0,
 	}
 }
 
-// GetAcceptedWork fetches the accepted work referenced by the provided id.
-func GetAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
+// FetchAcceptedWork fetches the accepted work referenced by the provided id.
+func FetchAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
 	var work AcceptedWork
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
@@ -67,9 +69,7 @@ func (work *AcceptedWork) Create(db *bolt.DB) error {
 			return err
 		}
 
-		encoded := make([]byte, hex.EncodedLen(len(work.Nonce[:])))
-		_ = hex.Encode(encoded, work.Nonce[:])
-		return bkt.Put(encoded, workBytes)
+		return bkt.Put([]byte(work.UUID), workBytes)
 	})
 	return err
 }
@@ -79,16 +79,14 @@ func (work *AcceptedWork) Update(db *bolt.DB) error {
 	return work.Create(db)
 }
 
-// Delete is not supported for accepted work.
+// Delete removes the associated accepted work from the database.
 func (work *AcceptedWork) Delete(db *bolt.DB) error {
-	encoded := make([]byte, hex.EncodedLen(len(work.Nonce[:])))
-	_ = hex.Encode(encoded, work.Nonce[:])
-	return database.Delete(db, database.WorkBkt, encoded)
+	return database.Delete(db, database.WorkBkt, []byte(work.UUID))
 }
 
 // PruneAcceptedWork removes all accepted work entries with heights less than
 // or equal to the provided height.
-func PruneAcceptedWork(db *bolt.DB, height int64) error {
+func PruneAcceptedWork(db *bolt.DB, height uint32) error {
 	err := db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		if pbkt == nil {
@@ -107,7 +105,7 @@ func PruneAcceptedWork(db *bolt.DB, height int64) error {
 				return err
 			}
 
-			if work.Connected && (work.ConnectedAtHeight > -1 &&
+			if work.Connected && (work.ConnectedAtHeight > 0 &&
 				work.ConnectedAtHeight < height) {
 				err = cursor.Delete()
 				if err != nil {
