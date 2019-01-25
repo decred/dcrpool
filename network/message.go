@@ -45,7 +45,7 @@ const (
 
 // NewStratumError creates a stratum error instance.
 func NewStratumError(code uint64) []interface{} {
-	errData := make([]interface{}, 3, 3)
+	errData := make([]interface{}, 3)
 	errData[0] = code
 	errData[2] = nil
 
@@ -328,10 +328,10 @@ func ParseSetDifficultyNotification(req *Request) (uint64, error) {
 }
 
 // WorkNotification creates a work notification message.
-func WorkNotification(jobID string, prevHash string, genTx1 string, genTx2 string, blockVersion string, nTime string, cleanJob bool) *Request {
+func WorkNotification(jobID string, prevBlock string, genTx1 string, genTx2 string, blockVersion string, nTime string, cleanJob bool) *Request {
 	return &Request{
 		Method: Notify,
-		Params: []interface{}{jobID, prevHash, genTx1, genTx2, []string{},
+		Params: []interface{}{jobID, prevBlock, genTx1, genTx2, []string{},
 			blockVersion, "", nTime, cleanJob},
 	}
 }
@@ -462,8 +462,22 @@ func SubmitWorkRequest(id *uint64, workerName string, jobID string, extraNonce2 
 	}
 }
 
+// HexReversed reverses a hex string.
+func HexReversed(in string) (string, error) {
+	if len(in)%2 != 0 {
+		return "", fmt.Errorf("incorrect hex input length")
+	}
+
+	buf := bytes.NewBufferString("")
+	for i := len(in) - 1; i > -1; i -= 2 {
+		buf.WriteByte(in[i-1])
+		buf.WriteByte(in[i])
+	}
+	return buf.String(), nil
+}
+
 // ParseSubmitWorkRequest resolves a submit work request into its components.
-func ParseSubmitWorkRequest(req *Request) (string, string, string, string, string, error) {
+func ParseSubmitWorkRequest(req *Request, miner string) (string, string, string, string, string, error) {
 	if req.Method != Submit {
 		return "", "", "", "", "", fmt.Errorf("request method is not submit")
 	}
@@ -496,6 +510,18 @@ func ParseSubmitWorkRequest(req *Request) (string, string, string, string, strin
 	if !ok {
 		return "", "", "", "", "",
 			fmt.Errorf("failed to parse nTime parameter")
+	}
+
+	switch miner {
+	// The miners listed submit nTime as a hex encoded big endian, the
+	// bytes have to the reversed to little endian to proceed.
+	case dividend.InnosiliconD9, dividend.ObeliskDCR1, dividend.AntminerDR3,
+		dividend.StrongUU1, dividend.AntminerDR5:
+		rev, err := HexReversed(nTime)
+		if err != nil {
+			return "", "", "", "", "", err
+		}
+		nTime = rev
 	}
 
 	nonce, ok := params[4].(string)

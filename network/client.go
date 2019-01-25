@@ -2,6 +2,7 @@ package network
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -208,7 +209,8 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		return
 	}
 
-	_, jobID, extraNonce2E, nTimeE, nonceE, err := ParseSubmitWorkRequest(req)
+	_, jobID, extraNonce2E, nTimeE, nonceE, err := ParseSubmitWorkRequest(req,
+		c.endpoint.miner)
 	if err != nil {
 		log.Errorf("Failed to parse submit work request: %v", err)
 		err := NewStratumError(Unknown)
@@ -383,6 +385,132 @@ func (c *Client) Listen() {
 	}
 }
 
+// ReversePrevBlockWords reverses each 4-byte word in the provided hex encoded
+// previous block hash.
+func ReversePrevBlockWords(hashE string) string {
+	buf := bytes.NewBufferString("")
+	for i := 0; i < len(hashE); i += 8 {
+		buf.WriteString(hashE[i+6 : i+8])
+		buf.WriteString(hashE[i+4 : i+6])
+		buf.WriteString(hashE[i+2 : i+4])
+		buf.WriteString(hashE[i : i+2])
+	}
+	return buf.String()
+}
+
+// handleAntminerDR3 prepares work notifications for the Antminer DR3.
+func (c *Client) handleAntminerDR3Work(req *Request) {
+	jobID, prevBlock, genTx1, genTx2, blockVersion, nTime,
+		cleanJob, err := ParseWorkNotification(req)
+	if err != nil {
+		log.Errorf("Failed to parse work message: %v", err)
+	}
+
+	// Reverse the the 4-byte words of the prevHash:
+	wordReversedPrevBlock := ReversePrevBlockWords(prevBlock)
+	workNotif := WorkNotification(jobID, wordReversedPrevBlock,
+		genTx1, genTx2, blockVersion, nTime, cleanJob)
+
+	err = c.encoder.Encode(workNotif)
+	if err != nil {
+		log.Errorf("Message encoding error: %v", err)
+		c.cancel()
+	}
+}
+
+// handleAntminerDR5 prepares work notifications for the Antminer DR5.
+func (c *Client) handleAntminerDR5Work(req *Request) {
+	c.handleAntminerDR3Work(req)
+}
+
+// handleObeliskDCR1 prepares work notifications for the Obelisk DCR1.
+func (c *Client) handleObeliskDCR1Work(req *Request) {
+	jobID, prevBlock, genTx1, genTx2, blockVersion, nTime,
+		cleanJob, err := ParseWorkNotification(req)
+	if err != nil {
+		log.Errorf("Failed to parse work message: %v", err)
+	}
+
+	// TODO: handle any perculiar modifications for the DCR1.
+
+	// Reverse the the 4-byte words of the prevHash:
+	wordReversedPrevBlock := ReversePrevBlockWords(prevBlock)
+	workNotif := WorkNotification(jobID, wordReversedPrevBlock,
+		genTx1, genTx2, blockVersion, nTime, cleanJob)
+
+	err = c.encoder.Encode(workNotif)
+	if err != nil {
+		log.Errorf("Message encoding error: %v", err)
+		c.cancel()
+	}
+}
+
+// handleInnosiliconD9Work prepares work notifications for the Innosilicon D9.
+func (c *Client) handleInnosiliconD9Work(req *Request) {
+	jobID, prevBlock, genTx1, genTx2, blockVersion, nTime,
+		cleanJob, err := ParseWorkNotification(req)
+	if err != nil {
+		log.Errorf("Failed to parse work message: %v", err)
+	}
+
+	// TODO: handle any perculiar modifications for the D9.
+
+	// Reverse the the 4-byte words of the prevHash:
+	wordReversedPrevBlock := ReversePrevBlockWords(prevBlock)
+	workNotif := WorkNotification(jobID, wordReversedPrevBlock,
+		genTx1, genTx2, blockVersion, nTime, cleanJob)
+
+	err = c.encoder.Encode(workNotif)
+	if err != nil {
+		log.Errorf("Message encoding error: %v", err)
+		c.cancel()
+	}
+}
+
+// handleStrongUU1Work prepares work notifications for the StrongU U1.
+func (c *Client) handleStrongUU1Work(req *Request) {
+	jobID, prevBlock, genTx1, genTx2, blockVersion, nTime,
+		cleanJob, err := ParseWorkNotification(req)
+	if err != nil {
+		log.Errorf("Failed to parse work message: %v", err)
+	}
+
+	// TODO: handle any perculiar modifications for the D9.
+
+	// Reverse the the 4-byte words of the prevHash:
+	wordReversedPrevBlock := ReversePrevBlockWords(prevBlock)
+	workNotif := WorkNotification(jobID, wordReversedPrevBlock,
+		genTx1, genTx2, blockVersion, nTime, cleanJob)
+
+	err = c.encoder.Encode(workNotif)
+	if err != nil {
+		log.Errorf("Message encoding error: %v", err)
+		c.cancel()
+	}
+}
+
+// handleWhatsminerD1Work prepares work notifications for the Whatsminer D1.
+func (c *Client) handleWhatsminerD1Work(req *Request) {
+	jobID, prevBlock, genTx1, genTx2, blockVersion, nTime,
+		cleanJob, err := ParseWorkNotification(req)
+	if err != nil {
+		log.Errorf("Failed to parse work message: %v", err)
+	}
+
+	// TODO: handle any perculiar modifications for the D1.
+
+	// Reverse the the 4-byte words of the prevHash:
+	wordReversedPrevBlock := ReversePrevBlockWords(prevBlock)
+	workNotif := WorkNotification(jobID, wordReversedPrevBlock,
+		genTx1, genTx2, blockVersion, nTime, cleanJob)
+
+	err = c.encoder.Encode(workNotif)
+	if err != nil {
+		log.Errorf("Message encoding error: %v", err)
+		c.cancel()
+	}
+}
+
 // Send dispatches messages to a pool client. It must be run as a goroutine.
 func (c *Client) Send() {
 	for {
@@ -408,35 +536,40 @@ func (c *Client) Send() {
 				continue
 			}
 
-			err := c.encoder.Encode(msg)
-			if err != nil {
-				log.Errorf("Message encoding error: %v", err)
-				c.cancel()
-				continue
+			req := msg.(*Request)
+			switch req.Method {
+			case Notify:
+				switch c.endpoint.miner {
+				case dividend.CPU:
+					err := c.encoder.Encode(msg)
+					if err != nil {
+						log.Errorf("Message encoding error: %v", err)
+						c.cancel()
+						continue
+					}
+
+				case dividend.InnosiliconD9:
+					c.handleInnosiliconD9Work(req)
+
+				case dividend.ObeliskDCR1:
+					c.handleObeliskDCR1Work(req)
+
+				case dividend.AntminerDR3:
+					c.handleAntminerDR3Work(req)
+
+				case dividend.StrongUU1:
+					c.handleStrongUU1Work(req)
+
+				case dividend.AntminerDR5:
+					c.handleAntminerDR5Work(req)
+
+				case dividend.WhatsminerD1:
+					c.handleWhatsminerD1Work(req)
+				}
+
+			default:
+				log.Errorf("Unknown miner (%v) specified", c.endpoint.miner)
 			}
-
-			// TODO: reconstruct the work notification based on the miner then
-			// send.
-			// req := msg.(*Request)
-			// switch req.Method {
-			// case Notify:
-			// 	jobID, prevBlock, genTxOne, genTxTwo, blockVersion, nBits,
-			// 		nTime, cleanJob, err := ParseWorkNotification(req)
-			// 	if err != nil {
-			// 		log.Errorf("Failed to parse mining.notify message: %v", err)
-			// 	}
-
-			// 	// TODO: Update the work notification components per the
-			// 	// specification of the endpoint and send it.
-
-			// default:
-			// 	err := c.encoder.Encode(msg)
-			// 	if err != nil {
-			// 		log.Errorf("Broadcast message encoding error: %v", err)
-			// 		c.cancel()
-			// 		continue
-			// 	}
-			// }
 		}
 	}
 }

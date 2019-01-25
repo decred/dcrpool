@@ -18,16 +18,14 @@ import (
 	"github.com/dnldd/dcrpool/database"
 )
 
-// Miner types lists all known DCR miners, in order of descending hash power
+// Miner types lists all known DCR miners
 const (
 	CPU           = "cpu"
-	ObeliskDCR1   = "obeliskdcr1"
-	WoodpeckerWB2 = "woodpeckerwb2"
-	FFMinerD18    = "ffminerd18"
 	InnosiliconD9 = "innosilicond9"
-	IbelinkDSM6T  = "ibelinkdsm6t"
-	AntiminerDR3  = "antminerdr3"
+	ObeliskDCR1   = "obeliskdcr1"
+	AntminerDR3   = "antminerdr3"
 	StrongUU1     = "stronguu1"
+	AntminerDR5   = "antminerdr5"
 	WhatsminerD1  = "whatsminerd1"
 )
 
@@ -75,13 +73,11 @@ func fetchPOWLimit(net *chaincfg.Params) (*big.Int, error) {
 // hashrates.
 var MinerHashes = map[string]*big.Int{
 	CPU:           new(big.Int).SetInt64(150E3),
-	ObeliskDCR1:   new(big.Int).SetInt64(1.2E12),
-	WoodpeckerWB2: new(big.Int).SetInt64(1.5E12),
-	FFMinerD18:    new(big.Int).SetInt64(1.8E12),
 	InnosiliconD9: new(big.Int).SetInt64(2.4E12),
-	IbelinkDSM6T:  new(big.Int).SetInt64(6E12),
-	AntiminerDR3:  new(big.Int).SetInt64(7.8E12),
-	StrongUU1:     new(big.Int).SetInt64(11E12),
+	ObeliskDCR1:   new(big.Int).SetInt64(2.6E12),
+	AntminerDR3:   new(big.Int).SetInt64(7.8E12),
+	StrongUU1:     new(big.Int).SetInt64(12E12),
+	AntminerDR5:   new(big.Int).SetInt64(32E12),
 	WhatsminerD1:  new(big.Int).SetInt64(44E12),
 }
 
@@ -90,13 +86,10 @@ var MinerHashes = map[string]*big.Int{
 var MinerPorts = map[string]uint32{
 	CPU:           5550,
 	ObeliskDCR1:   5551,
-	WoodpeckerWB2: 5552,
-	FFMinerD18:    5553,
-	InnosiliconD9: 5554,
-	IbelinkDSM6T:  5555,
-	AntiminerDR3:  5556,
-	StrongUU1:     5557,
-	WhatsminerD1:  5558,
+	InnosiliconD9: 5552,
+	AntminerDR3:   5553,
+	StrongUU1:     5554,
+	WhatsminerD1:  5555,
 }
 
 // Convenience variables.
@@ -122,13 +115,12 @@ var (
 // 				(Hash of Miner X * Weight of LHM)/ Hash of LHM
 var ShareWeights = map[string]*big.Rat{
 	CPU:           new(big.Rat).SetFloat64(1.0), // Reserved for testing.
-	ObeliskDCR1:   new(big.Rat).SetFloat64(1.0),
-	WoodpeckerWB2: new(big.Rat).SetFloat64(1.25),
-	FFMinerD18:    new(big.Rat).SetFloat64(1.5),
-	InnosiliconD9: new(big.Rat).SetFloat64(2.0),
-	IbelinkDSM6T:  new(big.Rat).SetFloat64(5),
-	AntiminerDR3:  new(big.Rat).SetFloat64(6.5),
-	WhatsminerD1:  new(big.Rat).SetFloat64(36.667),
+	InnosiliconD9: new(big.Rat).SetFloat64(1.0),
+	ObeliskDCR1:   new(big.Rat).SetFloat64(1.0833),
+	AntminerDR3:   new(big.Rat).SetFloat64(3.25),
+	StrongUU1:     new(big.Rat).SetFloat64(5),
+	AntminerDR5:   new(big.Rat).SetFloat64(11.429),
+	WhatsminerD1:  new(big.Rat).SetFloat64(18.333),
 }
 
 // CalculatePoolDifficulty determines the difficulty at which the provided

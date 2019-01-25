@@ -307,7 +307,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 	}
 
 	if h.gConn == nil {
-		return nil, fmt.Errorf("Failed to establish grpc with the wallet")
+		return nil, fmt.Errorf("failed to establish grpc with the wallet")
 	}
 
 	h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
@@ -355,10 +355,7 @@ func (h *Hub) RemoveClient(miner string) {
 // HasClients asserts the mining pool has clients.
 func (h *Hub) HasClients() bool {
 	connCount := atomic.LoadUint32(&h.connCount)
-	if connCount == 0 {
-		return false
-	}
-	return true
+	return connCount == 0
 }
 
 // SubmitWork sends solved block data for evaluation.

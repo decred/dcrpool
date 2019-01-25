@@ -46,7 +46,7 @@ func NewEndpoint(hub *Hub, port uint32, miner string) (*Endpoint, error) {
 	url := SanitizeAddress(fmt.Sprintf("%s:%d", hub.cfg.Domain, port))
 	addr, err := net.ResolveTCPAddr("tcp", url)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to resolve tcp address: %v", err)
+		return nil, fmt.Errorf("failed to resolve tcp address: %v", err)
 	}
 
 	endpoint := &Endpoint{
@@ -59,7 +59,7 @@ func NewEndpoint(hub *Hub, port uint32, miner string) (*Endpoint, error) {
 	target := hub.poolTargets[miner]
 	hub.poolTargetsMtx.Unlock()
 	if target == 0 {
-		return nil, fmt.Errorf("Pool target not found for miner (%s)", miner)
+		return nil, fmt.Errorf("pool target not found for miner (%s)", miner)
 	}
 
 	endpoint.target = target
