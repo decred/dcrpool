@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,6 +16,11 @@ import (
 
 	"github.com/dnldd/dcrpool/dividend"
 	"github.com/dnldd/dcrpool/network"
+)
+
+var (
+	// statum defines the stratum protocol identifier.
+	stratum = "stratum+tcp"
 )
 
 // Work represents the data recieved from a work notification. It comprises of
@@ -45,7 +51,6 @@ type Miner struct {
 	cancel          context.CancelFunc
 	extraNonce1     string
 	extraNonce2Size uint64
-	pCount          uint32
 }
 
 // recordRequest logs a request as an id/method pair.
@@ -112,16 +117,16 @@ func NewMiner(cfg *config) (*Miner, error) {
 		work:    new(Work),
 		ctx:     ctx,
 		cancel:  cancel,
-		chainCh: make(chan struct{}, 0),
-		req:     make(map[uint64]string, 0),
+		chainCh: make(chan struct{}),
+		req:     make(map[uint64]string),
 	}
 
-	poolAddr := network.SanitizeAddress(m.config.Pool)
+	poolAddr := strings.Replace(m.config.Pool, stratum, "", 1)
 	log.Tracef("Pool address is: %v", poolAddr)
 
 	conn, err := net.Dial(network.TCP, poolAddr)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to connect to %s, %v", poolAddr, err)
+		return nil, fmt.Errorf("failed to connect to %s, %v", poolAddr, err)
 	}
 
 	m.conn = conn
@@ -130,12 +135,12 @@ func NewMiner(cfg *config) (*Miner, error) {
 
 	err = m.subscribe()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to subscribe miner: %v", err)
+		return nil, fmt.Errorf("failed to subscribe miner: %v", err)
 	}
 
 	err = m.authenticate()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to authenticate miner: %v", err)
+		return nil, fmt.Errorf("failed to authenticate miner: %v", err)
 	}
 
 	m.started = time.Now().Unix()
@@ -147,10 +152,10 @@ func NewMiner(cfg *config) (*Miner, error) {
 
 // Reconnect reestablishes a broken stratum connection.
 func (m *Miner) Reconnect() error {
-	poolAddr := network.SanitizeAddress(m.config.Pool)
+	poolAddr := strings.Replace(m.config.Pool, stratum, "", 1)
 	conn, err := net.Dial(network.TCP, poolAddr)
 	if err != nil {
-		return fmt.Errorf("Failed to reconnect to %s, %v", poolAddr, err)
+		return fmt.Errorf("failed to reconnect to %s, %v", poolAddr, err)
 	}
 
 	m.conn = conn
@@ -159,12 +164,12 @@ func (m *Miner) Reconnect() error {
 
 	err = m.subscribe()
 	if err != nil {
-		return fmt.Errorf("Failed to subscribe miner: %v", err)
+		return fmt.Errorf("failed to subscribe miner: %v", err)
 	}
 
 	err = m.authenticate()
 	if err != nil {
-		return fmt.Errorf("Failed to authenticate miner: %v", err)
+		return fmt.Errorf("fvailed to authenticate miner: %v", err)
 	}
 
 	m.started = time.Now().Unix()
@@ -259,6 +264,7 @@ out:
 
 				m.extraNonce1 = extraNonce1E
 				m.extraNonce2Size = extraNonce2Size
+				m.subscribed = true
 
 			case network.Submit:
 				_, strErr, err := network.ParseSubmitWorkResponse(resp)
@@ -314,7 +320,7 @@ out:
 				m.workMtx.Unlock()
 
 			case network.Notify:
-				jobID, prevBlock, genTx1, genTx2, blockVersion, nTime, _, err :=
+				jobID, prevBlock, genTx1, genTx2, blockVersion, _, nTime, _, err :=
 					network.ParseWorkNotification(notif)
 				if err != nil {
 					log.Errorf("Parse job notification error: %v", err)

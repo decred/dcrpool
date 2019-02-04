@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coreos/bbolt"
+	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
 
@@ -329,17 +329,17 @@ func TestCalculatePoolTarget(t *testing.T) {
 		{
 			new(big.Int).SetInt64(1.2E12),
 			new(big.Int).SetInt64(15),
-			"6432893846517566412420610278260439325181665814757809113303199112",
+			"6434354813162443865075659925303014480581657380081282215060527505",
 		},
 		{
 			new(big.Int).SetInt64(1.2E12),
 			new(big.Int).SetInt64(10),
-			"9649340769776349618630915417390658987772498722136713669954798668",
+			"9652684091353612529418909805592420577743338497150222871859509577",
 		},
 	}
 
 	for _, test := range set {
-		target, err := CalculatePoolTarget(&chaincfg.SimNetParams,
+		target, _, err := CalculatePoolTarget(&chaincfg.MainNetParams,
 			test.hashRate, test.targetTime)
 		if err != nil {
 			t.Error(err)

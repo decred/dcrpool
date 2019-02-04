@@ -9,13 +9,11 @@ import (
 	"math/big"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
 
 	bolt "github.com/coreos/bbolt"
-	"github.com/decred/dcrd/blockchain"
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
@@ -58,7 +56,6 @@ type HubConfig struct {
 	ActiveNet         *chaincfg.Params
 	DcrdRPCCfg        *rpcclient.ConnConfig
 	PoolFee           float64
-	Domain            string
 	MaxTxFeeReserve   dcrutil.Amount
 	MaxGenTime        *big.Int
 	WalletRPCCertFile string
@@ -67,7 +64,15 @@ type HubConfig struct {
 	LastNPeriod       uint32
 	WalletPass        string
 	MinPayment        dcrutil.Amount
+	SoloPool          bool
 	PoolFeeAddrs      []dcrutil.Address
+}
+
+// DifficultyData captures the pool target difficulty and pool difficulty
+// ratio of a mining client.
+type DifficultyData struct {
+	target     *big.Int
+	difficulty *big.Int
 }
 
 // Hub maintains the set of active clients and facilitates message broadcasting
@@ -85,10 +90,10 @@ type Hub struct {
 	grpcMtx           sync.Mutex
 	hashRate          *big.Int
 	hashRateMtx       sync.Mutex
-	poolTargets       map[string]uint32
-	poolTargetsMtx    sync.RWMutex
-	connCount         uint32
-	Ticker            *time.Ticker
+	poolDiff          map[string]*DifficultyData
+	poolDiffMtx       sync.RWMutex
+	clients           uint32
+	clientsMtx        sync.RWMutex
 	connCh            chan []byte
 	discCh            chan []byte
 	ctx               context.Context
@@ -125,27 +130,51 @@ func (h *Hub) GenerateBlake256Pad() {
 		wire.MaxBlockHeaderPayload*8)
 }
 
+// GenerateDifficultyData generates difficulty data for all known miners.
+func (h *Hub) GenerateDifficultyData() error {
+	h.poolDiffMtx.Lock()
+	for miner, hashrate := range dividend.MinerHashes {
+		target, difficulty, err := dividend.CalculatePoolTarget(h.cfg.ActiveNet,
+			hashrate, h.cfg.MaxGenTime)
+		if err != nil {
+			log.Error("Failed to calculate pool target and diff for miner "+
+				"(%v): %v", err)
+			return err
+		}
+
+		h.poolDiff[miner] = &DifficultyData{
+			target:     target,
+			difficulty: difficulty,
+		}
+	}
+	h.poolDiffMtx.Unlock()
+	return nil
+}
+
 // NewHub initializes a websocket hub.
 func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimiter) (*Hub, error) {
 	h := &Hub{
-		db:          db,
-		httpc:       httpc,
-		limiter:     limiter,
-		cfg:         hcfg,
-		hashRate:    dividend.ZeroInt,
-		poolTargets: make(map[string]uint32),
-		Broadcast:   make(chan Message),
-		connCount:   0,
-		Ticker:      time.NewTicker(time.Second * 5),
-		connCh:      make(chan []byte),
-		discCh:      make(chan []byte),
-		ctx:         ctx,
-		cancel:      cancel,
+		db:        db,
+		httpc:     httpc,
+		limiter:   limiter,
+		cfg:       hcfg,
+		hashRate:  dividend.ZeroInt,
+		poolDiff:  make(map[string]*DifficultyData),
+		Broadcast: make(chan Message),
+		clients:   0,
+		connCh:    make(chan []byte),
+		discCh:    make(chan []byte),
+		ctx:       ctx,
+		cancel:    cancel,
 	}
 
 	h.GenerateBlake256Pad()
 
-	log.Infof("Payment method is %v.", hcfg.PaymentMethod)
+	if !h.cfg.SoloPool {
+		log.Infof("Payment method is %v.", hcfg.PaymentMethod)
+	} else {
+		log.Infof("Solo pool enabled")
+	}
 
 	// Load the tx fee reserve and last payment height.
 	err := db.View(func(tx *bolt.Tx) error {
@@ -182,22 +211,12 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		h.txFeeReserve, h.cfg.MaxTxFeeReserve)
 	log.Tracef("Last payment height is currently %v", h.lastPaymentHeight)
 
-	// Calculate pool targets for all known miners.
-	h.poolTargetsMtx.Lock()
-	for miner, hashrate := range dividend.MinerHashes {
-		target, err := dividend.CalculatePoolTarget(h.cfg.ActiveNet, hashrate,
-			h.cfg.MaxGenTime)
-		if err != nil {
-			log.Error("Failed to calculate pool target for miner (%v): %v", err)
-			return nil, err
-		}
-
-		compactTarget := blockchain.BigToCompact(target)
-		h.poolTargets[miner] = compactTarget
+	// Generate difficulty data for all known pool clients.
+	err = h.GenerateDifficultyData()
+	if err != nil {
+		log.Error("Failed to generate difficulty data: %v", err)
+		return nil, err
 	}
-	h.poolTargetsMtx.Unlock()
-
-	log.Tracef("Mining pool domain is %v", h.cfg.Domain)
 
 	// Setup listeners for all known pool clients.
 	err = h.CreateListeners()
@@ -227,25 +246,17 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 			}
 
 			height := binary.LittleEndian.Uint32(heightD)
-			cleanJob := true
-			if height == h.lastWorkHeight {
-				cleanJob = false
-			}
+			h.lastWorkHeight = height
 
-			if cleanJob {
-				h.lastWorkHeight = height
-			}
-
+			// Do not process work data id there are no connected  pool clients.
 			if !h.HasClients() {
 				return
 			}
 
-			// The mining.notify message is constructed per the nicehash spec:
-			// https://github.com/nicehash/Specifications/blob/master/Decred_NiceHash.txt
-
 			blockVersion := headerE[:8]
 			prevBlock := headerE[8:72]
-			genTx1 := headerE[72:272]
+			genTx1 := headerE[72:288]
+			nBits := headerE[232:240]
 			nTime := headerE[272:280]
 			genTx2 := headerE[352:360]
 
@@ -263,8 +274,9 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 			}
 
 			workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
-				blockVersion, nTime, cleanJob)
+				blockVersion, nBits, nTime, true)
 
+			// Broadcast the work notification to connected pool clients.
 			h.Broadcast <- workNotif
 		},
 	}
@@ -284,6 +296,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		h.rpccMtx.Unlock()
 		return nil, fmt.Errorf("notify work rpc error (dcrd): %v", err)
 	}
+
 	if err := h.rpcc.NotifyBlocks(); err != nil {
 		h.rpccMtx.Lock()
 		h.rpcc.Shutdown()
@@ -293,31 +306,33 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 
 	log.Debugf("RPC connection established with dcrd.")
 
-	// Establish GRPC connection with the wallet.
-	creds, err := credentials.NewClientTLSFromFile(hcfg.WalletRPCCertFile,
-		"localhost")
-	if err != nil {
-		return nil, fmt.Errorf("grpc tls error (dcrwallet): %v", err)
-	}
+	// Establish GRPC connection with the wallet if not in solo pool mode.
+	if !h.cfg.SoloPool {
+		creds, err := credentials.NewClientTLSFromFile(hcfg.WalletRPCCertFile,
+			"localhost")
+		if err != nil {
+			return nil, fmt.Errorf("grpc tls error (dcrwallet): %v", err)
+		}
 
-	h.gConn, err = grpc.Dial(hcfg.WalletGRPCHost,
-		grpc.WithTransportCredentials(creds))
-	if err != nil {
-		return nil, fmt.Errorf("grpc dial error (dcrwallet): %v", err)
-	}
+		h.gConn, err = grpc.Dial(hcfg.WalletGRPCHost,
+			grpc.WithTransportCredentials(creds))
+		if err != nil {
+			return nil, fmt.Errorf("grpc dial error (dcrwallet): %v", err)
+		}
 
-	if h.gConn == nil {
-		return nil, fmt.Errorf("failed to establish grpc with the wallet")
-	}
+		if h.gConn == nil {
+			return nil, fmt.Errorf("failed to establish grpc with the wallet")
+		}
 
-	h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
+		h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
+	}
 
 	go h.process()
 
 	return h, nil
 }
 
-// GenerateExtraNonce1 a generated 4-byte pool id.
+// GenerateExtraNonce1 generates a random 4-byte extraNonce1 value.
 func GenerateExtraNonce1() string {
 	id := make([]byte, 4)
 	rand.Read(id)
@@ -328,7 +343,9 @@ func GenerateExtraNonce1() string {
 // to the pool.
 func (h *Hub) AddClient(miner string) {
 	// Increment the client count.
-	atomic.AddUint32(&h.connCount, 1)
+	h.clientsMtx.Lock()
+	h.clients++
+	h.clientsMtx.Unlock()
 
 	// Add the client's hash rate.
 	hash := dividend.MinerHashes[miner]
@@ -341,8 +358,10 @@ func (h *Hub) AddClient(miner string) {
 // RemoveClient removes a disconnected client and the hash rate it contributed to
 // the pool.
 func (h *Hub) RemoveClient(miner string) {
-	// Decrement the client count
-	atomic.AddUint32(&h.connCount, ^uint32(0))
+	// Decrement the client count.
+	h.clientsMtx.Lock()
+	h.clients--
+	h.clientsMtx.Unlock()
 
 	// Remove the client's hash rate
 	hash := dividend.MinerHashes[miner]
@@ -354,11 +373,13 @@ func (h *Hub) RemoveClient(miner string) {
 
 // HasClients asserts the mining pool has clients.
 func (h *Hub) HasClients() bool {
-	connCount := atomic.LoadUint32(&h.connCount)
-	return connCount == 0
+	h.clientsMtx.RLock()
+	hasClients := h.clients > 0
+	h.clientsMtx.RUnlock()
+	return hasClients
 }
 
-// SubmitWork sends solved block data for evaluation.
+// SubmitWork sends solved block data to the consensus daemon for evaluation.
 func (h *Hub) SubmitWork(data *string) (bool, error) {
 	h.rpccMtx.Lock()
 	status, err := h.rpcc.GetWorkSubmit(*data)
@@ -452,9 +473,18 @@ func (h *Hub) process() {
 	for {
 		select {
 		case <-h.ctx.Done():
-			h.gConn.Close()
+			if !h.cfg.SoloPool {
+				h.gConn.Close()
+			}
+
+			h.rpccMtx.Lock()
 			h.rpcc.Shutdown()
+			h.rpccMtx.Unlock()
+
+			close(h.discCh)
+			close(h.connCh)
 			close(h.Broadcast)
+
 			log.Info("Hub process handler done.")
 			return
 
@@ -474,7 +504,6 @@ func (h *Hub) process() {
 			}
 
 			id := hex.EncodeToString(headerB[140:152])
-			log.Tracef("Accepted work id is %v", id)
 			work, err := FetchAcceptedWork(h.db, []byte(id))
 			if err != nil {
 				log.Errorf("Failed to fetch connected accepted work: %v", err)
@@ -598,6 +627,13 @@ func (h *Hub) process() {
 // ProcessPayments fetches all eligible payments and publishes a
 // transaction to the network paying dividends to participating accounts.
 func (h *Hub) ProcessPayments(height uint32) error {
+	// In solo pool mode, mining rewards are paid to the mining address
+	// specified by the consensus daemon. Since it's a solo operation there is
+	// no need to distribute rewards for the workers.
+	if h.cfg.SoloPool {
+		return nil
+	}
+
 	// Waiting two blocks after a successful payment before proceeding with
 	// another one because the reserved amount for transaction fees becomes
 	// change after a successful transaction. Change matures after the next
@@ -628,7 +664,7 @@ func (h *Hub) ProcessPayments(height uint32) error {
 		return err
 	}
 
-	log.Tracef("mature rewards at height (%v) is %v", height, targetAmt)
+	log.Tracef("mature rewards at height (%v) is: %v", height, targetAmt)
 
 	// Create address-amount kv pairs for the transaction, using the payment
 	// details.

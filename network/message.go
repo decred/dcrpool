@@ -5,9 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"strings"
 
-	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/wire"
 	"github.com/dnldd/dcrpool/dividend"
 )
@@ -40,7 +40,7 @@ const (
 
 // Stratum constants.
 const (
-	ExtraNonce2Size = 8
+	ExtraNonce2Size = 4
 )
 
 // NewStratumError creates a stratum error instance.
@@ -218,16 +218,34 @@ func SubscribeRequest(id *uint64) *Request {
 }
 
 // ParseSubscribeRequest resolves a subscribe request into its components.
-func ParseSubscribeRequest(req *Request) error {
+func ParseSubscribeRequest(req *Request) (string, string, error) {
 	if req.Method != Subscribe {
-		return fmt.Errorf("request method is not subscribe")
+		return "", "", fmt.Errorf("request method is not subscribe")
 	}
 
-	return nil
+	params, ok := req.Params.([]interface{})
+	if !ok {
+		return "", "", fmt.Errorf("failed to parse authorize parameters")
+	}
+
+	miner, ok := params[0].(string)
+	if !ok {
+		return "", "", fmt.Errorf("failed to parse miner parameter")
+	}
+
+	id := ""
+	if len(params) == 2 {
+		id, ok = params[1].(string)
+		if !ok {
+			return "", "", fmt.Errorf("failed to parse id parameter")
+		}
+	}
+
+	return miner, id, nil
 }
 
-// SubscribeResponse creates a subscribe response.
-func SubscribeResponse(id *uint64, extraNonce1 string, err []interface{}) *Response {
+// SubscribeResponse creates a mining.subscribe response.
+func SubscribeResponse(id *uint64, notifyID string, extraNonce1 string, err []interface{}) *Response {
 	if err != nil {
 		return &Response{
 			ID:     id,
@@ -236,13 +254,11 @@ func SubscribeResponse(id *uint64, extraNonce1 string, err []interface{}) *Respo
 		}
 	}
 
-	// TODO: set the difficulty and notify ids when it's supported.
 	return &Response{
 		ID:    id,
 		Error: nil,
 		Result: []interface{}{[][]string{
-			{"mining.set_difficulty", "not supported"},
-			{"mining.notify", "not supported"}},
+			{"mining.set_difficulty", notifyID}, {"mining.notify", notifyID}},
 			extraNonce1, ExtraNonce2Size},
 	}
 }
@@ -301,15 +317,11 @@ func ParseSubscribeResponse(resp *Response) (string, string, string, uint64, err
 }
 
 // SetDifficultyNotification creates a set difficulty notification message.
-func SetDifficultyNotification(net *chaincfg.Params, target uint32) (*Request, error) {
-	difficulty, err := dividend.TargetToDifficulty(net, target)
-	if err != nil {
-		return nil, err
-	}
+func SetDifficultyNotification(difficulty *big.Int) *Request {
 	return &Request{
 		Method: SetDifficulty,
-		Params: []uint64{difficulty},
-	}, nil
+		Params: []uint64{difficulty.Uint64()},
+	}
 }
 
 // ParseSetDifficultyNotification resolves a set difficulty notification into
@@ -328,70 +340,76 @@ func ParseSetDifficultyNotification(req *Request) (uint64, error) {
 }
 
 // WorkNotification creates a work notification message.
-func WorkNotification(jobID string, prevBlock string, genTx1 string, genTx2 string, blockVersion string, nTime string, cleanJob bool) *Request {
+func WorkNotification(jobID string, prevBlock string, genTx1 string, genTx2 string, blockVersion string, nBits string, nTime string, cleanJob bool) *Request {
 	return &Request{
 		Method: Notify,
 		Params: []interface{}{jobID, prevBlock, genTx1, genTx2, []string{},
-			blockVersion, "", nTime, cleanJob},
+			blockVersion, nBits, nTime, cleanJob},
 	}
 }
 
 // ParseWorkNotification resolves a work notification message into its components.
-func ParseWorkNotification(req *Request) (string, string, string, string, string, string, bool, error) {
+func ParseWorkNotification(req *Request) (string, string, string, string, string, string, string, bool, error) {
 	if req.Method != Notify {
-		return "", "", "", "", "", "", false,
+		return "", "", "", "", "", "", "", false,
 			fmt.Errorf("notification method is not notify")
 	}
 
 	params, ok := req.Params.([]interface{})
 	if !ok {
-		return "", "", "", "", "", "", false,
+		return "", "", "", "", "", "", "", false,
 			fmt.Errorf("failed to parse work parameters")
 	}
 
 	jobID, ok := params[0].(string)
 	if !ok {
-		return "", "", "", "", "", "", false,
+		return "", "", "", "", "", "", "", false,
 			fmt.Errorf("failed to parse jobID parameter")
 	}
 
 	prevBlock, ok := params[1].(string)
 	if !ok {
-		return "", "", "", "", "", "", false,
+		return "", "", "", "", "", "", "", false,
 			fmt.Errorf("failed to parse prevBlock parameter")
 	}
 
 	genTx1, ok := params[2].(string)
 	if !ok {
-		return "", "", "", "", "", "", false,
+		return "", "", "", "", "", "", "", false,
 			fmt.Errorf("failed to parse genTx1 parameter")
 	}
 
 	genTx2, ok := params[3].(string)
 	if !ok {
-		return "", "", "", "", "", "", false,
+		return "", "", "", "", "", "", "", false,
 			fmt.Errorf("failed to parse genTx2 parameter")
 	}
 
 	blockVersion, ok := params[5].(string)
 	if !ok {
-		return "", "", "", "", "", "", false,
+		return "", "", "", "", "", "", "", false,
 			fmt.Errorf("failed to parse blockVersion parameter")
+	}
+
+	nBits, ok := params[6].(string)
+	if !ok {
+		return "", "", "", "", "", "", "", false,
+			fmt.Errorf("failed to parse nBits parameter")
 	}
 
 	nTime, ok := params[7].(string)
 	if !ok {
-		return "", "", "", "", "", "", false,
+		return "", "", "", "", "", "", "", false,
 			fmt.Errorf("failed to parse nTime parameter")
 	}
 
 	cleanJob, ok := params[8].(bool)
 	if !ok {
-		return "", "", "", "", "", "", false,
+		return "", "", "", "", "", "", "", false,
 			fmt.Errorf("failed to parse cleanJob parameter")
 	}
 
-	return jobID, prevBlock, genTx1, genTx2, blockVersion, nTime, cleanJob, nil
+	return jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime, cleanJob, nil
 }
 
 // GenerateBlockHeader creates a block header from a mining.notify
@@ -425,32 +443,40 @@ func GenerateBlockHeader(blockVersionE string, prevBlockE string, genTx1E string
 // GenerateSolvedBlockHeader create a block header from a mining.submit message
 // and its associated job. It returns the solved block header and the entire
 // nonce space.
-func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E string, nTimeE string, nonceE string) (*wire.BlockHeader, []byte, error) {
-	buf := bytes.NewBufferString("")
-	buf.WriteString(headerE[:272])
-	buf.WriteString(nTimeE)
-	buf.WriteString(nonceE)
-	buf.WriteString(extraNonce1E)
-	buf.WriteString(extraNonce2E)
-	buf.WriteString(headerE[304:])
-	solvedHeaderE := buf.String()
+func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E string, nTimeE string, nonceE string, miner string) (*wire.BlockHeader, string, error) {
+	var nonceSpaceE string
 
-	solvedHeaderD, err := hex.DecodeString(solvedHeaderE)
+	headerEB := []byte(headerE)
+	copy(headerEB[272:280], []byte(nTimeE))
+	copy(headerEB[280:288], []byte(nonceE))
+
+	switch miner {
+	// The Antiminer DR3 returns a 12-byte entraNonce regardless of the
+	// extraNonce2Size specified in the mining.subscribe message. The 12-byte
+	// extraNonce comprises of extraNonce1 and extraNonce2 as a result.
+	case dividend.AntminerDR3:
+		copy(headerEB[288:312], []byte(extraNonce2E))
+		nonceSpaceE = string(headerEB[280:312])
+
+	default:
+		return nil, "", fmt.Errorf("generating solved block for unknown miner "+
+			"(%v)", miner)
+	}
+
+	solvedHeaderD, err := hex.DecodeString(string(headerEB))
 	if err != nil {
-		return nil, nil,
+		return nil, "",
 			fmt.Errorf("failed to decode solved block header: %v", err)
 	}
 
 	var solvedHeader wire.BlockHeader
 	err = solvedHeader.FromBytes(solvedHeaderD)
 	if err != nil {
-		return nil, nil,
+		return nil, "",
 			fmt.Errorf("failed to create block header from bytes:%v", err)
 	}
 
-	nonceSpace := solvedHeaderD[140:152]
-
-	return &solvedHeader, nonceSpace, nil
+	return &solvedHeader, nonceSpaceE, nil
 }
 
 // SubmitWorkRequest creates a submit request message.
@@ -460,20 +486,6 @@ func SubmitWorkRequest(id *uint64, workerName string, jobID string, extraNonce2 
 		Method: Submit,
 		Params: []string{workerName, jobID, extraNonce2, nTime, nonce},
 	}
-}
-
-// HexReversed reverses a hex string.
-func HexReversed(in string) (string, error) {
-	if len(in)%2 != 0 {
-		return "", fmt.Errorf("incorrect hex input length")
-	}
-
-	buf := bytes.NewBufferString("")
-	for i := len(in) - 1; i > -1; i -= 2 {
-		buf.WriteByte(in[i-1])
-		buf.WriteByte(in[i])
-	}
-	return buf.String(), nil
 }
 
 // ParseSubmitWorkRequest resolves a submit work request into its components.
@@ -512,22 +524,27 @@ func ParseSubmitWorkRequest(req *Request, miner string) (string, string, string,
 			fmt.Errorf("failed to parse nTime parameter")
 	}
 
+	nonce, ok := params[4].(string)
+	if !ok {
+		return "", "", "", "", "",
+			fmt.Errorf("failed to parse nonce parameter")
+	}
+
 	switch miner {
-	// The miners listed submit nTime as a hex encoded big endian, the
-	// bytes have to the reversed to little endian to proceed.
-	case dividend.InnosiliconD9, dividend.ObeliskDCR1, dividend.AntminerDR3,
-		dividend.StrongUU1, dividend.AntminerDR5:
+	// All miners besides whatsminer submit nTime and nonce as a hex encoded
+	// big endian, the bytes have to the reversed to little endian to proceed.
+	case dividend.AntminerDR3: // Add the rest when needed.
 		rev, err := HexReversed(nTime)
 		if err != nil {
 			return "", "", "", "", "", err
 		}
 		nTime = rev
-	}
 
-	nonce, ok := params[4].(string)
-	if !ok {
-		return "", "", "", "", "",
-			fmt.Errorf("failed to parse nonce parameter")
+		rev, err = HexReversed(nonce)
+		if err != nil {
+			return "", "", "", "", "", err
+		}
+		nonce = rev
 	}
 
 	return workerName, jobID, extraNonce2, nTime, nonce, nil
