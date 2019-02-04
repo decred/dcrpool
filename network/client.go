@@ -6,11 +6,12 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"io"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/decred/dcrd/wire"
 
@@ -24,26 +25,25 @@ import (
 
 // Client represents a client connection.
 type Client struct {
-	conn           *net.TCPConn
-	endpoint       *Endpoint
-	encoder        *json.Encoder
-	reader         *bufio.Reader
-	ctx            context.Context
-	cancel         context.CancelFunc
-	ip             string
-	id             uint64
-	extraNonce1    string
-	ch             chan Message
-	req            map[uint64]string
-	reqMtx         sync.RWMutex
-	account        string
-	authorized     bool
-	subscribed     bool
-	lastWorkHeight uint32
+	conn        net.Conn
+	endpoint    *Endpoint
+	encoder     *json.Encoder
+	reader      *bufio.Reader
+	ctx         context.Context
+	cancel      context.CancelFunc
+	ip          string
+	id          uint64
+	extraNonce1 string
+	ch          chan Message
+	req         map[uint64]string
+	reqMtx      sync.RWMutex
+	account     string
+	authorized  bool
+	subscribed  bool
 }
 
 // NewClient creates client connection instance.
-func NewClient(conn *net.TCPConn, endpoint *Endpoint, ip string) *Client {
+func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
 	ctx, cancel := context.WithCancel(context.TODO())
 	endpoint.hub.AddClient(endpoint.miner)
 	return &Client{
@@ -102,6 +102,7 @@ func (c *Client) claimWeightedShare() {
 	weight := dividend.ShareWeights[c.endpoint.miner]
 	share := dividend.NewShare(c.account, weight)
 	share.Create(c.endpoint.hub.db)
+	log.Tracef("Weighted share claimed")
 }
 
 // handleAuthorizeRequest processes authorize request messages received.
@@ -113,6 +114,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 		return
 	}
 
+	// Usernames are expected to be of `address:id` format.
 	username, err := ParseAuthorizeRequest(req)
 	if err != nil {
 		log.Errorf("Failed to parse authorize request: %v", err)
@@ -123,13 +125,32 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	}
 
 	parts := strings.Split(username, ".")
-	name := parts[1]
-	address := parts[0]
+	if len(parts) != 2 {
+		log.Errorf("Invalid username format, expected `address.id`,got %v",
+			username)
+		err := NewStratumError(Unknown)
+		resp := AuthorizeResponse(req.ID, false, err)
+		c.ch <- resp
+		return
+	}
 
-	// Ensure the provided address is valid.
-	_, err = dcrutil.DecodeAddress(address)
+	name := strings.TrimSpace(parts[1])
+	address := strings.TrimSpace(parts[0])
+
+	// Ensure the provided address is valid and associated with the active
+	// network.
+	addr, err := dcrutil.DecodeAddress(address)
 	if err != nil {
 		log.Errorf("Failed to decode address: %v", err)
+		err := NewStratumError(Unknown)
+		resp := AuthorizeResponse(req.ID, false, err)
+		c.ch <- resp
+		return
+	}
+
+	if !addr.IsForNet(c.endpoint.hub.cfg.ActiveNet) {
+		log.Errorf("Address (%v) is not associated with the active network"+
+			" (%v)", address, c.endpoint.hub.cfg.ActiveNet.Name)
 		err := NewStratumError(Unknown)
 		resp := AuthorizeResponse(req.ID, false, err)
 		c.ch <- resp
@@ -176,28 +197,38 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 	if !allowed {
 		err := NewStratumError(Unknown)
-		resp := SubscribeResponse(req.ID, "", err)
+		resp := SubscribeResponse(req.ID, "", "", err)
 		c.ch <- resp
 		return
 	}
 
-	err := ParseSubscribeRequest(req)
+	_, nid, err := ParseSubscribeRequest(req)
 	if err != nil {
 		log.Errorf("Failed to parse subscribe request: %v", err)
 		err := NewStratumError(Unknown)
-		resp := SubscribeResponse(req.ID, "", err)
+		resp := SubscribeResponse(req.ID, "", "", err)
 		c.ch <- resp
 		return
 	}
 
 	c.extraNonce1 = GenerateExtraNonce1()
-	resp := SubscribeResponse(req.ID, c.extraNonce1, nil)
+	if nid == "" {
+		nid = fmt.Sprintf("mn%v", c.extraNonce1)
+	}
+
+	resp := SubscribeResponse(req.ID, nid, c.extraNonce1, nil)
+	log.Tracef("Subscribe response is: %v", spew.Sdump(resp))
+
 	c.ch <- resp
 	c.subscribed = true
+}
 
-	c.endpoint.clientsMtx.Lock()
-	c.endpoint.clients = append(c.endpoint.clients, c)
-	c.endpoint.clientsMtx.Unlock()
+// setDifficulty sends the pool client's difficulty ratio.
+func (c *Client) setDifficulty() {
+	log.Tracef("Difficulty is %v", c.endpoint.diffData.difficulty)
+	diffNotif := SetDifficultyNotification(
+		c.endpoint.diffData.difficulty)
+	c.ch <- diffNotif
 }
 
 // handleSubmitWorkRequest processes work submission request messages received.
@@ -208,6 +239,8 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		c.ch <- resp
 		return
 	}
+
+	log.Tracef("Received work submission is: %v", spew.Sdump(req))
 
 	_, jobID, extraNonce2E, nTimeE, nonceE, err := ParseSubmitWorkRequest(req,
 		c.endpoint.miner)
@@ -228,31 +261,33 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		return
 	}
 
-	header, nonceSpace, err := GenerateSolvedBlockHeader(job.Header,
-		c.extraNonce1, extraNonce2E, nTimeE, nonceE)
+	header, nonceSpaceE, err := GenerateSolvedBlockHeader(job.Header,
+		c.extraNonce1, extraNonce2E, nTimeE, nonceE, c.endpoint.miner)
 	if err != nil {
-		log.Errorf("Failed to generate solved bloch header: %v", err)
+		log.Errorf("Failed to generate solved block header: %v", err)
 		err := NewStratumError(Unknown)
 		resp := SubmitWorkResponse(req.ID, false, err)
 		c.ch <- resp
 		return
 	}
 
-	log.Tracef("solved block header is %v", spew.Sdump(header))
+	log.Tracef("solved block header is: %v", spew.Sdump(header))
 
-	poolTarget := blockchain.CompactToBig(c.endpoint.target)
+	poolTarget := c.endpoint.diffData.target
 	target := blockchain.CompactToBig(header.Bits)
 	hash := header.BlockHash()
 	hashNum := blockchain.HashToBig(&hash)
+
+	log.Tracef("pool target is: %v", poolTarget)
+	log.Tracef("hash target is: %v", hashNum)
 
 	// Only submit work to the network if the submitted blockhash is
 	// below the target difficulty and the specified pool target
 	// for the client.
 	if hashNum.Cmp(poolTarget) > 0 {
-		log.Errorf("submitted work (%v) is not less than the "+
-			"client's (%v) pool target (%v)", c.endpoint.miner,
-			hashNum, poolTarget)
-		err := NewStratumError(Unknown)
+		log.Errorf("submitted work is not less than the "+
+			"client's (%v) pool target", c.endpoint.miner)
+		err := NewStratumError(LowDifficultyShare)
 		resp := SubmitWorkResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -261,12 +296,15 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	// Claim a weighted share for work contributed to the pool.
 	c.claimWeightedShare()
 
+	// Send an accepted work response to the pool client.
+	c.ch <- SubmitWorkResponse(req.ID, true, nil)
+
 	if hashNum.Cmp(target) < 0 {
 		// Persist the accepted work, this is a workaround for having
 		// an accepted work record available when a block connected
 		// notification is received.
 
-		work := NewAcceptedWork(nonceSpace)
+		work := NewAcceptedWork(nonceSpaceE)
 		work.Create(c.endpoint.hub.db)
 
 		// Generate and send the work submission.
@@ -293,21 +331,17 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 			return
 		}
 
+		log.Tracef("Work accepted status is: %v", accepted)
+
 		if !accepted {
 			work.Delete(c.endpoint.hub.db)
-			err := NewStratumError(LowDifficultyShare)
-			resp := SubmitWorkResponse(req.ID, accepted, err)
-			c.ch <- resp
-			return
 		}
-
-		c.ch <- SubmitWorkResponse(req.ID, accepted, nil)
 	}
 }
 
 // Listen reads and processes incoming messages from the connected pool client.
 func (c *Client) Listen() {
-	//TODO: work in a read timeout max bytex for the tcp connection.
+	//TODO: work in a read timeout and max message size for the tcp connection.
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -317,14 +351,16 @@ func (c *Client) Listen() {
 			// Non-blocking receive fallthrough.
 		}
 
+		c.conn.SetReadDeadline(time.Now().Add(time.Second * 120))
+		c.conn.SetWriteDeadline(time.Now().Add(time.Second * 120))
 		data, err := c.reader.ReadBytes('\n')
 		if err != nil {
-			if err == io.EOF {
-				log.Tracef("Client connection lost with %v", c.ip)
-				c.cancel()
-				continue
-			}
+			log.Errorf("Failed to read bytes: %v", err)
+			c.cancel()
+			continue
 		}
+
+		log.Tracef("Message received is %v", string(data))
 
 		msg, reqType, err := IdentifyMessage(data)
 		if err != nil {
@@ -345,18 +381,8 @@ func (c *Client) Listen() {
 
 			case Subscribe:
 				c.handleSubscribeRequest(req, allowed)
+				c.setDifficulty()
 
-				if allowed {
-					// Send a set difficulty notification.
-					diffNotif, err := SetDifficultyNotification(
-						c.endpoint.hub.cfg.ActiveNet, c.endpoint.target)
-					if err != nil {
-						log.Errorf("Failed to calculate diff from target: %v",
-							err)
-						continue
-					}
-					c.ch <- diffNotif
-				}
 			case Submit:
 				c.handleSubmitWorkRequest(req, allowed)
 
@@ -398,116 +424,53 @@ func ReversePrevBlockWords(hashE string) string {
 	return buf.String()
 }
 
+// HexReversed reverses a hex string.
+func HexReversed(in string) (string, error) {
+	if len(in)%2 != 0 {
+		return "", fmt.Errorf("incorrect hex input length")
+	}
+
+	buf := bytes.NewBufferString("")
+	for i := len(in) - 1; i > -1; i -= 2 {
+		buf.WriteByte(in[i-1])
+		buf.WriteByte(in[i])
+	}
+	return buf.String(), nil
+}
+
 // handleAntminerDR3 prepares work notifications for the Antminer DR3.
 func (c *Client) handleAntminerDR3Work(req *Request) {
-	jobID, prevBlock, genTx1, genTx2, blockVersion, nTime,
+	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
 		cleanJob, err := ParseWorkNotification(req)
 	if err != nil {
 		log.Errorf("Failed to parse work message: %v", err)
 	}
 
-	// Reverse the the 4-byte words of the prevHash:
-	wordReversedPrevBlock := ReversePrevBlockWords(prevBlock)
-	workNotif := WorkNotification(jobID, wordReversedPrevBlock,
-		genTx1, genTx2, blockVersion, nTime, cleanJob)
+	nBits, err = HexReversed(nBits)
+	if err != nil {
+		log.Errorf("Failed to hex reverse nBits: %v", err)
+		c.cancel()
+		return
+	}
+
+	nTime, err = HexReversed(nTime)
+	if err != nil {
+		log.Errorf("Failed to hex reverse nTime: %v", err)
+		c.cancel()
+		return
+	}
+
+	prevBlockRev := ReversePrevBlockWords(prevBlock)
+	workNotif := WorkNotification(jobID, prevBlockRev,
+		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
+
+	log.Tracef("DR3 work notification is: %v", spew.Sdump(workNotif))
 
 	err = c.encoder.Encode(workNotif)
 	if err != nil {
 		log.Errorf("Message encoding error: %v", err)
 		c.cancel()
-	}
-}
-
-// handleAntminerDR5 prepares work notifications for the Antminer DR5.
-func (c *Client) handleAntminerDR5Work(req *Request) {
-	c.handleAntminerDR3Work(req)
-}
-
-// handleObeliskDCR1 prepares work notifications for the Obelisk DCR1.
-func (c *Client) handleObeliskDCR1Work(req *Request) {
-	jobID, prevBlock, genTx1, genTx2, blockVersion, nTime,
-		cleanJob, err := ParseWorkNotification(req)
-	if err != nil {
-		log.Errorf("Failed to parse work message: %v", err)
-	}
-
-	// TODO: handle any perculiar modifications for the DCR1.
-
-	// Reverse the the 4-byte words of the prevHash:
-	wordReversedPrevBlock := ReversePrevBlockWords(prevBlock)
-	workNotif := WorkNotification(jobID, wordReversedPrevBlock,
-		genTx1, genTx2, blockVersion, nTime, cleanJob)
-
-	err = c.encoder.Encode(workNotif)
-	if err != nil {
-		log.Errorf("Message encoding error: %v", err)
-		c.cancel()
-	}
-}
-
-// handleInnosiliconD9Work prepares work notifications for the Innosilicon D9.
-func (c *Client) handleInnosiliconD9Work(req *Request) {
-	jobID, prevBlock, genTx1, genTx2, blockVersion, nTime,
-		cleanJob, err := ParseWorkNotification(req)
-	if err != nil {
-		log.Errorf("Failed to parse work message: %v", err)
-	}
-
-	// TODO: handle any perculiar modifications for the D9.
-
-	// Reverse the the 4-byte words of the prevHash:
-	wordReversedPrevBlock := ReversePrevBlockWords(prevBlock)
-	workNotif := WorkNotification(jobID, wordReversedPrevBlock,
-		genTx1, genTx2, blockVersion, nTime, cleanJob)
-
-	err = c.encoder.Encode(workNotif)
-	if err != nil {
-		log.Errorf("Message encoding error: %v", err)
-		c.cancel()
-	}
-}
-
-// handleStrongUU1Work prepares work notifications for the StrongU U1.
-func (c *Client) handleStrongUU1Work(req *Request) {
-	jobID, prevBlock, genTx1, genTx2, blockVersion, nTime,
-		cleanJob, err := ParseWorkNotification(req)
-	if err != nil {
-		log.Errorf("Failed to parse work message: %v", err)
-	}
-
-	// TODO: handle any perculiar modifications for the D9.
-
-	// Reverse the the 4-byte words of the prevHash:
-	wordReversedPrevBlock := ReversePrevBlockWords(prevBlock)
-	workNotif := WorkNotification(jobID, wordReversedPrevBlock,
-		genTx1, genTx2, blockVersion, nTime, cleanJob)
-
-	err = c.encoder.Encode(workNotif)
-	if err != nil {
-		log.Errorf("Message encoding error: %v", err)
-		c.cancel()
-	}
-}
-
-// handleWhatsminerD1Work prepares work notifications for the Whatsminer D1.
-func (c *Client) handleWhatsminerD1Work(req *Request) {
-	jobID, prevBlock, genTx1, genTx2, blockVersion, nTime,
-		cleanJob, err := ParseWorkNotification(req)
-	if err != nil {
-		log.Errorf("Failed to parse work message: %v", err)
-	}
-
-	// TODO: handle any perculiar modifications for the D1.
-
-	// Reverse the the 4-byte words of the prevHash:
-	wordReversedPrevBlock := ReversePrevBlockWords(prevBlock)
-	workNotif := WorkNotification(jobID, wordReversedPrevBlock,
-		genTx1, genTx2, blockVersion, nTime, cleanJob)
-
-	err = c.encoder.Encode(workNotif)
-	if err != nil {
-		log.Errorf("Message encoding error: %v", err)
-		c.cancel()
+		return
 	}
 }
 
@@ -548,27 +511,9 @@ func (c *Client) Send() {
 						continue
 					}
 
-				case dividend.InnosiliconD9:
-					c.handleInnosiliconD9Work(req)
-
-				case dividend.ObeliskDCR1:
-					c.handleObeliskDCR1Work(req)
-
 				case dividend.AntminerDR3:
 					c.handleAntminerDR3Work(req)
-
-				case dividend.StrongUU1:
-					c.handleStrongUU1Work(req)
-
-				case dividend.AntminerDR5:
-					c.handleAntminerDR5Work(req)
-
-				case dividend.WhatsminerD1:
-					c.handleWhatsminerD1Work(req)
 				}
-
-			default:
-				log.Errorf("Unknown miner (%v) specified", c.endpoint.miner)
 			}
 		}
 	}

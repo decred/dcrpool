@@ -28,7 +28,6 @@ const (
 	defaultRPCCertFilename = "rpc.cert"
 	defaultRPCUser         = "dcrp"
 	defaultRPCPass         = "dcrppass"
-	defaultDomain          = "127.0.0.1"
 	defaultDcrdRPCHost     = "127.0.0.1:19109"
 	defaultWalletGRPCHost  = "127.0.0.1:51028"
 	defaultPoolFeeAddr     = ""
@@ -37,6 +36,7 @@ const (
 	defaultLastNPeriod     = 86400 // 1 day
 	defaultWalletPass      = ""
 	defaultMaxTxFeeReserve = 0.1
+	defaultSoloPool        = false
 )
 
 var (
@@ -63,7 +63,7 @@ type config struct {
 	HomeDir         string   `long:"homedir" description:"Path to application home directory."`
 	ConfigFile      string   `long:"configfile" description:"Path to configuration file."`
 	DataDir         string   `long:"datadir" description:"The data directory."`
-	ActiveNet       string   `long:"activenet" description:"The active network being mined on. {simnet, testnet, mainnet}"`
+	ActiveNet       string   `long:"activenet" description:"The active network being mined on. {testnet3, mainnet}"`
 	DebugLevel      string   `long:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir          string   `long:"logdir" description:"Directory to log output."`
 	DBFile          string   `long:"dbfile" description:"Path to the database file."`
@@ -72,7 +72,6 @@ type config struct {
 	RPCUser         string   `long:"rpcuser" description:"Username for RPC connections."`
 	RPCPass         string   `long:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
 	PoolFeeAddrs    []string `long:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
-	Domain          string   `long:"domain" description:"The domain or ip of the the pool. eg. decred.org, 127.0.0.1"`
 	PoolFee         float64  `long:"poolfee" description:"The fee charged for pool participation. eg. 0.01 (1%), 0.05 (5%)."`
 	MaxTxFeeReserve float64  `long:"maxtxfeereserve" description:"The maximum amount reserved for transaction fees, in DCR."`
 	MaxGenTime      uint64   `long:"maxgentime" description:"The share creation target time for the pool in seconds."`
@@ -80,6 +79,7 @@ type config struct {
 	LastNPeriod     uint32   `long:"lastnperiod" description:"The period of interest when using the PPLNS payment scheme."`
 	WalletPass      string   `long:"walletpass" description:"The wallet passphrase."`
 	MinPayment      float64  `long:"minpayment" description:"The minimum payment to process for an account."`
+	SoloPool        bool     `long:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
 	poolFeeAddrs    []dcrutil.Address
 	dcrdRPCCerts    []byte
 	net             *chaincfg.Params
@@ -261,7 +261,6 @@ func loadConfig() (*config, []string, error) {
 		DcrdRPCHost:     defaultDcrdRPCHost,
 		WalletGRPCHost:  defaultWalletGRPCHost,
 		PoolFeeAddrs:    []string{defaultPoolFeeAddr},
-		Domain:          defaultDomain,
 		PoolFee:         defaultPoolFee,
 		MaxTxFeeReserve: defaultMaxTxFeeReserve,
 		MaxGenTime:      defaultMaxGenTime,
@@ -270,6 +269,7 @@ func loadConfig() (*config, []string, error) {
 		LastNPeriod:     defaultLastNPeriod,
 		WalletPass:      defaultWalletPass,
 		MinPayment:      defaultMinPayment,
+		SoloPool:        defaultSoloPool,
 	}
 
 	// Service options which are only added on Windows.
@@ -424,14 +424,18 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	// Set the active network.
+	// Set the mining active network, simnet is ineligible due to different
+	// network parameters with regards to mining.
 	switch cfg.ActiveNet {
-	case chaincfg.SimNetParams.Name:
-		cfg.net = &chaincfg.SimNetParams
 	case chaincfg.TestNet3Params.Name:
 		cfg.net = &chaincfg.TestNet3Params
 	case chaincfg.MainNetParams.Name:
 		cfg.net = &chaincfg.MainNetParams
+	case chaincfg.SimNetParams.Name:
+		return nil, nil, fmt.Errorf("simnet is ineligible for mining")
+	default:
+		return nil, nil, fmt.Errorf("unknown network provided %v",
+			cfg.ActiveNet)
 	}
 
 	for _, pAddr := range cfg.PoolFeeAddrs {
@@ -464,7 +468,7 @@ func loadConfig() (*config, []string, error) {
 	// Load Dcrd RPC Certificate.
 	if !fileExists(dcrdRPCCertFile) {
 		return nil, nil,
-			fmt.Errorf("Dcrd RPC certificate (%v) not found", dcrdRPCCertFile)
+			fmt.Errorf("dcrd RPC certificate (%v) not found", dcrdRPCCertFile)
 	}
 
 	cfg.dcrdRPCCerts, err = ioutil.ReadFile(dcrdRPCCertFile)
@@ -472,10 +476,12 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	// Assert the wallet's RPC certificate exists.
-	if !fileExists(walletRPCCertFile) {
-		return nil, nil,
-			fmt.Errorf("Wallet RPC certificate (%v) not found", walletRPCCertFile)
+	if !cfg.SoloPool {
+		// Assert the wallet's RPC certificate exists.
+		if !fileExists(walletRPCCertFile) {
+			return nil, nil,
+				fmt.Errorf("wallet RPC certificate (%v) not found", walletRPCCertFile)
+		}
 	}
 
 	return &cfg, remainingArgs, nil

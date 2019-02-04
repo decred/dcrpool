@@ -154,8 +154,6 @@ func (m *CPUMiner) solveBlock(headerB []byte, target *big.Int, ticker *time.Tick
 				}
 			}
 		}
-
-		return false
 	}
 }
 

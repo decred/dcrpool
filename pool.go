@@ -11,8 +11,6 @@ import (
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
-	"github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
 
 	"github.com/dnldd/dcrpool/database"
 	"github.com/dnldd/dcrpool/network"
@@ -20,20 +18,16 @@ import (
 
 // Pool represents a Proof-of-Work Mining pool for Decred.
 type Pool struct {
-	cfg       *config
-	db        *bolt.DB
-	server    *http.Server
-	httpc     *http.Client
-	ctx       context.Context
-	cancel    context.CancelFunc
-	hub       *network.Hub
-	router    *mux.Router
-	limiter   *network.RateLimiter
-	rpcclient *rpcclient.Client
-	upgrader  websocket.Upgrader
+	cfg     *config
+	db      *bolt.DB
+	httpc   *http.Client
+	ctx     context.Context
+	cancel  context.CancelFunc
+	hub     *network.Hub
+	limiter *network.RateLimiter
 }
 
-// NewPool initializes a mining pool.
+// NewPool initializes the mining pool.
 func NewPool(cfg *config) (*Pool, error) {
 	p := new(Pool)
 	p.cfg = cfg
@@ -54,8 +48,6 @@ func NewPool(cfg *config) (*Pool, error) {
 	}
 
 	p.limiter = network.NewRateLimiter()
-	p.router = new(mux.Router)
-
 	dcrdRPCCfg := &rpcclient.ConnConfig{
 		Host:         cfg.DcrdRPCHost,
 		Endpoint:     "ws",
@@ -81,7 +73,6 @@ func NewPool(cfg *config) (*Pool, error) {
 		WalletGRPCHost:    cfg.WalletGRPCHost,
 		DcrdRPCCfg:        dcrdRPCCfg,
 		PoolFee:           cfg.PoolFee,
-		Domain:            cfg.Domain,
 		MaxTxFeeReserve:   maxTxFeeReserve,
 		MaxGenTime:        new(big.Int).SetUint64(cfg.MaxGenTime),
 		PaymentMethod:     cfg.PaymentMethod,
@@ -89,6 +80,7 @@ func NewPool(cfg *config) (*Pool, error) {
 		WalletPass:        cfg.WalletPass,
 		MinPayment:        minPmt,
 		PoolFeeAddrs:      cfg.poolFeeAddrs,
+		SoloPool:          cfg.SoloPool,
 	}
 
 	p.hub, err = network.NewHub(p.ctx, p.cancel, p.db, p.httpc, hcfg, p.limiter)
@@ -112,9 +104,6 @@ func (p *Pool) shutdown() {
 }
 
 func main() {
-	// Use all processor cores.
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
 	// Listen for interrupt signals.
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
@@ -123,6 +112,7 @@ func main() {
 	// and configures it accordingly.
 	cfg, _, err := loadConfig()
 	if err != nil {
+		pLog.Error(err)
 		return
 	}
 	defer func() {

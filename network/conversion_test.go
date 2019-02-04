@@ -13,7 +13,7 @@ import (
 func TestTargetConversion(t *testing.T) {
 	targetTime := new(big.Int).SetInt64(15)
 	for miner, hashrate := range dividend.MinerHashes {
-		target, err := dividend.CalculatePoolTarget(&chaincfg.SimNetParams,
+		target, _, err := dividend.CalculatePoolTarget(&chaincfg.MainNetParams,
 			hashrate, targetTime)
 		if err != nil {
 			t.Error(err)

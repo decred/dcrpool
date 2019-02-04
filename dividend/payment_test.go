@@ -15,15 +15,15 @@ import (
 
 // createShare creates a share with the provided account, weight and
 // created on time.
-func createShare(db *bolt.DB, account string, weight *big.Rat, createdOnNano int64) *Share {
-	share := &Share{
-		Account:   account,
-		Weight:    weight,
-		CreatedOn: createdOnNano,
-	}
+// func createShare(db *bolt.DB, account string, weight *big.Rat, createdOnNano int64) *Share {
+// 	share := &Share{
+// 		Account:   account,
+// 		Weight:    weight,
+// 		CreatedOn: createdOnNano,
+// 	}
 
-	return share
-}
+// 	return share
+// }
 
 // createPersistedAccount creates a pool account with the provided parameters
 // and persists it to the database.
@@ -37,16 +37,16 @@ func createPersistedAccount(db *bolt.DB, name string, address string) error {
 }
 
 // createMultipleShares creates multiple shares per the count provided.
-func createMultipleShares(db *bolt.DB, account string, weight *big.Rat,
-	createdOnNano int64, count int) []*Share {
-	shares := make([]*Share, 0)
-	for idx := 0; idx < count; idx++ {
-		share := createShare(db, account, weight, createdOnNano+int64(idx))
-		shares = append(shares, share)
-	}
+// func createMultipleShares(db *bolt.DB, account string, weight *big.Rat,
+// 	createdOnNano int64, count int) []*Share {
+// 	shares := make([]*Share, 0)
+// 	for idx := 0; idx < count; idx++ {
+// 		share := createShare(db, account, weight, createdOnNano+int64(idx))
+// 		shares = append(shares, share)
+// 	}
 
-	return shares
-}
+// 	return shares
+// }
 
 func TestPayPerShare(t *testing.T) {
 	db, err := setupDB()

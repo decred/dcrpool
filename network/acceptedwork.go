@@ -1,7 +1,6 @@
 package network
 
 import (
-	"encoding/hex"
 	"encoding/json"
 
 	bolt "github.com/coreos/bbolt"
@@ -11,17 +10,16 @@ import (
 // AcceptedWork represents an accepted work submission to the network.
 type AcceptedWork struct {
 	UUID              string `json:"uuid"`
-	Nonce             []byte `json:"nonce"`
+	Nonce             string `json:"nonce"`
 	Connected         bool   `json:"connected"`
 	ConnectedAtHeight uint32 `json:"connectedatheight"`
 }
 
 // NewAcceptedWork creates an accepted work instance.
-func NewAcceptedWork(idB []byte) *AcceptedWork {
-	id := hex.EncodeToString(idB)
+func NewAcceptedWork(nonceSpaceE string) *AcceptedWork {
 	return &AcceptedWork{
-		UUID:              id,
-		Nonce:             idB,
+		UUID:              nonceSpaceE,
+		Nonce:             nonceSpaceE,
 		Connected:         false,
 		ConnectedAtHeight: 0,
 	}

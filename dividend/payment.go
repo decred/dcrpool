@@ -519,7 +519,7 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, heig
 func GeneratePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address, eligiblePmts []*PaymentBundle, maxTxFeeReserve dcrutil.Amount, txFeeReserve *dcrutil.Amount) (map[string]dcrutil.Amount, *dcrutil.Amount, error) {
 	// Generate the address and payment amount kv pairs.
 	var targetAmt dcrutil.Amount
-	pmts := make(map[string]dcrutil.Amount, 0)
+	pmts := make(map[string]dcrutil.Amount)
 
 	// Fetch a pool fee address at random.
 	rand.Seed(time.Now().UnixNano())
@@ -537,7 +537,7 @@ func GeneratePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address, eligibl
 		// For a dividend payment, fetch the corresponding account address.
 		acc, err := FetchAccount(db, []byte(p.Account))
 		if err != nil {
-			return nil, nil, fmt.Errorf("Failed to fetch account: %v", err)
+			return nil, nil, fmt.Errorf("failed to fetch account: %v", err)
 		}
 
 		bundleAmt := p.Total()
@@ -571,7 +571,7 @@ func FetchArchivedPaymentsForAccount(db *bolt.DB, account []byte, minNano []byte
 		}
 
 		c := abkt.Cursor()
-		for k, v := c.Next(); k != nil && (bytes.Compare(k[12:], account) == 0 &&
+		for k, v := c.Next(); k != nil && (bytes.Equal(k[12:], account) &&
 			bytes.Compare(k[:8], minNano) > 0); k, v = c.Next() {
 			var payment Payment
 			err := json.Unmarshal(v, &payment)
