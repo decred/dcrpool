@@ -447,15 +447,39 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 	var nonceSpaceE string
 
 	headerEB := []byte(headerE)
-	copy(headerEB[272:280], []byte(nTimeE))
-	copy(headerEB[280:288], []byte(nonceE))
 
 	switch miner {
 	// The Antiminer DR3 and DR5 return a 12-byte entraNonce regardless of the
-	// extraNonce2Size specified in the mining.subscribe message.
+	// extraNonce2Size specified in the mining.subscribe message. The nTime and
+	// nonce values submitted are little endian, readily available for header
+	// reconstruction.
 	case dividend.AntminerDR3, dividend.AntminerDR5:
+		copy(headerEB[272:280], []byte(nTimeE))
+		copy(headerEB[280:288], []byte(nonceE))
 		copy(headerEB[288:312], []byte(extraNonce2E))
 		nonceSpaceE = string(headerEB[280:312])
+
+	// The Innosilicon D9 respects the extraNonce2Size specified in the
+	// mining.subscribe response sent to it. The extraNonce2 value submitted is
+	// exclusively the extraNonce2. The nTime and nonce values submitted are
+	// big endian, they have to be reversed to little endian before header
+	// reconstruction.
+	case dividend.InnosiliconD9:
+		nTimeERev, err := HexReversed(nTimeE)
+		if err != nil {
+			return nil, "", err
+		}
+		copy(headerEB[272:280], []byte(nTimeERev))
+
+		nonceERev, err := HexReversed(nonceE)
+		if err != nil {
+			return nil, "", err
+		}
+		copy(headerEB[280:288], []byte(nonceERev))
+
+		copy(headerEB[288:296], []byte(extraNonce1E))
+		copy(headerEB[296:304], []byte(extraNonce2E))
+		nonceSpaceE = string(headerEB[280:304])
 
 	default:
 		return nil, "", fmt.Errorf("generating solved block for unknown miner "+

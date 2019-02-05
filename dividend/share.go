@@ -19,8 +19,8 @@ import (
 
 // Miner types lists all known DCR miners
 const (
-	CPU = "cpu"
-	// InnosiliconD9 = "innosilicond9"
+	CPU           = "cpu"
+	InnosiliconD9 = "innosilicond9"
 	// ObeliskDCR1   = "obeliskdcr1"
 	AntminerDR3 = "antminerdr3"
 	// StrongUU1     = "stronguu1"
@@ -59,8 +59,8 @@ func fetchPOWLimit(net *chaincfg.Params) (*big.Int, error) {
 // MinerHashes is a map of all known DCR miners and their coressponding
 // hashrates.
 var MinerHashes = map[string]*big.Int{
-	CPU: new(big.Int).SetInt64(150E3),
-	// InnosiliconD9: new(big.Int).SetInt64(2.4E12),
+	CPU:           new(big.Int).SetInt64(150E3),
+	InnosiliconD9: new(big.Int).SetInt64(2.4E12),
 	// ObeliskDCR1:   new(big.Int).SetInt64(2.6E12),
 	AntminerDR3: new(big.Int).SetInt64(7.8E12),
 	// StrongUU1:     new(big.Int).SetInt64(12E12),
@@ -73,9 +73,9 @@ var MinerHashes = map[string]*big.Int{
 var MinerPorts = map[string]uint32{
 	CPU: 5550,
 	// ObeliskDCR1:   5551,
-	// InnosiliconD9: 5552,
-	AntminerDR3: 5553,
-	AntminerDR5: 5554,
+	InnosiliconD9: 5552,
+	AntminerDR3:   5553,
+	AntminerDR5:   5554,
 	// StrongUU1:     5554,
 	// WhatsminerD1:  5555,
 }
@@ -102,8 +102,8 @@ var (
 // rest were calculated as :
 // 				(Hash of Miner X * Weight of LHM)/ Hash of LHM
 var ShareWeights = map[string]*big.Rat{
-	CPU: new(big.Rat).SetFloat64(1.0), // Reserved for testing.
-	// InnosiliconD9: new(big.Rat).SetFloat64(1.0),
+	CPU:           new(big.Rat).SetFloat64(0.0), // Reserved for testing.
+	InnosiliconD9: new(big.Rat).SetFloat64(1.0),
 	// ObeliskDCR1:   new(big.Rat).SetFloat64(1.0833),
 	AntminerDR3: new(big.Rat).SetFloat64(3.25),
 	// StrongUU1:     new(big.Rat).SetFloat64(5),
