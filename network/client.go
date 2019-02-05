@@ -446,6 +446,8 @@ func (c *Client) handleAntminerDR3Work(req *Request) {
 		log.Errorf("Failed to parse work message: %v", err)
 	}
 
+	// The DR3 requires the nBits and nTime fields of a mining.notify message
+	// as big endian.
 	nBits, err = HexReversed(nBits)
 	if err != nil {
 		log.Errorf("Failed to hex reverse nBits: %v", err)
@@ -465,6 +467,44 @@ func (c *Client) handleAntminerDR3Work(req *Request) {
 		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
 
 	log.Tracef("DR3 work notification is: %v", spew.Sdump(workNotif))
+
+	err = c.encoder.Encode(workNotif)
+	if err != nil {
+		log.Errorf("Message encoding error: %v", err)
+		c.cancel()
+		return
+	}
+}
+
+// handleInnosiliconD9Work prepares work notifications for the Innosilicon D9.
+func (c *Client) handleInnosiliconD9Work(req *Request) {
+	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
+		cleanJob, err := ParseWorkNotification(req)
+	if err != nil {
+		log.Errorf("Failed to parse work message: %v", err)
+	}
+
+	// The D9 requires the nBits and nTime fields of a mining.notify message
+	// as big endian.
+	nBits, err = HexReversed(nBits)
+	if err != nil {
+		log.Errorf("Failed to hex reverse nBits: %v", err)
+		c.cancel()
+		return
+	}
+
+	nTime, err = HexReversed(nTime)
+	if err != nil {
+		log.Errorf("Failed to hex reverse nTime: %v", err)
+		c.cancel()
+		return
+	}
+
+	prevBlockRev := ReversePrevBlockWords(prevBlock)
+	workNotif := WorkNotification(jobID, prevBlockRev,
+		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
+
+	log.Tracef("D9 work notification is: %v", spew.Sdump(workNotif))
 
 	err = c.encoder.Encode(workNotif)
 	if err != nil {
@@ -513,6 +553,15 @@ func (c *Client) Send() {
 
 				case dividend.AntminerDR3, dividend.AntminerDR5:
 					c.handleAntminerDR3Work(req)
+
+				case dividend.InnosiliconD9:
+					c.handleInnosiliconD9Work(req)
+
+				default:
+					log.Errorf("Unknown miner provided to receive work: %v",
+						c.endpoint.miner)
+					c.cancel()
+					continue
 				}
 			}
 		}
