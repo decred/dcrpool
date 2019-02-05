@@ -351,8 +351,8 @@ func (c *Client) Listen() {
 			// Non-blocking receive fallthrough.
 		}
 
-		c.conn.SetReadDeadline(time.Now().Add(time.Second * 120))
-		c.conn.SetWriteDeadline(time.Now().Add(time.Second * 120))
+		c.conn.SetReadDeadline(time.Now().Add(time.Minute * 3))
+		c.conn.SetWriteDeadline(time.Now().Add(time.Minute * 3))
 		data, err := c.reader.ReadBytes('\n')
 		if err != nil {
 			log.Errorf("Failed to read bytes: %v", err)
@@ -378,10 +378,10 @@ func (c *Client) Listen() {
 			switch req.Method {
 			case Authorize:
 				c.handleAuthorizeRequest(req, allowed)
+				c.setDifficulty()
 
 			case Subscribe:
 				c.handleSubscribeRequest(req, allowed)
-				c.setDifficulty()
 
 			case Submit:
 				c.handleSubmitWorkRequest(req, allowed)
@@ -511,7 +511,7 @@ func (c *Client) Send() {
 						continue
 					}
 
-				case dividend.AntminerDR3:
+				case dividend.AntminerDR3, dividend.AntminerDR5:
 					c.handleAntminerDR3Work(req)
 				}
 			}

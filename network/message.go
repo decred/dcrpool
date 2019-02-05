@@ -451,10 +451,9 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 	copy(headerEB[280:288], []byte(nonceE))
 
 	switch miner {
-	// The Antiminer DR3 returns a 12-byte entraNonce regardless of the
-	// extraNonce2Size specified in the mining.subscribe message. The 12-byte
-	// extraNonce comprises of extraNonce1 and extraNonce2 as a result.
-	case dividend.AntminerDR3:
+	// The Antiminer DR3 and DR5 return a 12-byte entraNonce regardless of the
+	// extraNonce2Size specified in the mining.subscribe message.
+	case dividend.AntminerDR3, dividend.AntminerDR5:
 		copy(headerEB[288:312], []byte(extraNonce2E))
 		nonceSpaceE = string(headerEB[280:312])
 
@@ -533,7 +532,9 @@ func ParseSubmitWorkRequest(req *Request, miner string) (string, string, string,
 	switch miner {
 	// All miners besides whatsminer submit nTime and nonce as a hex encoded
 	// big endian, the bytes have to the reversed to little endian to proceed.
-	case dividend.AntminerDR3: // Add the rest when needed.
+
+	// TODO: Add the rest when needed.
+	case dividend.AntminerDR3, dividend.AntminerDR5:
 		rev, err := HexReversed(nTime)
 		if err != nil {
 			return "", "", "", "", "", err
