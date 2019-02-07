@@ -127,6 +127,7 @@ func PruneJobs(db *bolt.DB, height uint32) error {
 			return database.ErrBucketNotFound(database.JobBkt)
 		}
 
+		toDelete := [][]byte{}
 		c := bkt.Cursor()
 		for k, _ := c.First(); k != nil; k, _ = c.Next() {
 			height, err := hex.DecodeString(string(k[:8]))
@@ -135,10 +136,14 @@ func PruneJobs(db *bolt.DB, height uint32) error {
 			}
 
 			if bytes.Compare(height, heightBE) <= 0 {
-				err := c.Delete()
-				if err != nil {
-					return err
-				}
+				toDelete = append(toDelete, k)
+			}
+		}
+
+		for _, entry := range toDelete {
+			err := bkt.Delete(entry)
+			if err != nil {
+				return err
 			}
 		}
 

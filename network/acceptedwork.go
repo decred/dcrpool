@@ -95,8 +95,9 @@ func PruneAcceptedWork(db *bolt.DB, height uint32) error {
 			return database.ErrBucketNotFound(database.WorkBkt)
 		}
 
+		toDelete := [][]byte{}
 		cursor := bkt.Cursor()
-		for k, v := cursor.First(); k != nil; k, _ = cursor.Next() {
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
 			var work AcceptedWork
 			err := json.Unmarshal(v, &work)
 			if err != nil {
@@ -105,10 +106,14 @@ func PruneAcceptedWork(db *bolt.DB, height uint32) error {
 
 			if work.Connected && (work.ConnectedAtHeight > 0 &&
 				work.ConnectedAtHeight < height) {
-				err = cursor.Delete()
-				if err != nil {
-					return err
-				}
+				toDelete = append(toDelete, k)
+			}
+		}
+
+		for _, entry := range toDelete {
+			err := bkt.Delete(entry)
+			if err != nil {
+				return err
 			}
 		}
 
