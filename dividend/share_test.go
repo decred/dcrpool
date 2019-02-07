@@ -358,6 +358,9 @@ func TestCalculatePoolTarget(t *testing.T) {
 	}
 }
 
+// Currently not using cursor delete's even though this test passing. An
+// identical test in a PR for dcrwallet is failing, inconsistent
+// behaviour.
 func TestBoltDBCursorDeletion(t *testing.T) {
 	db, err := setupDB()
 	if err != nil {
