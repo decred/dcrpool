@@ -2,8 +2,8 @@
 set -e
 SESSION="harness"
 NODES_ROOT=~/harness
-RPCUSER="user"
-RPCPASS="pass"
+RPC_USER="user"
+RPC_PASS="pass"
 WALLET_SEED="b280922d2cffda44648346412c5ec97f429938105003730414f10b01e1402eac"
 POOL_MINING_ADDR="DsinLTk5vxzLUV6boLCKV8uQKCbWQ8gBu2Q"
 PFEE_ADDR="DsinLTk5vxzLUV6boLCKV8uQKCbWQ8gBu2Q"
@@ -23,13 +23,13 @@ mkdir -p "${NODES_ROOT}/pool"
 mkdir -p "${NODES_ROOT}/client"
 
 cat > "${NODES_ROOT}/dcrctl.conf" <<EOF
-rpcuser=${RPCUSER}
-rpcpass=${RPCPASS}
+rpcuser=${RPC_USER}
+rpcpass=${RPC_PASS}
 EOF
 
 cat > "${NODES_ROOT}/wallet/wallet.conf" <<EOF
-username=${RPCUSER}
-password=${RPCPASS}
+username=${RPC_USER}
+password=${RPC_PASS}
 rpccert=${DCRW_RPC_CERT}
 rpckey=${DCRW_RPC_KEY}
 logdir=./log
@@ -39,8 +39,8 @@ debuglevel=debug
 EOF
 
 cat > "${NODES_ROOT}/pool/pool.conf" <<EOF
-rpcuser=${RPCUSER}
-rpcpass=${RPCPASS}
+rpcuser=${RPC_USER}
+rpcpass=${RPC_PASS}
 dcrdrpchost=127.0.0.1:9109
 walletgrpchost=127.0.0.1:19558
 debuglevel=trace
@@ -75,7 +75,7 @@ chmod +x "${NODES_ROOT}/master/ctl"
 
 tmux rename-window -t $SESSION:1 'master'
 tmux send-keys "cd ${NODES_ROOT}/master" C-m
-tmux send-keys "dcrd -C ${HOME}/dcrd.updated.conf" C-m
+tmux send-keys "dcrd -C ${HOME}/dcrd.conf --rpcuser=${RPC_USER} --rpcpass=${RPC_PASS} --miningaddr=${POOL_MINING_ADDR}" C-m
 
 ################################################################################
 # Setup the master node's dcrctl (mctl).
@@ -129,6 +129,6 @@ tmux send-keys "dcrpool --configfile pool.conf --homedir=." C-m
 # sleep 1
 # tmux new-window -t $SESSION:6 -n 'client'
 # tmux send-keys "cd ${NODES_ROOT}/client" C-m
-# tmux send-keys "miner --configfile client.conf --homedir=." C-m
+# tmux send-keys "miner --configfile=client.conf --homedir=." C-m
 
 tmux attach-session -t $SESSION

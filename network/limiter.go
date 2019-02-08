@@ -17,8 +17,8 @@ const (
 	// work to the pool at a controlled rate is adequate.
 	tokenRate = 5
 
-	// burst is the maximum token usage allowed per call.
-	burst = 1
+	// burst is the maximum token usage allowed per second.
+	burst = 5
 )
 
 // RequestLimiter represents a rate limiter for a connecting client. This identifies

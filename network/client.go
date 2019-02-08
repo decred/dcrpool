@@ -112,6 +112,7 @@ func (c *Client) claimWeightedShare() {
 // handleAuthorizeRequest processes authorize request messages received.
 func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	if !allowed {
+		log.Errorf("Failed to process authorize request, limit reached")
 		err := NewStratumError(Unknown)
 		resp := AuthorizeResponse(req.ID, false, err)
 		c.ch <- resp
@@ -200,6 +201,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 // handleSubscribeRequest processes subscription request messages received.
 func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 	if !allowed {
+		log.Errorf("Failed to process subscribe request, limit reached")
 		err := NewStratumError(Unknown)
 		resp := SubscribeResponse(req.ID, "", "", err)
 		c.ch <- resp
@@ -238,6 +240,7 @@ func (c *Client) setDifficulty() {
 // handleSubmitWorkRequest processes work submission request messages received.
 func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	if !allowed {
+		log.Errorf("Failed to process submit work request, limit reached")
 		err := NewStratumError(Unknown)
 		resp := SubmitWorkResponse(req.ID, false, err)
 		c.ch <- resp
@@ -345,7 +348,6 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 
 // Listen reads and processes incoming messages from the connected pool client.
 func (c *Client) Listen() {
-	//TODO: work in a read timeout and max message size for the tcp connection.
 	for {
 		select {
 		case <-c.ctx.Done():

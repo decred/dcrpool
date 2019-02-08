@@ -55,6 +55,7 @@ type Miner struct {
 	cancel          context.CancelFunc
 	extraNonce1     string
 	extraNonce2Size uint64
+	notifyID        string
 }
 
 // recordRequest logs a request as an id/method pair.
@@ -102,7 +103,7 @@ func (m *Miner) authenticate() error {
 // subscribe sends a stratum miner subscribe message.
 func (m *Miner) subscribe() error {
 	id := m.nextID()
-	req := network.SubscribeRequest(id)
+	req := network.SubscribeRequest(id, "cpuminer", version(), m.notifyID)
 	err := m.encoder.Encode(req)
 	if err != nil {
 		return err
@@ -268,6 +269,7 @@ out:
 
 				m.extraNonce1 = extraNonce1E
 				m.extraNonce2Size = extraNonce2Size
+				m.notifyID = notifyID
 				m.subscribed = true
 
 			case network.Submit:
