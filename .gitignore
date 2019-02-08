@@ -2,7 +2,6 @@ vendor
 .DS_Store
 tmp
 dcrpool
-/poolclient/poolclient
-deploy/*
+/miner/miner
 *.log
 *.conf
