@@ -213,11 +213,17 @@ func ParseAuthorizeResponse(resp *Response) (bool, []interface{}, error) {
 }
 
 // SubscribeRequest creates a subscribe request message.
-func SubscribeRequest(id *uint64) *Request {
+func SubscribeRequest(id *uint64, userAgent string, version string, notifyID string) *Request {
+	agent := fmt.Sprintf("%v/%v", userAgent, version)
+	params := []string{agent}
+	if notifyID != "" {
+		params = append(params, notifyID)
+	}
+
 	return &Request{
 		ID:     id,
 		Method: Subscribe,
-		Params: []string{},
+		Params: params,
 	}
 }
 
@@ -229,7 +235,11 @@ func ParseSubscribeRequest(req *Request) (string, string, error) {
 
 	params, ok := req.Params.([]interface{})
 	if !ok {
-		return "", "", fmt.Errorf("failed to parse authorize parameters")
+		return "", "", fmt.Errorf("failed to parse subscribe parameters")
+	}
+
+	if len(params) == 0 {
+		return "", "", fmt.Errorf("no user agent provided for subscribe request")
 	}
 
 	miner, ok := params[0].(string)

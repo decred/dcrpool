@@ -79,9 +79,6 @@ out:
 				log.Infof("Hash rate: %6.0f kilohashes/s",
 					hashRate/1000)
 			}
-
-		default:
-			// Non-blocking receive fallthrough.
 		}
 	}
 }
