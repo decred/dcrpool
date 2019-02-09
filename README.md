@@ -2,60 +2,43 @@
 
 [![Build Status](https://travis-ci.com/dnldd/dcrpool.svg?branch=master)](https://travis-ci.com/dnldd/dcrpool)
 
-dcrpool is a decred mining pool. The nonce space is defined by haste protocol 
-semantics which consistitutes 12-bytes of nonce space with an 8-bytes nonce 
-and a 4-bytes worker id:  
+dcrpool is a stratum decred mining pool. It currently supports:
+* Innosilicon D9 (port: 5552, supported firmware: [D9_20180602_094459.swu](https://drive.google.com/open?id=1wofB_OUDkB2gxz_IS7wM8Br6ogKdYDmY))
+* Antminer DR3 (port: 5553)
+* Antminer DR5 (port: 5554) 
 
-```sh
-<0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00>, [0x00, 0x00, 0x00, 0x00]
-``` 
+The pool can be configured to mine in solo pool mode or as a publicly available 
+mining pool. It supports both PPS (Pay Per Share) and PPLNS 
+(Pay Per Last N Shares) payment schemes when configured as a publicly 
+available mining pool. When configured as a solo pool, mining rewards 
+accumulate at the specified mining address for the consensus daemon (dcrd).
 
-It supports both PPS (Pay Per Share) and PPLNS (Pay Per Last N Shares) payment 
-schemes. Clients require a registered account to the pool and must maintain a 
-websockect connection for work notifications and submissions. The client 
-included the project (poolclient) is a CPU mining client, therefore intended 
-for testing purposes only. The pool through its connection to a node receives 
-chain updates, particularly block notifications (connected & disconnected) as 
-well as work notifications.  
-
-Work notifications are relayed to connected pool clients with their respective 
-pool targets which when solved are submitted to the pool. Pool shares are 
-awarded for legit submissions. Legit work submissions from pool clients lower 
-than the network target are submitted to the network.  
-
-When a block is mined by the pool, the configured paymnt scheme (PPS or PPLNS) 
-is applied to determine the proportions participating clients are due per their 
-share count and share weights. The resulting amounts are recorded as payments 
-and scheduled to paid to associated accounts after the block reward matures. 
-The pool using its gRPC connection with to the pool wallet publishes payout 
-transactions to associated pool accounts when block rewards mature. Processed 
-payments are archived for auditing purposes. To install and run dcrpool:  
+To install and run dcrpool:  
 
 ```sh
 git clone https://github.com/dnldd/dcrpool.git 
 cd dcrpool 
 go build 
 go install 
-dcrpool --configfile path/to/config.conf 
+dcrpool --configfile=path/to/config.conf 
 ```
 
-To install and run poolclient:  
+The project has a tmux mining harness and a cpu miner for testing purposes.
+Refer to `harness.sh` for configuration details. 
+
+To install and run the cpu miner:  
 
 ```sh
-cd dcrpool/poolclient 
+cd dcrpool/miner 
 go build 
 go install 
-poolclient --configfile path/to/config.conf 
+miner --configfile=path/to/config.conf 
 ```
 
-The project has a tmux mining harness for testing purposes. The harness 
-consists of two dcrd nodes, two wallets, a mining pool and a pool client. Refer 
-to `harness.sh` for configuration details. The mining harness takes 10+ seconds 
-to start so give it some time, or take a look at the script and better it :). 
 To run the mining harness:  
 
 ```sh
-harness.sh 
+./harness.sh 
 ```
 
 
