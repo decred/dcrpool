@@ -28,8 +28,8 @@ const (
 	// ObeliskDCR1   = "obeliskdcr1"
 	AntminerDR3 = "antminerdr3"
 	// StrongUU1     = "stronguu1"
-	AntminerDR5 = "antminerdr5"
-	// WhatsminerD1  = "whatsminerd1"
+	AntminerDR5  = "antminerdr5"
+	WhatsminerD1 = "whatsminerd1"
 )
 
 // These variables are the chain proof-of-work limit parameters for each default
@@ -68,8 +68,8 @@ var MinerHashes = map[string]*big.Int{
 	// ObeliskDCR1:   new(big.Int).SetInt64(2.6E12),
 	AntminerDR3: new(big.Int).SetInt64(7.8E12),
 	// StrongUU1:     new(big.Int).SetInt64(12E12),
-	AntminerDR5: new(big.Int).SetInt64(32E12),
-	// WhatsminerD1:  new(big.Int).SetInt64(44E12),
+	AntminerDR5:  new(big.Int).SetInt64(32E12),
+	WhatsminerD1: new(big.Int).SetInt64(44E12),
 }
 
 // MinerPorts is a map of all known DCR miners and the coressponding
@@ -81,7 +81,7 @@ var MinerPorts = map[string]uint32{
 	AntminerDR3:   5553,
 	AntminerDR5:   5554,
 	// StrongUU1:     5554,
-	// WhatsminerD1:  5555,
+	WhatsminerD1: 5555,
 }
 
 // Convenience variables.
@@ -111,8 +111,8 @@ var ShareWeights = map[string]*big.Rat{
 	// ObeliskDCR1:   new(big.Rat).SetFloat64(1.0833),
 	AntminerDR3: new(big.Rat).SetFloat64(3.25),
 	// StrongUU1:     new(big.Rat).SetFloat64(5),
-	AntminerDR5: new(big.Rat).SetFloat64(11.429),
-	// WhatsminerD1:  new(big.Rat).SetFloat64(18.333),
+	AntminerDR5:  new(big.Rat).SetFloat64(11.429),
+	WhatsminerD1: new(big.Rat).SetFloat64(18.333),
 }
 
 // CalculatePoolDifficulty determines the difficulty at which the provided

@@ -520,6 +520,32 @@ func (c *Client) handleInnosiliconD9Work(req *Request) {
 	}
 }
 
+// handleWhatsminerD1Work prepares work notifications for the Whatsminer D1.
+func (c *Client) handleWhatsminerD1Work(req *Request) {
+	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
+		cleanJob, err := ParseWorkNotification(req)
+	if err != nil {
+		log.Errorf("Failed to parse work message: %v", err)
+	}
+
+	// The D1 requires the nBits and nTime fields of a mining.notify message
+	// as little endian. Since they're already in the preferred format there
+	// is no need to reverse bytes for nBits and nTime.
+
+	prevBlockRev := ReversePrevBlockWords(prevBlock)
+	workNotif := WorkNotification(jobID, prevBlockRev,
+		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
+
+	log.Tracef("D1 work notification is: %v", spew.Sdump(workNotif))
+
+	err = c.encoder.Encode(workNotif)
+	if err != nil {
+		log.Errorf("Message encoding error: %v", err)
+		c.cancel()
+		return
+	}
+}
+
 // Send dispatches messages to a pool client. It must be run as a goroutine.
 func (c *Client) Send() {
 	for {
@@ -562,6 +588,9 @@ func (c *Client) Send() {
 
 				case dividend.InnosiliconD9:
 					c.handleInnosiliconD9Work(req)
+
+				case dividend.WhatsminerD1:
+					c.handleWhatsminerD1Work(req)
 
 				default:
 					log.Errorf("Unknown miner provided to receive work: %v",
