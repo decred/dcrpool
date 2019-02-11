@@ -16,12 +16,3 @@ require (
 	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c
 	google.golang.org/grpc v1.18.0
 )
-
-replace (
-	github.com/decred/dcrd/blockchain => github.com/dnldd/dcrd/blockchain v0.0.0-20190119113654-fad46ce7c9fd
-	github.com/decred/dcrd/blockchain/stake => github.com/dnldd/dcrd/blockchain/stake v0.0.0-20190119113654-fad46ce7c9fd
-	github.com/decred/dcrd/chaincfg => github.com/dnldd/dcrd/chaincfg v0.0.0-20190119113654-fad46ce7c9fd
-	github.com/decred/dcrd/dcrjson => github.com/dnldd/dcrd/dcrjson v0.0.0-20190119113654-fad46ce7c9fd
-	github.com/decred/dcrd/dcrutil => github.com/dnldd/dcrd/dcrutil v0.0.0-20190119113654-fad46ce7c9fd
-	github.com/decred/dcrd/rpcclient => github.com/dnldd/dcrd/rpcclient v0.0.0-20190119113654-fad46ce7c9fd
-)
