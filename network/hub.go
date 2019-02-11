@@ -170,6 +170,55 @@ func (h *Hub) GenerateDifficultyData() error {
 	return nil
 }
 
+// processWork parses work recieved and dispatches a work notification to all
+// connected pool clients.
+func (h *Hub) processWork(headerE string, target string) {
+	log.Tracef("New Work (header: %v , target: %v)", headerE,
+		target)
+
+	heightD, err := hex.DecodeString(headerE[256:264])
+	if err != nil {
+		log.Errorf("Failed to decode block height: %v", err)
+		return
+	}
+
+	height := binary.LittleEndian.Uint32(heightD)
+	h.lastWorkHeight = height
+
+	// Do not process work data id there are no connected  pool clients.
+	if !h.HasClients() {
+		return
+	}
+
+	blockVersion := headerE[:8]
+	prevBlock := headerE[8:72]
+	genTx1 := headerE[72:288]
+	nBits := headerE[232:240]
+	nTime := headerE[272:280]
+	genTx2 := headerE[352:360]
+
+	// Create a job for the received work.
+	job, err := NewJob(headerE, height)
+	if err != nil {
+		log.Errorf("Failed to create job: %v", err)
+		return
+	}
+
+	err = job.Create(h.db)
+	if err != nil {
+		log.Errorf("Failed to persist job: %v", err)
+		return
+	}
+
+	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
+		blockVersion, nBits, nTime, true)
+
+	// Broadcast the work notification to connected pool clients.
+	h.Broadcast <- workNotif
+
+	log.Tracef("Work sent to pool clients")
+}
+
 // NewHub initializes a websocket hub.
 func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimiter) (*Hub, error) {
 	h := &Hub{
@@ -254,50 +303,10 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 			h.discCh <- headerB
 		},
 
-		OnWork: func(headerE string, target string) {
-			log.Tracef("New Work (header: %v , target: %v)", headerE,
-				target)
-
-			heightD, err := hex.DecodeString(headerE[256:264])
-			if err != nil {
-				log.Errorf("Failed to decode block height: %v", err)
-				return
-			}
-
-			height := binary.LittleEndian.Uint32(heightD)
-			h.lastWorkHeight = height
-
-			// Do not process work data id there are no connected  pool clients.
-			if !h.HasClients() {
-				return
-			}
-
-			blockVersion := headerE[:8]
-			prevBlock := headerE[8:72]
-			genTx1 := headerE[72:288]
-			nBits := headerE[232:240]
-			nTime := headerE[272:280]
-			genTx2 := headerE[352:360]
-
-			// Create a job for the received work.
-			job, err := NewJob(headerE, height)
-			if err != nil {
-				log.Errorf("Failed to create job: %v", err)
-				return
-			}
-
-			err = job.Create(db)
-			if err != nil {
-				log.Errorf("Failed to persist job: %v", err)
-				return
-			}
-
-			workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
-				blockVersion, nBits, nTime, true)
-
-			// Broadcast the work notification to connected pool clients.
-			h.Broadcast <- workNotif
-		},
+		// TODO: Switch to OnWork notifications when dcrd PR #1410 is merged.
+		// OnWork: func(headerE string, target string) {
+		// 	h.processWork(headerE, target)
+		// },
 	}
 
 	// Establish RPC connection with dcrd.
@@ -309,12 +318,14 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 	h.rpcc = rpcc
 
 	// Subscribe for chain notifications.
-	if err := h.rpcc.NotifyWork(); err != nil {
-		h.rpccMtx.Lock()
-		h.rpcc.Shutdown()
-		h.rpccMtx.Unlock()
-		return nil, fmt.Errorf("notify work rpc error (dcrd): %v", err)
-	}
+
+	// TODO: Subscribe for OnWork notifications when dcrd PR #1410 is merged.
+	// if err := h.rpcc.NotifyWork(); err != nil {
+	// 	h.rpccMtx.Lock()
+	// 	h.rpcc.Shutdown()
+	// 	h.rpccMtx.Unlock()
+	// 	return nil, fmt.Errorf("notify work rpc error (dcrd): %v", err)
+	// }
 
 	if err := h.rpcc.NotifyBlocks(); err != nil {
 		h.rpccMtx.Lock()
@@ -346,7 +357,8 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
 	}
 
-	go h.process()
+	go h.handleGetWork()
+	go h.handleChainUpdates()
 
 	return h, nil
 }
@@ -404,6 +416,14 @@ func (h *Hub) SubmitWork(data *string) (bool, error) {
 	status, err := h.rpcc.GetWorkSubmit(*data)
 	h.rpccMtx.Unlock()
 	return status, err
+}
+
+// GetWork fetches available work from the consensus daemon.
+func (h *Hub) GetWork() (string, string, error) {
+	h.rpccMtx.Lock()
+	work, err := h.rpcc.GetWork()
+	h.rpccMtx.Unlock()
+	return work.Data, work.Target, err
 }
 
 // Persist saves details of the hub to the database.
@@ -486,8 +506,131 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 	return nil
 }
 
-func (h *Hub) process() {
-	log.Info("Started hub process handler.")
+// handleGetWork periodically fetches available work from the consensus daemon.
+func (h *Hub) handleGetWork() {
+	var currHeaderE string
+	ticker := time.NewTicker(time.Second * 3)
+	defer ticker.Stop()
+	log.Info("Started getwork handler")
+
+	for {
+		select {
+		case <-h.ctx.Done():
+			log.Info("GetWork handler done.")
+			return
+		case <-ticker.C:
+			headerE, target, err := h.GetWork()
+			if err != nil {
+				log.Errorf("Failed to fetch work: %v", err)
+				h.cancel()
+				continue
+			}
+
+			// Process incoming work if there is no current work.
+			if currHeaderE == "" {
+				currHeaderE = headerE
+				h.processWork(currHeaderE, target)
+				continue
+			}
+
+			// Process incoming work if it has a higher height than the
+			// current work.
+			currHeaderHeightD, err := hex.DecodeString(currHeaderE[256:264])
+			if err != nil {
+				log.Errorf("Failed to decode current header block height: %v",
+					err)
+				h.cancel()
+				continue
+			}
+
+			currHeaderHeight := binary.LittleEndian.Uint32(currHeaderHeightD)
+
+			newHeaderHeightD, err := hex.DecodeString(headerE[256:264])
+			if err != nil {
+				log.Errorf("Failed to decode new header block height: %v",
+					err)
+				h.cancel()
+				continue
+			}
+
+			newHeaderHeight := binary.LittleEndian.Uint32(newHeaderHeightD)
+
+			log.Tracef("Work heights are: curr (%v) : new (%v)",
+				currHeaderHeight, newHeaderHeight)
+			if newHeaderHeight > currHeaderHeight {
+				currHeaderE = headerE
+				h.processWork(currHeaderE, target)
+				continue
+			}
+
+			// Process incoming work if it has more votes than the current work.
+			currHeaderVotersD, err := hex.DecodeString(currHeaderE[216:220])
+			if err != nil {
+				log.Errorf("Failed to decode current header block voters: %v",
+					err)
+				h.cancel()
+				continue
+			}
+
+			currHeaderVoters := binary.LittleEndian.Uint16(currHeaderVotersD)
+
+			newHeaderVotersD, err := hex.DecodeString(headerE[216:220])
+			if err != nil {
+				log.Errorf("Failed to decode new header blockvoters: %v",
+					err)
+				h.cancel()
+				continue
+			}
+
+			newHeaderVoters :=
+				binary.LittleEndian.Uint16(newHeaderVotersD)
+
+			log.Tracef("Work votes are: curr (%v) : new (%v)",
+				currHeaderVoters, newHeaderVoters)
+
+			if newHeaderVoters > currHeaderVoters {
+				currHeaderE = headerE
+				h.processWork(currHeaderE, target)
+				continue
+			}
+
+			// Process incoming work if it is at least 30 seconds older than
+			// the current work.
+			currNTimeD, err := hex.DecodeString(currHeaderE[272:280])
+			if err != nil {
+				log.Errorf("Failed to decode current header block time: %v",
+					err)
+				return
+			}
+
+			currNTime :=
+				time.Unix(int64(binary.LittleEndian.Uint32(currNTimeD)), 0)
+
+			newNTimeD, err := hex.DecodeString(headerE[272:280])
+			if err != nil {
+				log.Errorf("Failed to decode new header block time: %v",
+					err)
+				return
+			}
+
+			newNTime :=
+				time.Unix(int64(binary.LittleEndian.Uint32(newNTimeD)), 0)
+
+			log.Tracef("Work times difference: (%v)", newNTime.Sub(currNTime))
+
+			if newNTime.Sub(currNTime) >= time.Second*30 {
+				currHeaderE = headerE
+				h.processWork(currHeaderE, target)
+				continue
+			}
+		}
+	}
+}
+
+// handleChainUpdates processes connected and disconnected block notifications
+// from the consensus daemon.
+func (h *Hub) handleChainUpdates() {
+	log.Info("Started chain updates handler.")
 
 	for {
 		select {
@@ -504,12 +647,12 @@ func (h *Hub) process() {
 			close(h.connCh)
 			close(h.Broadcast)
 
-			log.Info("Hub process handler done.")
+			log.Info("Chain updates handler done.")
 			return
 
 		case headerB := <-h.connCh:
 			height := binary.LittleEndian.Uint32(headerB[128:132])
-			log.Infof("Block connected at height %v", height)
+			log.Tracef("Block connected at height %v", height)
 
 			if height > MaxReorgLimit {
 				pruneLimit := height - MaxReorgLimit
@@ -552,7 +695,7 @@ func (h *Hub) process() {
 			coinbase :=
 				dcrutil.Amount(block.Transactions[0].TxOut[2].Value)
 
-			log.Debugf("accepted work (%v) at height %v has coinbase "+
+			log.Tracef("accepted work (%v) at height %v has coinbase "+
 				"of %v", header.BlockHash(), header.Height, coinbase)
 
 			// Pay dividends per the configured payment scheme and process
@@ -605,7 +748,7 @@ func (h *Hub) process() {
 
 		case headerB := <-h.discCh:
 			height := binary.LittleEndian.Uint32(headerB[128:132])
-			log.Infof("Block disconnected at height %v", height)
+			log.Tracef("Block disconnected at height %v", height)
 
 			id := hex.EncodeToString(headerB[140:152])
 			work, err := FetchAcceptedWork(h.db, []byte(id))
