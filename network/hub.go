@@ -55,6 +55,14 @@ const (
 		(chainhash.HashBlockSize * 8))) * chainhash.HashBlockSize
 )
 
+var (
+	// soloMaxGenTime is the threshold (in seconds) at which pool clients will
+	// generate a valid share when solo pool mode is activated. This is set to a
+	// high value to reduce the number of round trips to the pool by connected
+	// pool clients since pool shares are a non factor in solo pool mode.
+	soloMaxGenTime = new(big.Int).SetInt64(25)
+)
+
 // HubConfig represents configuration details for the hub.
 type HubConfig struct {
 	ActiveNet         *chaincfg.Params
@@ -136,10 +144,17 @@ func (h *Hub) GenerateBlake256Pad() {
 
 // GenerateDifficultyData generates difficulty data for all known miners.
 func (h *Hub) GenerateDifficultyData() error {
+	maxGenTime := h.cfg.MaxGenTime
+	if h.cfg.SoloPool {
+		maxGenTime = soloMaxGenTime
+	}
+
+	log.Tracef("Max valid share generation time is: %v seconds", maxGenTime)
+
 	h.poolDiffMtx.Lock()
 	for miner, hashrate := range dividend.MinerHashes {
 		target, difficulty, err := dividend.CalculatePoolTarget(h.cfg.ActiveNet,
-			hashrate, h.cfg.MaxGenTime)
+			hashrate, maxGenTime)
 		if err != nil {
 			log.Error("Failed to calculate pool target and diff for miner "+
 				"(%v): %v", err)
