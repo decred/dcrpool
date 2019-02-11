@@ -68,8 +68,8 @@ var MinerHashes = map[string]*big.Int{
 	// ObeliskDCR1:   new(big.Int).SetInt64(2.6E12),
 	AntminerDR3: new(big.Int).SetInt64(7.8E12),
 	// StrongUU1:     new(big.Int).SetInt64(12E12),
-	AntminerDR5:  new(big.Int).SetInt64(32E12),
-	WhatsminerD1: new(big.Int).SetInt64(44E12),
+	AntminerDR5:  new(big.Int).SetInt64(35E12),
+	WhatsminerD1: new(big.Int).SetInt64(48E12),
 }
 
 // MinerPorts is a map of all known DCR miners and the coressponding
