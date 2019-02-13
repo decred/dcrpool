@@ -428,13 +428,11 @@ func ParseWorkNotification(req *Request) (string, string, string, string, string
 
 // GenerateBlockHeader creates a block header from a mining.notify
 // message and the extraNonce1 of the client.
-func GenerateBlockHeader(blockVersionE string, prevBlockE string, genTx1E string, nTimeE string, extraNonce1E string, genTx2E string) (*wire.BlockHeader, error) {
+func GenerateBlockHeader(blockVersionE string, prevBlockE string, genTx1E string, extraNonce1E string, genTx2E string) (*wire.BlockHeader, error) {
 	buf := bytes.NewBufferString("")
 	buf.WriteString(blockVersionE)
 	buf.WriteString(prevBlockE)
 	buf.WriteString(genTx1E)
-	buf.WriteString(nTimeE)
-	buf.WriteString(strings.Repeat("0", 8))
 	buf.WriteString(extraNonce1E)
 	buf.WriteString(strings.Repeat("0", 56))
 	buf.WriteString(genTx2E)

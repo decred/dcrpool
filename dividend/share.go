@@ -65,9 +65,8 @@ func fetchPOWLimit(net *chaincfg.Params) (*big.Int, error) {
 var MinerHashes = map[string]*big.Int{
 	CPU:           new(big.Int).SetInt64(150E3),
 	InnosiliconD9: new(big.Int).SetInt64(2.4E12),
-	// ObeliskDCR1:   new(big.Int).SetInt64(2.6E12),
-	AntminerDR3: new(big.Int).SetInt64(7.8E12),
-	// StrongUU1:     new(big.Int).SetInt64(12E12),
+	// ObeliskDCR1:   new(big.Int).SetInt64(1.1E12),
+	AntminerDR3:  new(big.Int).SetInt64(7.8E12),
 	AntminerDR5:  new(big.Int).SetInt64(35E12),
 	WhatsminerD1: new(big.Int).SetInt64(48E12),
 }
@@ -80,8 +79,7 @@ var MinerPorts = map[string]uint32{
 	InnosiliconD9: 5552,
 	AntminerDR3:   5553,
 	AntminerDR5:   5554,
-	// StrongUU1:     5554,
-	WhatsminerD1: 5555,
+	WhatsminerD1:  5555,
 }
 
 // Convenience variables.
@@ -106,13 +104,12 @@ var (
 // rest were calculated as :
 // 				(Hash of Miner X * Weight of LHM)/ Hash of LHM
 var ShareWeights = map[string]*big.Rat{
-	CPU:           new(big.Rat).SetFloat64(0.0), // Reserved for testing.
-	InnosiliconD9: new(big.Rat).SetFloat64(1.0),
-	// ObeliskDCR1:   new(big.Rat).SetFloat64(1.0833),
-	AntminerDR3: new(big.Rat).SetFloat64(3.25),
-	// StrongUU1:     new(big.Rat).SetFloat64(5),
-	AntminerDR5:  new(big.Rat).SetFloat64(11.429),
-	WhatsminerD1: new(big.Rat).SetFloat64(18.333),
+	CPU: new(big.Rat).SetFloat64(0.0), // Reserved for testing.
+	// ObeliskDCR1:   new(big.Rat).SetFloat64(1.0),
+	InnosiliconD9: new(big.Rat).SetFloat64(2.182),
+	AntminerDR3:   new(big.Rat).SetFloat64(7.091),
+	AntminerDR5:   new(big.Rat).SetFloat64(31.181),
+	WhatsminerD1:  new(big.Rat).SetFloat64(43.636),
 }
 
 // CalculatePoolDifficulty determines the difficulty at which the provided
