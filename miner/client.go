@@ -53,7 +53,7 @@ type Miner struct {
 	started         int64
 	ctx             context.Context
 	cancel          context.CancelFunc
-	extraNonce1     string
+	extraNonce1E    string
 	extraNonce2Size uint64
 	notifyID        string
 }
@@ -198,8 +198,8 @@ out:
 			// Non-blocking receive fallthrough.
 		}
 
-		//TODO: work in a read timeout and max bytes for the tcp connection.
-
+		m.conn.SetReadDeadline(time.Now().Add(time.Minute * 3))
+		m.conn.SetWriteDeadline(time.Now().Add(time.Minute * 3))
 		data, err := m.reader.ReadBytes('\n')
 		if err != nil {
 			continue
@@ -267,20 +267,20 @@ out:
 				log.Tracef("subscription details: %s, %s, %s, %d",
 					diffID, notifyID, extraNonce1E, extraNonce2Size)
 
-				m.extraNonce1 = extraNonce1E
+				m.extraNonce1E = extraNonce1E
 				m.extraNonce2Size = extraNonce2Size
 				m.notifyID = notifyID
 				m.subscribed = true
 
 			case network.Submit:
-				_, strErr, err := network.ParseSubmitWorkResponse(resp)
+				accepted, strErr, err := network.ParseSubmitWorkResponse(resp)
 				if err != nil {
 					log.Errorf("Parse submit response error: %v", err)
 					m.cancel()
 					continue
 				}
 
-				// log.Tracef("mining.submit status is %v", status)
+				log.Tracef("Accepted status is %v", accepted)
 
 				if strErr != nil {
 					code, msg, err := network.ParseStratumError(strErr)
@@ -310,23 +310,24 @@ out:
 					continue
 				}
 
-				log.Tracef("difficulty is %v", difficulty)
+				log.Tracef("Difficulty is %v", difficulty)
 
 				diff := new(big.Int).SetUint64(difficulty)
 				target, err := dividend.DifficultyToTarget(m.config.net, diff)
-				log.Tracef("target is %v", target)
 				if err != nil {
 					log.Errorf("Difficulty to target conversion error: %v", err)
 					m.cancel()
 					continue
 				}
 
+				log.Tracef("Target is %v", target)
+
 				m.workMtx.Lock()
 				m.work.target = target
 				m.workMtx.Unlock()
 
 			case network.Notify:
-				jobID, prevBlock, genTx1, genTx2, blockVersion, _, nTime, _, err :=
+				jobID, prevBlockE, genTx1E, genTx2E, blockVersionE, _, _, _, err :=
 					network.ParseWorkNotification(notif)
 				if err != nil {
 					log.Errorf("Parse job notification error: %v", err)
@@ -334,8 +335,8 @@ out:
 					continue
 				}
 
-				blockHeader, err := network.GenerateBlockHeader(blockVersion,
-					prevBlock, genTx1, nTime, m.extraNonce1, genTx2)
+				blockHeader, err := network.GenerateBlockHeader(blockVersionE,
+					prevBlockE, genTx1E, m.extraNonce1E, genTx2E)
 				if err != nil {
 					log.Errorf("Generate block header error: %v", err)
 					m.cancel()

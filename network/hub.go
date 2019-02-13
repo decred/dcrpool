@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -61,6 +62,9 @@ var (
 	// high value to reduce the number of round trips to the pool by connected
 	// pool clients since pool shares are a non factor in solo pool mode.
 	soloMaxGenTime = new(big.Int).SetInt64(25)
+
+	// MinedBlocks is the mined block count key.
+	MinedBlocks = []byte("minedblocks")
 )
 
 // HubConfig represents configuration details for the hub.
@@ -111,6 +115,7 @@ type Hub struct {
 	ctx               context.Context
 	cancel            context.CancelFunc
 	txFeeReserve      dcrutil.Amount
+	minedBlocks       uint32
 	lastWorkHeight    uint32
 	lastPaymentHeight uint32
 	endpoints         []*Endpoint
@@ -160,6 +165,8 @@ func (h *Hub) GenerateDifficultyData() error {
 				"(%v): %v", err)
 			return err
 		}
+
+		log.Tracef("difficulty for %v is %v", miner, difficulty)
 
 		h.poolDiff[miner] = &DifficultyData{
 			target:     target,
@@ -244,7 +251,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		log.Infof("Solo pool enabled")
 	}
 
-	// Load the tx fee reserve and last payment height.
+	// Load the tx fee reserve, last payment height and mined blocks count.
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 
@@ -268,6 +275,16 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 			h.lastPaymentHeight = binary.LittleEndian.Uint32(v)
 		}
 
+		v = pbkt.Get(MinedBlocks)
+		if v == nil {
+			log.Info("Mined blocks value not found in db, initializing.")
+			h.minedBlocks = 0
+		}
+
+		if v != nil {
+			h.minedBlocks = binary.LittleEndian.Uint32(v)
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -278,6 +295,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 	log.Tracef("Tx fee reserve is currently %v, with a max of %v",
 		h.txFeeReserve, h.cfg.MaxTxFeeReserve)
 	log.Tracef("Last payment height is currently %v", h.lastPaymentHeight)
+	log.Tracef("Mined blocks is currently %v", h.minedBlocks)
 
 	// Generate difficulty data for all known pool clients.
 	err = h.GenerateDifficultyData()
@@ -441,7 +459,14 @@ func (h *Hub) Persist() error {
 
 		// Persist the last payment height.
 		binary.LittleEndian.PutUint32(vbytes, uint32(h.lastPaymentHeight))
-		return pbkt.Put(dividend.LastPaymentHeight, vbytes)
+		err = pbkt.Put(dividend.LastPaymentHeight, vbytes)
+		if err != nil {
+			return err
+		}
+
+		// Persist the mined blocks count.
+		binary.LittleEndian.PutUint32(vbytes, uint32(h.minedBlocks))
+		return pbkt.Put(MinedBlocks, vbytes)
 	})
 
 	return err
@@ -509,7 +534,7 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 // handleGetWork periodically fetches available work from the consensus daemon.
 func (h *Hub) handleGetWork() {
 	var currHeaderE string
-	ticker := time.NewTicker(time.Second * 3)
+	ticker := time.NewTicker(time.Second * 5)
 	defer ticker.Stop()
 	log.Info("Started getwork handler")
 
@@ -618,7 +643,7 @@ func (h *Hub) handleGetWork() {
 
 			log.Tracef("Work times difference: (%v)", newNTime.Sub(currNTime))
 
-			if newNTime.Sub(currNTime) >= time.Second*30 {
+			if newNTime.Sub(currNTime) > time.Second*30 {
 				currHeaderE = headerE
 				h.processWork(currHeaderE, target)
 				continue
@@ -692,40 +717,47 @@ func (h *Hub) handleChainUpdates() {
 				continue
 			}
 
+			// increment the mined blocks counter.
+			atomic.AddUint32(&h.minedBlocks, 1)
+
 			coinbase :=
 				dcrutil.Amount(block.Transactions[0].TxOut[2].Value)
 
 			log.Tracef("accepted work (%v) at height %v has coinbase "+
 				"of %v", header.BlockHash(), header.Height, coinbase)
 
-			// Pay dividends per the configured payment scheme and process
-			// mature payments.
-			switch h.cfg.PaymentMethod {
-			case dividend.PPS:
-				err := dividend.PayPerShare(h.db, coinbase, h.cfg.PoolFee,
-					header.Height, h.cfg.ActiveNet.CoinbaseMaturity)
-				if err != nil {
-					log.Error("Failed to process generate PPS shares: %v", err)
-					h.cancel()
-					continue
+			// Only process shares and payments when not mining in solo
+			// pool mode.
+			if !h.cfg.SoloPool {
+				// Pay dividends per the configured payment scheme and process
+				// mature payments.
+				switch h.cfg.PaymentMethod {
+				case dividend.PPS:
+					err := dividend.PayPerShare(h.db, coinbase, h.cfg.PoolFee,
+						header.Height, h.cfg.ActiveNet.CoinbaseMaturity)
+					if err != nil {
+						log.Error("Failed to process generate PPS shares: %v", err)
+						h.cancel()
+						continue
+					}
+
+				case dividend.PPLNS:
+					err := dividend.PayPerLastNShares(h.db, coinbase,
+						h.cfg.PoolFee, header.Height,
+						h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
+					if err != nil {
+						log.Error("Failed to generate PPLNS shares: %v", err)
+						h.cancel()
+						continue
+					}
 				}
 
-			case dividend.PPLNS:
-				err := dividend.PayPerLastNShares(h.db, coinbase,
-					h.cfg.PoolFee, header.Height,
-					h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
+				// Process mature payments.
+				err = h.ProcessPayments(uint32(header.Height))
 				if err != nil {
-					log.Error("Failed to generate PPLNS shares: %v", err)
+					log.Errorf("Failed to process payments: %v", err)
 					h.cancel()
-					continue
 				}
-			}
-
-			// Process mature payments.
-			err = h.ProcessPayments(uint32(header.Height))
-			if err != nil {
-				log.Errorf("Failed to process payments: %v", err)
-				h.cancel()
 			}
 
 			// Update the accepted work record for the connected block.
@@ -758,28 +790,31 @@ func (h *Hub) handleChainUpdates() {
 				continue
 			}
 
-			// If the disconnected block is an accepted work from the pool,
-			// delete all associated payments and update the state of the
-			// accepted work.
-			work.Connected = false
-			payments, err := dividend.FetchPendingPaymentsAtHeight(h.db,
-				uint32(work.ConnectedAtHeight))
-			if err != nil {
-				log.Errorf("Failed to fetch pending payments at height (%v):"+
-					" %v", work.ConnectedAtHeight, err)
-				h.cancel()
-				continue
-			}
-
-			for _, pmt := range payments {
-				err = pmt.Delete(h.db)
+			// Only remove invalidated payments if not mining in solo pool mode.
+			if !h.cfg.SoloPool {
+				// If the disconnected block is an accepted work from the pool,
+				// delete all associated payments and update the state of the
+				// accepted work.
+				payments, err := dividend.FetchPendingPaymentsAtHeight(h.db,
+					uint32(work.ConnectedAtHeight))
 				if err != nil {
-					log.Errorf("Failed to delete payment", err)
+					log.Errorf("Failed to fetch pending payments at height (%v):"+
+						" %v", work.ConnectedAtHeight, err)
 					h.cancel()
-					break
+					continue
+				}
+
+				for _, pmt := range payments {
+					err = pmt.Delete(h.db)
+					if err != nil {
+						log.Errorf("Failed to delete payment", err)
+						h.cancel()
+						break
+					}
 				}
 			}
 
+			work.Connected = false
 			work.ConnectedAtHeight = 0
 			work.Update(h.db)
 		}
@@ -789,13 +824,6 @@ func (h *Hub) handleChainUpdates() {
 // ProcessPayments fetches all eligible payments and publishes a
 // transaction to the network paying dividends to participating accounts.
 func (h *Hub) ProcessPayments(height uint32) error {
-	// In solo pool mode, mining rewards are paid to the mining address
-	// specified by the consensus daemon. Since it's a solo operation there is
-	// no need to distribute rewards for the workers.
-	if h.cfg.SoloPool {
-		return nil
-	}
-
 	// Waiting two blocks after a successful payment before proceeding with
 	// another one because the reserved amount for transaction fees becomes
 	// change after a successful transaction. Change matures after the next

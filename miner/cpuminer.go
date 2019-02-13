@@ -130,10 +130,11 @@ func (m *CPUMiner) solveBlock(headerB []byte, target *big.Int, ticker *time.Tick
 					return false
 				}
 
-				hash := header.BlockHash()
+				log.Tracef("Reconstructed block header is: %v", spew.Sdump(header))
 
 				// A valid submission is generated when the block hash is less
 				// than the pool target of the client.
+				hash := header.BlockHash()
 				hashNum := blockchain.HashToBig(&hash)
 				hashesCompleted++
 
