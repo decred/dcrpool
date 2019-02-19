@@ -223,7 +223,7 @@ func (h *Hub) processWork(headerE string, target string) {
 	// Broadcast the work notification to connected pool clients.
 	h.Broadcast <- workNotif
 
-	log.Tracef("Work sent to pool clients")
+	log.Tracef("Broadcasting work to pool clients")
 }
 
 // NewHub initializes a websocket hub.
@@ -292,10 +292,13 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		return nil, err
 	}
 
-	log.Tracef("Tx fee reserve is currently %v, with a max of %v",
-		h.txFeeReserve, h.cfg.MaxTxFeeReserve)
-	log.Tracef("Last payment height is currently %v", h.lastPaymentHeight)
-	log.Tracef("Mined blocks is currently %v", h.minedBlocks)
+	if !h.cfg.SoloPool {
+		log.Tracef("Tx fee reserve is currently %v, with a max of %v",
+			h.txFeeReserve, h.cfg.MaxTxFeeReserve)
+	}
+
+	log.Tracef("Last payment height is currently: %v", h.lastPaymentHeight)
+	log.Tracef("Mined blocks counter is currently at: %v blocks", h.minedBlocks)
 
 	// Generate difficulty data for all known pool clients.
 	err = h.GenerateDifficultyData()
@@ -433,6 +436,10 @@ func (h *Hub) SubmitWork(data *string) (bool, error) {
 	h.rpccMtx.Lock()
 	status, err := h.rpcc.GetWorkSubmit(*data)
 	h.rpccMtx.Unlock()
+	if err != nil {
+		return false, err
+	}
+
 	return status, err
 }
 
@@ -441,6 +448,10 @@ func (h *Hub) GetWork() (string, string, error) {
 	h.rpccMtx.Lock()
 	work, err := h.rpcc.GetWork()
 	h.rpccMtx.Unlock()
+	if err != nil {
+		return "", "", err
+	}
+
 	return work.Data, work.Target, err
 }
 
@@ -547,7 +558,6 @@ func (h *Hub) handleGetWork() {
 			headerE, target, err := h.GetWork()
 			if err != nil {
 				log.Errorf("Failed to fetch work: %v", err)
-				h.cancel()
 				continue
 			}
 
@@ -579,9 +589,6 @@ func (h *Hub) handleGetWork() {
 			}
 
 			newHeaderHeight := binary.LittleEndian.Uint32(newHeaderHeightD)
-
-			log.Tracef("Work heights are: curr (%v) : new (%v)",
-				currHeaderHeight, newHeaderHeight)
 			if newHeaderHeight > currHeaderHeight {
 				currHeaderE = headerE
 				h.processWork(currHeaderE, target)
@@ -609,10 +616,6 @@ func (h *Hub) handleGetWork() {
 
 			newHeaderVoters :=
 				binary.LittleEndian.Uint16(newHeaderVotersD)
-
-			log.Tracef("Work votes are: curr (%v) : new (%v)",
-				currHeaderVoters, newHeaderVoters)
-
 			if newHeaderVoters > currHeaderVoters {
 				currHeaderE = headerE
 				h.processWork(currHeaderE, target)
@@ -640,9 +643,6 @@ func (h *Hub) handleGetWork() {
 
 			newNTime :=
 				time.Unix(int64(binary.LittleEndian.Uint32(newNTimeD)), 0)
-
-			log.Tracef("Work times difference: (%v)", newNTime.Sub(currNTime))
-
 			if newNTime.Sub(currNTime) > time.Second*30 {
 				currHeaderE = headerE
 				h.processWork(currHeaderE, target)
@@ -676,11 +676,17 @@ func (h *Hub) handleChainUpdates() {
 			return
 
 		case headerB := <-h.connCh:
-			height := binary.LittleEndian.Uint32(headerB[128:132])
-			log.Tracef("Block connected at height %v", height)
+			var header wire.BlockHeader
+			err := header.FromBytes(headerB)
+			if err != nil {
+				log.Errorf("Failed to create header from bytes: %v", err)
+				h.cancel()
+				continue
+			}
+			log.Tracef("Block connected at height %v", header.Height)
 
-			if height > MaxReorgLimit {
-				pruneLimit := height - MaxReorgLimit
+			if header.Height > MaxReorgLimit {
+				pruneLimit := header.Height - MaxReorgLimit
 				err := PruneJobs(h.db, pruneLimit)
 				if err != nil {
 					log.Errorf("Failed to prune jobs to height %d: %v",
@@ -688,47 +694,75 @@ func (h *Hub) handleChainUpdates() {
 					h.cancel()
 					continue
 				}
-			}
 
-			id := hex.EncodeToString(headerB[140:152])
-			work, err := FetchAcceptedWork(h.db, []byte(id))
-			if err != nil {
-				log.Errorf("Failed to fetch connected accepted work: %v", err)
-				continue
-			}
-
-			// If the connected block is an accepted work from the pool,
-			// record payouts to participating accounts.
-			var header wire.BlockHeader
-			err = header.FromBytes(headerB)
-			if err != nil {
-				log.Errorf("Failed to create header from bytes: %v", err)
-				h.cancel()
-				continue
+				log.Tracef("Pruned jobs below height: %v", pruneLimit)
 			}
 
 			blockHash := header.BlockHash()
-			h.rpccMtx.Lock()
-			block, err := h.rpcc.GetBlock(&blockHash)
-			h.rpccMtx.Unlock()
+			id := AcceptedWorkID(blockHash.String(), header.Height)
+			work, err := FetchAcceptedWork(h.db, id)
 			if err != nil {
-				log.Errorf("Failed to fetch block: %v", err)
-				h.cancel()
+				log.Errorf("Failed to fetch accepted work: %v", err)
 				continue
 			}
 
-			// increment the mined blocks counter.
+			prevWork, err := work.FilterParentAcceptedWork(h.db)
+			if err != nil {
+				log.Errorf("Failed to filter parent accepted work: %v", err)
+				continue
+			}
+
+			// Prune accepted work that is below the estimated reorg limit.
+			if header.Height > MaxReorgLimit {
+				pruneLimit := header.Height - MaxReorgLimit
+				err = PruneAcceptedWork(h.db, pruneLimit)
+				if err != nil {
+					log.Errorf("Failed to prune accepted work below height (%v)"+
+						": %v", pruneLimit, err)
+					h.cancel()
+					continue
+				}
+
+				log.Tracef("Pruned accepted work below height: %v", pruneLimit)
+			}
+
+			if prevWork == nil {
+				log.Tracef("No mined previous work found")
+				continue
+			}
+
+			log.Tracef("Found mined previous work: %v", prevWork.BlockHash)
+
+			// Persist the mined work and increment the mined blocks counter.
+			err = prevWork.PersistMinedWork(h.db)
+			if err != nil {
+				log.Errorf("Failed to persist mined workd: %v", err)
+			}
+
 			atomic.AddUint32(&h.minedBlocks, 1)
-
-			coinbase :=
-				dcrutil.Amount(block.Transactions[0].TxOut[2].Value)
-
-			log.Tracef("accepted work (%v) at height %v has coinbase "+
-				"of %v", header.BlockHash(), header.Height, coinbase)
+			minedCount := atomic.LoadUint32(&h.minedBlocks)
+			log.Tracef("Connected to mined block (%v),"+
+				" current mined blocks count is (%v)",
+				header.BlockHash(), minedCount)
 
 			// Only process shares and payments when not mining in solo
 			// pool mode.
 			if !h.cfg.SoloPool {
+				h.rpccMtx.Lock()
+				block, err := h.rpcc.GetBlock(&blockHash)
+				h.rpccMtx.Unlock()
+				if err != nil {
+					log.Errorf("Failed to fetch block: %v", err)
+					h.cancel()
+					continue
+				}
+
+				coinbase :=
+					dcrutil.Amount(block.Transactions[0].TxOut[2].Value)
+
+				log.Tracef("Accepted work (%v) at height %v has coinbase"+
+					" of %v", header.BlockHash(), header.Height, coinbase)
+
 				// Pay dividends per the configured payment scheme and process
 				// mature payments.
 				switch h.cfg.PaymentMethod {
@@ -760,32 +794,27 @@ func (h *Hub) handleChainUpdates() {
 				}
 			}
 
-			// Update the accepted work record for the connected block.
-			work.Connected = true
-			work.ConnectedAtHeight = header.Height
-			work.Update(h.db)
+		case headerB := <-h.discCh:
+			var header wire.BlockHeader
+			err := header.FromBytes(headerB)
+			if err != nil {
+				log.Errorf("Failed to create header from bytes: %v", err)
+				h.cancel()
+				continue
+			}
+			log.Tracef("Block disconnected at height %v", header.Height)
 
-			// Prune accepted work that is recorded as connected to the
-			// chain and is below the estimated reorg limit.
-			if height > MaxReorgLimit {
-				pruneLimit := height - MaxReorgLimit
-				err = PruneAcceptedWork(h.db, pruneLimit)
-				if err != nil {
-					log.Errorf("Failed to prune accepted work below height (%v)"+
-						": %v", pruneLimit, err)
-					h.cancel()
-					continue
-				}
+			// Delete mined work if it is disconnected from the chain.
+			id := AcceptedWorkID(header.BlockHash().String(), header.Height)
+			work, err := FetchMinedWork(h.db, id)
+			if err != nil {
+				log.Errorf("Failed to fetch mined work: %v", err)
+				continue
 			}
 
-		case headerB := <-h.discCh:
-			height := binary.LittleEndian.Uint32(headerB[128:132])
-			log.Tracef("Block disconnected at height %v", height)
-
-			id := hex.EncodeToString(headerB[140:152])
-			work, err := FetchAcceptedWork(h.db, []byte(id))
+			err = work.DeleteMinedWork(h.db)
 			if err != nil {
-				log.Errorf("Failed to fetch disconnected accepted work: %v", err)
+				log.Errorf("Failed to delete mined work: %v", err)
 				h.cancel()
 				continue
 			}
@@ -793,13 +822,12 @@ func (h *Hub) handleChainUpdates() {
 			// Only remove invalidated payments if not mining in solo pool mode.
 			if !h.cfg.SoloPool {
 				// If the disconnected block is an accepted work from the pool,
-				// delete all associated payments and update the state of the
-				// accepted work.
+				// delete all associated payments.
 				payments, err := dividend.FetchPendingPaymentsAtHeight(h.db,
-					uint32(work.ConnectedAtHeight))
+					uint32(header.Height))
 				if err != nil {
-					log.Errorf("Failed to fetch pending payments at height (%v):"+
-						" %v", work.ConnectedAtHeight, err)
+					log.Errorf("Failed to fetch pending payments"+
+						" at height (%v): %v", header.Height, err)
 					h.cancel()
 					continue
 				}
@@ -813,10 +841,6 @@ func (h *Hub) handleChainUpdates() {
 					}
 				}
 			}
-
-			work.Connected = false
-			work.ConnectedAtHeight = 0
-			work.Update(h.db)
 		}
 	}
 }

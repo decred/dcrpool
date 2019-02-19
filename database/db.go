@@ -28,8 +28,12 @@ var (
 	JobBkt = []byte("jobbkt")
 
 	// WorkBkt stores work submissions from the pool accepted by the network,
-	// it is periodically pruned by the current chain tip height.
+	// it is periodically pruned by the current chain tip  adjusted by the
+	// max reorg height and by chain reorgs.
 	WorkBkt = []byte("workbkt")
+
+	// MinedBkt stores mined blocks by pool, it is pruned by chain reorgs.
+	MinedBkt = []byte("minedbkt")
 
 	// PaymentBkt stores all payments.
 	PaymentBkt = []byte("paymentbkt")
@@ -106,6 +110,12 @@ func CreateBuckets(db *bolt.DB) error {
 		if err != nil {
 			return fmt.Errorf("failed to create '%v' bucket: %v",
 				string(JobBkt), err)
+		}
+
+		_, err = pbkt.CreateBucketIfNotExists(MinedBkt)
+		if err != nil {
+			return fmt.Errorf("failed to create '%v' bucket: %v",
+				string(MinedBkt), err)
 		}
 
 		_, err = pbkt.CreateBucketIfNotExists(PaymentBkt)

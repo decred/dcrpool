@@ -74,11 +74,11 @@ func (m *Miner) fetchRequest(id uint64) string {
 }
 
 // deleteRequest removes the recorded request referenced by the provided id.
-func (m *Miner) deleteRequest(id uint64) {
-	m.reqMtx.Lock()
-	delete(m.req, id)
-	m.reqMtx.Unlock()
-}
+// func (m *Miner) deleteRequest(id uint64) {
+// 	m.reqMtx.Lock()
+// 	delete(m.req, id)
+// 	m.reqMtx.Unlock()
+// }
 
 // nextID returns the next message id for the client.
 func (m *Miner) nextID() *uint64 {
@@ -349,6 +349,8 @@ out:
 					m.cancel()
 					continue
 				}
+
+				log.Tracef("Block header is: %v", spew.Sdump(blockHeader))
 
 				m.workMtx.Lock()
 				m.work.jobID = jobID

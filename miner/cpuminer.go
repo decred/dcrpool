@@ -147,7 +147,7 @@ func (m *CPUMiner) solveBlock(headerB []byte, target *big.Int, ticker *time.Tick
 					m.workData.extraNonce2 = hex.EncodeToString(headerB[148:152])
 
 					m.updateHashes <- hashesCompleted
-					log.Tracef("Solved block header is %v", spew.Sdump(header))
+					log.Tracef("Solved block header is: %v", spew.Sdump(header))
 					return true
 				}
 			}

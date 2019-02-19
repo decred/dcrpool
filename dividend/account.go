@@ -12,7 +12,6 @@ import (
 	"time"
 
 	bolt "github.com/coreos/bbolt"
-
 	"github.com/dnldd/dcrpool/database"
 )
 

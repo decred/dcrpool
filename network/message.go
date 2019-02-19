@@ -453,23 +453,34 @@ func GenerateBlockHeader(blockVersionE string, prevBlockE string, genTx1E string
 }
 
 // GenerateSolvedBlockHeader create a block header from a mining.submit message
-// and its associated job. It returns the solved block header and the entire
-// nonce space.
-func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E string, nTimeE string, nonceE string, miner string) (*wire.BlockHeader, string, error) {
-	var nonceSpaceE string
-
+// and its associated job.
+func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E string, nTimeE string, nonceE string, miner string) (*wire.BlockHeader, error) {
 	headerEB := []byte(headerE)
 
 	switch miner {
-	// The Antiminer DR3 and DR5 return a 12-byte entraNonce regardless of the
-	// extraNonce2Size specified in the mining.subscribe message. The nTime and
-	// nonce values submitted are little endian, readily available for header
-	// reconstruction.
-	case dividend.AntminerDR3, dividend.AntminerDR5:
+	case dividend.CPU:
 		copy(headerEB[272:280], []byte(nTimeE))
 		copy(headerEB[280:288], []byte(nonceE))
+		copy(headerEB[288:296], []byte(extraNonce1E))
+		copy(headerEB[296:304], []byte(extraNonce2E))
+
+	// The Antiminer DR3 and DR5 return a 12-byte entraNonce regardless of the
+	// extraNonce2Size specified in the mining.subscribe message. The nTime and
+	// nonce values submitted are big endian, they have to be reversed before
+	// block header reconstruction.
+	case dividend.AntminerDR3, dividend.AntminerDR5:
+		nTimeERev, err := HexReversed(nTimeE)
+		if err != nil {
+			return nil, err
+		}
+		copy(headerEB[272:280], []byte(nTimeERev))
+
+		nonceERev, err := HexReversed(nonceE)
+		if err != nil {
+			return nil, err
+		}
+		copy(headerEB[280:288], []byte(nonceERev))
 		copy(headerEB[288:312], []byte(extraNonce2E))
-		nonceSpaceE = string(headerEB[280:312])
 
 	// The Innosilicon D9 respects the extraNonce2Size specified in the
 	// mining.subscribe response sent to it. The extraNonce2 value submitted is
@@ -479,60 +490,53 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 	case dividend.InnosiliconD9:
 		nTimeERev, err := HexReversed(nTimeE)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		copy(headerEB[272:280], []byte(nTimeERev))
 
 		nonceERev, err := HexReversed(nonceE)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		copy(headerEB[280:288], []byte(nonceERev))
-
 		copy(headerEB[288:296], []byte(extraNonce1E))
 		copy(headerEB[296:304], []byte(extraNonce2E))
-		nonceSpaceE = string(headerEB[280:304])
 
 	// The Whatsminer D1 does not respect the extraNonce2Size specified in the
-	// mining.subscribe response sent to it. The  8-byte extranonce submitted is
+	// mining.subscribe response sent to it. The 8-byte extranonce submitted is
 	// is for the extraNonce1 and extraNonce2. The nTime and nonce values
 	// submitted are big endian, they have to be reversed to little endian
 	// before header reconstruction.
 	case dividend.WhatsminerD1:
 		nTimeERev, err := HexReversed(nTimeE)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		copy(headerEB[272:280], []byte(nTimeERev))
 
 		nonceERev, err := HexReversed(nonceE)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		copy(headerEB[280:288], []byte(nonceERev))
-
 		copy(headerEB[288:304], []byte(extraNonce2E))
-		nonceSpaceE = string(headerEB[280:304])
 
 	default:
-		return nil, "", fmt.Errorf("generating solved block for unknown miner "+
-			"(%v)", miner)
+		return nil, fmt.Errorf("unknown miner (%v) provided for block", miner)
 	}
 
 	solvedHeaderD, err := hex.DecodeString(string(headerEB))
 	if err != nil {
-		return nil, "",
-			fmt.Errorf("failed to decode solved block header: %v", err)
+		return nil, fmt.Errorf("failed to decode solved header: %v", err)
 	}
 
 	var solvedHeader wire.BlockHeader
 	err = solvedHeader.FromBytes(solvedHeaderD)
 	if err != nil {
-		return nil, "",
-			fmt.Errorf("failed to create block header from bytes:%v", err)
+		return nil, fmt.Errorf("failed to create header from bytes: %v", err)
 	}
 
-	return &solvedHeader, nonceSpaceE, nil
+	return &solvedHeader, nil
 }
 
 // SubmitWorkRequest creates a submit request message.
@@ -584,25 +588,6 @@ func ParseSubmitWorkRequest(req *Request, miner string) (string, string, string,
 	if !ok {
 		return "", "", "", "", "",
 			fmt.Errorf("failed to parse nonce parameter")
-	}
-
-	switch miner {
-	// All miners besides whatsminer submit nTime and nonce as a hex encoded
-	// big endian, the bytes have to the reversed to little endian to proceed.
-
-	// TODO: Add the rest when needed.
-	case dividend.AntminerDR3, dividend.AntminerDR5:
-		rev, err := HexReversed(nTime)
-		if err != nil {
-			return "", "", "", "", "", err
-		}
-		nTime = rev
-
-		rev, err = HexReversed(nonce)
-		if err != nil {
-			return "", "", "", "", "", err
-		}
-		nonce = rev
 	}
 
 	return workerName, jobID, extraNonce2, nTime, nonce, nil
