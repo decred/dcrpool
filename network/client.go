@@ -14,7 +14,6 @@ import (
 	"net"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/decred/dcrd/wire"
@@ -29,14 +28,14 @@ import (
 
 // Client represents a client connection.
 type Client struct {
-	conn        net.Conn
-	endpoint    *Endpoint
-	encoder     *json.Encoder
-	reader      *bufio.Reader
-	ctx         context.Context
-	cancel      context.CancelFunc
-	ip          string
-	id          uint64
+	conn     net.Conn
+	endpoint *Endpoint
+	encoder  *json.Encoder
+	reader   *bufio.Reader
+	ctx      context.Context
+	cancel   context.CancelFunc
+	ip       string
+	// id          uint64
 	extraNonce1 string
 	ch          chan Message
 	req         map[uint64]string
@@ -63,11 +62,11 @@ func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
 }
 
 // recordRequest logs a request as an id/method pair.
-func (c *Client) recordRequest(id uint64, method string) {
-	c.reqMtx.Lock()
-	c.req[id] = method
-	c.reqMtx.Unlock()
-}
+// func (c *Client) recordRequest(id uint64, method string) {
+// 	c.reqMtx.Lock()
+// 	c.req[id] = method
+// 	c.reqMtx.Unlock()
+// }
 
 // fetchRequest fetches the method of the recorded request id.
 func (c *Client) fetchRequest(id uint64) string {
@@ -78,17 +77,17 @@ func (c *Client) fetchRequest(id uint64) string {
 }
 
 // deleteRequest removes the recorded request referenced by the provided id.
-func (c *Client) deleteRequest(id uint64) {
-	c.reqMtx.Lock()
-	delete(c.req, id)
-	c.reqMtx.Unlock()
-}
+// func (c *Client) deleteRequest(id uint64) {
+// 	c.reqMtx.Lock()
+// 	delete(c.req, id)
+// 	c.reqMtx.Unlock()
+// }
 
 // nextID returns the next message id for the client.
-func (c *Client) nextID() *uint64 {
-	id := atomic.AddUint64(&c.id, 1)
-	return &id
-}
+// func (c *Client) nextID() *uint64 {
+// 	id := atomic.AddUint64(&c.id, 1)
+// 	return &id
+// }
 
 // Shutdown terminates all client processes and established connections.
 func (c *Client) Shutdown() {
@@ -268,7 +267,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		return
 	}
 
-	header, nonceSpaceE, err := GenerateSolvedBlockHeader(job.Header,
+	header, err := GenerateSolvedBlockHeader(job.Header,
 		c.extraNonce1, extraNonce2E, nTimeE, nonceE, c.endpoint.miner)
 	if err != nil {
 		log.Errorf("Failed to generate solved block header: %v", err)
@@ -300,18 +299,22 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		return
 	}
 
-	// Claim a weighted share for work contributed to the pool.
-	c.claimWeightedShare()
+	// Claim a weighted share for work contributed to the pool if not mining
+	// in solo mining mode.
+	if !c.endpoint.hub.cfg.SoloPool {
+		c.claimWeightedShare()
+	}
 
 	// Send an accepted work response to the pool client.
 	c.ch <- SubmitWorkResponse(req.ID, true, nil)
 
 	if hashNum.Cmp(target) < 0 {
-		// Persist the accepted work, this is a workaround for having
-		// an accepted work record available when a block connected
-		// notification is received.
+		// Persist the accepted work before submiting to the network. This is
+		// a workaround in order to have an accepted work record available
+		// when a block connected notification is received.
 
-		work := NewAcceptedWork(nonceSpaceE)
+		work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
+			header.Height, c.account, c.endpoint.miner)
 		work.Create(c.endpoint.hub.db)
 
 		// Generate and send the work submission.
@@ -340,6 +343,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 
 		log.Tracef("Work accepted status is: %v", accepted)
 
+		// Remove the aceepted work record if it's not accepted by the network.
 		if !accepted {
 			work.Delete(c.endpoint.hub.db)
 		}

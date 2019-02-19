@@ -26,39 +26,10 @@ const (
 	CPU           = "cpu"
 	InnosiliconD9 = "innosilicond9"
 	// ObeliskDCR1   = "obeliskdcr1"
-	AntminerDR3 = "antminerdr3"
-	// StrongUU1     = "stronguu1"
+	AntminerDR3  = "antminerdr3"
 	AntminerDR5  = "antminerdr5"
 	WhatsminerD1 = "whatsminerd1"
 )
-
-// These variables are the chain proof-of-work limit parameters for each default
-// network.
-var (
-	// bigOne is 1 represented as a big.Int.  It is defined here to avoid
-	// the overhead of creating it multiple times.
-	bigOne = big.NewInt(1)
-
-	// mainPowLimit is the highest proof of work value a Decred block can
-	// have for the main network.  It is the value 2^224 - 1.
-	mainPowLimit = new(big.Int).Sub(new(big.Int).Lsh(bigOne, 224), bigOne)
-
-	// testNetPowLimit is the highest proof of work value a Decred block
-	// can have for the test network.  It is the value 2^232 - 1.
-	testNetPowLimit = new(big.Int).Sub(new(big.Int).Lsh(bigOne, 232), bigOne)
-)
-
-// fetchPOWLimit fetches the associated POW limit of the provided network.
-func fetchPOWLimit(net *chaincfg.Params) (*big.Int, error) {
-	switch net.Name {
-	case chaincfg.TestNet3Params.Name:
-		return testNetPowLimit, nil
-	case chaincfg.MainNetParams.Name:
-		return mainPowLimit, nil
-	default:
-		return mainPowLimit, nil
-	}
-}
 
 // MinerHashes is a map of all known DCR miners and their coressponding
 // hashrates.
@@ -116,10 +87,7 @@ var ShareWeights = map[string]*big.Rat{
 // hashrate can generate a pool share by the provided target time.
 func CalculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) (*big.Int, error) {
 	hashesPerTargetTime := new(big.Int).Mul(hashRate, targetTimeSecs)
-	powLimit, err := fetchPOWLimit(net)
-	if err != nil {
-		return nil, err
-	}
+	powLimit := net.PowLimit
 
 	powLimitFloat, _ := new(big.Float).SetInt(powLimit).Float64()
 
@@ -147,10 +115,7 @@ func CalculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTime
 // DifficultyToTarget converts the provided difficulty to a target based on the
 // active network.
 func DifficultyToTarget(net *chaincfg.Params, difficulty *big.Int) (*big.Int, error) {
-	powLimit, err := fetchPOWLimit(net)
-	if err != nil {
-		return ZeroInt, err
-	}
+	powLimit := net.PowLimit
 
 	// The corresponding target is calculated as:
 	//

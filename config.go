@@ -67,12 +67,14 @@ type config struct {
 	HomeDir         string   `long:"homedir" description:"Path to application home directory."`
 	ConfigFile      string   `long:"configfile" description:"Path to configuration file."`
 	DataDir         string   `long:"datadir" description:"The data directory."`
-	ActiveNet       string   `long:"activenet" description:"The active network being mined on. {testnet3, mainnet}"`
+	ActiveNet       string   `long:"activenet" description:"The active network being mined on. {testnet3, mainnet, simnet}"`
 	DebugLevel      string   `long:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir          string   `long:"logdir" description:"Directory to log output."`
 	DBFile          string   `long:"dbfile" description:"Path to the database file."`
 	DcrdRPCHost     string   `long:"dcrdrpchost" description:"The ip:port to establish an RPC connection for dcrd."`
+	DcrdRPCCert     string   `long:"dcrdrpccert" description:"The dcrd RPC certificate."`
 	WalletGRPCHost  string   `long:"walletgrpchost" description:"The ip:port to establish a GRPC connection for the wallet."`
+	WalletRPCCert   string   `long:"walletrpccert" description:"The wallet RPC certificate."`
 	RPCUser         string   `long:"rpcuser" description:"Username for RPC connections."`
 	RPCPass         string   `long:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
 	PoolFeeAddrs    []string `long:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
@@ -263,6 +265,8 @@ func loadConfig() (*config, []string, error) {
 		RPCUser:         defaultRPCUser,
 		RPCPass:         defaultRPCPass,
 		DcrdRPCHost:     defaultDcrdRPCHost,
+		DcrdRPCCert:     dcrdRPCCertFile,
+		WalletRPCCert:   walletRPCCertFile,
 		WalletGRPCHost:  defaultWalletGRPCHost,
 		PoolFeeAddrs:    []string{defaultPoolFeeAddr},
 		PoolFee:         defaultPoolFee,
@@ -428,38 +432,43 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	// Set the mining active network, simnet is ineligible due to different
-	// network parameters with regards to mining.
+	// Set the mining active network. Testnet and simnet proof of work
+	// parameters are modified here to mirror that of mainnet in order to
+	// generate reasonable difficulties for asics.
 	switch cfg.ActiveNet {
 	case chaincfg.TestNet3Params.Name:
 		cfg.net = &chaincfg.TestNet3Params
+		cfg.net.PowLimit = chaincfg.MainNetParams.PowLimit
 	case chaincfg.MainNetParams.Name:
 		cfg.net = &chaincfg.MainNetParams
 	case chaincfg.SimNetParams.Name:
-		return nil, nil, fmt.Errorf("simnet is ineligible for mining")
+		cfg.net = &chaincfg.SimNetParams
+		cfg.net.PowLimit = chaincfg.MainNetParams.PowLimit
 	default:
 		return nil, nil, fmt.Errorf("unknown network provided %v",
 			cfg.ActiveNet)
 	}
 
-	for _, pAddr := range cfg.PoolFeeAddrs {
-		addr, err := dcrutil.DecodeAddress(pAddr)
-		if err != nil {
-			str := "%s: pool fee address '%v' failed to decode: %v"
-			err := fmt.Errorf(str, funcName, addr, err)
-			fmt.Fprintln(os.Stderr, err)
-			fmt.Fprintln(os.Stderr, usageMessage)
-			return nil, nil, err
-		}
+	if !cfg.SoloPool {
+		for _, pAddr := range cfg.PoolFeeAddrs {
+			addr, err := dcrutil.DecodeAddress(pAddr)
+			if err != nil {
+				str := "%s: pool fee address '%v' failed to decode: %v"
+				err := fmt.Errorf(str, funcName, addr, err)
+				fmt.Fprintln(os.Stderr, err)
+				fmt.Fprintln(os.Stderr, usageMessage)
+				return nil, nil, err
+			}
 
-		// Ensure pool fee address is valid and on the active network.
-		if !addr.IsForNet(cfg.net) {
-			return nil, nil,
-				fmt.Errorf("pool fee address (%v) not on the active network "+
-					"(%s)", addr, cfg.ActiveNet)
-		}
+			// Ensure pool fee address is valid and on the active network.
+			if !addr.IsForNet(cfg.net) {
+				return nil, nil,
+					fmt.Errorf("pool fee address (%v) not on the active network "+
+						"(%s)", addr, cfg.ActiveNet)
+			}
 
-		cfg.poolFeeAddrs = append(cfg.poolFeeAddrs, addr)
+			cfg.poolFeeAddrs = append(cfg.poolFeeAddrs, addr)
+		}
 	}
 
 	// Warn about missing config file only after all other configuration is
@@ -470,9 +479,9 @@ func loadConfig() (*config, []string, error) {
 	}
 
 	// Load Dcrd RPC Certificate.
-	if !fileExists(dcrdRPCCertFile) {
+	if !fileExists(cfg.DcrdRPCCert) {
 		return nil, nil,
-			fmt.Errorf("dcrd RPC certificate (%v) not found", dcrdRPCCertFile)
+			fmt.Errorf("dcrd RPC certificate (%v) not found", cfg.DcrdRPCCert)
 	}
 
 	cfg.dcrdRPCCerts, err = ioutil.ReadFile(dcrdRPCCertFile)
@@ -481,10 +490,11 @@ func loadConfig() (*config, []string, error) {
 	}
 
 	if !cfg.SoloPool {
-		// Assert the wallet's RPC certificate exists.
-		if !fileExists(walletRPCCertFile) {
+		// Load the wallet RPC certificate.
+		if !fileExists(cfg.WalletRPCCert) {
 			return nil, nil,
-				fmt.Errorf("wallet RPC certificate (%v) not found", walletRPCCertFile)
+				fmt.Errorf("wallet RPC certificate (%v) not found",
+					cfg.WalletRPCCert)
 		}
 	}
 
