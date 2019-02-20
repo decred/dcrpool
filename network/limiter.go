@@ -82,7 +82,7 @@ func (r *RateLimiter) DiscardLimiters() {
 }
 
 // WithinLimit asserts that the client referenced by the provided IP address is
-// within the limits of the rate limiter, therefore can make futher requests.
+// within the limits of the rate limiter, therefore can make further requests.
 // If no request limiter is found for the provided IP address a new one is
 // created.
 func (r *RateLimiter) WithinLimit(ip string) bool {

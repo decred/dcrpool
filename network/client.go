@@ -63,9 +63,9 @@ func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
 
 // recordRequest logs a request as an id/method pair.
 // func (c *Client) recordRequest(id uint64, method string) {
-// 	c.reqMtx.Lock()
-// 	c.req[id] = method
-// 	c.reqMtx.Unlock()
+//     c.reqMtx.Lock()
+//	c.req[id] = method
+//	c.reqMtx.Unlock()
 // }
 
 // fetchRequest fetches the method of the recorded request id.
@@ -78,15 +78,15 @@ func (c *Client) fetchRequest(id uint64) string {
 
 // deleteRequest removes the recorded request referenced by the provided id.
 // func (c *Client) deleteRequest(id uint64) {
-// 	c.reqMtx.Lock()
-// 	delete(c.req, id)
-// 	c.reqMtx.Unlock()
+//     c.reqMtx.Lock()
+//     delete(c.req, id)
+//     c.reqMtx.Unlock()
 // }
 
 // nextID returns the next message id for the client.
 // func (c *Client) nextID() *uint64 {
-// 	id := atomic.AddUint64(&c.id, 1)
-// 	return &id
+//     id := atomic.AddUint64(&c.id, 1)
+//     return &id
 // }
 
 // Shutdown terminates all client processes and established connections.
@@ -402,7 +402,7 @@ func (c *Client) Listen() {
 
 		case ResponseType:
 			resp := msg.(*Response)
-			method := c.fetchRequest(*resp.ID)
+			method := c.fetchRequest(resp.ID)
 			if method == "" {
 				log.Errorf("No request found for response with id: ", resp.ID,
 					spew.Sdump(resp))
@@ -410,10 +410,7 @@ func (c *Client) Listen() {
 				continue
 			}
 
-			switch method {
-			default:
-				log.Errorf("Unknown request method for response: %s", method)
-			}
+			log.Errorf("Unknown request method for response: %s", method)
 
 		default:
 			log.Errorf("Unknown message type received: %s", reqType)
@@ -576,8 +573,7 @@ func (c *Client) Send() {
 			}
 
 			req := msg.(*Request)
-			switch req.Method {
-			case Notify:
+			if req.Method == Notify {
 				switch c.endpoint.miner {
 				case dividend.CPU:
 					err := c.encoder.Encode(msg)

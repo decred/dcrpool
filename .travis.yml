@@ -1,33 +1,11 @@
-branches:
-  only:
-    - master
-
-addons:
-  apt:
-    update: true
-
-env:
-  - GO111MODULE=on
-
 language: go
-
 go:
-  - 1.11
-
-sudo: required
-
-install: true
-
-cache:
-  directories:
-    - $HOME/.cache/go-build
-    - $GOPATH/pkg/mod
-
-before_install:
-  - sudo apt-get install -y libgtk2.0-dev libglib2.0-dev libgtksourceview2.0-dev tree
-  - wget -O gometalinter.tar.gz https://github.com/alecthomas/gometalinter/releases/download/v2.0.11/gometalinter-2.0.11-linux-amd64.tar.gz
-  - tar -xf gometalinter.tar.gz -C $TRAVIS_HOME/bin --strip 1
-  - gometalinter --version
-
-
-script: ./tests.sh
+  - 1.11.x
+sudo: false
+install:
+  - go get -v github.com/golangci/golangci-lint/cmd/golangci-lint
+script:
+  - export GO111MODULE=on
+  - go build
+  - (cd miner && go build)
+  - ./goclean.sh

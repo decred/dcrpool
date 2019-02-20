@@ -179,7 +179,7 @@ func (work *AcceptedWork) FilterParentAcceptedWork(db *bolt.DB) (*AcceptedWork, 
 		match := false
 		prevHashB := []byte(work.PrevHash)
 		cursor := bkt.Cursor()
-		for k, v := cursor.Seek([]byte(prefix)); k != nil && bytes.HasPrefix(k, prefix); k, v = cursor.Next() {
+		for k, v := cursor.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = cursor.Next() {
 			if !match {
 				prevHash := k[len(prefix):]
 				if bytes.Equal(prevHashB, prevHash) {

@@ -55,8 +55,8 @@ var MinerPorts = map[string]uint32{
 
 // Convenience variables.
 var (
-	ZeroRat = new(big.Rat)
-	ZeroInt = new(big.Int)
+	zeroRat = new(big.Rat).SetInt64(0)
+	zeroInt = new(big.Int).SetInt64(0)
 )
 
 var (
@@ -105,7 +105,7 @@ func CalculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTime
 	diff := new(big.Int).Quo(difficulty.Num(), difficulty.Denom())
 
 	// Clamp the difficulty to 1 if needed.
-	if diff.Cmp(ZeroInt) == 0 {
+	if diff.Cmp(zeroInt) == 0 {
 		diff = new(big.Int).SetInt64(1)
 	}
 
@@ -136,7 +136,7 @@ func DifficultyToTarget(net *chaincfg.Params, difficulty *big.Int) (*big.Int, er
 func CalculatePoolTarget(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) (*big.Int, *big.Int, error) {
 	difficulty, err := CalculatePoolDifficulty(net, hashRate, targetTimeSecs)
 	if err != nil {
-		return ZeroInt, ZeroInt, err
+		return nil, nil, err
 	}
 
 	target, err := DifficultyToTarget(net, difficulty)
@@ -324,7 +324,7 @@ func CalculateSharePercentages(shares []*Share) (map[string]*big.Rat, error) {
 
 	// Calculate each participating account to be claimed.
 	for account, shareCount := range tally {
-		if tally[account].Cmp(ZeroRat) == 0 {
+		if tally[account].Cmp(zeroRat) == 0 {
 			return nil, ErrDivideByZero()
 		}
 
