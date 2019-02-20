@@ -99,7 +99,7 @@ type Message interface {
 
 // Request defines a request message.
 type Request struct {
-	ID     *uint64     `json:"id"`
+	ID     uint64      `json:"id"`
 	Method string      `json:"method"`
 	Params interface{} `json:"params"`
 }
@@ -110,7 +110,7 @@ func (req *Request) MessageType() string {
 }
 
 // NewRequest creates a request instance.
-func NewRequest(id *uint64, method string, params interface{}) *Request {
+func NewRequest(id uint64, method string, params interface{}) *Request {
 	return &Request{
 		ID:     id,
 		Method: method,
@@ -120,7 +120,7 @@ func NewRequest(id *uint64, method string, params interface{}) *Request {
 
 // Response defines a response message.
 type Response struct {
-	ID     *uint64       `json:"id"`
+	ID     uint64        `json:"id"`
 	Error  []interface{} `json:"error,omitempty"`
 	Result interface{}   `json:"result,omitempty"`
 }
@@ -131,7 +131,7 @@ func (req *Response) MessageType() string {
 }
 
 // NewResponse creates a response instance.
-func NewResponse(id *uint64, result interface{}, err []interface{}) *Response {
+func NewResponse(id uint64, result interface{}, err []interface{}) *Response {
 	return &Response{
 		ID:     id,
 		Error:  err,
@@ -149,9 +149,6 @@ func IdentifyMessage(data []byte) (Message, string, error) {
 	}
 
 	if req.Method != "" {
-		if req.ID == nil {
-			return &req, NotificationType, nil
-		}
 		return &req, RequestType, nil
 	}
 
@@ -165,7 +162,7 @@ func IdentifyMessage(data []byte) (Message, string, error) {
 }
 
 // AuthorizeRequest creates an authorize request message.
-func AuthorizeRequest(id *uint64, name string, address string) *Request {
+func AuthorizeRequest(id uint64, name string, address string) *Request {
 	user := fmt.Sprintf("%s.%s", address, name)
 	return &Request{
 		ID:     id,
@@ -194,7 +191,7 @@ func ParseAuthorizeRequest(req *Request) (string, error) {
 }
 
 // AuthorizeResponse creates an authorize response.
-func AuthorizeResponse(id *uint64, status bool, err []interface{}) *Response {
+func AuthorizeResponse(id uint64, status bool, err []interface{}) *Response {
 	return &Response{
 		ID:     id,
 		Error:  err,
@@ -213,7 +210,7 @@ func ParseAuthorizeResponse(resp *Response) (bool, []interface{}, error) {
 }
 
 // SubscribeRequest creates a subscribe request message.
-func SubscribeRequest(id *uint64, userAgent string, version string, notifyID string) *Request {
+func SubscribeRequest(id uint64, userAgent string, version string, notifyID string) *Request {
 	agent := fmt.Sprintf("%v/%v", userAgent, version)
 	params := []string{agent}
 	if notifyID != "" {
@@ -259,7 +256,7 @@ func ParseSubscribeRequest(req *Request) (string, string, error) {
 }
 
 // SubscribeResponse creates a mining.subscribe response.
-func SubscribeResponse(id *uint64, notifyID string, extraNonce1 string, err []interface{}) *Response {
+func SubscribeResponse(id uint64, notifyID string, extraNonce1 string, err []interface{}) *Response {
 	if err != nil {
 		return &Response{
 			ID:     id,
@@ -540,7 +537,7 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 }
 
 // SubmitWorkRequest creates a submit request message.
-func SubmitWorkRequest(id *uint64, workerName string, jobID string, extraNonce2 string, nTime string, nonce string) *Request {
+func SubmitWorkRequest(id uint64, workerName string, jobID string, extraNonce2 string, nTime string, nonce string) *Request {
 	return &Request{
 		ID:     id,
 		Method: Submit,
@@ -594,7 +591,7 @@ func ParseSubmitWorkRequest(req *Request, miner string) (string, string, string,
 }
 
 // SubmitWorkResponse creates a submit response.
-func SubmitWorkResponse(id *uint64, status bool, err []interface{}) *Response {
+func SubmitWorkResponse(id uint64, status bool, err []interface{}) *Response {
 	return &Response{
 		ID:     id,
 		Error:  err,

@@ -27,7 +27,7 @@ var (
 	stratum = "stratum+tcp"
 )
 
-// Work represents the data recieved from a work notification. It comprises of
+// Work represents the data received from a work notification. It comprises of
 // hex encoded block header and pool target data.
 type Work struct {
 	jobID  string
@@ -37,6 +37,9 @@ type Work struct {
 
 // Miner represents a stratum mining client.
 type Miner struct {
+	// atomic variables first for alignment
+	id uint64
+
 	conn            net.Conn
 	core            *CPUMiner
 	encoder         *json.Encoder
@@ -44,7 +47,6 @@ type Miner struct {
 	work            *Work
 	workMtx         sync.RWMutex
 	config          *config
-	id              uint64
 	req             map[uint64]string
 	reqMtx          sync.RWMutex
 	chainCh         chan struct{}
@@ -81,9 +83,8 @@ func (m *Miner) fetchRequest(id uint64) string {
 // }
 
 // nextID returns the next message id for the client.
-func (m *Miner) nextID() *uint64 {
-	id := atomic.AddUint64(&m.id, 1)
-	return &id
+func (m *Miner) nextID() uint64 {
+	return atomic.AddUint64(&m.id, 1)
 }
 
 // authenticate sends a stratum miner authentication message.
@@ -95,7 +96,7 @@ func (m *Miner) authenticate() error {
 		return err
 	}
 
-	m.recordRequest(*id, req.Method)
+	m.recordRequest(id, req.Method)
 
 	return nil
 }
@@ -109,7 +110,7 @@ func (m *Miner) subscribe() error {
 		return err
 	}
 
-	m.recordRequest(*id, req.Method)
+	m.recordRequest(id, req.Method)
 
 	return nil
 }
@@ -223,7 +224,7 @@ out:
 
 		case network.ResponseType:
 			resp := msg.(*network.Response)
-			method := m.fetchRequest(*resp.ID)
+			method := m.fetchRequest(resp.ID)
 			if method == "" {
 				log.Error("No request found for response with id: ", resp.ID,
 					spew.Sdump(resp))

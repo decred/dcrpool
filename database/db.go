@@ -84,7 +84,10 @@ func CreateBuckets(db *bolt.DB) error {
 			// Persist the database version.
 			vbytes := make([]byte, 4)
 			binary.LittleEndian.PutUint32(vbytes, uint32(DBVersion))
-			pbkt.Put(VersionK, vbytes)
+			err = pbkt.Put(VersionK, vbytes)
+			if err != nil {
+				return fmt.Errorf("failed to put version: %v", err)
+			}
 		}
 
 		// Create all other buckets nested within.

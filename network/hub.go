@@ -57,6 +57,9 @@ const (
 )
 
 var (
+	// Convenience variable
+	zeroInt = new(big.Int).SetInt64(0)
+
 	// soloMaxGenTime is the threshold (in seconds) at which pool clients will
 	// generate a valid share when solo pool mode is activated. This is set to a
 	// high value to reduce the number of round trips to the pool by connected
@@ -94,6 +97,9 @@ type DifficultyData struct {
 // Hub maintains the set of active clients and facilitates message broadcasting
 // to all active clients.
 type Hub struct {
+	// atomic variables first for alignment
+	minedBlocks uint32
+
 	db                *bolt.DB
 	httpc             *http.Client
 	cfg               *HubConfig
@@ -115,7 +121,6 @@ type Hub struct {
 	ctx               context.Context
 	cancel            context.CancelFunc
 	txFeeReserve      dcrutil.Amount
-	minedBlocks       uint32
 	lastWorkHeight    uint32
 	lastPaymentHeight uint32
 	endpoints         []*Endpoint
@@ -177,7 +182,7 @@ func (h *Hub) GenerateDifficultyData() error {
 	return nil
 }
 
-// processWork parses work recieved and dispatches a work notification to all
+// processWork parses work received and dispatches a work notification to all
 // connected pool clients.
 func (h *Hub) processWork(headerE string, target string) {
 	log.Tracef("New Work (header: %v , target: %v)", headerE,
@@ -233,7 +238,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		httpc:     httpc,
 		limiter:   limiter,
 		cfg:       hcfg,
-		hashRate:  dividend.ZeroInt,
+		hashRate:  zeroInt,
 		poolDiff:  make(map[string]*DifficultyData),
 		Broadcast: make(chan Message),
 		clients:   0,
@@ -388,7 +393,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 func GenerateExtraNonce1() string {
 	id := make([]byte, 4)
 	rand.Read(id)
-	return hex.EncodeToString(id[:])
+	return hex.EncodeToString(id)
 }
 
 // AddClient records a connected client and the hash rate it contributes to
@@ -469,14 +474,14 @@ func (h *Hub) Persist() error {
 		}
 
 		// Persist the last payment height.
-		binary.LittleEndian.PutUint32(vbytes, uint32(h.lastPaymentHeight))
+		binary.LittleEndian.PutUint32(vbytes, h.lastPaymentHeight)
 		err = pbkt.Put(dividend.LastPaymentHeight, vbytes)
 		if err != nil {
 			return err
 		}
 
 		// Persist the mined blocks count.
-		binary.LittleEndian.PutUint32(vbytes, uint32(h.minedBlocks))
+		binary.LittleEndian.PutUint32(vbytes, h.minedBlocks)
 		return pbkt.Put(MinedBlocks, vbytes)
 	})
 
@@ -787,7 +792,7 @@ func (h *Hub) handleChainUpdates() {
 				}
 
 				// Process mature payments.
-				err = h.ProcessPayments(uint32(header.Height))
+				err = h.ProcessPayments(header.Height)
 				if err != nil {
 					log.Errorf("Failed to process payments: %v", err)
 					h.cancel()
@@ -824,7 +829,7 @@ func (h *Hub) handleChainUpdates() {
 				// If the disconnected block is an accepted work from the pool,
 				// delete all associated payments.
 				payments, err := dividend.FetchPendingPaymentsAtHeight(h.db,
-					uint32(header.Height))
+					header.Height)
 				if err != nil {
 					log.Errorf("Failed to fetch pending payments"+
 						" at height (%v): %v", header.Height, err)

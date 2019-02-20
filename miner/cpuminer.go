@@ -38,7 +38,7 @@ type SubmitWorkData struct {
 
 // CPUMiner provides facilities for solving blocks using the CPU in a
 // concurrency-safe manner. It consists of a hash rate monitor and
-// worker goroutines which solve the recieved block.
+// worker goroutines which solve the received block.
 type CPUMiner struct {
 	miner        *Miner
 	started      bool
@@ -196,7 +196,7 @@ out:
 				m.miner.config.User)
 			req := network.SubmitWorkRequest(m.miner.nextID(), worker, jobID,
 				m.workData.extraNonce2, m.workData.nTime, m.workData.nonce)
-			m.miner.recordRequest(*req.ID, network.Submit)
+			m.miner.recordRequest(req.ID, network.Submit)
 			err := m.miner.encoder.Encode(req)
 			if err != nil {
 				log.Errorf("Failed to encode request: %v", err)
