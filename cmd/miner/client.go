@@ -274,7 +274,7 @@ out:
 				m.subscribed = true
 
 			case network.Submit:
-				accepted, strErr, err := network.ParseSubmitWorkResponse(resp)
+				accepted, sErr, err := network.ParseSubmitWorkResponse(resp)
 				if err != nil {
 					log.Errorf("Parse submit response error: %v", err)
 					m.cancel()
@@ -283,16 +283,9 @@ out:
 
 				log.Tracef("Accepted status is %v", accepted)
 
-				if strErr != nil {
-					code, msg, err := network.ParseStratumError(strErr)
-					if err != nil {
-						log.Errorf("Failed to parse stratum error: %v", err)
-						m.cancel()
-						continue
-					}
-
-					log.Errorf("Stratum mining.submit error: [%d, %s, null]",
-						code, msg)
+				if sErr != nil {
+					log.Errorf("Stratum mining.submit error: [%d, %s, %s]",
+						sErr.Code, sErr.Message, sErr.Traceback)
 					continue
 				}
 

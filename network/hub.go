@@ -6,7 +6,6 @@ package network
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -36,10 +35,6 @@ const (
 	// That is, it is highly improbable for the the chain to reorg beyond six
 	// blocks from the chain tip.
 	MaxReorgLimit = 6
-
-	// uint256Size is the number of bytes needed to represent an unsigned
-	// 256-bit integer.
-	uint256Size = 32
 
 	// getworkDataLen is the length of the data field of the getwork RPC.
 	// It consists of the serialized block header plus the internal blake256
@@ -387,13 +382,6 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 	go h.handleChainUpdates()
 
 	return h, nil
-}
-
-// GenerateExtraNonce1 generates a random 4-byte extraNonce1 value.
-func GenerateExtraNonce1() string {
-	id := make([]byte, 4)
-	rand.Read(id)
-	return hex.EncodeToString(id)
 }
 
 // AddClient records a connected client and the hash rate it contributes to
@@ -930,44 +918,4 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	h.lastPaymentHeight = height
 
 	return nil
-}
-
-// BigToLEUint256 returns the passed big integer as an unsigned 256-bit integer
-// encoded as little-endian bytes.  Numbers which are larger than the max
-// unsigned 256-bit integer are truncated.
-func BigToLEUint256(n *big.Int) [uint256Size]byte {
-	// Pad or truncate the big-endian big int to correct number of bytes.
-	nBytes := n.Bytes()
-	nlen := len(nBytes)
-	pad := 0
-	start := 0
-	if nlen <= uint256Size {
-		pad = uint256Size - nlen
-	} else {
-		start = nlen - uint256Size
-	}
-	var buf [uint256Size]byte
-	copy(buf[pad:], nBytes[start:])
-
-	// Reverse the bytes to little endian and return them.
-	for i := 0; i < uint256Size/2; i++ {
-		buf[i], buf[uint256Size-1-i] = buf[uint256Size-1-i], buf[i]
-	}
-	return buf
-}
-
-// LEUint256ToBig returns the passed unsigned 256-bit integer
-// encoded as little-endian as a big integer.
-func LEUint256ToBig(n [uint256Size]byte) *big.Int {
-	var buf [uint256Size]byte
-	copy(buf[:], n[:])
-
-	// Reverse the bytes to big endian and create a big.Int.
-	for i := 0; i < uint256Size/2; i++ {
-		buf[i], buf[uint256Size-1-i] = buf[uint256Size-1-i], buf[i]
-	}
-
-	v := new(big.Int).SetBytes(buf[:])
-
-	return v
 }

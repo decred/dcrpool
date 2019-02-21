@@ -12,6 +12,7 @@ import (
 	"github.com/decred/dcrd/chaincfg"
 
 	"github.com/dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/util"
 )
 
 func TestTargetConversion(t *testing.T) {
@@ -24,8 +25,8 @@ func TestTargetConversion(t *testing.T) {
 		}
 
 		compact := blockchain.BigToCompact(target)
-		leu256 := BigToLEUint256(target)
-		cBig := LEUint256ToBig(leu256)
+		leu256 := util.BigToLEUint256(target)
+		cBig := util.LEUint256ToBig(leu256)
 		if target.Cmp(cBig) != 0 {
 			t.Errorf("invalid LEUint256 to big.Int conversion (%v) expected "+
 				"%v, got %v", miner, target, cBig)

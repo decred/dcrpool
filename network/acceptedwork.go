@@ -14,6 +14,7 @@ import (
 
 	"github.com/dnldd/dcrpool/database"
 	"github.com/dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/util"
 )
 
 // AcceptedWork represents an accepted work submission to the network.
@@ -28,7 +29,7 @@ type AcceptedWork struct {
 
 // AcceptedWorkID generates a unique id for the work accepted by the network.
 func AcceptedWorkID(blockHash string, blockHeight uint32) []byte {
-	heightE := hex.EncodeToString(HeightToBigEndianBytes(blockHeight))
+	heightE := hex.EncodeToString(util.HeightToBigEndianBytes(blockHeight))
 	id := fmt.Sprintf("%v%v", heightE, blockHash)
 	return []byte(id)
 }
@@ -171,7 +172,7 @@ func (work *AcceptedWork) FilterParentAcceptedWork(db *bolt.DB) (*AcceptedWork, 
 			return database.ErrBucketNotFound(database.WorkBkt)
 		}
 
-		heightB := HeightToBigEndianBytes(work.Height - 1)
+		heightB := util.HeightToBigEndianBytes(work.Height - 1)
 		prefix := make([]byte, hex.EncodedLen(len(heightB)))
 		hex.Encode(prefix, heightB)
 
@@ -240,7 +241,7 @@ func PruneAcceptedWork(db *bolt.DB, height uint32) error {
 				return err
 			}
 
-			workHeight := BigEndianBytesToHeight(workHeightB)
+			workHeight := util.BigEndianBytesToHeight(workHeightB)
 			if workHeight < height {
 				toDelete = append(toDelete, k)
 			}

@@ -5,13 +5,13 @@
 package dividend
 
 import (
-	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	bolt "github.com/coreos/bbolt"
+	"github.com/dchest/blake256"
 	"github.com/dnldd/dcrpool/database"
 )
 
@@ -26,7 +26,7 @@ type Account struct {
 // AccountID forms a unique id for an account using the provided name
 // and address.
 func AccountID(name, address string) *string {
-	hasher := sha1.New()
+	hasher := blake256.New()
 	hasher.Write([]byte(fmt.Sprintf("%s.%s", address, name)))
 	id := hex.EncodeToString(hasher.Sum(nil))
 	return &id

@@ -148,6 +148,8 @@ func (m *CPUMiner) solveBlock(headerB []byte, target *big.Int, ticker *time.Tick
 
 					m.updateHashes <- hashesCompleted
 					log.Tracef("Solved block header is: %v", spew.Sdump(header))
+					log.Infof("Solved block hash at height (%v) is (%v)",
+						header.Height, header.BlockHash().String())
 					return true
 				}
 			}

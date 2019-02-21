@@ -36,7 +36,7 @@ func main() {
 	log.Infof("Version: %s", version())
 	log.Infof("Runtime: Go version %s", runtime.Version())
 	log.Infof("Home dir: %s", cfg.HomeDir)
-	log.Infof("Started poolclient.")
+	log.Infof("Started miner.")
 
 	// Initialize the client.
 	miner, err := NewMiner(cfg)

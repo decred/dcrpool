@@ -6,8 +6,8 @@ package network
 
 import (
 	"bufio"
-	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -24,6 +24,7 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/dnldd/dcrpool/database"
 	"github.com/dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/util"
 )
 
 // Client represents a client connection.
@@ -61,6 +62,14 @@ func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
 	}
 }
 
+// GenerateExtraNonce1 generates a random 4-byte extraNonce1 for the
+// client.
+func (c *Client) GenerateExtraNonce1() {
+	id := make([]byte, 4)
+	rand.Read(id)
+	c.extraNonce1 = hex.EncodeToString(id)
+}
+
 // recordRequest logs a request as an id/method pair.
 // func (c *Client) recordRequest(id uint64, method string) {
 //     c.reqMtx.Lock()
@@ -91,6 +100,7 @@ func (c *Client) fetchRequest(id uint64) string {
 
 // Shutdown terminates all client processes and established connections.
 func (c *Client) Shutdown() {
+	c.endpoint.hub.limiter.RemoveLimiter(c.ip)
 	c.endpoint.hub.RemoveClient(c.endpoint.miner)
 	close(c.ch)
 	err := c.conn.Close()
@@ -112,7 +122,7 @@ func (c *Client) claimWeightedShare() {
 func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	if !allowed {
 		log.Errorf("Failed to process authorize request, limit reached")
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := AuthorizeResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -122,7 +132,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	username, err := ParseAuthorizeRequest(req)
 	if err != nil {
 		log.Errorf("Failed to parse authorize request: %v", err)
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := AuthorizeResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -132,7 +142,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	if len(parts) != 2 {
 		log.Errorf("Invalid username format, expected `address.id`,got %v",
 			username)
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := AuthorizeResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -146,7 +156,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	addr, err := dcrutil.DecodeAddress(address)
 	if err != nil {
 		log.Errorf("Failed to decode address: %v", err)
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := AuthorizeResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -155,7 +165,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	if !addr.IsForNet(c.endpoint.hub.cfg.ActiveNet) {
 		log.Errorf("Address (%v) is not associated with the active network"+
 			" (%v)", address, c.endpoint.hub.cfg.ActiveNet.Name)
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := AuthorizeResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -166,7 +176,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	if err != nil && err.Error() !=
 		database.ErrValueNotFound([]byte(*id)).Error() {
 		log.Errorf("Failed to fetch account: %v", err)
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := AuthorizeResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -176,7 +186,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	account, err := dividend.NewAccount(name, address)
 	if err != nil {
 		log.Errorf("Failed to create account: %v", err)
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := AuthorizeResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -185,7 +195,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	err = account.Create(c.endpoint.hub.db)
 	if err != nil {
 		log.Errorf("Failed to persist account: %v", err)
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := AuthorizeResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -201,7 +211,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 	if !allowed {
 		log.Errorf("Failed to process subscribe request, limit reached")
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := SubscribeResponse(req.ID, "", "", err)
 		c.ch <- resp
 		return
@@ -210,13 +220,14 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 	_, nid, err := ParseSubscribeRequest(req)
 	if err != nil {
 		log.Errorf("Failed to parse subscribe request: %v", err)
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := SubscribeResponse(req.ID, "", "", err)
 		c.ch <- resp
 		return
 	}
 
-	c.extraNonce1 = GenerateExtraNonce1()
+	c.GenerateExtraNonce1()
+
 	if nid == "" {
 		nid = fmt.Sprintf("mn%v", c.extraNonce1)
 	}
@@ -240,7 +251,7 @@ func (c *Client) setDifficulty() {
 func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	if !allowed {
 		log.Errorf("Failed to process submit work request, limit reached")
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := SubmitWorkResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -252,7 +263,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		c.endpoint.miner)
 	if err != nil {
 		log.Errorf("Failed to parse submit work request: %v", err)
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := SubmitWorkResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -261,7 +272,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	job, err := FetchJob(c.endpoint.hub.db, []byte(jobID))
 	if err != nil {
 		log.Errorf("Failed to fetch job: %v", err)
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := SubmitWorkResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -271,13 +282,15 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		c.extraNonce1, extraNonce2E, nTimeE, nonceE, c.endpoint.miner)
 	if err != nil {
 		log.Errorf("Failed to generate solved block header: %v", err)
-		err := NewStratumError(Unknown)
+		err := NewStratumError(Unknown, nil)
 		resp := SubmitWorkResponse(req.ID, false, err)
 		c.ch <- resp
 		return
 	}
 
-	log.Tracef("solved block header is: %v", spew.Sdump(header))
+	log.Tracef("Solved block header is: %v", spew.Sdump(header))
+	log.Infof("Solved block hash at height (%v) is (%v)", header.Height,
+		header.BlockHash().String())
 
 	poolTarget := c.endpoint.diffData.target
 	target := blockchain.CompactToBig(header.Bits)
@@ -293,7 +306,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	if hashNum.Cmp(poolTarget) > 0 {
 		log.Errorf("submitted work is not less than the "+
 			"client's (%v) pool target", c.endpoint.miner)
-		err := NewStratumError(LowDifficultyShare)
+		err := NewStratumError(LowDifficultyShare, nil)
 		resp := SubmitWorkResponse(req.ID, false, err)
 		c.ch <- resp
 		return
@@ -321,7 +334,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		headerB, err := header.Bytes()
 		if err != nil {
 			log.Errorf("Failed to fetch block header bytes: %v", err)
-			err := NewStratumError(Unknown)
+			err := NewStratumError(Unknown, nil)
 			resp := SubmitWorkResponse(req.ID, false, err)
 			c.ch <- resp
 			return
@@ -335,7 +348,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		accepted, err := c.endpoint.hub.SubmitWork(&submission)
 		if err != nil {
 			log.Errorf("Failed to submit work request: %v", err)
-			err := NewStratumError(Unknown)
+			err := NewStratumError(Unknown, nil)
 			resp := SubmitWorkResponse(req.ID, false, err)
 			c.ch <- resp
 			return
@@ -343,7 +356,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 
 		log.Tracef("Work accepted status is: %v", accepted)
 
-		// Remove the aceepted work record if it's not accepted by the network.
+		// Remove the work record if it is not accepted by the network.
 		if !accepted {
 			work.Delete(c.endpoint.hub.db)
 		}
@@ -418,33 +431,6 @@ func (c *Client) Listen() {
 	}
 }
 
-// ReversePrevBlockWords reverses each 4-byte word in the provided hex encoded
-// previous block hash.
-func ReversePrevBlockWords(hashE string) string {
-	buf := bytes.NewBufferString("")
-	for i := 0; i < len(hashE); i += 8 {
-		buf.WriteString(hashE[i+6 : i+8])
-		buf.WriteString(hashE[i+4 : i+6])
-		buf.WriteString(hashE[i+2 : i+4])
-		buf.WriteString(hashE[i : i+2])
-	}
-	return buf.String()
-}
-
-// HexReversed reverses a hex string.
-func HexReversed(in string) (string, error) {
-	if len(in)%2 != 0 {
-		return "", fmt.Errorf("incorrect hex input length")
-	}
-
-	buf := bytes.NewBufferString("")
-	for i := len(in) - 1; i > -1; i -= 2 {
-		buf.WriteByte(in[i-1])
-		buf.WriteByte(in[i])
-	}
-	return buf.String(), nil
-}
-
 // handleAntminerDR3 prepares work notifications for the Antminer DR3.
 func (c *Client) handleAntminerDR3Work(req *Request) {
 	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
@@ -455,21 +441,21 @@ func (c *Client) handleAntminerDR3Work(req *Request) {
 
 	// The DR3 requires the nBits and nTime fields of a mining.notify message
 	// as big endian.
-	nBits, err = HexReversed(nBits)
+	nBits, err = util.HexReversed(nBits)
 	if err != nil {
 		log.Errorf("Failed to hex reverse nBits: %v", err)
 		c.cancel()
 		return
 	}
 
-	nTime, err = HexReversed(nTime)
+	nTime, err = util.HexReversed(nTime)
 	if err != nil {
 		log.Errorf("Failed to hex reverse nTime: %v", err)
 		c.cancel()
 		return
 	}
 
-	prevBlockRev := ReversePrevBlockWords(prevBlock)
+	prevBlockRev := util.ReversePrevBlockWords(prevBlock)
 	workNotif := WorkNotification(jobID, prevBlockRev,
 		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
 
@@ -493,21 +479,21 @@ func (c *Client) handleInnosiliconD9Work(req *Request) {
 
 	// The D9 requires the nBits and nTime fields of a mining.notify message
 	// as big endian.
-	nBits, err = HexReversed(nBits)
+	nBits, err = util.HexReversed(nBits)
 	if err != nil {
 		log.Errorf("Failed to hex reverse nBits: %v", err)
 		c.cancel()
 		return
 	}
 
-	nTime, err = HexReversed(nTime)
+	nTime, err = util.HexReversed(nTime)
 	if err != nil {
 		log.Errorf("Failed to hex reverse nTime: %v", err)
 		c.cancel()
 		return
 	}
 
-	prevBlockRev := ReversePrevBlockWords(prevBlock)
+	prevBlockRev := util.ReversePrevBlockWords(prevBlock)
 	workNotif := WorkNotification(jobID, prevBlockRev,
 		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
 
@@ -533,7 +519,7 @@ func (c *Client) handleWhatsminerD1Work(req *Request) {
 	// as little endian. Since they're already in the preferred format there
 	// is no need to reverse bytes for nBits and nTime.
 
-	prevBlockRev := ReversePrevBlockWords(prevBlock)
+	prevBlockRev := util.ReversePrevBlockWords(prevBlock)
 	workNotif := WorkNotification(jobID, prevBlockRev,
 		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
 

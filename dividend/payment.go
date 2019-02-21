@@ -225,8 +225,9 @@ func GeneratePaymentBundles(payments []*Payment) []*PaymentBundle {
 	return bundles
 }
 
-// FetchPendingPayments fetches all unpaid payments.
-func FetchPendingPayments(db *bolt.DB) ([]*Payment, error) {
+// FilterPayments iterates the payments bucket, the result set is generated
+// based on the provided filter.
+func FilterPayments(db *bolt.DB, filter func(payment *Payment) bool) ([]*Payment, error) {
 	payments := make([]*Payment, 0)
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
@@ -246,14 +247,27 @@ func FetchPendingPayments(db *bolt.DB) ([]*Payment, error) {
 				return err
 			}
 
-			if payment.PaidOnHeight == 0 {
+			if filter(&payment) {
 				payments = append(payments, &payment)
 			}
 		}
 
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
+	return payments, nil
+}
+
+// FetchPendingPayments fetches all unpaid payments.
+func FetchPendingPayments(db *bolt.DB) ([]*Payment, error) {
+	filter := func(payment *Payment) bool {
+		return payment.PaidOnHeight == 0
+	}
+
+	payments, err := FilterPayments(db, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -264,33 +278,12 @@ func FetchPendingPayments(db *bolt.DB) ([]*Payment, error) {
 // FetchMaturePendingPayments fetches all payments past their estimated
 // maturities which have not been paid yet.
 func FetchMaturePendingPayments(db *bolt.DB, height uint32) ([]*Payment, error) {
-	payments := make([]*Payment, 0)
-	err := db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.PaymentBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.PaymentBkt)
-		}
+	filter := func(payment *Payment) bool {
+		return payment.PaidOnHeight == 0 &&
+			payment.EstimatedMaturity <= height
+	}
 
-		cursor := bkt.Cursor()
-		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			var payment Payment
-			err := json.Unmarshal(v, &payment)
-			if err != nil {
-				return err
-			}
-
-			if payment.PaidOnHeight == 0 &&
-				payment.EstimatedMaturity <= height {
-				payments = append(payments, &payment)
-			}
-		}
-
-		return nil
-	})
+	payments, err := FilterPayments(db, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -301,32 +294,11 @@ func FetchMaturePendingPayments(db *bolt.DB, height uint32) ([]*Payment, error) 
 // FetchPendingPaymentsAtHeight fetches all pending payments at the provided
 // height.
 func FetchPendingPaymentsAtHeight(db *bolt.DB, height uint32) ([]*Payment, error) {
-	payments := make([]*Payment, 0)
-	err := db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.PaymentBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.PaymentBkt)
-		}
+	filter := func(payment *Payment) bool {
+		return payment.PaidOnHeight == 0 && payment.Height == height
+	}
 
-		cursor := bkt.Cursor()
-		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			var payment Payment
-			err := json.Unmarshal(v, &payment)
-			if err != nil {
-				return err
-			}
-
-			if payment.PaidOnHeight == 0 && payment.Height == height {
-				payments = append(payments, &payment)
-			}
-		}
-
-		return nil
-	})
+	payments, err := FilterPayments(db, filter)
 	if err != nil {
 		return nil, err
 	}

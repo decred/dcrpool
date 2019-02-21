@@ -3,6 +3,7 @@ module github.com/dnldd/dcrpool
 require (
 	github.com/coreos/bbolt v1.3.2
 	github.com/davecgh/go-spew v1.1.1
+	github.com/dchest/blake256 v1.0.0
 	github.com/decred/dcrd/blockchain v1.1.1
 	github.com/decred/dcrd/chaincfg v1.3.0
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.1
