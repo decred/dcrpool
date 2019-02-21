@@ -6,12 +6,12 @@ package network
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"time"
 
 	"github.com/dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/util"
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/dnldd/dcrpool/database"
@@ -24,24 +24,10 @@ type Job struct {
 	Header string `json:"header"`
 }
 
-// HeightToBigEndianBytes returns an 4-byte big endian representation of
-// the provided block height.
-func HeightToBigEndianBytes(height uint32) []byte {
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, height)
-	return b
-}
-
-// BigEndianBytesToHeight returns the block height of the provided 4-byte big
-// endian representation.
-func BigEndianBytesToHeight(b []byte) uint32 {
-	return binary.BigEndian.Uint32(b[0:4])
-}
-
 // GenerateJobID generates a unique job id of the provided block height.
 func GenerateJobID(height uint32) (string, error) {
 	buf := bytes.Buffer{}
-	buf.Write(HeightToBigEndianBytes(height))
+	buf.Write(util.HeightToBigEndianBytes(height))
 	buf.Write(dividend.NanoToBigEndianBytes(time.Now().UnixNano()))
 	return hex.EncodeToString(buf.Bytes()), nil
 }
@@ -117,10 +103,9 @@ func (job *Job) Delete(db *bolt.DB) error {
 	return database.Delete(db, database.JobBkt, []byte(job.UUID))
 }
 
-// PruneJobs removes all jobs entries with heights less than
-// or equal to the provided height.
+// PruneJobs removes all jobs with heights less than the provided height.
 func PruneJobs(db *bolt.DB, height uint32) error {
-	heightBE := HeightToBigEndianBytes(height)
+	heightBE := util.HeightToBigEndianBytes(height)
 	err := db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		if pbkt == nil {
@@ -139,7 +124,7 @@ func PruneJobs(db *bolt.DB, height uint32) error {
 				return err
 			}
 
-			if bytes.Compare(height, heightBE) <= 0 {
+			if bytes.Compare(height, heightBE) < 0 {
 				toDelete = append(toDelete, k)
 			}
 		}

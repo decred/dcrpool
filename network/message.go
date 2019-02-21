@@ -14,6 +14,7 @@ import (
 
 	"github.com/decred/dcrd/wire"
 	"github.com/dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/util"
 )
 
 // Message types.
@@ -47,49 +48,39 @@ const (
 	ExtraNonce2Size = 4
 )
 
+// StratumError represents a stratum error message.
+type StratumError struct {
+	Code      uint32  `json:"code"`
+	Message   string  `json:"message"`
+	Traceback *string `json:"traceback"`
+}
+
 // NewStratumError creates a stratum error instance.
-func NewStratumError(code uint64) []interface{} {
-	errData := make([]interface{}, 3)
-	errData[0] = code
-	errData[2] = nil
+func NewStratumError(code uint32, traceback *string) *StratumError {
+	var message string
 
 	switch code {
 	case StaleJob:
-		errData[1] = "Stale Job"
+		message = "Stale Job"
 	case DuplicateShare:
-		errData[1] = "Duplicate share"
+		message = "Duplicate share"
 	case LowDifficultyShare:
-		errData[1] = "Low difficulty share"
+		message = "Low difficulty share"
 	case UnauthorizedWorker:
-		errData[1] = "Unauthorized worker"
+		message = "Unauthorized worker"
 	case NotSubscribed:
-		errData[1] = "Not subscribed"
+		message = "Not subscribed"
+	case Unknown:
+		fallthrough
 	default:
-		errData[1] = "Other/Unknown"
+		message = "Other/Unknown"
 	}
 
-	return errData
-}
-
-// ParseStratumError resolves a stratum error into its components.
-func ParseStratumError(err []interface{}) (uint64, string, error) {
-	if err == nil {
-		return 0, "", fmt.Errorf("nil stratum error provided")
+	return &StratumError{
+		Code:      code,
+		Message:   message,
+		Traceback: traceback,
 	}
-
-	errCode, ok := err[0].(float64)
-	if !ok {
-		return 0, "", fmt.Errorf("failed to parse error code parameter")
-	}
-
-	code := uint64(errCode)
-
-	message, ok := err[1].(string)
-	if !ok {
-		return 0, "", fmt.Errorf("failed to parse message parameter")
-	}
-
-	return code, message, nil
 }
 
 // Message defines a message interface.
@@ -121,7 +112,7 @@ func NewRequest(id uint64, method string, params interface{}) *Request {
 // Response defines a response message.
 type Response struct {
 	ID     uint64        `json:"id"`
-	Error  []interface{} `json:"error,omitempty"`
+	Error  *StratumError `json:"error"`
 	Result interface{}   `json:"result,omitempty"`
 }
 
@@ -131,7 +122,7 @@ func (req *Response) MessageType() string {
 }
 
 // NewResponse creates a response instance.
-func NewResponse(id uint64, result interface{}, err []interface{}) *Response {
+func NewResponse(id uint64, result interface{}, err *StratumError) *Response {
 	return &Response{
 		ID:     id,
 		Error:  err,
@@ -191,7 +182,7 @@ func ParseAuthorizeRequest(req *Request) (string, error) {
 }
 
 // AuthorizeResponse creates an authorize response.
-func AuthorizeResponse(id uint64, status bool, err []interface{}) *Response {
+func AuthorizeResponse(id uint64, status bool, err *StratumError) *Response {
 	return &Response{
 		ID:     id,
 		Error:  err,
@@ -200,7 +191,7 @@ func AuthorizeResponse(id uint64, status bool, err []interface{}) *Response {
 }
 
 // ParseAuthorizeResponse resolves an authorize response into its components.
-func ParseAuthorizeResponse(resp *Response) (bool, []interface{}, error) {
+func ParseAuthorizeResponse(resp *Response) (bool, *StratumError, error) {
 	status, ok := resp.Result.(bool)
 	if !ok {
 		return false, nil, fmt.Errorf("failed to parse result parameter")
@@ -256,7 +247,7 @@ func ParseSubscribeRequest(req *Request) (string, string, error) {
 }
 
 // SubscribeResponse creates a mining.subscribe response.
-func SubscribeResponse(id uint64, notifyID string, extraNonce1 string, err []interface{}) *Response {
+func SubscribeResponse(id uint64, notifyID string, extraNonce1 string, err *StratumError) *Response {
 	if err != nil {
 		return &Response{
 			ID:     id,
@@ -277,7 +268,8 @@ func SubscribeResponse(id uint64, notifyID string, extraNonce1 string, err []int
 // ParseSubscribeResponse resolves a subscribe response into its components.
 func ParseSubscribeResponse(resp *Response) (string, string, string, uint64, error) {
 	if resp.Error != nil {
-		return "", "", "", 0, fmt.Errorf("%s", resp.Error)
+		return "", "", "", 0, fmt.Errorf("%d, %s, %v",
+			resp.Error.Code, resp.Error.Message, resp.Error.Traceback)
 	}
 
 	res, ok := resp.Result.([]interface{})
@@ -466,13 +458,13 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 	// nonce values submitted are big endian, they have to be reversed before
 	// block header reconstruction.
 	case dividend.AntminerDR3, dividend.AntminerDR5:
-		nTimeERev, err := HexReversed(nTimeE)
+		nTimeERev, err := util.HexReversed(nTimeE)
 		if err != nil {
 			return nil, err
 		}
 		copy(headerEB[272:280], []byte(nTimeERev))
 
-		nonceERev, err := HexReversed(nonceE)
+		nonceERev, err := util.HexReversed(nonceE)
 		if err != nil {
 			return nil, err
 		}
@@ -485,13 +477,13 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 	// big endian, they have to be reversed to little endian before header
 	// reconstruction.
 	case dividend.InnosiliconD9:
-		nTimeERev, err := HexReversed(nTimeE)
+		nTimeERev, err := util.HexReversed(nTimeE)
 		if err != nil {
 			return nil, err
 		}
 		copy(headerEB[272:280], []byte(nTimeERev))
 
-		nonceERev, err := HexReversed(nonceE)
+		nonceERev, err := util.HexReversed(nonceE)
 		if err != nil {
 			return nil, err
 		}
@@ -505,13 +497,13 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 	// submitted are big endian, they have to be reversed to little endian
 	// before header reconstruction.
 	case dividend.WhatsminerD1:
-		nTimeERev, err := HexReversed(nTimeE)
+		nTimeERev, err := util.HexReversed(nTimeE)
 		if err != nil {
 			return nil, err
 		}
 		copy(headerEB[272:280], []byte(nTimeERev))
 
-		nonceERev, err := HexReversed(nonceE)
+		nonceERev, err := util.HexReversed(nonceE)
 		if err != nil {
 			return nil, err
 		}
@@ -591,7 +583,7 @@ func ParseSubmitWorkRequest(req *Request, miner string) (string, string, string,
 }
 
 // SubmitWorkResponse creates a submit response.
-func SubmitWorkResponse(id uint64, status bool, err []interface{}) *Response {
+func SubmitWorkResponse(id uint64, status bool, err *StratumError) *Response {
 	return &Response{
 		ID:     id,
 		Error:  err,
@@ -600,7 +592,7 @@ func SubmitWorkResponse(id uint64, status bool, err []interface{}) *Response {
 }
 
 // ParseSubmitWorkResponse resolves a submit response into its components.
-func ParseSubmitWorkResponse(resp *Response) (bool, []interface{}, error) {
+func ParseSubmitWorkResponse(resp *Response) (bool, *StratumError, error) {
 	status, ok := resp.Result.(bool)
 	if !ok {
 		return false, nil, fmt.Errorf("failed to parse result parameter")

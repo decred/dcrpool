@@ -58,26 +58,19 @@ func (r *RateLimiter) AddRequestLimiter(ip string) *RequestLimiter {
 	return limiter
 }
 
-// GetRequestLimiter fetches the request limiter referenced by the provided
+// GetLimiter fetches the request limiter referenced by the provided
 // IP address.
-func (r *RateLimiter) GetRequestLimiter(ip string) *RequestLimiter {
+func (r *RateLimiter) GetLimiter(ip string) *RequestLimiter {
 	r.mutex.RLock()
 	limiter := r.limiters[ip]
 	r.mutex.RUnlock()
 	return limiter
 }
 
-// DiscardLimiters iterates through the limiters set and removes all
-// limiters that have not received a request in five minutes or more.
-func (r *RateLimiter) DiscardLimiters() {
-	now := time.Now()
-	fiveMinAgo := uint32(now.Add(-(time.Minute * 5)).Unix())
+// RemoveLimiter deletes the request limiter associated with the provided ip.
+func (r *RateLimiter) RemoveLimiter(ip string) {
 	r.mutex.Lock()
-	for ip, limiter := range r.limiters {
-		if limiter.lastAllowedRequest < fiveMinAgo {
-			delete(r.limiters, ip)
-		}
-	}
+	delete(r.limiters, ip)
 	r.mutex.Unlock()
 }
 
@@ -86,7 +79,7 @@ func (r *RateLimiter) DiscardLimiters() {
 // If no request limiter is found for the provided IP address a new one is
 // created.
 func (r *RateLimiter) WithinLimit(ip string) bool {
-	reqLimiter := r.GetRequestLimiter(ip)
+	reqLimiter := r.GetLimiter(ip)
 
 	// create a new limiter if the incoming request is from a new client.
 	if reqLimiter == nil {

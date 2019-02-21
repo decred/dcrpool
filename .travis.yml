@@ -7,5 +7,5 @@ install:
 script:
   - export GO111MODULE=on
   - go build
-  - (cd miner && go build)
+  - (cd cmd/miner && go build)
   - ./goclean.sh
