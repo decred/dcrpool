@@ -90,7 +90,7 @@ type Message interface {
 
 // Request defines a request message.
 type Request struct {
-	ID     uint64      `json:"id"`
+	ID     *uint64     `json:"id"`
 	Method string      `json:"method"`
 	Params interface{} `json:"params"`
 }
@@ -101,7 +101,7 @@ func (req *Request) MessageType() string {
 }
 
 // NewRequest creates a request instance.
-func NewRequest(id uint64, method string, params interface{}) *Request {
+func NewRequest(id *uint64, method string, params interface{}) *Request {
 	return &Request{
 		ID:     id,
 		Method: method,
@@ -140,6 +140,9 @@ func IdentifyMessage(data []byte) (Message, string, error) {
 	}
 
 	if req.Method != "" {
+		if req.ID == nil {
+			return &req, NotificationType, nil
+		}
 		return &req, RequestType, nil
 	}
 
@@ -153,7 +156,7 @@ func IdentifyMessage(data []byte) (Message, string, error) {
 }
 
 // AuthorizeRequest creates an authorize request message.
-func AuthorizeRequest(id uint64, name string, address string) *Request {
+func AuthorizeRequest(id *uint64, name string, address string) *Request {
 	user := fmt.Sprintf("%s.%s", address, name)
 	return &Request{
 		ID:     id,
@@ -201,7 +204,7 @@ func ParseAuthorizeResponse(resp *Response) (bool, *StratumError, error) {
 }
 
 // SubscribeRequest creates a subscribe request message.
-func SubscribeRequest(id uint64, userAgent string, version string, notifyID string) *Request {
+func SubscribeRequest(id *uint64, userAgent string, version string, notifyID string) *Request {
 	agent := fmt.Sprintf("%v/%v", userAgent, version)
 	params := []string{agent}
 	if notifyID != "" {
@@ -529,7 +532,7 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 }
 
 // SubmitWorkRequest creates a submit request message.
-func SubmitWorkRequest(id uint64, workerName string, jobID string, extraNonce2 string, nTime string, nonce string) *Request {
+func SubmitWorkRequest(id *uint64, workerName string, jobID string, extraNonce2 string, nTime string, nonce string) *Request {
 	return &Request{
 		ID:     id,
 		Method: Submit,

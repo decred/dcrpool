@@ -90,7 +90,7 @@ func (m *Miner) nextID() uint64 {
 // authenticate sends a stratum miner authentication message.
 func (m *Miner) authenticate() error {
 	id := m.nextID()
-	req := network.AuthorizeRequest(id, m.config.User, m.config.Address)
+	req := network.AuthorizeRequest(&id, m.config.User, m.config.Address)
 	err := m.encoder.Encode(req)
 	if err != nil {
 		return err
@@ -104,7 +104,7 @@ func (m *Miner) authenticate() error {
 // subscribe sends a stratum miner subscribe message.
 func (m *Miner) subscribe() error {
 	id := m.nextID()
-	req := network.SubscribeRequest(id, "cpuminer", version(), m.notifyID)
+	req := network.SubscribeRequest(&id, "cpuminer", version(), m.notifyID)
 	err := m.encoder.Encode(req)
 	if err != nil {
 		return err

@@ -378,7 +378,7 @@ func PayPerShare(db *bolt.DB, total dcrutil.Amount, poolFee float64, height uint
 		return err
 	}
 
-	log.Tracef("Share percentages are: %v", spew.Sdump(percentages))
+	log.Tracef("Share percentages (PPS) are: %v", spew.Sdump(percentages))
 
 	var estMaturity uint32
 
@@ -396,6 +396,8 @@ func PayPerShare(db *bolt.DB, total dcrutil.Amount, poolFee float64, height uint
 	if err != nil {
 		return err
 	}
+
+	log.Tracef("Calculated payments (PPS) are: %v", spew.Sdump(payments))
 
 	// Persist all payments.
 	for _, payment := range payments {
@@ -446,7 +448,7 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, heig
 		return err
 	}
 
-	log.Tracef("Share percentages are: %v", spew.Sdump(percentages))
+	log.Tracef("Share percentages (PPLNS) are: %v", spew.Sdump(percentages))
 
 	var estMaturity uint32
 
@@ -464,6 +466,8 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, heig
 	if err != nil {
 		return err
 	}
+
+	log.Tracef("Calculated payments (PPLNS) are: %v", spew.Sdump(payments))
 
 	// Persist all payments.
 	for _, payment := range payments {

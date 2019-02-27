@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 
 	bolt "github.com/coreos/bbolt"
@@ -99,7 +100,6 @@ type Hub struct {
 	httpc             *http.Client
 	cfg               *HubConfig
 	limiter           *RateLimiter
-	Broadcast         chan Message
 	rpcc              *rpcclient.Client
 	rpccMtx           sync.Mutex
 	gConn             *grpc.ClientConn
@@ -180,9 +180,6 @@ func (h *Hub) GenerateDifficultyData() error {
 // processWork parses work received and dispatches a work notification to all
 // connected pool clients.
 func (h *Hub) processWork(headerE string, target string) {
-	log.Tracef("New Work (header: %v , target: %v)", headerE,
-		target)
-
 	heightD, err := hex.DecodeString(headerE[256:264])
 	if err != nil {
 		log.Errorf("Failed to decode block height: %v", err)
@@ -191,6 +188,8 @@ func (h *Hub) processWork(headerE string, target string) {
 
 	height := binary.LittleEndian.Uint32(heightD)
 	h.lastWorkHeight = height
+
+	log.Tracef("New work at height (%v) received (%v)", height, headerE)
 
 	// Do not process work data id there are no connected  pool clients.
 	if !h.HasClients() {
@@ -221,26 +220,29 @@ func (h *Hub) processWork(headerE string, target string) {
 		blockVersion, nBits, nTime, true)
 
 	// Broadcast the work notification to connected pool clients.
-	h.Broadcast <- workNotif
-
-	log.Tracef("Broadcasting work to pool clients")
+	for _, endpoint := range h.endpoints {
+		endpoint.clientsMtx.Lock()
+		for _, client := range endpoint.clients {
+			client.ch <- workNotif
+		}
+		endpoint.clientsMtx.Unlock()
+	}
 }
 
 // NewHub initializes a websocket hub.
 func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *http.Client, hcfg *HubConfig, limiter *RateLimiter) (*Hub, error) {
 	h := &Hub{
-		db:        db,
-		httpc:     httpc,
-		limiter:   limiter,
-		cfg:       hcfg,
-		hashRate:  zeroInt,
-		poolDiff:  make(map[string]*DifficultyData),
-		Broadcast: make(chan Message),
-		clients:   0,
-		connCh:    make(chan []byte),
-		discCh:    make(chan []byte),
-		ctx:       ctx,
-		cancel:    cancel,
+		db:       db,
+		httpc:    httpc,
+		limiter:  limiter,
+		cfg:      hcfg,
+		hashRate: zeroInt,
+		poolDiff: make(map[string]*DifficultyData),
+		clients:  0,
+		connCh:   make(chan []byte),
+		discCh:   make(chan []byte),
+		ctx:      ctx,
+		cancel:   cancel,
 	}
 
 	h.GenerateBlake256Pad()
@@ -386,33 +388,35 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 
 // AddClient records a connected client and the hash rate it contributes to
 // to the pool.
-func (h *Hub) AddClient(miner string) {
+func (h *Hub) AddClient(c *Client) {
 	// Increment the client count.
 	h.clientsMtx.Lock()
 	h.clients++
 	h.clientsMtx.Unlock()
 
 	// Add the client's hash rate.
-	hash := dividend.MinerHashes[miner]
+	hash := dividend.MinerHashes[c.endpoint.miner]
 	h.hashRateMtx.Lock()
 	h.hashRate = new(big.Int).Add(h.hashRate, hash)
-	log.Infof("Client connected, updated pool hash rate is %v", h.hashRate)
+	log.Infof("Client (%v/%v) connected, updated pool hash rate is %v",
+		c.extraNonce1, c.endpoint.miner, h.hashRate)
 	h.hashRateMtx.Unlock()
 }
 
 // RemoveClient removes a disconnected client and the hash rate it contributed to
 // the pool.
-func (h *Hub) RemoveClient(miner string) {
+func (h *Hub) RemoveClient(c *Client) {
 	// Decrement the client count.
 	h.clientsMtx.Lock()
 	h.clients--
 	h.clientsMtx.Unlock()
 
 	// Remove the client's hash rate
-	hash := dividend.MinerHashes[miner]
+	hash := dividend.MinerHashes[c.endpoint.miner]
 	h.hashRateMtx.Lock()
 	h.hashRate = new(big.Int).Sub(h.hashRate, hash)
-	log.Infof("Client disconnected, updated pool hash rate is %v", h.hashRate)
+	log.Infof("Client (%v/%v) disconnected, updated pool hash rate is %v",
+		c.extraNonce1, c.endpoint.miner, h.hashRate)
 	h.hashRateMtx.Unlock()
 }
 
@@ -556,6 +560,8 @@ func (h *Hub) handleGetWork() {
 
 			// Process incoming work if there is no current work.
 			if currHeaderE == "" {
+				log.Tracef("updated work based on no current work being" +
+					" available")
 				currHeaderE = headerE
 				h.processWork(currHeaderE, target)
 				continue
@@ -583,6 +589,9 @@ func (h *Hub) handleGetWork() {
 
 			newHeaderHeight := binary.LittleEndian.Uint32(newHeaderHeightD)
 			if newHeaderHeight > currHeaderHeight {
+				log.Tracef("updated work based on new work having a higher"+
+					" height than the current work: %v > %v", newHeaderHeight,
+					currHeaderHeight)
 				currHeaderE = headerE
 				h.processWork(currHeaderE, target)
 				continue
@@ -610,6 +619,9 @@ func (h *Hub) handleGetWork() {
 			newHeaderVoters :=
 				binary.LittleEndian.Uint16(newHeaderVotersD)
 			if newHeaderVoters > currHeaderVoters {
+				log.Tracef("updated work based on new work having more voters"+
+					" than the current work, %v > %v", newHeaderVoters,
+					currHeaderVoters)
 				currHeaderE = headerE
 				h.processWork(currHeaderE, target)
 				continue
@@ -636,7 +648,10 @@ func (h *Hub) handleGetWork() {
 
 			newNTime :=
 				time.Unix(int64(binary.LittleEndian.Uint32(newNTimeD)), 0)
-			if newNTime.Sub(currNTime) > time.Second*30 {
+			timeDiff := newNTime.Sub(currNTime)
+			if timeDiff >= time.Second*30 {
+				log.Tracef("updated work based on new work being 30 or more"+
+					" seconds (%v) younger than the current work", timeDiff)
 				currHeaderE = headerE
 				h.processWork(currHeaderE, target)
 				continue
@@ -663,7 +678,6 @@ func (h *Hub) handleChainUpdates() {
 
 			close(h.discCh)
 			close(h.connCh)
-			close(h.Broadcast)
 
 			log.Info("Chain updates handler done.")
 			return
@@ -863,6 +877,8 @@ func (h *Hub) ProcessPayments(height uint32) error {
 		log.Infof("no eligible payments to process")
 		return nil
 	}
+
+	log.Tracef("eligible payments are: %v", spew.Sdump(eligiblePmts))
 
 	// Generate the payment details from the eligible payments fetched.
 	details, targetAmt, err := dividend.GeneratePaymentDetails(h.db,

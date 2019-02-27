@@ -49,8 +49,7 @@ type Client struct {
 // NewClient creates client connection instance.
 func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
 	ctx, cancel := context.WithCancel(context.TODO())
-	endpoint.hub.AddClient(endpoint.miner)
-	return &Client{
+	c := &Client{
 		conn:     conn,
 		endpoint: endpoint,
 		ctx:      ctx,
@@ -60,6 +59,9 @@ func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
 		reader:   bufio.NewReader(conn),
 		ip:       ip,
 	}
+	c.GenerateExtraNonce1()
+	endpoint.hub.AddClient(c)
+	return c
 }
 
 // GenerateExtraNonce1 generates a random 4-byte extraNonce1 for the
@@ -101,7 +103,7 @@ func (c *Client) fetchRequest(id uint64) string {
 // Shutdown terminates all client processes and established connections.
 func (c *Client) Shutdown() {
 	c.endpoint.hub.limiter.RemoveLimiter(c.ip)
-	c.endpoint.hub.RemoveClient(c.endpoint.miner)
+	c.endpoint.hub.RemoveClient(c)
 	close(c.ch)
 	err := c.conn.Close()
 	if err != nil {
@@ -123,87 +125,92 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	if !allowed {
 		log.Errorf("Failed to process authorize request, limit reached")
 		err := NewStratumError(Unknown, nil)
-		resp := AuthorizeResponse(req.ID, false, err)
+		resp := AuthorizeResponse(*req.ID, false, err)
 		c.ch <- resp
 		return
 	}
 
-	// Usernames are expected to be of `address:id` format.
-	username, err := ParseAuthorizeRequest(req)
-	if err != nil {
-		log.Errorf("Failed to parse authorize request: %v", err)
-		err := NewStratumError(Unknown, nil)
-		resp := AuthorizeResponse(req.ID, false, err)
-		c.ch <- resp
-		return
-	}
+	// Usernames are expected to be of `address:id` format when in not in
+	// solo pool mode. A username name does not have to be provided when in
+	// solo pool mode.
+	if !c.endpoint.hub.cfg.SoloPool {
+		username, err := ParseAuthorizeRequest(req)
+		if err != nil {
+			log.Errorf("Failed to parse authorize request: %v", err)
+			err := NewStratumError(Unknown, nil)
+			resp := AuthorizeResponse(*req.ID, false, err)
+			c.ch <- resp
+			return
+		}
 
-	parts := strings.Split(username, ".")
-	if len(parts) != 2 {
-		log.Errorf("Invalid username format, expected `address.id`,got %v",
-			username)
-		err := NewStratumError(Unknown, nil)
-		resp := AuthorizeResponse(req.ID, false, err)
-		c.ch <- resp
-		return
-	}
+		parts := strings.Split(username, ".")
+		if len(parts) != 2 {
+			log.Errorf("Invalid username format, expected `address.id`,got %v",
+				username)
+			err := NewStratumError(Unknown, nil)
+			resp := AuthorizeResponse(*req.ID, false, err)
+			c.ch <- resp
+			return
+		}
 
-	name := strings.TrimSpace(parts[1])
-	address := strings.TrimSpace(parts[0])
+		name := strings.TrimSpace(parts[1])
+		address := strings.TrimSpace(parts[0])
 
-	// Ensure the provided address is valid and associated with the active
-	// network.
-	addr, err := dcrutil.DecodeAddress(address)
-	if err != nil {
-		log.Errorf("Failed to decode address: %v", err)
-		err := NewStratumError(Unknown, nil)
-		resp := AuthorizeResponse(req.ID, false, err)
-		c.ch <- resp
-		return
-	}
+		// Ensure the provided address is valid and associated with the active
+		// network.
+		addr, err := dcrutil.DecodeAddress(address)
+		if err != nil {
+			log.Errorf("Failed to decode address: %v", err)
+			err := NewStratumError(Unknown, nil)
+			resp := AuthorizeResponse(*req.ID, false, err)
+			c.ch <- resp
+			return
+		}
 
-	if !addr.IsForNet(c.endpoint.hub.cfg.ActiveNet) {
-		log.Errorf("Address (%v) is not associated with the active network"+
-			" (%v)", address, c.endpoint.hub.cfg.ActiveNet.Name)
-		err := NewStratumError(Unknown, nil)
-		resp := AuthorizeResponse(req.ID, false, err)
-		c.ch <- resp
-		return
-	}
+		if !addr.IsForNet(c.endpoint.hub.cfg.ActiveNet) {
+			log.Errorf("Address (%v) is not associated with the active network"+
+				" (%v)", address, c.endpoint.hub.cfg.ActiveNet.Name)
+			err := NewStratumError(Unknown, nil)
+			resp := AuthorizeResponse(*req.ID, false, err)
+			c.ch <- resp
+			return
+		}
 
-	id := dividend.AccountID(name, address)
-	_, err = dividend.FetchAccount(c.endpoint.hub.db, []byte(*id))
-	if err != nil && err.Error() !=
-		database.ErrValueNotFound([]byte(*id)).Error() {
-		log.Errorf("Failed to fetch account: %v", err)
-		err := NewStratumError(Unknown, nil)
-		resp := AuthorizeResponse(req.ID, false, err)
-		c.ch <- resp
-		return
-	}
+		id := dividend.AccountID(name, address)
+		_, err = dividend.FetchAccount(c.endpoint.hub.db, []byte(*id))
+		if err != nil && err.Error() !=
+			database.ErrValueNotFound([]byte(*id)).Error() {
+			log.Errorf("Failed to fetch account: %v", err)
+			err := NewStratumError(Unknown, nil)
+			resp := AuthorizeResponse(*req.ID, false, err)
+			c.ch <- resp
+			return
+		}
 
-	// Create the account if it does not already exist.
-	account, err := dividend.NewAccount(name, address)
-	if err != nil {
-		log.Errorf("Failed to create account: %v", err)
-		err := NewStratumError(Unknown, nil)
-		resp := AuthorizeResponse(req.ID, false, err)
-		c.ch <- resp
-		return
-	}
+		// Create the account if it does not already exist.
+		account, err := dividend.NewAccount(name, address)
+		if err != nil {
+			log.Errorf("Failed to create account: %v", err)
+			err := NewStratumError(Unknown, nil)
+			resp := AuthorizeResponse(*req.ID, false, err)
+			c.ch <- resp
+			return
+		}
 
-	err = account.Create(c.endpoint.hub.db)
-	if err != nil {
-		log.Errorf("Failed to persist account: %v", err)
-		err := NewStratumError(Unknown, nil)
-		resp := AuthorizeResponse(req.ID, false, err)
-		c.ch <- resp
-		return
+		err = account.Create(c.endpoint.hub.db)
+		if err != nil {
+			log.Errorf("Failed to persist account: %v", err)
+			err := NewStratumError(Unknown, nil)
+			resp := AuthorizeResponse(*req.ID, false, err)
+			c.ch <- resp
+			return
+		}
+
+		c.account = *id
 	}
 
 	c.authorized = true
-	c.account = *id
-	resp := AuthorizeResponse(req.ID, true, nil)
+	resp := AuthorizeResponse(*req.ID, true, nil)
 	c.ch <- resp
 }
 
@@ -212,7 +219,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 	if !allowed {
 		log.Errorf("Failed to process subscribe request, limit reached")
 		err := NewStratumError(Unknown, nil)
-		resp := SubscribeResponse(req.ID, "", "", err)
+		resp := SubscribeResponse(*req.ID, "", "", err)
 		c.ch <- resp
 		return
 	}
@@ -221,18 +228,16 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 	if err != nil {
 		log.Errorf("Failed to parse subscribe request: %v", err)
 		err := NewStratumError(Unknown, nil)
-		resp := SubscribeResponse(req.ID, "", "", err)
+		resp := SubscribeResponse(*req.ID, "", "", err)
 		c.ch <- resp
 		return
 	}
-
-	c.GenerateExtraNonce1()
 
 	if nid == "" {
 		nid = fmt.Sprintf("mn%v", c.extraNonce1)
 	}
 
-	resp := SubscribeResponse(req.ID, nid, c.extraNonce1, nil)
+	resp := SubscribeResponse(*req.ID, nid, c.extraNonce1, nil)
 	log.Tracef("Subscribe response is: %v", spew.Sdump(resp))
 
 	c.ch <- resp
@@ -242,8 +247,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 // setDifficulty sends the pool client's difficulty ratio.
 func (c *Client) setDifficulty() {
 	log.Tracef("Difficulty is %v", c.endpoint.diffData.difficulty)
-	diffNotif := SetDifficultyNotification(
-		c.endpoint.diffData.difficulty)
+	diffNotif := SetDifficultyNotification(c.endpoint.diffData.difficulty)
 	c.ch <- diffNotif
 }
 
@@ -252,19 +256,20 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	if !allowed {
 		log.Errorf("Failed to process submit work request, limit reached")
 		err := NewStratumError(Unknown, nil)
-		resp := SubmitWorkResponse(req.ID, false, err)
+		resp := SubmitWorkResponse(*req.ID, false, err)
 		c.ch <- resp
 		return
 	}
 
-	log.Tracef("Received work submission is: %v", spew.Sdump(req))
+	log.Tracef("Received work submission from (%v/%v) is %v",
+		c.extraNonce1, c.endpoint.miner, spew.Sdump(req))
 
 	_, jobID, extraNonce2E, nTimeE, nonceE, err := ParseSubmitWorkRequest(req,
 		c.endpoint.miner)
 	if err != nil {
 		log.Errorf("Failed to parse submit work request: %v", err)
 		err := NewStratumError(Unknown, nil)
-		resp := SubmitWorkResponse(req.ID, false, err)
+		resp := SubmitWorkResponse(*req.ID, false, err)
 		c.ch <- resp
 		return
 	}
@@ -273,7 +278,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	if err != nil {
 		log.Errorf("Failed to fetch job: %v", err)
 		err := NewStratumError(Unknown, nil)
-		resp := SubmitWorkResponse(req.ID, false, err)
+		resp := SubmitWorkResponse(*req.ID, false, err)
 		c.ch <- resp
 		return
 	}
@@ -283,13 +288,14 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	if err != nil {
 		log.Errorf("Failed to generate solved block header: %v", err)
 		err := NewStratumError(Unknown, nil)
-		resp := SubmitWorkResponse(req.ID, false, err)
+		resp := SubmitWorkResponse(*req.ID, false, err)
 		c.ch <- resp
 		return
 	}
 
-	log.Tracef("Solved block header is: %v", spew.Sdump(header))
-	log.Infof("Solved block hash at height (%v) is (%v)", header.Height,
+	log.Tracef("Submitted work from (%v/%v) is %v", c.extraNonce1,
+		c.endpoint.miner, spew.Sdump(header))
+	log.Infof("Submited work hash at height (%v) is (%v)", header.Height,
 		header.BlockHash().String())
 
 	poolTarget := c.endpoint.diffData.target
@@ -301,13 +307,12 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	log.Tracef("hash target is: %v", hashNum)
 
 	// Only submit work to the network if the submitted blockhash is
-	// below the target difficulty and the specified pool target
-	// for the client.
+	// below the pool target for the client.
 	if hashNum.Cmp(poolTarget) > 0 {
-		log.Errorf("submitted work is not less than the "+
-			"client's (%v) pool target", c.endpoint.miner)
+		log.Errorf("submitted work from (%v/%v) is not less than its"+
+			" corresponding pool target", c.extraNonce1, c.endpoint.miner)
 		err := NewStratumError(LowDifficultyShare, nil)
-		resp := SubmitWorkResponse(req.ID, false, err)
+		resp := SubmitWorkResponse(*req.ID, false, err)
 		c.ch <- resp
 		return
 	}
@@ -318,8 +323,15 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		c.claimWeightedShare()
 	}
 
-	// Send an accepted work response to the pool client.
-	c.ch <- SubmitWorkResponse(req.ID, true, nil)
+	// Only submit work to the network if the submitted blockhash is
+	// below the network target difficulty.
+	if hashNum.Cmp(target) > 0 {
+		log.Tracef("submitted work from (%v/%v) is not less than the"+
+			" network target difficulty", c.extraNonce1, c.endpoint.miner)
+		resp := SubmitWorkResponse(*req.ID, false, nil)
+		c.ch <- resp
+		return
+	}
 
 	if hashNum.Cmp(target) < 0 {
 		// Persist the accepted work before submiting to the network. This is
@@ -335,7 +347,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		if err != nil {
 			log.Errorf("Failed to fetch block header bytes: %v", err)
 			err := NewStratumError(Unknown, nil)
-			resp := SubmitWorkResponse(req.ID, false, err)
+			resp := SubmitWorkResponse(*req.ID, false, err)
 			c.ch <- resp
 			return
 		}
@@ -349,12 +361,13 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		if err != nil {
 			log.Errorf("Failed to submit work request: %v", err)
 			err := NewStratumError(Unknown, nil)
-			resp := SubmitWorkResponse(req.ID, false, err)
+			resp := SubmitWorkResponse(*req.ID, false, err)
 			c.ch <- resp
 			return
 		}
 
 		log.Tracef("Work accepted status is: %v", accepted)
+		c.ch <- SubmitWorkResponse(*req.ID, accepted, nil)
 
 		// Remove the work record if it is not accepted by the network.
 		if !accepted {
@@ -364,6 +377,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 }
 
 // Listen reads and processes incoming messages from the connected pool client.
+// It must be run as a goroutine.
 func (c *Client) Listen() {
 	for {
 		select {
@@ -383,8 +397,8 @@ func (c *Client) Listen() {
 			continue
 		}
 
-		log.Tracef("Message received is %v", string(data))
-
+		log.Tracef("message received from (%v/%v) is %v", c.extraNonce1,
+			c.endpoint.miner, string(data))
 		msg, reqType, err := IdentifyMessage(data)
 		if err != nil {
 			log.Errorf("Failed to identify message: %v", err)
@@ -459,7 +473,7 @@ func (c *Client) handleAntminerDR3Work(req *Request) {
 	workNotif := WorkNotification(jobID, prevBlockRev,
 		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
 
-	log.Tracef("DR3 work notification is: %v", spew.Sdump(workNotif))
+	log.Tracef("DR3/DR5 work notification is: %v", spew.Sdump(workNotif))
 
 	err = c.encoder.Encode(workNotif)
 	if err != nil {
@@ -546,43 +560,62 @@ func (c *Client) Send() {
 				continue
 			}
 
-			err := c.encoder.Encode(msg)
-			if err != nil {
-				log.Errorf("Message encoding error: %v", err)
-				c.cancel()
-				continue
+			log.Tracef("message sent to (%v/%v) is %v", c.extraNonce1,
+				c.endpoint.miner, spew.Sdump(msg))
+			if msg.MessageType() == ResponseType {
+				err := c.encoder.Encode(msg)
+				if err != nil {
+					log.Errorf("Message encoding error: %v", err)
+					c.cancel()
+					continue
+				}
 			}
 
-		case msg := <-c.endpoint.hub.Broadcast:
-			if msg == nil {
-				continue
-			}
+			if msg.MessageType() == RequestType {
+				req := msg.(*Request)
+				if req.Method == Notify {
+					switch c.endpoint.miner {
+					case dividend.CPU:
+						err := c.encoder.Encode(msg)
+						if err != nil {
+							log.Errorf("Message encoding error: %v", err)
+							c.cancel()
+							continue
+						}
 
-			req := msg.(*Request)
-			if req.Method == Notify {
-				switch c.endpoint.miner {
-				case dividend.CPU:
+						log.Tracef("Client (%v/%v) notified of new work",
+							c.extraNonce1, c.endpoint.miner)
+
+					case dividend.AntminerDR3, dividend.AntminerDR5:
+						c.handleAntminerDR3Work(req)
+						log.Tracef("Client (%v/%v) notified of new work",
+							c.extraNonce1, c.endpoint.miner)
+
+					case dividend.InnosiliconD9:
+						c.handleInnosiliconD9Work(req)
+						log.Tracef("Client (%v/%v) notified of new work",
+							c.extraNonce1, c.endpoint.miner)
+
+					case dividend.WhatsminerD1:
+						c.handleWhatsminerD1Work(req)
+						log.Tracef("Client (%v/%v) notified of new work",
+							c.extraNonce1, c.endpoint.miner)
+
+					default:
+						log.Errorf("Unknown miner provided to receive work: %v",
+							c.endpoint.miner)
+						c.cancel()
+						continue
+					}
+				}
+
+				if req.Method != Notify {
 					err := c.encoder.Encode(msg)
 					if err != nil {
 						log.Errorf("Message encoding error: %v", err)
 						c.cancel()
 						continue
 					}
-
-				case dividend.AntminerDR3, dividend.AntminerDR5:
-					c.handleAntminerDR3Work(req)
-
-				case dividend.InnosiliconD9:
-					c.handleInnosiliconD9Work(req)
-
-				case dividend.WhatsminerD1:
-					c.handleWhatsminerD1Work(req)
-
-				default:
-					log.Errorf("Unknown miner provided to receive work: %v",
-						c.endpoint.miner)
-					c.cancel()
-					continue
 				}
 			}
 		}
