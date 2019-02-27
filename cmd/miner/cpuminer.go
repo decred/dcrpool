@@ -196,9 +196,10 @@ out:
 			// Record and send the request.
 			worker := fmt.Sprintf("%s.%s", m.miner.config.Address,
 				m.miner.config.User)
-			req := network.SubmitWorkRequest(m.miner.nextID(), worker, jobID,
+			id := m.miner.nextID()
+			req := network.SubmitWorkRequest(&id, worker, jobID,
 				m.workData.extraNonce2, m.workData.nTime, m.workData.nonce)
-			m.miner.recordRequest(req.ID, network.Submit)
+			m.miner.recordRequest(id, network.Submit)
 			err := m.miner.encoder.Encode(req)
 			if err != nil {
 				log.Errorf("Failed to encode request: %v", err)
