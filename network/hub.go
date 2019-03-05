@@ -406,12 +406,15 @@ func (h *Hub) AddClient(c *Client) {
 // RemoveClient removes a disconnected client and the hash rate it contributed to
 // the pool.
 func (h *Hub) RemoveClient(c *Client) {
+	// Remove the client from its associated endpoint.
+	c.endpoint.RemoveClient(c)
+
 	// Decrement the client count.
 	h.clientsMtx.Lock()
 	h.clients--
 	h.clientsMtx.Unlock()
 
-	// Remove the client's hash rate
+	// Deduct the disconnected client's hash rate.
 	hash := dividend.MinerHashes[c.endpoint.miner]
 	h.hashRateMtx.Lock()
 	h.hashRate = new(big.Int).Sub(h.hashRate, hash)

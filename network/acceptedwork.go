@@ -17,6 +17,12 @@ import (
 	"github.com/dnldd/dcrpool/util"
 )
 
+// ErrBucketNotFound is returned when a provided database bucket cannot be
+// found.
+func ErrWorkAlreadyExists(id []byte) error {
+	return fmt.Errorf("work '%v' already exists", string(id))
+}
+
 // AcceptedWork represents an accepted work submission to the network.
 type AcceptedWork struct {
 	UUID      string `json:"uuid"`
@@ -110,6 +116,14 @@ func (work *AcceptedWork) Create(db *bolt.DB) error {
 		if bkt == nil {
 			return database.ErrBucketNotFound(database.WorkBkt)
 		}
+
+		// Do not persist already existing accepted work.
+		id := []byte(work.UUID)
+		v := bkt.Get(id)
+		if v != nil {
+			return ErrWorkAlreadyExists(id)
+		}
+
 		workBytes, err := json.Marshal(work)
 		if err != nil {
 			return err
@@ -181,9 +195,9 @@ func (work *AcceptedWork) FilterParentAcceptedWork(db *bolt.DB) (*AcceptedWork, 
 		prevHashB := []byte(work.PrevHash)
 		cursor := bkt.Cursor()
 		for k, v := cursor.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = cursor.Next() {
+			parentWork := k[len(prefix):]
 			if !match {
-				prevHash := k[len(prefix):]
-				if bytes.Equal(prevHashB, prevHash) {
+				if bytes.Equal(parentWork, prevHashB) {
 					err := json.Unmarshal(v, &prevWork)
 					if err != nil {
 						return err

@@ -97,3 +97,17 @@ func (e *Endpoint) Listen() {
 		go client.Send()
 	}
 }
+
+// RemoveClient removes a disconnected pool client from its associated endpoint.
+func (e *Endpoint) RemoveClient(c *Client) {
+	e.clientsMtx.Lock()
+	for idx := 0; idx < len(e.clients); idx++ {
+		if c.ip == e.clients[idx].ip {
+			copy(e.clients[idx:], e.clients[idx+1:])
+			e.clients[len(e.clients)-1] = nil
+			e.clients = e.clients[:len(e.clients)-1]
+			break
+		}
+	}
+	e.clientsMtx.Unlock()
+}
