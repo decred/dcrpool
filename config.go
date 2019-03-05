@@ -379,9 +379,10 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	// Set the mining active network. Testnet and simnet proof of work
+	// Set the mining active network. Testnet proof of work
 	// parameters are modified here to mirror that of mainnet in order to
-	// generate reasonable difficulties for asics.
+	// generate reasonable difficulties for asics. Simnet is currently reserved
+	// for cpu miner tests only.
 	switch cfg.ActiveNet {
 	case chaincfg.TestNet3Params.Name:
 		cfg.net = &chaincfg.TestNet3Params
@@ -390,7 +391,6 @@ func loadConfig() (*config, []string, error) {
 		cfg.net = &chaincfg.MainNetParams
 	case chaincfg.SimNetParams.Name:
 		cfg.net = &chaincfg.SimNetParams
-		cfg.net.PowLimit = chaincfg.MainNetParams.PowLimit
 	default:
 		return nil, nil, fmt.Errorf("unknown network provided %v",
 			cfg.ActiveNet)

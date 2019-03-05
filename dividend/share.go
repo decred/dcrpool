@@ -34,7 +34,7 @@ const (
 // MinerHashes is a map of all known DCR miners and their coressponding
 // hashrates.
 var MinerHashes = map[string]*big.Int{
-	CPU:           new(big.Int).SetInt64(150E3),
+	CPU:           new(big.Int).SetInt64(70E3),
 	InnosiliconD9: new(big.Int).SetInt64(2.4E12),
 	// ObeliskDCR1:   new(big.Int).SetInt64(1.1E12),
 	AntminerDR3:  new(big.Int).SetInt64(7.8E12),
@@ -160,9 +160,9 @@ func NewShare(account string, weight *big.Rat) *Share {
 }
 
 // ErrNotSupported is returned when an entity does not support an action.
-func ErrNotSupported(entity, action string) error {
-	return fmt.Errorf("action (%v) not supported for entity (%v)",
-		action, entity)
+func ErrNotSupported(tp, action string) error {
+	return fmt.Errorf("action (%v) not supported for type (%v)",
+		action, tp)
 }
 
 // NanoToBigEndianBytes returns an 8-byte big endian representation of

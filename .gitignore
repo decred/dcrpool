@@ -3,5 +3,6 @@ vendor
 tmp
 dcrpool
 /miner/miner
+logs
 *.log
 *.conf

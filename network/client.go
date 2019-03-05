@@ -113,11 +113,17 @@ func (c *Client) Shutdown() {
 
 // claimWeightedShare records a weighted share for the pool client. This serves
 // as proof of verifiable work contributed to the mining pool.
-func (c *Client) claimWeightedShare() {
+func (c *Client) claimWeightedShare() error {
 	weight := dividend.ShareWeights[c.endpoint.miner]
 	share := dividend.NewShare(c.account, weight)
-	share.Create(c.endpoint.hub.db)
-	log.Tracef("Weighted share claimed")
+	err := share.Create(c.endpoint.hub.db)
+	if err != nil {
+		return err
+	}
+
+	log.Tracef("Weighted share of (%v) for pool client (%v/%v) claimed",
+		weight, c.extraNonce1, c.endpoint.miner)
+	return nil
 }
 
 // handleAuthorizeRequest processes authorize request messages received.
@@ -320,7 +326,15 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	// Claim a weighted share for work contributed to the pool if not mining
 	// in solo mining mode.
 	if !c.endpoint.hub.cfg.SoloPool {
-		c.claimWeightedShare()
+		err := c.claimWeightedShare()
+		if err != nil {
+			log.Errorf("Failed to persist weighted share for (%v/%v): %v",
+				c.extraNonce1, c.endpoint.miner, err)
+			err := NewStratumError(Unknown, nil)
+			resp := SubmitWorkResponse(*req.ID, false, err)
+			c.ch <- resp
+			return
+		}
 	}
 
 	// Only submit work to the network if the submitted blockhash is
@@ -340,7 +354,20 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 
 		work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
 			header.Height, c.account, c.endpoint.miner)
-		work.Create(c.endpoint.hub.db)
+		err := work.Create(c.endpoint.hub.db)
+		if err != nil {
+			// If the submitted accetped work already exists, ignore the submission.
+			if err.Error() == ErrWorkAlreadyExists([]byte(work.UUID)).Error() {
+				log.Tracef("Work already exists, ignoring.")
+				return
+			}
+
+			log.Errorf("Failed to persist accepted work: %v", err)
+			err := NewStratumError(Unknown, nil)
+			resp := SubmitWorkResponse(*req.ID, false, err)
+			c.ch <- resp
+			return
+		}
 
 		// Generate and send the work submission.
 		headerB, err := header.Bytes()

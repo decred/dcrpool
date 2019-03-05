@@ -9,15 +9,16 @@ WALLET_PASS=123
 NETWORK="simnet"
 # NETWORK="testnet3"
 # NETWORK="mainnet"
-SOLO_POOL=1
-MAX_GEN_TIME=15
-PAYMENT_METHOD="pps"
+SOLO_POOL=0
+MAX_GEN_TIME=20
+PAYMENT_METHOD="pplns"
 LAST_N_PERIOD=300 # PPLNS range, 5 minutes.
 
 if [ "${NETWORK}" = "simnet" ]; then
  POOL_MINING_ADDR="SspUvSyDGSzvPz2NfdZ5LW15uq6rmuGZyhL"
  PFEE_ADDR="SsVPfV8yoMu7AvF5fGjxTGmQ57pGkaY6n8z"
- CLIENT_ADDR="SsZckVrqHRBtvhJA5UqLZ3MDXpZHi5mK6uU"
+ CLIENT_ONE_ADDR="SsZckVrqHRBtvhJA5UqLZ3MDXpZHi5mK6uU"
+ CLIENT_TWO_ADDR="Ssn23a3rJaCUxjqXiVSNwU6FxV45sLkiFpz"
 fi
 
 if [ "${NETWORK}" = "mainnet" ]; then
@@ -52,16 +53,16 @@ mkdir -p "${NODES_ROOT}/c2"
 cat > "${NODES_ROOT}/c1/client.conf" <<EOF
 debuglevel=trace
 activenet=${NETWORK}
-user=miner
-address=${CLIENT_ADDR}
+user=m1
+address=${CLIENT_ONE_ADDR}
 pool=127.0.0.1:5550
 EOF
 
 cat > "${NODES_ROOT}/c2/client.conf" <<EOF
 debuglevel=trace
 activenet=${NETWORK}
-user=miner
-address=${CLIENT_ADDR}
+user=m2
+address=${CLIENT_TWO_ADDR}
 pool=127.0.0.1:5550
 EOF
 
@@ -202,27 +203,28 @@ fi
 ################################################################################
 # Setup the master node's dcrctl (mctl).
 ################################################################################
-# sleep 3
-# cat > "${NODES_ROOT}/master/mine" <<EOF
-# #!/bin/zsh
-#   NUM=1
-#   case \$1 in
-#       ''|*[!0-9]*)  ;;
-#       *) NUM=\$1 ;;
-#   esac
-#   for i in \$(seq \$NUM) ; do
-#     dcrctl -C ../dcrctl.conf  generate 1
-#     sleep 0.5
-#   done
-# EOF
-# chmod +x "${NODES_ROOT}/master/mine"
+cat > "${NODES_ROOT}/master/mine" <<EOF
+#!/bin/zsh
+  NUM=1
+  case \$1 in
+      ''|*[!0-9]*)  ;;
+      *) NUM=\$1 ;;
+  esac
+  for i in \$(seq \$NUM) ; do
+    dcrctl -C ../dcrctl.conf  generate 1
+    sleep 0.5
+  done
+EOF
+chmod +x "${NODES_ROOT}/master/mine"
 
-sleep 2
 tmux new-window -t $SESSION:2 -n 'mctl'
 tmux send-keys "cd ${NODES_ROOT}/master" C-m
 
-# mine some blocks to start the chain.
-# mux send-keys "./mine 2" C-m
+if [ "${NETWORK}" = "simnet" ]; then
+sleep 2
+# mine some blocks to start the chain if the active network is simnet.
+tmux send-keys "./mine 2" C-m
+fi
 
 if [ "${NETWORK}" = "simnet" ]; then
 ################################################################################
@@ -253,8 +255,10 @@ tmux new-window -t $SESSION:4 -n 'wctl'
 tmux send-keys "cd ${NODES_ROOT}/wallet" C-m
 tmux send-keys "./ctl createnewaccount pfee" C-m
 tmux send-keys "./ctl getnewaddress pfee" C-m
-tmux send-keys "./ctl createnewaccount client" C-m
-tmux send-keys "./ctl getnewaddress client" C-m
+tmux send-keys "./ctl createnewaccount c1" C-m
+tmux send-keys "./ctl getnewaddress c1" C-m
+tmux send-keys "./ctl createnewaccount c2" C-m
+tmux send-keys "./ctl getnewaddress c2" C-m
 tmux send-keys "./ctl getnewaddress default" C-m
 tmux send-keys "./ctl getbalance"
 fi
@@ -267,20 +271,22 @@ tmux new-window -t $SESSION:5 -n 'pool'
 tmux send-keys "cd ${NODES_ROOT}/pool" C-m
 tmux send-keys "dcrpool --configfile pool.conf homedir=." C-m
 
+if [ "${NETWORK}" = "simnet" ]; then
 ################################################################################
 # Setup first mining client. 
 ################################################################################
-# sleep 1
-# tmux new-window -t $SESSION:6 -n 'c1'
-# tmux send-keys "cd ${NODES_ROOT}/c1" C-m
-# tmux send-keys "miner --configfile=client.conf --homedir=." C-m
+sleep 1
+tmux new-window -t $SESSION:6 -n 'c1'
+tmux send-keys "cd ${NODES_ROOT}/c1" C-m
+tmux send-keys "miner --configfile=client.conf --homedir=." C-m
 
 ################################################################################
 # Setup another mining client. 
 ################################################################################
-# sleep 1
-# tmux new-window -t $SESSION:7 -n 'c2'
-# tmux send-keys "cd ${NODES_ROOT}/c2" C-m
-# tmux send-keys "miner --configfile=client.conf --homedir=." C-m
+sleep 1
+tmux new-window -t $SESSION:7 -n 'c2'
+tmux send-keys "cd ${NODES_ROOT}/c2" C-m
+tmux send-keys "miner --configfile=client.conf --homedir=." C-m
+fi
 
 tmux attach-session -t $SESSION
