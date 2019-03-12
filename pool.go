@@ -11,10 +11,12 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"time"
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
+	"github.com/gorilla/mux"
 
 	"github.com/dnldd/dcrpool/database"
 	"github.com/dnldd/dcrpool/network"
@@ -29,6 +31,42 @@ type Pool struct {
 	cancel  context.CancelFunc
 	hub     *network.Hub
 	limiter *network.RateLimiter
+	server  *http.Server
+	router  *mux.Router
+}
+
+// route configures the api routes of the pool.
+func (p *Pool) route() {
+	p.router = mux.NewRouter()
+	p.router.Use(p.limiter.LimiterMiddleware)
+	p.router.HandleFunc("/hash", p.hub.FetchHash).Methods("GET")
+	p.router.HandleFunc("/connections", p.hub.FetchConnections).Methods("GET")
+	p.router.HandleFunc("/mined/{page}", p.hub.FetchMinedWork).Methods("GET")
+	p.router.HandleFunc("/work/quotas", p.hub.FetchWorkQuotas).
+		Methods("GET")
+	p.router.HandleFunc("/account/mined",
+		p.hub.FetchMinedWorkByAccount).Methods("POST")
+	p.router.HandleFunc("/account/payments",
+		p.hub.FetchProcessedPaymentsForAccount).Methods("POST")
+}
+
+// serve starts the pool api server.
+func (p *Pool) serve() {
+	p.route()
+	p.server = &http.Server{
+		Addr:         "0.0.0.0:8080",
+		WriteTimeout: time.Second * 30,
+		ReadTimeout:  time.Second * 5,
+		IdleTimeout:  time.Second * 30,
+		Handler:      p.router,
+	}
+
+	go func() {
+		if err := p.server.ListenAndServeTLS(defaultTLSCertFile, defaultTLSKeyFile); err != nil &&
+			err != http.ErrServerClosed {
+			pLog.Error(err)
+		}
+	}()
 }
 
 // NewPool initializes the mining pool.
@@ -92,6 +130,8 @@ func NewPool(cfg *config) (*Pool, error) {
 		return nil, err
 	}
 
+	p.serve()
+
 	return p, nil
 }
 
@@ -103,6 +143,12 @@ func (p *Pool) shutdown() {
 
 	err := p.hub.Persist()
 	if err != nil {
+		pLog.Error(err)
+	}
+
+	ctx, cl := context.WithTimeout(p.ctx, 5*time.Second)
+	defer cl()
+	if err := p.server.Shutdown(ctx); err != nil {
 		pLog.Error(err)
 	}
 }

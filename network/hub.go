@@ -8,9 +8,11 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"net/http"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,6 +26,7 @@ import (
 	"github.com/decred/dcrd/rpcclient"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/rpc/walletrpc"
+	"github.com/gorilla/mux"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -50,6 +53,9 @@ const (
 	// multiplies the result by the block hash block size in bytes.
 	getworkDataLen = (1 + ((wire.MaxBlockHeaderPayload*8 + 65) /
 		(chainhash.HashBlockSize * 8))) * chainhash.HashBlockSize
+
+	// PageCount is the number of data items in a paginated set.
+	PageCount = 50
 )
 
 var (
@@ -94,7 +100,8 @@ type DifficultyData struct {
 // to all active clients.
 type Hub struct {
 	// atomic variables first for alignment
-	minedBlocks uint32
+	minedBlocks    uint32
+	lastWorkHeight uint32
 
 	db                *bolt.DB
 	httpc             *http.Client
@@ -116,7 +123,6 @@ type Hub struct {
 	ctx               context.Context
 	cancel            context.CancelFunc
 	txFeeReserve      dcrutil.Amount
-	lastWorkHeight    uint32
 	lastPaymentHeight uint32
 	endpoints         []*Endpoint
 	blake256Pad       []byte
@@ -187,7 +193,7 @@ func (h *Hub) processWork(headerE string, target string) {
 	}
 
 	height := binary.LittleEndian.Uint32(heightD)
-	h.lastWorkHeight = height
+	atomic.StoreUint32(&h.lastWorkHeight, height)
 
 	log.Tracef("New work at height (%v) received (%v)", height, headerE)
 
@@ -790,7 +796,7 @@ func (h *Hub) handleChainUpdates() {
 						h.cfg.PoolFee, header.Height,
 						h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
 					if err != nil {
-						log.Error("Failed to generate PPLNS shares: %v", err)
+						log.Errorf("Failed to generate PPLNS shares: %v", err)
 						h.cancel()
 						continue
 					}
@@ -937,4 +943,179 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	h.lastPaymentHeight = height
 
 	return nil
+}
+
+func RespondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+	response, _ := json.Marshal(payload)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
+}
+
+func RespondWithError(w http.ResponseWriter, code int, message string) {
+	RespondWithJSON(w, code, map[string]string{"error": message})
+}
+
+// FetchHash handles requests on the hash rate of the pool.
+func (h *Hub) FetchHash(w http.ResponseWriter, r *http.Request) {
+	h.hashRateMtx.Lock()
+	hsh := new(big.Rat).SetFrac64(h.hashRate.Int64(), 1000000000000)
+	h.hashRateMtx.Unlock()
+
+	hash := fmt.Sprintf("%s TH/s", hsh.FloatString(6))
+	RespondWithJSON(w, http.StatusOK, map[string]string{"hash": hash})
+}
+
+//FetchConnectionInfo handles requests on the number of connected pool clients.
+func (h *Hub) FetchConnections(w http.ResponseWriter, r *http.Request) {
+	connInfo := make(map[string]uint32)
+	total := 0
+	for _, endpoint := range h.endpoints {
+		endpoint.clientsMtx.Lock()
+		for _, client := range endpoint.clients {
+			connInfo[client.endpoint.miner]++
+			total++
+		}
+		endpoint.clientsMtx.Unlock()
+	}
+
+	resp := map[string]interface{}{
+		"total":       total,
+		"connections": connInfo,
+	}
+
+	RespondWithJSON(w, http.StatusOK, resp)
+}
+
+// FetchMinedWork handles requests on listing mined work by the pool
+func (h *Hub) FetchMinedWork(w http.ResponseWriter, r *http.Request) {
+	qp := mux.Vars(r)
+	page, err := strconv.Atoi(qp["page"])
+	if err != nil {
+		RespondWithError(w, http.StatusBadRequest,
+			"the provided 'page' query param must be numeric")
+		return
+	}
+
+	work, maxPages, err := ListMinedWork(h.db, uint32(page))
+	if err != nil {
+		RespondWithError(w, http.StatusInternalServerError,
+			err.Error())
+		return
+	}
+
+	resp := map[string]interface{}{
+		"maxpages": maxPages,
+		"results":  work,
+	}
+
+	RespondWithJSON(w, http.StatusOK, resp)
+}
+
+// FetchWorkQuotas returns the reward distribution to pool accounts
+// based on work contributed per the peyment scheme used by the pool.
+func (h *Hub) FetchWorkQuotas(w http.ResponseWriter, r *http.Request) {
+	if h.cfg.SoloPool {
+		RespondWithError(w, http.StatusBadRequest, "share percentages not "+
+			"available when mining in solo pool mode")
+		return
+	}
+
+	height := atomic.LoadUint32(&h.lastWorkHeight)
+
+	var percentages map[string]*big.Rat
+	var err error
+	if h.cfg.PaymentMethod == dividend.PPS {
+		percentages, err =
+			dividend.CalculatePPSSharePercentages(h.db, h.cfg.PoolFee, height)
+	}
+
+	if h.cfg.PaymentMethod == dividend.PPLNS {
+		percentages, err =
+			dividend.CalculatePPLNSSharePercentages(h.db, h.cfg.PoolFee,
+				height, h.cfg.LastNPeriod)
+	}
+
+	if err != nil {
+		RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	resp := map[string]interface{}{
+		"type":    h.cfg.PaymentMethod,
+		"results": percentages,
+	}
+
+	RespondWithJSON(w, http.StatusOK, resp)
+}
+
+// FetchMinedWorkByAccount returns a list of mined work by the provided account.
+func (h *Hub) FetchMinedWorkByAccount(w http.ResponseWriter, r *http.Request) {
+	params := map[string]string{}
+	dc := json.NewDecoder(r.Body)
+	err := dc.Decode(&params)
+	if err != nil {
+		RespondWithError(w, http.StatusBadRequest,
+			"request body is invalid json")
+	}
+
+	id := dividend.AccountID(params["name"], params["address"])
+	work, err := ListMinedWorkByAccount(h.db, *id)
+	if err != nil {
+		RespondWithError(w, http.StatusInternalServerError,
+			err.Error())
+	}
+
+	resp := map[string]interface{}{
+		"accountid": id,
+		"results":   work,
+	}
+
+	RespondWithJSON(w, http.StatusOK, resp)
+}
+
+// FetchProcessedPaymentsForAccount returns archived payments made to the
+// provided account up to the minimum time (in unix time seconds) provided.
+func (h *Hub) FetchProcessedPaymentsForAccount(w http.ResponseWriter, r *http.Request) {
+	params := map[string]interface{}{}
+	dc := json.NewDecoder(r.Body)
+	err := dc.Decode(&params)
+	if err != nil {
+		RespondWithError(w, http.StatusBadRequest,
+			"request body is invalid json")
+	}
+
+	name, ok := params["name"].(string)
+	if !ok {
+		RespondWithError(w, http.StatusBadRequest,
+			"provided 'name' parameter is not a string")
+	}
+
+	address, ok := params["address"].(string)
+	if !ok {
+		RespondWithError(w, http.StatusBadRequest,
+			"provided 'address' parameter is not a string")
+	}
+
+	min, ok := params["min"].(float64)
+	if !ok {
+		RespondWithError(w, http.StatusBadRequest,
+			"provided 'min' parameter is not a numeric")
+	}
+
+	id := dividend.AccountID(name, address)
+	minNano := dividend.NanoToBigEndianBytes(time.Unix(int64(min), 0).UnixNano())
+	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db,
+		[]byte(*id), minNano)
+	if err != nil {
+		RespondWithError(w, http.StatusInternalServerError, err.Error())
+	}
+
+	resp := map[string]interface{}{
+		"accountid": id,
+		"results":   payments,
+	}
+
+	RespondWithJSON(w, http.StatusOK, resp)
 }

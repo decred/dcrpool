@@ -38,6 +38,20 @@ if [ -d "${NODES_ROOT}" ]; then
   rm -R "${NODES_ROOT}"
 fi
 
+if [ "${NETWORK}" = "simnet" ]; then
+  if [ -d "${HOME}/.dcrd/data/simnet" ]; then
+    rm -R "${HOME}/.dcrd/data/simnet"
+  fi
+
+  if [ -d "${HOME}/.dcrpool/data" ]; then
+    rm -R "${HOME}/.dcrpool/data"
+  fi
+
+  if [ -d "${HOME}/.dcrpool/data" ]; then
+    rm -R "${HOME}/.dcrpool/log"
+  fi
+fi
+
 DCRD_RPC_CERT="${HOME}/.dcrd/rpc.cert"
 DCRD_RPC_KEY="${HOME}/.dcrd/rpc.key"
 DCRD_CONF="${HOME}/.dcrd/dcrd.conf"

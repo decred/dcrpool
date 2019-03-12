@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/decred/dcrd/chaincfg"
+
 	"github.com/decred/dcrd/wire"
 
 	"github.com/decred/dcrd/blockchain"
@@ -114,6 +116,12 @@ func (c *Client) Shutdown() {
 // claimWeightedShare records a weighted share for the pool client. This serves
 // as proof of verifiable work contributed to the mining pool.
 func (c *Client) claimWeightedShare() error {
+	if c.endpoint.hub.cfg.ActiveNet.Name == chaincfg.MainNetParams.Name &&
+		c.endpoint.miner == dividend.CPU {
+		log.Error("CPU miners are reserved for only simnet testing purposes")
+		return nil
+	}
+
 	weight := dividend.ShareWeights[c.endpoint.miner]
 	share := dividend.NewShare(c.account, weight)
 	err := share.Create(c.endpoint.hub.db)
@@ -342,7 +350,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	if hashNum.Cmp(target) > 0 {
 		log.Tracef("submitted work from (%v/%v) is not less than the"+
 			" network target difficulty", c.extraNonce1, c.endpoint.miner)
-		resp := SubmitWorkResponse(*req.ID, false, nil)
+		resp := SubmitWorkResponse(*req.ID, true, nil)
 		c.ch <- resp
 		return
 	}
@@ -434,7 +442,7 @@ func (c *Client) Listen() {
 		}
 
 		// Ensure the requesting client is within their request limits.
-		allowed := c.endpoint.hub.limiter.WithinLimit(c.ip)
+		allowed := c.endpoint.hub.limiter.WithinLimit(c.ip, PoolClient)
 
 		switch reqType {
 		case RequestType:
