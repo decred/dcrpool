@@ -6,9 +6,11 @@ package network
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	bolt "github.com/coreos/bbolt"
 
@@ -169,6 +171,128 @@ func (work *AcceptedWork) Delete(db *bolt.DB) error {
 // DeleteMinedWork removes the associated mined work from the database.
 func (work *AcceptedWork) DeleteMinedWork(db *bolt.DB) error {
 	return database.Delete(db, database.MinedBkt, []byte(work.UUID))
+}
+
+// ListMinedWork returns mined work data associated with blocks mined by
+// the pool.
+func ListMinedWork(db *bolt.DB, page uint32) ([]*AcceptedWork, uint32, error) {
+	minedWork := make([]*AcceptedWork, 0)
+	numPages := uint32(0)
+	err := db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+
+		// return an empty list if the mined block counter has not been
+		// initialized.
+		v := pbkt.Get(MinedBlocks)
+		if v == nil {
+			return nil
+		}
+
+		var minedCount uint32
+		if v != nil {
+			minedCount = binary.LittleEndian.Uint32(v)
+		}
+
+		extraPage := minedCount%PageCount > 0
+		numPages = minedCount / PageCount
+		if extraPage {
+			numPages++
+		}
+
+		// return an empty list if the page requested is greater than the
+		// currently available number of pages.
+		if page > numPages {
+			return nil
+		}
+
+		bkt := pbkt.Bucket(database.MinedBkt)
+		if bkt == nil {
+			return database.ErrBucketNotFound(database.MinedBkt)
+		}
+
+		cursor := bkt.Cursor()
+
+		// Mark the index position to start reading from
+		idx := page * PageCount
+		count := 0
+		iter := uint32(0)
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			// Skip to the start of the specified page.
+			if iter != idx {
+				iter++
+				continue
+			}
+
+			var work AcceptedWork
+			err := json.Unmarshal(v, &work)
+			if err != nil {
+				return err
+			}
+
+			minedWork = append(minedWork, &work)
+
+			// Stop iterating when the number of mined work fetched is a full
+			// page.
+			count++
+			if count == PageCount {
+				break
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return minedWork, numPages, nil
+}
+
+// ListMinedWorkByAccount returns all mined work data on blocks mined by the
+// provided pool account id.
+func ListMinedWorkByAccount(db *bolt.DB, accountID string) ([]*AcceptedWork, error) {
+	minedWork := make([]*AcceptedWork, 0)
+	err := db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+
+		// return an empty list if the mined block counter is has not been
+		// initialized.
+		v := pbkt.Get(MinedBlocks)
+		if v == nil {
+			return nil
+		}
+
+		bkt := pbkt.Bucket(database.MinedBkt)
+		if bkt == nil {
+			return database.ErrBucketNotFound(database.MinedBkt)
+		}
+
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			var work AcceptedWork
+			err := json.Unmarshal(v, &work)
+			if err != nil {
+				return err
+			}
+
+			if strings.Compare(work.MinedBy, accountID) == 0 {
+				minedWork = append(minedWork, &work)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return minedWork, nil
 }
 
 // FilterParentAcceptedWork locates the accepted work associated with the

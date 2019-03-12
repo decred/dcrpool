@@ -75,7 +75,7 @@ var (
 // rest were calculated as :
 // 				(Hash of Miner X * Weight of LHM)/ Hash of LHM
 var ShareWeights = map[string]*big.Rat{
-	CPU: new(big.Rat).SetFloat64(0.0), // Reserved for testing.
+	CPU: new(big.Rat).SetFloat64(1.0), // Reserved for testing.
 	// ObeliskDCR1:   new(big.Rat).SetFloat64(1.0),
 	InnosiliconD9: new(big.Rat).SetFloat64(2.182),
 	AntminerDR3:   new(big.Rat).SetFloat64(7.091),
