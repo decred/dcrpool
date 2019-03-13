@@ -95,7 +95,7 @@ func TestPayPerShare(t *testing.T) {
 			return database.ErrBucketNotFound(database.PoolBkt)
 		}
 
-		lastPaymentCreatedOn = pbkt.Get(LastPaymentCreatedOn)
+		lastPaymentCreatedOn = pbkt.Get(database.LastPaymentCreatedOn)
 		return nil
 	})
 
@@ -228,7 +228,7 @@ func TestPayPerLastShare(t *testing.T) {
 			return database.ErrBucketNotFound(database.PoolBkt)
 		}
 
-		lastPaymentCreatedOn = pbkt.Get(LastPaymentCreatedOn)
+		lastPaymentCreatedOn = pbkt.Get(database.LastPaymentCreatedOn)
 		return nil
 	})
 

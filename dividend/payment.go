@@ -21,22 +21,6 @@ import (
 	"github.com/dnldd/dcrpool/database"
 )
 
-var (
-	// LastPaymentCreatedOn is the key of the last time a payment was
-	// persisted.
-	LastPaymentCreatedOn = []byte("lastpaymentcreatedon")
-
-	// LastPaymentPaidOn is the key of the last time a payment was
-	// paid.
-	LastPaymentPaidOn = []byte("lastpaymentpaidon")
-
-	// LastPaymentHeight is the key of the last payment height.
-	LastPaymentHeight = []byte("lastpaymentheight")
-
-	// TxFeeReserve is the key of the tx fee reserve.
-	TxFeeReserve = []byte("txfeereserve")
-)
-
 // Payment represents an outstanding payment for a pool account.
 type Payment struct {
 	Account           string         `json:"account"`
@@ -326,12 +310,12 @@ func FetchEligiblePaymentBundles(db *bolt.DB, height uint32, minPayment dcrutil.
 	return bundles, nil
 }
 
-// replenishTxFeeReserve adjusts the pool fee amount supplied to leave the specified
-// max tx fee reserve.
+// replenishTxFeeReserve adjusts the pool fee amount supplied to leave the
+// specified max tx fee reserve.
 func replenishTxFeeReserve(maxTxFeeReserve dcrutil.Amount, txFeeReserve *dcrutil.Amount, poolFee dcrutil.Amount) dcrutil.Amount {
 	if *txFeeReserve < maxTxFeeReserve {
 		diff := maxTxFeeReserve - *txFeeReserve
-		*txFeeReserve += maxTxFeeReserve
+		*txFeeReserve += diff
 		return poolFee - diff
 	}
 
@@ -353,7 +337,7 @@ func CalculatePPSSharePercentages(db *bolt.DB, poolFee float64, height uint32) (
 			return database.ErrBucketNotFound(database.PoolBkt)
 		}
 
-		v := pbkt.Get(LastPaymentCreatedOn)
+		v := pbkt.Get(database.LastPaymentCreatedOn)
 		lastPaymentTimeNano = v
 
 		return nil
@@ -430,7 +414,7 @@ func PayPerShare(db *bolt.DB, total dcrutil.Amount, poolFee float64, height uint
 			return database.ErrBucketNotFound(database.PoolBkt)
 		}
 
-		return pbkt.Put(LastPaymentCreatedOn,
+		return pbkt.Put(database.LastPaymentCreatedOn,
 			NanoToBigEndianBytes(payments[len(payments)-1].CreatedOn))
 	})
 
@@ -511,7 +495,7 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, heig
 			return database.ErrBucketNotFound(database.PoolBkt)
 		}
 
-		return pbkt.Put(LastPaymentCreatedOn,
+		return pbkt.Put(database.LastPaymentCreatedOn,
 			NanoToBigEndianBytes(payments[len(payments)-1].CreatedOn))
 	})
 

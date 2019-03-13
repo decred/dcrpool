@@ -43,6 +43,26 @@ var (
 
 	// VersionK is the key of the current version of the database.
 	VersionK = []byte("version")
+
+	// LastPaymentCreatedOn is the key of the last time a payment was
+	// persisted.
+	LastPaymentCreatedOn = []byte("lastpaymentcreatedon")
+
+	// LastPaymentPaidOn is the key of the last time a payment was
+	// paid.
+	LastPaymentPaidOn = []byte("lastpaymentpaidon")
+
+	// LastPaymentHeight is the key of the last payment height.
+	LastPaymentHeight = []byte("lastpaymentheight")
+
+	// TxFeeReserve is the key of the tx fee reserve.
+	TxFeeReserve = []byte("txfeereserve")
+
+	// MinedBlocks is the mined block count key.
+	MinedBlocks = []byte("minedblocks")
+
+	// SoloPool is the solo pool mode key.
+	SoloPool = []byte("solopool")
 )
 
 // ErrValueNotFound is returned when a provided database key does not map
@@ -150,4 +170,113 @@ func Delete(db *bolt.DB, bucket, key []byte) error {
 		return b.Delete(key)
 	})
 	return err
+}
+
+// Backup saves a copy of the db file.
+func Backup(db *bolt.DB) error {
+	// Backup the db file
+	err := db.View(func(tx *bolt.Tx) error {
+		now := time.Now().Format(time.RFC3339)
+		file := fmt.Sprintf("dcrpool_backup@%v.kv", now)
+		err := tx.CopyFile(file, 0600)
+		return err
+	})
+
+	return err
+}
+
+// Purge removes all existing data and recreates the db.
+func Purge(db *bolt.DB) error {
+	err := db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(PoolBkt)
+		if pbkt == nil {
+			return ErrBucketNotFound(PoolBkt)
+		}
+
+		err := pbkt.DeleteBucket(AccountBkt)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' bucket: %v",
+				string(AccountBkt), err)
+		}
+
+		pbkt.DeleteBucket(ShareBkt)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' bucket: %v",
+				string(ShareBkt), err)
+		}
+
+		pbkt.DeleteBucket(WorkBkt)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' bucket: %v",
+				string(WorkBkt), err)
+		}
+
+		pbkt.DeleteBucket(JobBkt)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' bucket: %v",
+				string(JobBkt), err)
+		}
+
+		pbkt.DeleteBucket(MinedBkt)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' bucket: %v",
+				string(MinedBkt), err)
+		}
+
+		pbkt.DeleteBucket(PaymentBkt)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' bucket: %v",
+				string(PaymentBkt), err)
+		}
+
+		pbkt.DeleteBucket(PaymentArchiveBkt)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' bucket: %v",
+				string(PaymentArchiveBkt), err)
+		}
+
+		pbkt.Delete(TxFeeReserve)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' k/v: %v",
+				string(TxFeeReserve), err)
+		}
+
+		pbkt.Delete(LastPaymentHeight)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' k/v: %v",
+				string(LastPaymentHeight), err)
+		}
+
+		pbkt.Delete(LastPaymentPaidOn)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' k/v: %v",
+				string(LastPaymentPaidOn), err)
+		}
+
+		pbkt.Delete(LastPaymentCreatedOn)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' k/v: %v",
+				string(LastPaymentCreatedOn), err)
+		}
+
+		pbkt.Delete(MinedBlocks)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' k/v: %v",
+				string(MinedBlocks), err)
+		}
+
+		pbkt.Delete(SoloPool)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' k/v: %v",
+				string(SoloPool), err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return CreateBuckets(db)
 }
