@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"math/big"
 	"net/http"
 	"os"
@@ -35,6 +36,75 @@ type Pool struct {
 	router  *mux.Router
 }
 
+// initDB handles the creation, upgrading and backup of the database
+// (when the pool mode is updated) when needed.
+func (p *Pool) initDB() error {
+	// Create and open the database.
+	db, err := database.OpenDB(p.cfg.DBFile)
+	if err != nil {
+		return err
+	}
+
+	p.db = db
+	err = database.CreateBuckets(p.db)
+	if err != nil {
+		return err
+	}
+
+	// Check if the pool mode changed since the last run.
+	var switchMode bool
+	err = db.View(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return err
+		}
+
+		v := pbkt.Get(database.SoloPool)
+		if v == nil {
+			return nil
+		}
+
+		if v != nil {
+			spMode := binary.LittleEndian.Uint32(v) == 1
+			if p.cfg.SoloPool != spMode {
+				switchMode = true
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// If the pool mode changed, backup the current database and purge all data
+	// for a clean slate with the updated pool mode.
+	if switchMode {
+		pLog.Info("Pool mode changed, backing up database before purge.")
+		err := database.Backup(p.db)
+		if err != nil {
+			return err
+		}
+
+		database.Purge(p.db)
+		if err != nil {
+			return err
+		}
+	}
+
+	// If the pool mode did not change, upgrade the database if there is a
+	// pending upgrade.
+	if !switchMode {
+		err = database.Upgrade(p.db)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // route configures the api routes of the pool.
 func (p *Pool) route() {
 	p.router = mux.NewRouter()
@@ -43,6 +113,10 @@ func (p *Pool) route() {
 	p.router.HandleFunc("/connections", p.hub.FetchConnections).Methods("GET")
 	p.router.HandleFunc("/mined/{page}", p.hub.FetchMinedWork).Methods("GET")
 	p.router.HandleFunc("/work/quotas", p.hub.FetchWorkQuotas).
+		Methods("GET")
+	p.router.HandleFunc("/work/height", p.hub.FetchLastWorkHeight).
+		Methods("GET")
+	p.router.HandleFunc("/payment/height", p.hub.FetchLastPaymentHeight).
 		Methods("GET")
 	p.router.HandleFunc("/account/mined",
 		p.hub.FetchMinedWorkByAccount).Methods("POST")
@@ -74,17 +148,7 @@ func NewPool(cfg *config) (*Pool, error) {
 	p := new(Pool)
 	p.cfg = cfg
 
-	bolt, err := database.OpenDB(p.cfg.DBFile)
-	if err != nil {
-		return nil, err
-	}
-	p.db = bolt
-	err = database.CreateBuckets(p.db)
-	if err != nil {
-		return nil, err
-	}
-
-	err = database.Upgrade(p.db)
+	err := p.initDB()
 	if err != nil {
 		return nil, err
 	}
@@ -140,11 +204,6 @@ func (p *Pool) shutdown() {
 	pLog.Info("Shutting down dcrpool.")
 	defer p.db.Close()
 	defer p.cancel()
-
-	err := p.hub.Persist()
-	if err != nil {
-		pLog.Error(err)
-	}
 
 	ctx, cl := context.WithTimeout(p.ctx, 5*time.Second)
 	defer cl()

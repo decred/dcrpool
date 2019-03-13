@@ -16,6 +16,7 @@ const (
 
 	// MaxMessageSize represents the maximum size of a transmitted message,
 	// in bytes.
+	// TODO: factor in
 	MaxMessageSize = 511
 )
 

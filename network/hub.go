@@ -67,9 +67,6 @@ var (
 	// high value to reduce the number of round trips to the pool by connected
 	// pool clients since pool shares are a non factor in solo pool mode.
 	soloMaxGenTime = new(big.Int).SetInt64(25)
-
-	// MinedBlocks is the mined block count key.
-	MinedBlocks = []byte("minedblocks")
 )
 
 // HubConfig represents configuration details for the hub.
@@ -100,32 +97,32 @@ type DifficultyData struct {
 // to all active clients.
 type Hub struct {
 	// atomic variables first for alignment
-	minedBlocks    uint32
-	lastWorkHeight uint32
-
-	db                *bolt.DB
-	httpc             *http.Client
-	cfg               *HubConfig
-	limiter           *RateLimiter
-	rpcc              *rpcclient.Client
-	rpccMtx           sync.Mutex
-	gConn             *grpc.ClientConn
-	grpc              walletrpc.WalletServiceClient
-	grpcMtx           sync.Mutex
-	hashRate          *big.Int
-	hashRateMtx       sync.Mutex
-	poolDiff          map[string]*DifficultyData
-	poolDiffMtx       sync.RWMutex
-	clients           uint32
-	clientsMtx        sync.RWMutex
-	connCh            chan []byte
-	discCh            chan []byte
-	ctx               context.Context
-	cancel            context.CancelFunc
-	txFeeReserve      dcrutil.Amount
+	minedBlocks       uint32
+	lastWorkHeight    uint32
 	lastPaymentHeight uint32
-	endpoints         []*Endpoint
-	blake256Pad       []byte
+
+	db           *bolt.DB
+	httpc        *http.Client
+	cfg          *HubConfig
+	limiter      *RateLimiter
+	rpcc         *rpcclient.Client
+	rpccMtx      sync.Mutex
+	gConn        *grpc.ClientConn
+	grpc         walletrpc.WalletServiceClient
+	grpcMtx      sync.Mutex
+	hashRate     *big.Int
+	hashRateMtx  sync.Mutex
+	poolDiff     map[string]*DifficultyData
+	poolDiffMtx  sync.RWMutex
+	clients      uint32
+	clientsMtx   sync.RWMutex
+	connCh       chan []byte
+	discCh       chan []byte
+	ctx          context.Context
+	cancel       context.CancelFunc
+	txFeeReserve dcrutil.Amount
+	endpoints    []*Endpoint
+	blake256Pad  []byte
 }
 
 // CreateListeners sets up endpoints and listeners for each known pool client.
@@ -259,11 +256,35 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		log.Infof("Solo pool enabled")
 	}
 
+	// Persist the pool mode.
+	sp := uint32(0)
+	if h.cfg.SoloPool {
+		sp = 1
+	}
+
+	err := db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		vbytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(vbytes, sp)
+		err := pbkt.Put(database.SoloPool, vbytes)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
 	// Load the tx fee reserve, last payment height and mined blocks count.
-	err := db.View(func(tx *bolt.Tx) error {
+	var lastPaymentHeight uint32
+	var minedBlocks uint32
+	err = db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 
-		v := pbkt.Get(dividend.TxFeeReserve)
+		v := pbkt.Get(database.TxFeeReserve)
 		if v == nil {
 			log.Info("Tx fee reserve value not found in db, initializing.")
 			h.txFeeReserve = dcrutil.Amount(0)
@@ -273,24 +294,26 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 			h.txFeeReserve = dcrutil.Amount(binary.LittleEndian.Uint32(v))
 		}
 
-		v = pbkt.Get(dividend.LastPaymentHeight)
+		v = pbkt.Get(database.LastPaymentHeight)
 		if v == nil {
 			log.Info("Last payment height value not found in db, initializing.")
-			h.lastPaymentHeight = 0
+			atomic.StoreUint32(&h.lastPaymentHeight, 0)
 		}
 
 		if v != nil {
-			h.lastPaymentHeight = binary.LittleEndian.Uint32(v)
+			lastPaymentHeight = binary.LittleEndian.Uint32(v)
+			atomic.StoreUint32(&h.lastPaymentHeight, lastPaymentHeight)
 		}
 
-		v = pbkt.Get(MinedBlocks)
+		v = pbkt.Get(database.MinedBlocks)
 		if v == nil {
 			log.Info("Mined blocks value not found in db, initializing.")
-			h.minedBlocks = 0
+			atomic.StoreUint32(&h.minedBlocks, 0)
 		}
 
 		if v != nil {
-			h.minedBlocks = binary.LittleEndian.Uint32(v)
+			minedBlocks = binary.LittleEndian.Uint32(v)
+			atomic.StoreUint32(&h.minedBlocks, minedBlocks)
 		}
 
 		return nil
@@ -305,8 +328,8 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 			h.txFeeReserve, h.cfg.MaxTxFeeReserve)
 	}
 
-	log.Tracef("Last payment height is currently: %v", h.lastPaymentHeight)
-	log.Tracef("Mined blocks counter is currently at: %v blocks", h.minedBlocks)
+	log.Tracef("Last payment height is currently: %v", lastPaymentHeight)
+	log.Tracef("Number of mined blocks is currently: %v blocks", minedBlocks)
 
 	// Generate difficulty data for all known pool clients.
 	err = h.GenerateDifficultyData()
@@ -459,34 +482,6 @@ func (h *Hub) GetWork() (string, string, error) {
 	}
 
 	return work.Data, work.Target, err
-}
-
-// Persist saves details of the hub to the database.
-func (h *Hub) Persist() error {
-	err := h.db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		vbytes := make([]byte, 4)
-
-		// Persist the tx fee reserve.
-		binary.LittleEndian.PutUint32(vbytes, uint32(h.txFeeReserve))
-		err := pbkt.Put(dividend.TxFeeReserve, vbytes)
-		if err != nil {
-			return err
-		}
-
-		// Persist the last payment height.
-		binary.LittleEndian.PutUint32(vbytes, h.lastPaymentHeight)
-		err = pbkt.Put(dividend.LastPaymentHeight, vbytes)
-		if err != nil {
-			return err
-		}
-
-		// Persist the mined blocks count.
-		binary.LittleEndian.PutUint32(vbytes, h.minedBlocks)
-		return pbkt.Put(MinedBlocks, vbytes)
-	})
-
-	return err
 }
 
 // PublishTransaction creates a transaction paying pool accounts for work done.
@@ -749,17 +744,35 @@ func (h *Hub) handleChainUpdates() {
 
 			log.Tracef("Found mined previous work: %v", prevWork.BlockHash)
 
-			// Persist the mined work and increment the mined blocks counter.
+			// Persist the mined work and the incremented mined blocks counter.
 			err = prevWork.PersistMinedWork(h.db)
 			if err != nil {
-				log.Errorf("Failed to persist mined workd: %v", err)
+				log.Errorf("Failed to persist mined work: %v", err)
+				h.cancel()
+				continue
 			}
 
-			atomic.AddUint32(&h.minedBlocks, 1)
-			minedCount := atomic.LoadUint32(&h.minedBlocks)
-			log.Tracef("Connected to mined block (%v),"+
-				" current mined blocks count is (%v)",
-				header.BlockHash(), minedCount)
+			minedCount := atomic.AddUint32(&h.minedBlocks, 1)
+			err = h.db.Update(func(tx *bolt.Tx) error {
+				pbkt := tx.Bucket(database.PoolBkt)
+				vbytes := make([]byte, 4)
+				binary.LittleEndian.PutUint32(vbytes, minedCount)
+				err = pbkt.Put(database.MinedBlocks, vbytes)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			})
+
+			if err != nil {
+				log.Errorf("Failed to persist mined block count: %v", err)
+				h.cancel()
+				continue
+			}
+
+			log.Tracef("Connected to mined block (%v),current mined block"+
+				" count is (%v)", header.BlockHash(), minedCount)
 
 			// Only process shares and payments when not mining in solo
 			// pool mode.
@@ -835,6 +848,20 @@ func (h *Hub) handleChainUpdates() {
 				continue
 			}
 
+			// Decrement the mined blocks count.
+			minedCount := atomic.AddUint32(&h.minedBlocks, ^uint32(0))
+			err = h.db.Update(func(tx *bolt.Tx) error {
+				pbkt := tx.Bucket(database.PoolBkt)
+				vbytes := make([]byte, 4)
+				binary.LittleEndian.PutUint32(vbytes, minedCount)
+				err = pbkt.Put(database.MinedBlocks, vbytes)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			})
+
 			// Only remove invalidated payments if not mining in solo pool mode.
 			if !h.cfg.SoloPool {
 				// If the disconnected block is an accepted work from the pool,
@@ -871,7 +898,8 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	// maximize the transaction fee usage by processing mature payments
 	// after the transaction fees reserve has matured and ready for another
 	// transaction.
-	if h.lastPaymentHeight != 0 && (height-h.lastPaymentHeight) < 3 {
+	lastPaymentHeight := atomic.LoadUint32(&h.lastPaymentHeight)
+	if lastPaymentHeight != 0 && (height-lastPaymentHeight) < 3 {
 		return nil
 	}
 
@@ -925,7 +953,8 @@ func (h *Hub) ProcessPayments(height uint32) error {
 		}
 	}
 
-	// Update the last payment paid on time.
+	// Update the last payment paid on time, the last payment height and the
+	// tx fee reserve.
 	nowNano := time.Now().UnixNano()
 	err = h.db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
@@ -933,14 +962,29 @@ func (h *Hub) ProcessPayments(height uint32) error {
 			return database.ErrBucketNotFound(database.PoolBkt)
 		}
 
-		return pbkt.Put(dividend.LastPaymentPaidOn,
+		err := pbkt.Put(database.LastPaymentPaidOn,
 			dividend.NanoToBigEndianBytes(nowNano))
+		if err != nil {
+			return err
+		}
+
+		// Update and persist the last payment height.
+		atomic.StoreUint32(&h.lastPaymentHeight, height)
+		hbytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(hbytes, height)
+		pbkt.Put(database.LastPaymentHeight, hbytes)
+		if err != nil {
+			return err
+		}
+
+		// Persist the tx fee reserve.
+		tbytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(tbytes, uint32(h.txFeeReserve))
+		return pbkt.Put(database.TxFeeReserve, tbytes)
 	})
 	if err != nil {
 		return err
 	}
-
-	h.lastPaymentHeight = height
 
 	return nil
 }
@@ -986,6 +1030,27 @@ func (h *Hub) FetchConnections(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RespondWithJSON(w, http.StatusOK, resp)
+}
+
+// FetchLastPaymentHeight handles requests on the last height at which payments
+// were made
+func (h *Hub) FetchLastPaymentHeight(w http.ResponseWriter, r *http.Request) {
+	lastPaymentHeight := atomic.LoadUint32(&h.lastPaymentHeight)
+	if h.cfg.SoloPool {
+		RespondWithError(w, http.StatusBadRequest,
+			"payment processing is disabled in solo pool mode")
+		return
+	}
+
+	RespondWithJSON(w, http.StatusOK,
+		map[string]uint32{"lastpaymentheight": lastPaymentHeight})
+}
+
+//FetchLastWorkHeight handles requests on the last height work was generated for.
+func (h *Hub) FetchLastWorkHeight(w http.ResponseWriter, r *http.Request) {
+	lastWorkHeight := atomic.LoadUint32(&h.lastWorkHeight)
+	RespondWithJSON(w, http.StatusOK,
+		map[string]uint32{"lastworkheight": lastWorkHeight})
 }
 
 // FetchMinedWork handles requests on listing mined work by the pool

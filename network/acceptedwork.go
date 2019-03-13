@@ -186,7 +186,7 @@ func ListMinedWork(db *bolt.DB, page uint32) ([]*AcceptedWork, uint32, error) {
 
 		// return an empty list if the mined block counter has not been
 		// initialized.
-		v := pbkt.Get(MinedBlocks)
+		v := pbkt.Get(database.MinedBlocks)
 		if v == nil {
 			return nil
 		}
@@ -263,7 +263,7 @@ func ListMinedWorkByAccount(db *bolt.DB, accountID string) ([]*AcceptedWork, err
 
 		// return an empty list if the mined block counter is has not been
 		// initialized.
-		v := pbkt.Get(MinedBlocks)
+		v := pbkt.Get(database.MinedBlocks)
 		if v == nil {
 			return nil
 		}
