@@ -13,11 +13,6 @@ import (
 const (
 	// TCP represents the tcp network protocol.
 	TCP = "tcp"
-
-	// MaxMessageSize represents the maximum size of a transmitted message,
-	// in bytes.
-	// TODO: factor in
-	MaxMessageSize = 511
 )
 
 // Endpoint represents a stratum endpoint.

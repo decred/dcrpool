@@ -546,7 +546,7 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 // handleGetWork periodically fetches available work from the consensus daemon.
 func (h *Hub) handleGetWork() {
 	var currHeaderE string
-	ticker := time.NewTicker(time.Second * 5)
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	log.Info("Started getwork handler")
 
@@ -1082,8 +1082,9 @@ func (h *Hub) FetchMinedWork(w http.ResponseWriter, r *http.Request) {
 // based on work contributed per the peyment scheme used by the pool.
 func (h *Hub) FetchWorkQuotas(w http.ResponseWriter, r *http.Request) {
 	if h.cfg.SoloPool {
-		RespondWithError(w, http.StatusBadRequest, "share percentages not "+
-			"available when mining in solo pool mode")
+		RespondWithJSON(w, http.StatusOK, map[string]string{
+			"response": "share percentages not available when mining" +
+				" in solo pool mode"})
 		return
 	}
 

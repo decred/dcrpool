@@ -29,6 +29,12 @@ import (
 	"github.com/dnldd/dcrpool/util"
 )
 
+const (
+	// MaxMessageSize represents the maximum size of a transmitted message
+	// allowed, in bytes.
+	MaxMessageSize = 250
+)
+
 // Client represents a client connection.
 type Client struct {
 	conn     net.Conn
@@ -58,7 +64,7 @@ func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
 		cancel:   cancel,
 		ch:       make(chan Message),
 		encoder:  json.NewEncoder(conn),
-		reader:   bufio.NewReader(conn),
+		reader:   bufio.NewReaderSize(conn, MaxMessageSize),
 		ip:       ip,
 	}
 	c.GenerateExtraNonce1()
@@ -367,6 +373,9 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 			// If the submitted accetped work already exists, ignore the submission.
 			if err.Error() == ErrWorkAlreadyExists([]byte(work.UUID)).Error() {
 				log.Tracef("Work already exists, ignoring.")
+				err := NewStratumError(DuplicateShare, nil)
+				resp := SubmitWorkResponse(*req.ID, false, err)
+				c.ch <- resp
 				return
 			}
 
@@ -433,7 +442,7 @@ func (c *Client) Listen() {
 		}
 
 		log.Tracef("message received from (%v/%v) is %v", c.extraNonce1,
-			c.endpoint.miner, string(data))
+			c.endpoint.miner, spew.Sdump(data))
 		msg, reqType, err := IdentifyMessage(data)
 		if err != nil {
 			log.Errorf("Failed to identify message: %v", err)
