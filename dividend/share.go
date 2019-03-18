@@ -88,7 +88,6 @@ var ShareWeights = map[string]*big.Rat{
 func CalculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) (*big.Int, error) {
 	hashesPerTargetTime := new(big.Int).Mul(hashRate, targetTimeSecs)
 	powLimit := net.PowLimit
-
 	powLimitFloat, _ := new(big.Float).SetInt(powLimit).Float64()
 
 	// The number of possible iterations is calculated as:

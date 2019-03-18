@@ -199,73 +199,73 @@ func Purge(db *bolt.DB) error {
 				string(AccountBkt), err)
 		}
 
-		pbkt.DeleteBucket(ShareBkt)
+		err = pbkt.DeleteBucket(ShareBkt)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' bucket: %v",
 				string(ShareBkt), err)
 		}
 
-		pbkt.DeleteBucket(WorkBkt)
+		err = pbkt.DeleteBucket(WorkBkt)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' bucket: %v",
 				string(WorkBkt), err)
 		}
 
-		pbkt.DeleteBucket(JobBkt)
+		err = pbkt.DeleteBucket(JobBkt)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' bucket: %v",
 				string(JobBkt), err)
 		}
 
-		pbkt.DeleteBucket(MinedBkt)
+		err = pbkt.DeleteBucket(MinedBkt)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' bucket: %v",
 				string(MinedBkt), err)
 		}
 
-		pbkt.DeleteBucket(PaymentBkt)
+		err = pbkt.DeleteBucket(PaymentBkt)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' bucket: %v",
 				string(PaymentBkt), err)
 		}
 
-		pbkt.DeleteBucket(PaymentArchiveBkt)
+		err = pbkt.DeleteBucket(PaymentArchiveBkt)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' bucket: %v",
 				string(PaymentArchiveBkt), err)
 		}
 
-		pbkt.Delete(TxFeeReserve)
+		err = pbkt.Delete(TxFeeReserve)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' k/v: %v",
 				string(TxFeeReserve), err)
 		}
 
-		pbkt.Delete(LastPaymentHeight)
+		err = pbkt.Delete(LastPaymentHeight)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' k/v: %v",
 				string(LastPaymentHeight), err)
 		}
 
-		pbkt.Delete(LastPaymentPaidOn)
+		err = pbkt.Delete(LastPaymentPaidOn)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' k/v: %v",
 				string(LastPaymentPaidOn), err)
 		}
 
-		pbkt.Delete(LastPaymentCreatedOn)
+		err = pbkt.Delete(LastPaymentCreatedOn)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' k/v: %v",
 				string(LastPaymentCreatedOn), err)
 		}
 
-		pbkt.Delete(MinedBlocks)
+		err = pbkt.Delete(MinedBlocks)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' k/v: %v",
 				string(MinedBlocks), err)
 		}
 
-		pbkt.Delete(SoloPool)
+		err = pbkt.Delete(SoloPool)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' k/v: %v",
 				string(SoloPool), err)

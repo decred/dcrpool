@@ -285,22 +285,22 @@ tmux new-window -t $SESSION:5 -n 'pool'
 tmux send-keys "cd ${NODES_ROOT}/pool" C-m
 tmux send-keys "dcrpool --configfile pool.conf homedir=." C-m
 
-if [ "${NETWORK}" = "simnet" ]; then
-################################################################################
-# Setup first mining client. 
-################################################################################
-sleep 1
-tmux new-window -t $SESSION:6 -n 'c1'
-tmux send-keys "cd ${NODES_ROOT}/c1" C-m
-tmux send-keys "miner --configfile=client.conf --homedir=." C-m
+# if [ "${NETWORK}" = "simnet" ]; then
+# ################################################################################
+# # Setup first mining client. 
+# ################################################################################
+# sleep 1
+# tmux new-window -t $SESSION:6 -n 'c1'
+# tmux send-keys "cd ${NODES_ROOT}/c1" C-m
+# tmux send-keys "miner --configfile=client.conf --homedir=." C-m
 
-################################################################################
-# Setup another mining client. 
-################################################################################
-sleep 1
-tmux new-window -t $SESSION:7 -n 'c2'
-tmux send-keys "cd ${NODES_ROOT}/c2" C-m
-tmux send-keys "miner --configfile=client.conf --homedir=." C-m
-fi
+# ################################################################################
+# # Setup another mining client. 
+# ################################################################################
+# sleep 1
+# tmux new-window -t $SESSION:7 -n 'c2'
+# tmux send-keys "cd ${NODES_ROOT}/c2" C-m
+# tmux send-keys "miner --configfile=client.conf --homedir=." C-m
+# fi
 
 tmux attach-session -t $SESSION

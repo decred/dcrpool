@@ -64,11 +64,9 @@ func (p *Pool) initDB() error {
 			return nil
 		}
 
-		if v != nil {
-			spMode := binary.LittleEndian.Uint32(v) == 1
-			if p.cfg.SoloPool != spMode {
-				switchMode = true
-			}
+		spMode := binary.LittleEndian.Uint32(v) == 1
+		if p.cfg.SoloPool != spMode {
+			switchMode = true
 		}
 
 		return nil
@@ -87,7 +85,7 @@ func (p *Pool) initDB() error {
 			return err
 		}
 
-		database.Purge(p.db)
+		err = database.Purge(p.db)
 		if err != nil {
 			return err
 		}

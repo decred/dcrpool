@@ -66,7 +66,7 @@ var (
 	// generate a valid share when solo pool mode is activated. This is set to a
 	// high value to reduce the number of round trips to the pool by connected
 	// pool clients since pool shares are a non factor in solo pool mode.
-	soloMaxGenTime = new(big.Int).SetInt64(25)
+	soloMaxGenTime = new(big.Int).SetInt64(28)
 )
 
 // HubConfig represents configuration details for the hub.
@@ -281,38 +281,56 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 	// Load the tx fee reserve, last payment height and mined blocks count.
 	var lastPaymentHeight uint32
 	var minedBlocks uint32
-	err = db.View(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 
-		v := pbkt.Get(database.TxFeeReserve)
-		if v == nil {
+		txReserveB := pbkt.Get(database.TxFeeReserve)
+		if txReserveB == nil {
 			log.Info("Tx fee reserve value not found in db, initializing.")
 			h.txFeeReserve = dcrutil.Amount(0)
+			tbytes := make([]byte, 4)
+			binary.LittleEndian.PutUint32(tbytes, uint32(h.txFeeReserve))
+			err := pbkt.Put(database.TxFeeReserve, tbytes)
+			if err != nil {
+				return err
+			}
 		}
 
-		if v != nil {
-			h.txFeeReserve = dcrutil.Amount(binary.LittleEndian.Uint32(v))
+		if txReserveB != nil {
+			h.txFeeReserve = dcrutil.Amount(binary.LittleEndian.Uint32(txReserveB))
 		}
 
-		v = pbkt.Get(database.LastPaymentHeight)
-		if v == nil {
+		lastPaymentHeightB := pbkt.Get(database.LastPaymentHeight)
+		if lastPaymentHeightB == nil {
 			log.Info("Last payment height value not found in db, initializing.")
 			atomic.StoreUint32(&h.lastPaymentHeight, 0)
+			lbytes := make([]byte, 4)
+			binary.LittleEndian.PutUint32(lbytes, 0)
+			err := pbkt.Put(database.LastPaymentHeight, lbytes)
+			if err != nil {
+				return err
+			}
 		}
 
-		if v != nil {
-			lastPaymentHeight = binary.LittleEndian.Uint32(v)
+		if lastPaymentHeightB != nil {
+			lastPaymentHeight = binary.LittleEndian.Uint32(lastPaymentHeightB)
 			atomic.StoreUint32(&h.lastPaymentHeight, lastPaymentHeight)
 		}
 
-		v = pbkt.Get(database.MinedBlocks)
-		if v == nil {
+		minedBlocksB := pbkt.Get(database.MinedBlocks)
+		if minedBlocksB == nil {
 			log.Info("Mined blocks value not found in db, initializing.")
 			atomic.StoreUint32(&h.minedBlocks, 0)
+			mbytes := make([]byte, 4)
+			binary.LittleEndian.PutUint32(mbytes, 0)
+			err := pbkt.Put(database.MinedBlocks, mbytes)
+			if err != nil {
+				return err
+			}
 		}
 
-		if v != nil {
-			minedBlocks = binary.LittleEndian.Uint32(v)
+		if minedBlocksB != nil {
+			minedBlocks = binary.LittleEndian.Uint32(minedBlocksB)
 			atomic.StoreUint32(&h.minedBlocks, minedBlocks)
 		}
 
@@ -757,12 +775,7 @@ func (h *Hub) handleChainUpdates() {
 				pbkt := tx.Bucket(database.PoolBkt)
 				vbytes := make([]byte, 4)
 				binary.LittleEndian.PutUint32(vbytes, minedCount)
-				err = pbkt.Put(database.MinedBlocks, vbytes)
-				if err != nil {
-					return err
-				}
-
-				return nil
+				return pbkt.Put(database.MinedBlocks, vbytes)
 			})
 
 			if err != nil {
@@ -854,13 +867,14 @@ func (h *Hub) handleChainUpdates() {
 				pbkt := tx.Bucket(database.PoolBkt)
 				vbytes := make([]byte, 4)
 				binary.LittleEndian.PutUint32(vbytes, minedCount)
-				err = pbkt.Put(database.MinedBlocks, vbytes)
-				if err != nil {
-					return err
-				}
-
-				return nil
+				return pbkt.Put(database.MinedBlocks, vbytes)
 			})
+
+			if err != nil {
+				log.Errorf("Failed to persist mined block count: %v", err)
+				h.cancel()
+				continue
+			}
 
 			// Only remove invalidated payments if not mining in solo pool mode.
 			if !h.cfg.SoloPool {
@@ -972,7 +986,7 @@ func (h *Hub) ProcessPayments(height uint32) error {
 		atomic.StoreUint32(&h.lastPaymentHeight, height)
 		hbytes := make([]byte, 4)
 		binary.LittleEndian.PutUint32(hbytes, height)
-		pbkt.Put(database.LastPaymentHeight, hbytes)
+		err = pbkt.Put(database.LastPaymentHeight, hbytes)
 		if err != nil {
 			return err
 		}

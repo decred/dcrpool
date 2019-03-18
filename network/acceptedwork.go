@@ -188,14 +188,11 @@ func ListMinedWork(db *bolt.DB, page uint32) ([]*AcceptedWork, uint32, error) {
 		// initialized.
 		v := pbkt.Get(database.MinedBlocks)
 		if v == nil {
-			return nil
+			return fmt.Errorf("mined blocks key (%v) not found",
+				database.MinedBlocks)
 		}
 
-		var minedCount uint32
-		if v != nil {
-			minedCount = binary.LittleEndian.Uint32(v)
-		}
-
+		minedCount := binary.LittleEndian.Uint32(v)
 		extraPage := minedCount%PageCount > 0
 		numPages = minedCount / PageCount
 		if extraPage {
