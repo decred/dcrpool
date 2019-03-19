@@ -24,13 +24,14 @@ go install
 dcrpool --configfile=path/to/config.conf 
 ```
 
-The project has a tmux mining harness and a cpu miner for testing purposes.
+The project has a tmux mining harness and a cpu miner coupled with the simnet 
+network for testing.
 Refer to `harness.sh` for configuration details. 
 
 To install and run the cpu miner:  
 
 ```sh
-cd dcrpool/miner 
+cd dcrpool/cmd/miner 
 go build 
 go install 
 miner --configfile=path/to/config.conf 
@@ -39,7 +40,36 @@ miner --configfile=path/to/config.conf
 To run the mining harness:  
 
 ```sh
+cd dcrpool
 ./harness.sh 
 ```
 
+dcpool provides API access to mining pool data on. It currently has the following calls available:
+```
+GET /hash - maximum estimated hash of connected pool clients.
 
+GET /connections - number of connected pool clients.
+
+GET /work/quotes [pooled mining call] - PPS/PPLNS work quotas for participating pool clients. 
+
+GET /work/height - the recent work height.
+
+GET /payment/height - the last payment height.
+
+POST /account/mined - list of mined blocks by account.
+payload: {
+	"name":"xxx", - the account name.
+	"address": "xxx" - the account address.
+}
+
+GET /mined/{page} - paginated list of mined blocks by the pool.
+
+POST /account/payments [pooled mining call] - list of payments made to the provided account.
+payload: {
+	"name":"xxx", - the account name.
+	"address": "xxx", - the account address.
+	"min": xxxx - the minimum payment time, in seconds, unix time.
+}
+```
+
+Thanks to davecgh, SweeperAA, dhill, jhartbarger and NickH for their contributions.
