@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"net/http"
 	"os"
@@ -126,12 +127,14 @@ func (p *Pool) route() {
 func (p *Pool) serve() {
 	p.route()
 	p.server = &http.Server{
-		Addr:         "0.0.0.0:8080",
+		Addr:         fmt.Sprintf("0.0.0.0:%v", p.cfg.APIPort),
 		WriteTimeout: time.Second * 30,
 		ReadTimeout:  time.Second * 5,
 		IdleTimeout:  time.Second * 30,
 		Handler:      p.router,
 	}
+
+	pLog.Infof("API server listening on port %v.", p.cfg.APIPort)
 
 	go func() {
 		if err := p.server.ListenAndServeTLS(defaultTLSCertFile, defaultTLSKeyFile); err != nil &&

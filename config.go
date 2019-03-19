@@ -47,6 +47,7 @@ const (
 	defaultWalletPass      = ""
 	defaultMaxTxFeeReserve = 0.1
 	defaultSoloPool        = false
+	defaultAPIPort         = 8080
 )
 
 var (
@@ -76,6 +77,7 @@ type config struct {
 	ConfigFile      string   `long:"configfile" description:"Path to configuration file."`
 	DataDir         string   `long:"datadir" description:"The data directory."`
 	ActiveNet       string   `long:"activenet" description:"The active network being mined on. {testnet3, mainnet, simnet}"`
+	APIPort         uint32   `long:"apiport" description:"The pool API port."`
 	DebugLevel      string   `long:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir          string   `long:"logdir" description:"Directory to log output."`
 	DBFile          string   `long:"dbfile" description:"Path to the database file."`
@@ -254,6 +256,7 @@ func loadConfig() (*config, []string, error) {
 		WalletPass:      defaultWalletPass,
 		MinPayment:      defaultMinPayment,
 		SoloPool:        defaultSoloPool,
+		APIPort:         defaultAPIPort,
 	}
 
 	// Service options which are only added on Windows.
