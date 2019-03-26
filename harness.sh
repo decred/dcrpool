@@ -1,3 +1,4 @@
+#!/bin/sh
 # Tmux script that sets up a mining harness. 
 set -e
 SESSION="harness"
@@ -36,20 +37,6 @@ fi
 
 if [ -d "${NODES_ROOT}" ]; then
   rm -R "${NODES_ROOT}"
-fi
-
-if [ "${NETWORK}" = "simnet" ]; then
-  if [ -d "${HOME}/.dcrd/data/simnet" ]; then
-    rm -R "${HOME}/.dcrd/data/simnet"
-  fi
-
-  if [ -d "${HOME}/.dcrpool/data" ]; then
-    rm -R "${HOME}/.dcrpool/data"
-  fi
-
-  if [ -d "${HOME}/.dcrpool/data" ]; then
-    rm -R "${HOME}/.dcrpool/log"
-  fi
 fi
 
 DCRD_RPC_CERT="${HOME}/.dcrd/rpc.cert"
@@ -188,7 +175,7 @@ dcrctl -C ../dcrctl.conf \$*
 EOF
 chmod +x "${NODES_ROOT}/master/ctl"
 
-tmux rename-window -t $SESSION:1 'master'
+tmux rename-window -t $SESSION:0 'master'
 tmux send-keys "cd ${NODES_ROOT}/master" C-m
 
 if [ "${NETWORK}" = "mainnet" ]; then
@@ -218,7 +205,7 @@ fi
 # Setup the master node's dcrctl (mctl).
 ################################################################################
 cat > "${NODES_ROOT}/master/mine" <<EOF
-#!/bin/zsh
+#!/bin/sh
   NUM=1
   case \$1 in
       ''|*[!0-9]*)  ;;
@@ -231,7 +218,7 @@ cat > "${NODES_ROOT}/master/mine" <<EOF
 EOF
 chmod +x "${NODES_ROOT}/master/mine"
 
-tmux new-window -t $SESSION:2 -n 'mctl'
+tmux new-window -t $SESSION:1 -n 'mctl'
 tmux send-keys "cd ${NODES_ROOT}/master" C-m
 
 if [ "${NETWORK}" = "simnet" ]; then
@@ -245,19 +232,19 @@ if [ "${NETWORK}" = "simnet" ]; then
 # Setup the pool wallet.
 ################################################################################
 cat > "${NODES_ROOT}/wallet/ctl" <<EOF
-#!/bin/zsh
+#!/bin/sh
 dcrctl -C ../dcrwctl.conf --wallet \$*
 EOF
 chmod +x "${NODES_ROOT}/wallet/ctl"
 
-tmux new-window -t $SESSION:3 -n 'wallet'
+tmux new-window -t $SESSION:2 -n 'wallet'
 tmux send-keys "cd ${NODES_ROOT}/wallet" C-m
 tmux send-keys "dcrwallet -C wallet.conf --create" C-m
 sleep 2
 tmux send-keys "${WALLET_PASS}" C-m "${WALLET_PASS}" C-m "n" C-m "y" C-m
 sleep 1
 tmux send-keys "${WALLET_SEED}" C-m C-m
-tmux send-keys "dcrwallet -C wallet.conf homedir=." C-m
+tmux send-keys "dcrwallet -C wallet.conf" C-m
 
 ################################################################################
 # Setup the pool wallet's dcrctl (wctl).
@@ -265,7 +252,7 @@ tmux send-keys "dcrwallet -C wallet.conf homedir=." C-m
 sleep 6
 # The consensus daemon must be synced for account generation to 
 # work as expected.
-tmux new-window -t $SESSION:4 -n 'wctl'
+tmux new-window -t $SESSION:3 -n 'wctl'
 tmux send-keys "cd ${NODES_ROOT}/wallet" C-m
 tmux send-keys "./ctl createnewaccount pfee" C-m
 tmux send-keys "./ctl getnewaddress pfee" C-m
@@ -281,26 +268,26 @@ fi
 # Setup dcrpool.
 ################################################################################
 sleep 4
-tmux new-window -t $SESSION:5 -n 'pool'
+tmux new-window -t $SESSION:4 -n 'pool'
 tmux send-keys "cd ${NODES_ROOT}/pool" C-m
-tmux send-keys "dcrpool --configfile pool.conf homedir=." C-m
+tmux send-keys "dcrpool --configfile pool.conf --homedir=${NODES_ROOT}/pool" C-m
 
 if [ "${NETWORK}" = "simnet" ]; then
 ################################################################################
 # Setup first mining client. 
 ################################################################################
 sleep 1
-tmux new-window -t $SESSION:6 -n 'c1'
+tmux new-window -t $SESSION:5 -n 'c1'
 tmux send-keys "cd ${NODES_ROOT}/c1" C-m
-tmux send-keys "miner --configfile=client.conf --homedir=." C-m
+tmux send-keys "miner --configfile=client.conf --homedir=${NODES_ROOT}/c1" C-m
 
 ################################################################################
 # Setup another mining client. 
 ################################################################################
 sleep 1
-tmux new-window -t $SESSION:7 -n 'c2'
+tmux new-window -t $SESSION:6 -n 'c2'
 tmux send-keys "cd ${NODES_ROOT}/c2" C-m
-tmux send-keys "miner --configfile=client.conf --homedir=." C-m
+tmux send-keys "miner --configfile=client.conf --homedir=${NODES_ROOT}/c2" C-m
 fi
 
 tmux attach-session -t $SESSION

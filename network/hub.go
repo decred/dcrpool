@@ -404,7 +404,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		return nil, fmt.Errorf("notify blocks rpc error (dcrd): %v", err)
 	}
 
-	log.Debugf("RPC connection established with dcrd.")
+	log.Infof("RPC connection established with dcrd.")
 
 	// Establish GRPC connection with the wallet if not in solo pool mode.
 	if !h.cfg.SoloPool {
@@ -425,6 +425,19 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		}
 
 		h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
+
+		req := &walletrpc.BalanceRequest{
+			RequiredConfirmations: 1,
+		}
+
+		h.grpcMtx.Lock()
+		_, err = h.grpc.Balance(context.TODO(), req)
+		h.grpcMtx.Unlock()
+		if err != nil {
+			return nil, fmt.Errorf("grpc request error: %v", err)
+		}
+
+		log.Infof("GPRC connection established with wallet.")
 	}
 
 	go h.handleGetWork()
@@ -832,7 +845,6 @@ func (h *Hub) handleChainUpdates() {
 				err = h.ProcessPayments(header.Height)
 				if err != nil {
 					log.Errorf("Failed to process payments: %v", err)
-					h.cancel()
 				}
 			}
 

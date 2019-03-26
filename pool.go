@@ -176,7 +176,7 @@ func NewPool(cfg *config) (*Pool, error) {
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 	hcfg := &network.HubConfig{
 		ActiveNet:         cfg.net,
-		WalletRPCCertFile: walletRPCCertFile,
+		WalletRPCCertFile: cfg.WalletRPCCert,
 		WalletGRPCHost:    cfg.WalletGRPCHost,
 		DcrdRPCCfg:        dcrdRPCCfg,
 		PoolFee:           cfg.PoolFee,

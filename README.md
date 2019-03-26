@@ -19,7 +19,6 @@ To install and run dcrpool:
 ```sh
 git clone https://github.com/dnldd/dcrpool.git 
 cd dcrpool 
-go build 
 go install 
 dcrpool --configfile=path/to/config.conf 
 ```
@@ -32,7 +31,6 @@ To install and run the cpu miner:
 
 ```sh
 cd dcrpool/cmd/miner 
-go build 
 go install 
 miner --configfile=path/to/config.conf 
 ```
