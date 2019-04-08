@@ -96,6 +96,7 @@ type config struct {
 	WalletPass      string   `long:"walletpass" description:"The wallet passphrase."`
 	MinPayment      float64  `long:"minpayment" description:"The minimum payment to process for an account."`
 	SoloPool        bool     `long:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
+	BackupPass      string   `long:"backuppass" description:"The backup password, required for backup over api"`
 	poolFeeAddrs    []dcrutil.Address
 	dcrdRPCCerts    []byte
 	net             *chaincfg.Params
@@ -388,6 +389,13 @@ func loadConfig() (*config, []string, error) {
 	// Initialize log rotation.  After log rotation has been initialized, the
 	// logger variables may be used.
 	initLogRotator(filepath.Join(cfg.LogDir, defaultLogFilename))
+
+	// Ensure the backup password is set.
+	if cfg.BackupPass == "" {
+		str := "%s: backup password not set"
+		err := fmt.Errorf(str, funcName)
+		return nil, nil, err
+	}
 
 	// Create the data directory.
 	err = os.MkdirAll(cfg.DataDir, 0700)

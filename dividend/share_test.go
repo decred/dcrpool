@@ -15,6 +15,7 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 
 	"github.com/dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/util"
 )
 
 var (
@@ -153,8 +154,8 @@ func TestPPSEligibleShares(t *testing.T) {
 		t.Error(err)
 	}
 
-	minNanoBytes := NanoToBigEndianBytes(minNano)
-	nowNanoBytes := NanoToBigEndianBytes(now.UnixNano())
+	minNanoBytes := util.NanoToBigEndianBytes(minNano)
+	nowNanoBytes := util.NanoToBigEndianBytes(now.UnixNano())
 	shares, err := PPSEligibleShares(db, minNanoBytes, nowNanoBytes)
 	if err != nil {
 		t.Error(err)
@@ -228,7 +229,7 @@ func TestPPLNSEligibleShares(t *testing.T) {
 		t.Error(err)
 	}
 
-	minNanoBytes := NanoToBigEndianBytes(minNano)
+	minNanoBytes := util.NanoToBigEndianBytes(minNano)
 	shares, err := PPLNSEligibleShares(db, minNanoBytes)
 	if err != nil {
 		t.Error(err)

@@ -110,7 +110,7 @@ func (p *Pool) route() {
 	p.router.Use(p.limiter.LimiterMiddleware)
 	p.router.HandleFunc("/hash", p.hub.FetchHash).Methods("GET")
 	p.router.HandleFunc("/connections", p.hub.FetchConnections).Methods("GET")
-	p.router.HandleFunc("/mined/{page}", p.hub.FetchMinedWork).Methods("GET")
+	p.router.HandleFunc("/mined", p.hub.FetchMinedWork).Methods("GET")
 	p.router.HandleFunc("/work/quotas", p.hub.FetchWorkQuotas).
 		Methods("GET")
 	p.router.HandleFunc("/work/height", p.hub.FetchLastWorkHeight).
@@ -121,6 +121,7 @@ func (p *Pool) route() {
 		p.hub.FetchMinedWorkByAccount).Methods("POST")
 	p.router.HandleFunc("/account/payments",
 		p.hub.FetchProcessedPaymentsForAccount).Methods("POST")
+	p.router.HandleFunc("/backup", p.hub.BackupDB).Methods("POST")
 }
 
 // serve starts the pool api server.
@@ -188,6 +189,7 @@ func NewPool(cfg *config) (*Pool, error) {
 		MinPayment:        minPmt,
 		PoolFeeAddrs:      cfg.poolFeeAddrs,
 		SoloPool:          cfg.SoloPool,
+		BackupPass:        cfg.BackupPass,
 	}
 
 	p.hub, err = network.NewHub(p.ctx, p.cancel, p.db, p.httpc, hcfg, p.limiter)

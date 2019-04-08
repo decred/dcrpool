@@ -27,13 +27,10 @@ var (
 	// current chain tip height.
 	JobBkt = []byte("jobbkt")
 
-	// WorkBkt stores work submissions from the pool accepted by the network,
-	// it is periodically pruned by the current chain tip  adjusted by the
-	// max reorg height and by chain reorgs.
+	// WorkBkt stores work submissions from pool clients and confirmed mined
+	// work from the pool, it is periodically pruned by the current chain tip
+	// adjusted by the max reorg height and by chain reorgs.
 	WorkBkt = []byte("workbkt")
-
-	// MinedBkt stores mined blocks by pool, it is pruned by chain reorgs.
-	MinedBkt = []byte("minedbkt")
 
 	// PaymentBkt stores all payments.
 	PaymentBkt = []byte("paymentbkt")
@@ -57,9 +54,6 @@ var (
 
 	// TxFeeReserve is the key of the tx fee reserve.
 	TxFeeReserve = []byte("txfeereserve")
-
-	// MinedBlocks is the mined block count key.
-	MinedBlocks = []byte("minedblocks")
 
 	// SoloPool is the solo pool mode key.
 	SoloPool = []byte("solopool")
@@ -135,12 +129,6 @@ func CreateBuckets(db *bolt.DB) error {
 				string(JobBkt), err)
 		}
 
-		_, err = pbkt.CreateBucketIfNotExists(MinedBkt)
-		if err != nil {
-			return fmt.Errorf("failed to create '%v' bucket: %v",
-				string(MinedBkt), err)
-		}
-
 		_, err = pbkt.CreateBucketIfNotExists(PaymentBkt)
 		if err != nil {
 			return fmt.Errorf("failed to create '%v' bucket: %v",
@@ -172,7 +160,7 @@ func Delete(db *bolt.DB, bucket, key []byte) error {
 	return err
 }
 
-// Backup saves a copy of the db file.
+// Backup saves a copy of the db to file.
 func Backup(db *bolt.DB) error {
 	// Backup the db file
 	err := db.View(func(tx *bolt.Tx) error {
@@ -217,12 +205,6 @@ func Purge(db *bolt.DB) error {
 				string(JobBkt), err)
 		}
 
-		err = pbkt.DeleteBucket(MinedBkt)
-		if err != nil {
-			return fmt.Errorf("failed to delete '%v' bucket: %v",
-				string(MinedBkt), err)
-		}
-
 		err = pbkt.DeleteBucket(PaymentBkt)
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' bucket: %v",
@@ -257,12 +239,6 @@ func Purge(db *bolt.DB) error {
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' k/v: %v",
 				string(LastPaymentCreatedOn), err)
-		}
-
-		err = pbkt.Delete(MinedBlocks)
-		if err != nil {
-			return fmt.Errorf("failed to delete '%v' k/v: %v",
-				string(MinedBlocks), err)
 		}
 
 		err = pbkt.Delete(SoloPool)

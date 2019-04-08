@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"time"
 )
 
 const (
@@ -96,4 +97,25 @@ func HexReversed(in string) (string, error) {
 		buf.WriteByte(in[i])
 	}
 	return buf.String(), nil
+}
+
+// NanoToBigEndianBytes returns an 8-byte big endian representation of
+// the provided nanosecond time.
+func NanoToBigEndianBytes(nano int64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(nano))
+	return b
+}
+
+// BigEndianBytesToNano returns nanosecond time of the provided 8-byte big
+// endian representation.
+func BigEndianBytesToNano(b []byte) int64 {
+	return int64(binary.BigEndian.Uint64(b[0:8]))
+}
+
+// BigEndianBytesToTime returns a time instance of the provided 8-byte big
+// endian representation.
+func BigEndianBytesToTime(b []byte) *time.Time {
+	t := time.Unix(0, BigEndianBytesToNano(b))
+	return &t
 }
