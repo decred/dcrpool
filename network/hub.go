@@ -26,12 +26,12 @@ import (
 	"github.com/decred/dcrd/rpcclient"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/rpc/walletrpc"
-	"github.com/gorilla/mux"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dnldd/dcrpool/database"
 	"github.com/dnldd/dcrpool/dividend"
+	"github.com/dnldd/dcrpool/util"
 )
 
 const (
@@ -53,9 +53,6 @@ const (
 	// multiplies the result by the block hash block size in bytes.
 	getworkDataLen = (1 + ((wire.MaxBlockHeaderPayload*8 + 65) /
 		(chainhash.HashBlockSize * 8))) * chainhash.HashBlockSize
-
-	// PageCount is the number of data items in a paginated set.
-	PageCount = 50
 )
 
 var (
@@ -84,6 +81,7 @@ type HubConfig struct {
 	MinPayment        dcrutil.Amount
 	SoloPool          bool
 	PoolFeeAddrs      []dcrutil.Address
+	BackupPass        string
 }
 
 // DifficultyData captures the pool target difficulty and pool difficulty
@@ -96,10 +94,8 @@ type DifficultyData struct {
 // Hub maintains the set of active clients and facilitates message broadcasting
 // to all active clients.
 type Hub struct {
-	// atomic variables first for alignment
-	minedBlocks       uint32
-	lastWorkHeight    uint32
-	lastPaymentHeight uint32
+	lastWorkHeight    uint32 // update atomically
+	lastPaymentHeight uint32 // update atomically
 
 	db           *bolt.DB
 	httpc        *http.Client
@@ -280,12 +276,11 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 
 	// Load the tx fee reserve, last payment height and mined blocks count.
 	var lastPaymentHeight uint32
-	var minedBlocks uint32
 	err = db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 
-		txReserveB := pbkt.Get(database.TxFeeReserve)
-		if txReserveB == nil {
+		txFeeReserveB := pbkt.Get(database.TxFeeReserve)
+		if txFeeReserveB == nil {
 			log.Info("Tx fee reserve value not found in db, initializing.")
 			h.txFeeReserve = dcrutil.Amount(0)
 			tbytes := make([]byte, 4)
@@ -296,8 +291,9 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 			}
 		}
 
-		if txReserveB != nil {
-			h.txFeeReserve = dcrutil.Amount(binary.LittleEndian.Uint32(txReserveB))
+		if txFeeReserveB != nil {
+			feeReserve := binary.LittleEndian.Uint32(txFeeReserveB)
+			h.txFeeReserve = dcrutil.Amount(feeReserve)
 		}
 
 		lastPaymentHeightB := pbkt.Get(database.LastPaymentHeight)
@@ -317,23 +313,6 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 			atomic.StoreUint32(&h.lastPaymentHeight, lastPaymentHeight)
 		}
 
-		minedBlocksB := pbkt.Get(database.MinedBlocks)
-		if minedBlocksB == nil {
-			log.Info("Mined blocks value not found in db, initializing.")
-			atomic.StoreUint32(&h.minedBlocks, 0)
-			mbytes := make([]byte, 4)
-			binary.LittleEndian.PutUint32(mbytes, 0)
-			err := pbkt.Put(database.MinedBlocks, mbytes)
-			if err != nil {
-				return err
-			}
-		}
-
-		if minedBlocksB != nil {
-			minedBlocks = binary.LittleEndian.Uint32(minedBlocksB)
-			atomic.StoreUint32(&h.minedBlocks, minedBlocks)
-		}
-
 		return nil
 	})
 	if err != nil {
@@ -347,7 +326,6 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 	}
 
 	log.Tracef("Last payment height is currently: %v", lastPaymentHeight)
-	log.Tracef("Number of mined blocks is currently: %v blocks", minedBlocks)
 
 	// Generate difficulty data for all known pool clients.
 	err = h.GenerateDifficultyData()
@@ -769,36 +747,21 @@ func (h *Hub) handleChainUpdates() {
 			}
 
 			if prevWork == nil {
-				log.Tracef("No mined previous work found")
+				log.Tracef("No mined work found")
 				continue
 			}
 
-			log.Tracef("Found mined previous work: %v", prevWork.BlockHash)
+			log.Tracef("Found mined parent %v for work %v",
+				prevWork.BlockHash, header.BlockHash().String())
 
-			// Persist the mined work and the incremented mined blocks counter.
-			err = prevWork.PersistMinedWork(h.db)
+			// Update accepted work as confirmed mined.
+			prevWork.Confirmed = true
+			err = prevWork.Update(h.db)
 			if err != nil {
-				log.Errorf("Failed to persist mined work: %v", err)
+				log.Errorf("Failed to confirm accepted work: %v", err)
 				h.cancel()
 				continue
 			}
-
-			minedCount := atomic.AddUint32(&h.minedBlocks, 1)
-			err = h.db.Update(func(tx *bolt.Tx) error {
-				pbkt := tx.Bucket(database.PoolBkt)
-				vbytes := make([]byte, 4)
-				binary.LittleEndian.PutUint32(vbytes, minedCount)
-				return pbkt.Put(database.MinedBlocks, vbytes)
-			})
-
-			if err != nil {
-				log.Errorf("Failed to persist mined block count: %v", err)
-				h.cancel()
-				continue
-			}
-
-			log.Tracef("Connected to mined block (%v),current mined block"+
-				" count is (%v)", header.BlockHash(), minedCount)
 
 			// Only process shares and payments when not mining in solo
 			// pool mode.
@@ -860,30 +823,15 @@ func (h *Hub) handleChainUpdates() {
 
 			// Delete mined work if it is disconnected from the chain.
 			id := AcceptedWorkID(header.BlockHash().String(), header.Height)
-			work, err := FetchMinedWork(h.db, id)
+			work, err := FetchAcceptedWork(h.db, id)
 			if err != nil {
 				log.Errorf("Failed to fetch mined work: %v", err)
 				continue
 			}
 
-			err = work.DeleteMinedWork(h.db)
+			err = work.Delete(h.db)
 			if err != nil {
 				log.Errorf("Failed to delete mined work: %v", err)
-				h.cancel()
-				continue
-			}
-
-			// Decrement the mined blocks count.
-			minedCount := atomic.AddUint32(&h.minedBlocks, ^uint32(0))
-			err = h.db.Update(func(tx *bolt.Tx) error {
-				pbkt := tx.Bucket(database.PoolBkt)
-				vbytes := make([]byte, 4)
-				binary.LittleEndian.PutUint32(vbytes, minedCount)
-				return pbkt.Put(database.MinedBlocks, vbytes)
-			})
-
-			if err != nil {
-				log.Errorf("Failed to persist mined block count: %v", err)
 				h.cancel()
 				continue
 			}
@@ -989,7 +937,7 @@ func (h *Hub) ProcessPayments(height uint32) error {
 		}
 
 		err := pbkt.Put(database.LastPaymentPaidOn,
-			dividend.NanoToBigEndianBytes(nowNano))
+			util.NanoToBigEndianBytes(nowNano))
 		if err != nil {
 			return err
 		}
@@ -1008,11 +956,7 @@ func (h *Hub) ProcessPayments(height uint32) error {
 		binary.LittleEndian.PutUint32(tbytes, uint32(h.txFeeReserve))
 		return pbkt.Put(database.TxFeeReserve, tbytes)
 	})
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func RespondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
@@ -1081,27 +1025,13 @@ func (h *Hub) FetchLastWorkHeight(w http.ResponseWriter, r *http.Request) {
 
 // FetchMinedWork handles requests on listing mined work by the pool
 func (h *Hub) FetchMinedWork(w http.ResponseWriter, r *http.Request) {
-	qp := mux.Vars(r)
-	page, err := strconv.Atoi(qp["page"])
+	work, err := ListMinedWork(h.db)
 	if err != nil {
-		RespondWithError(w, http.StatusBadRequest,
-			"the provided 'page' query param must be numeric")
+		RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	work, maxPages, err := ListMinedWork(h.db, uint32(page))
-	if err != nil {
-		RespondWithError(w, http.StatusInternalServerError,
-			err.Error())
-		return
-	}
-
-	resp := map[string]interface{}{
-		"maxpages": maxPages,
-		"results":  work,
-	}
-
-	RespondWithJSON(w, http.StatusOK, resp)
+	RespondWithJSON(w, http.StatusOK, work)
 }
 
 // FetchWorkQuotas returns the reward distribution to pool accounts
@@ -1150,13 +1080,14 @@ func (h *Hub) FetchMinedWorkByAccount(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		RespondWithError(w, http.StatusBadRequest,
 			"request body is invalid json")
+		return
 	}
 
 	id := dividend.AccountID(params["name"], params["address"])
 	work, err := ListMinedWorkByAccount(h.db, *id)
 	if err != nil {
-		RespondWithError(w, http.StatusInternalServerError,
-			err.Error())
+		RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	resp := map[string]interface{}{
@@ -1176,32 +1107,37 @@ func (h *Hub) FetchProcessedPaymentsForAccount(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		RespondWithError(w, http.StatusBadRequest,
 			"request body is invalid json")
+		return
 	}
 
 	name, ok := params["name"].(string)
 	if !ok {
 		RespondWithError(w, http.StatusBadRequest,
 			"provided 'name' parameter is not a string")
+		return
 	}
 
 	address, ok := params["address"].(string)
 	if !ok {
 		RespondWithError(w, http.StatusBadRequest,
 			"provided 'address' parameter is not a string")
+		return
 	}
 
 	min, ok := params["min"].(float64)
 	if !ok {
 		RespondWithError(w, http.StatusBadRequest,
 			"provided 'min' parameter is not a numeric")
+		return
 	}
 
 	id := dividend.AccountID(name, address)
-	minNano := dividend.NanoToBigEndianBytes(time.Unix(int64(min), 0).UnixNano())
+	minNano := util.NanoToBigEndianBytes(time.Unix(int64(min), 0).UnixNano())
 	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db,
 		[]byte(*id), minNano)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	resp := map[string]interface{}{
@@ -1210,4 +1146,42 @@ func (h *Hub) FetchProcessedPaymentsForAccount(w http.ResponseWriter, r *http.Re
 	}
 
 	RespondWithJSON(w, http.StatusOK, resp)
+}
+
+// BackupHandler returns a copy of the db for backup purposes.
+func (h *Hub) BackupDB(w http.ResponseWriter, r *http.Request) {
+	params := map[string]interface{}{}
+	dc := json.NewDecoder(r.Body)
+	err := dc.Decode(&params)
+	if err != nil {
+		RespondWithError(w, http.StatusBadRequest,
+			"request body is invalid json")
+		return
+	}
+
+	pass, ok := params["pass"].(string)
+	if !ok {
+		RespondWithError(w, http.StatusBadRequest,
+			"provided 'pass' parameter is not a string")
+		return
+	}
+
+	if h.cfg.BackupPass != pass {
+		RespondWithError(w, http.StatusBadRequest, "unauthorized access")
+		return
+	}
+
+	err = h.db.View(func(tx *bolt.Tx) error {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", `attachment; filename="backup.db"`)
+		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
+		_, err := tx.WriteTo(w)
+		return err
+	})
+
+	if err != nil {
+		msg := fmt.Sprintf("failed to backup db: %v", err.Error())
+		RespondWithError(w, http.StatusInternalServerError, msg)
+		return
+	}
 }

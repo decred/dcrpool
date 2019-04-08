@@ -90,6 +90,7 @@ walletpass=${WALLET_PASS}
 poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
+backuppass=b@ckUp
 EOF
 fi
 
@@ -116,6 +117,7 @@ walletpass=${WALLET_PASS}
 poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
+backuppass=b@ckUp
 EOF
 
 cat > "${NODES_ROOT}/dcrwctl.conf" <<EOF
@@ -161,6 +163,7 @@ walletpass=${WALLET_PASS}
 poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
+backuppass=b@ckUp
 EOF
 fi
 

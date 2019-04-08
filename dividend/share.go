@@ -6,7 +6,6 @@ package dividend
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -19,6 +18,7 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 
 	"github.com/dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/util"
 )
 
 // Miner types lists all known DCR miners
@@ -164,27 +164,6 @@ func ErrNotSupported(tp, action string) error {
 		action, tp)
 }
 
-// NanoToBigEndianBytes returns an 8-byte big endian representation of
-// the provided nanosecond time.
-func NanoToBigEndianBytes(nano int64) []byte {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(nano))
-	return b
-}
-
-// BigEndianBytesToNano returns nanosecond time of the provided 8-byte big
-// endian representation.
-func BigEndianBytesToNano(b []byte) int64 {
-	return int64(binary.BigEndian.Uint64(b[0:8]))
-}
-
-// BigEndianBytesToTime returns a time instance of the provided 8-byte big
-// endian representation.
-func BigEndianBytesToTime(b []byte) *time.Time {
-	t := time.Unix(0, BigEndianBytesToNano(b))
-	return &t
-}
-
 // Create persists a share to the database.
 func (s *Share) Create(db *bolt.DB) error {
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -200,7 +179,7 @@ func (s *Share) Create(db *bolt.DB) error {
 		if err != nil {
 			return err
 		}
-		err = bkt.Put(NanoToBigEndianBytes(s.CreatedOn), sBytes)
+		err = bkt.Put(util.NanoToBigEndianBytes(s.CreatedOn), sBytes)
 		return err
 	})
 	return err
@@ -352,4 +331,38 @@ func CalculatePayments(percentages map[string]*big.Rat, total dcrutil.Amount, po
 	payments = append(payments, NewPayment(PoolFeesK, fee, height, estMaturity))
 
 	return payments, nil
+}
+
+// PruneShares removes invalidated shares from the db.
+func PruneShares(db *bolt.DB, minNano int64) error {
+	minBytes := util.NanoToBigEndianBytes(minNano)
+	err := db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(database.PoolBkt)
+		if pbkt == nil {
+			return database.ErrBucketNotFound(database.PoolBkt)
+		}
+		bkt := pbkt.Bucket(database.ShareBkt)
+		if bkt == nil {
+			return database.ErrBucketNotFound(database.ShareBkt)
+		}
+
+		toDelete := [][]byte{}
+		cursor := bkt.Cursor()
+		for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
+			if bytes.Compare(minBytes, k) > 0 {
+				toDelete = append(toDelete, k)
+			}
+		}
+
+		for _, entry := range toDelete {
+			err := bkt.Delete(entry)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	return err
 }

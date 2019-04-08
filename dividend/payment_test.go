@@ -15,6 +15,7 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 
 	"github.com/dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/util"
 )
 
 // createPersistedAccount creates a pool account with the provided parameters
@@ -44,9 +45,9 @@ func TestPayPerShare(t *testing.T) {
 	defer td()
 
 	now := time.Now()
-	nowBytes := NanoToBigEndianBytes(now.UnixNano())
+	nowBytes := util.NanoToBigEndianBytes(now.UnixNano())
 	minNano := now.Add(-(time.Second * 60)).UnixNano()
-	minBytes := NanoToBigEndianBytes(minNano)
+	minBytes := util.NanoToBigEndianBytes(minNano)
 	maxNano := now.Add(-(time.Second * 30)).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
 	shareCount := 10
@@ -175,9 +176,9 @@ func TestPayPerLastShare(t *testing.T) {
 	defer td()
 
 	now := time.Now()
-	nowBytes := NanoToBigEndianBytes(now.UnixNano())
+	nowBytes := util.NanoToBigEndianBytes(now.UnixNano())
 	minNano := now.Add(-(time.Second * 60)).UnixNano()
-	minBytes := NanoToBigEndianBytes(minNano)
+	minBytes := util.NanoToBigEndianBytes(minNano)
 	xAboveMinNano := now.Add(-(time.Second * 30)).UnixNano()
 	yAboveMinNano := now.Add(-(time.Second * 10)).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
@@ -527,7 +528,7 @@ func TestArchivedPaymentsFiltering(t *testing.T) {
 
 	now := time.Now()
 	minNano := now.Add(time.Second * 3).UnixNano()
-	minBytes := NanoToBigEndianBytes(minNano)
+	minBytes := util.NanoToBigEndianBytes(minNano)
 
 	time.Sleep(time.Second * 10)
 

@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/dnldd/dcrpool/dividend"
 	"github.com/dnldd/dcrpool/util"
 
 	bolt "github.com/coreos/bbolt"
@@ -28,7 +27,7 @@ type Job struct {
 func GenerateJobID(height uint32) (string, error) {
 	buf := bytes.Buffer{}
 	buf.Write(util.HeightToBigEndianBytes(height))
-	buf.Write(dividend.NanoToBigEndianBytes(time.Now().UnixNano()))
+	buf.Write(util.NanoToBigEndianBytes(time.Now().UnixNano()))
 	return hex.EncodeToString(buf.Bytes()), nil
 }
 

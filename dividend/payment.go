@@ -19,6 +19,7 @@ import (
 	"github.com/decred/dcrd/dcrutil"
 
 	"github.com/dnldd/dcrpool/database"
+	"github.com/dnldd/dcrpool/util"
 )
 
 // Payment represents an outstanding payment for a pool account.
@@ -45,7 +46,7 @@ func NewPayment(account string, amount dcrutil.Amount, height uint32, estMaturit
 // GeneratePaymentID generates a unique id using the provided account and the
 // created on nano time.
 func GeneratePaymentID(createdOnNano int64, height uint32, account string) []byte {
-	BECreatedOnNano := hex.EncodeToString(NanoToBigEndianBytes(createdOnNano))
+	BECreatedOnNano := hex.EncodeToString(util.NanoToBigEndianBytes(createdOnNano))
 	id := fmt.Sprintf("%v%v", BECreatedOnNano, account)
 	return []byte(id)
 }
@@ -327,7 +328,7 @@ func replenishTxFeeReserve(maxTxFeeReserve dcrutil.Amount, txFeeReserve *dcrutil
 // PPS payment scheme.
 func CalculatePPSSharePercentages(db *bolt.DB, poolFee float64, height uint32) (map[string]*big.Rat, error) {
 	now := time.Now()
-	nowNano := NanoToBigEndianBytes(now.UnixNano())
+	nowNano := util.NanoToBigEndianBytes(now.UnixNano())
 
 	// Fetch the last payment created time.
 	var lastPaymentTimeNano []byte
@@ -372,6 +373,7 @@ func CalculatePPSSharePercentages(db *bolt.DB, poolFee float64, height uint32) (
 // participating accounts. Payments are calculated based on work contributed
 // to the pool since the last payment batch.
 func PayPerShare(db *bolt.DB, total dcrutil.Amount, poolFee float64, height uint32, coinbaseMaturity uint16) error {
+	now := time.Now()
 	percentages, err := CalculatePPSSharePercentages(db, poolFee, height)
 	if err != nil {
 		return err
@@ -415,10 +417,15 @@ func PayPerShare(db *bolt.DB, total dcrutil.Amount, poolFee float64, height uint
 		}
 
 		return pbkt.Put(database.LastPaymentCreatedOn,
-			NanoToBigEndianBytes(payments[len(payments)-1].CreatedOn))
+			util.NanoToBigEndianBytes(payments[len(payments)-1].CreatedOn))
 	})
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Prune invalidated shares.
+	return PruneShares(db, now.UnixNano())
 }
 
 // CalculatePPLNSSharePercentages computes the current dividend
@@ -427,7 +434,7 @@ func PayPerShare(db *bolt.DB, total dcrutil.Amount, poolFee float64, height uint
 func CalculatePPLNSSharePercentages(db *bolt.DB, poolFee float64, height uint32, periodSecs uint32) (map[string]*big.Rat, error) {
 	now := time.Now()
 	min := now.Add(-(time.Second * time.Duration(periodSecs)))
-	minNano := NanoToBigEndianBytes(min.UnixNano())
+	minNano := util.NanoToBigEndianBytes(min.UnixNano())
 
 	// Fetch all eligible shares within the specified period.
 	shares, err := PPLNSEligibleShares(db, minNano)
@@ -496,10 +503,16 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, heig
 		}
 
 		return pbkt.Put(database.LastPaymentCreatedOn,
-			NanoToBigEndianBytes(payments[len(payments)-1].CreatedOn))
+			util.NanoToBigEndianBytes(payments[len(payments)-1].CreatedOn))
 	})
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Prune invalidated shares.
+	minNano := time.Now().Add(-(time.Second * time.Duration(periodSecs))).UnixNano()
+	return PruneShares(db, minNano)
 }
 
 // GeneratePaymentDetails generates kv pair of addresses and payment amounts

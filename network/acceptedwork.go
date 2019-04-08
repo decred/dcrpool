@@ -6,7 +6,6 @@ package network
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,14 +14,18 @@ import (
 	bolt "github.com/coreos/bbolt"
 
 	"github.com/dnldd/dcrpool/database"
-	"github.com/dnldd/dcrpool/dividend"
 	"github.com/dnldd/dcrpool/util"
 )
 
-// ErrBucketNotFound is returned when a provided database bucket cannot be
-// found.
+// ErrWorkAlreadyExists is returned when an already existing work is found for
+// the provided work id.
 func ErrWorkAlreadyExists(id []byte) error {
 	return fmt.Errorf("work '%v' already exists", string(id))
+}
+
+// ErrWorkNotFound is returned when no work is found for the provided work id.
+func ErrWorkNotFound(id []byte) error {
+	return fmt.Errorf("work '%v' not found", string(id))
 }
 
 // AcceptedWork represents an accepted work submission to the network.
@@ -33,6 +36,10 @@ type AcceptedWork struct {
 	Height    uint32 `json:"height"`
 	MinedBy   string `json:"minedby"`
 	Miner     string `json:"miner"`
+
+	// An accepted work becomes mined work once it is confirmed by an incoming
+	// work as the parent block it was built on.
+	Confirmed bool `json:"confirmed"`
 }
 
 // AcceptedWorkID generates a unique id for the work accepted by the network.
@@ -81,32 +88,6 @@ func FetchAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
 	return &work, err
 }
 
-// FetchMinedWork fetches the mined work referenced by the provided id.
-func FetchMinedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
-	var work AcceptedWork
-	err := db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.MinedBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.MinedBkt)
-		}
-		v := bkt.Get(id)
-		if v == nil {
-			return database.ErrValueNotFound(id)
-		}
-		err := json.Unmarshal(v, &work)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &work, err
-}
-
 // Create persists the accepted work to the database.
 func (work *AcceptedWork) Create(db *bolt.DB) error {
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -136,16 +117,23 @@ func (work *AcceptedWork) Create(db *bolt.DB) error {
 	return err
 }
 
-// PersistMinedWork stores details of a mined block by the pool to the db.
-func (work *AcceptedWork) PersistMinedWork(db *bolt.DB) error {
+// Update persists modifications to an existing work.
+func (work *AcceptedWork) Update(db *bolt.DB) error {
 	err := db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		if pbkt == nil {
 			return database.ErrBucketNotFound(database.PoolBkt)
 		}
-		bkt := pbkt.Bucket(database.MinedBkt)
+		bkt := pbkt.Bucket(database.WorkBkt)
 		if bkt == nil {
-			return database.ErrBucketNotFound(database.MinedBkt)
+			return database.ErrBucketNotFound(database.WorkBkt)
+		}
+
+		// Assert work associated with the provided id exists before updating.
+		id := []byte(work.UUID)
+		v := bkt.Get(id)
+		if v == nil {
+			return ErrWorkNotFound(id)
 		}
 
 		workBytes, err := json.Marshal(work)
@@ -158,94 +146,46 @@ func (work *AcceptedWork) PersistMinedWork(db *bolt.DB) error {
 	return err
 }
 
-// Update is not supported for accepted work.
-func (work *AcceptedWork) Update(db *bolt.DB) error {
-	return dividend.ErrNotSupported("accepted work", "update")
-}
-
 // Delete removes the associated accepted work from the database.
 func (work *AcceptedWork) Delete(db *bolt.DB) error {
 	return database.Delete(db, database.WorkBkt, []byte(work.UUID))
 }
 
-// DeleteMinedWork removes the associated mined work from the database.
-func (work *AcceptedWork) DeleteMinedWork(db *bolt.DB) error {
-	return database.Delete(db, database.MinedBkt, []byte(work.UUID))
-}
-
-// ListMinedWork returns mined work data associated with blocks mined by
+// ListMinedWork returns work data associated with blocks mined by
 // the pool.
-func ListMinedWork(db *bolt.DB, page uint32) ([]*AcceptedWork, uint32, error) {
+func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
 	minedWork := make([]*AcceptedWork, 0)
-	numPages := uint32(0)
 	err := db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		if pbkt == nil {
 			return database.ErrBucketNotFound(database.PoolBkt)
 		}
 
-		// return an empty list if the mined block counter has not been
-		// initialized.
-		v := pbkt.Get(database.MinedBlocks)
-		if v == nil {
-			return fmt.Errorf("mined blocks key (%v) not found",
-				database.MinedBlocks)
-		}
-
-		minedCount := binary.LittleEndian.Uint32(v)
-		extraPage := minedCount%PageCount > 0
-		numPages = minedCount / PageCount
-		if extraPage {
-			numPages++
-		}
-
-		// return an empty list if the page requested is greater than the
-		// currently available number of pages.
-		if page > numPages {
-			return nil
-		}
-
-		bkt := pbkt.Bucket(database.MinedBkt)
+		bkt := pbkt.Bucket(database.WorkBkt)
 		if bkt == nil {
-			return database.ErrBucketNotFound(database.MinedBkt)
+			return database.ErrBucketNotFound(database.WorkBkt)
 		}
 
 		cursor := bkt.Cursor()
-
-		// Mark the index position to start reading from
-		idx := page * PageCount
-		count := 0
-		iter := uint32(0)
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			// Skip to the start of the specified page.
-			if iter != idx {
-				iter++
-				continue
-			}
-
 			var work AcceptedWork
 			err := json.Unmarshal(v, &work)
 			if err != nil {
 				return err
 			}
 
-			minedWork = append(minedWork, &work)
-
-			// Stop iterating when the number of mined work fetched is a full
-			// page.
-			count++
-			if count == PageCount {
-				break
+			if work.Confirmed {
+				minedWork = append(minedWork, &work)
 			}
 		}
 
 		return nil
 	})
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
-	return minedWork, numPages, nil
+	return minedWork, nil
 }
 
 // ListMinedWorkByAccount returns all mined work data on blocks mined by the
@@ -258,16 +198,9 @@ func ListMinedWorkByAccount(db *bolt.DB, accountID string) ([]*AcceptedWork, err
 			return database.ErrBucketNotFound(database.PoolBkt)
 		}
 
-		// return an empty list if the mined block counter is has not been
-		// initialized.
-		v := pbkt.Get(database.MinedBlocks)
-		if v == nil {
-			return nil
-		}
-
-		bkt := pbkt.Bucket(database.MinedBkt)
+		bkt := pbkt.Bucket(database.WorkBkt)
 		if bkt == nil {
-			return database.ErrBucketNotFound(database.MinedBkt)
+			return database.ErrBucketNotFound(database.WorkBkt)
 		}
 
 		cursor := bkt.Cursor()
@@ -340,6 +273,10 @@ func (work *AcceptedWork) FilterParentAcceptedWork(db *bolt.DB) (*AcceptedWork, 
 			}
 		}
 
+		if !match {
+			return fmt.Errorf("no accepted work found for: %v", work.PrevHash)
+		}
+
 		return nil
 	})
 
@@ -347,15 +284,11 @@ func (work *AcceptedWork) FilterParentAcceptedWork(db *bolt.DB) (*AcceptedWork, 
 		return nil, err
 	}
 
-	if prevWork.UUID == "" {
-		return nil, err
-	}
-
 	return &prevWork, nil
 }
 
-// PruneAcceptedWork removes all accepted work with heights less than
-// the provided height.
+// PruneAcceptedWork removes all accepted work not confirmed as mined work with
+// heights less than the provided height.
 func PruneAcceptedWork(db *bolt.DB, height uint32) error {
 	err := db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
@@ -370,7 +303,7 @@ func PruneAcceptedWork(db *bolt.DB, height uint32) error {
 		toDelete := [][]byte{}
 		cursor := bkt.Cursor()
 		workHeightB := make([]byte, 8)
-		for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
 			_, err := hex.Decode(workHeightB, k[:8])
 			if err != nil {
 				return err
@@ -378,7 +311,16 @@ func PruneAcceptedWork(db *bolt.DB, height uint32) error {
 
 			workHeight := util.BigEndianBytesToHeight(workHeightB)
 			if workHeight < height {
-				toDelete = append(toDelete, k)
+				var work AcceptedWork
+				err := json.Unmarshal(v, &work)
+				if err != nil {
+					return err
+				}
+
+				// Only prune unconfirmed accepted work.
+				if !work.Confirmed {
+					toDelete = append(toDelete, k)
+				}
 			}
 		}
 
