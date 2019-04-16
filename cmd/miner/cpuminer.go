@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -41,7 +42,6 @@ type SubmitWorkData struct {
 // worker goroutines which solve the received block.
 type CPUMiner struct {
 	miner        *Miner
-	started      bool
 	rateCh       chan float64
 	updateHashes chan uint64
 	workData     *SubmitWorkData
@@ -49,20 +49,19 @@ type CPUMiner struct {
 
 // hashRateMonitor tracks number of hashes per second the mining process is
 // performing. It must be run as a goroutine.
-func (m *CPUMiner) hashRateMonitor() {
+func (m *CPUMiner) hashRateMonitor(ctx context.Context) {
 	var hashRate float64
 	var totalHashes uint64
 	ticker := time.NewTicker(time.Second * hpsUpdateSecs)
 	defer ticker.Stop()
 	log.Info("Miner hash rate monitor started.")
 
-out:
 	for {
 		select {
-		case <-m.miner.ctx.Done():
+		case <-ctx.Done():
 			close(m.updateHashes)
 			log.Info("Miner hash rate monitor done.")
-			break out
+			return
 
 		case numHashes := <-m.updateHashes:
 			totalHashes += numHashes
@@ -76,8 +75,7 @@ out:
 			hashRate = (hashRate + curHashRate) / 2
 			totalHashes = 0
 			if hashRate != 0 {
-				log.Infof("Hash rate: %6.0f kilohashes/s",
-					hashRate/1000)
+				log.Infof("Hash rate: %6.0f kilohashes/s", hashRate/1000)
 			}
 		}
 	}
@@ -90,7 +88,7 @@ out:
 // This function will return early with false when conditions that trigger a
 // stale block such as a new block showing up or periodically when there are
 // new transactions and enough time has elapsed without finding a solution.
-func (m *CPUMiner) solveBlock(headerB []byte, target *big.Int, ticker *time.Ticker) bool {
+func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.Int, ticker *time.Ticker) bool {
 	for {
 		hashesCompleted := uint64(0)
 
@@ -100,7 +98,7 @@ func (m *CPUMiner) solveBlock(headerB []byte, target *big.Int, ticker *time.Tick
 		for extraNonce2 := uint32(0); extraNonce2 < maxUint32; extraNonce2++ {
 			for nonce := uint32(0); nonce < maxUint32; nonce++ {
 				select {
-				case <-m.miner.ctx.Done():
+				case <-ctx.Done():
 					return false
 
 				case <-ticker.C:
@@ -159,19 +157,18 @@ func (m *CPUMiner) solveBlock(headerB []byte, target *big.Int, ticker *time.Tick
 // performing stale work. When a block is solved, it is submitted.
 //
 // It must be run as a goroutine.
-func (m *CPUMiner) generateBlocks() {
+func (m *CPUMiner) generateBlocks(ctx context.Context) {
 	// Start a ticker which is used to signal checks for stale work and
 	// updates to the hash rate monitor.
 	ticker := time.NewTicker(333 * time.Millisecond)
 	defer ticker.Stop()
 	log.Info("Miner generate blocks started.")
 
-out:
 	for {
 		select {
-		case <-m.miner.ctx.Done():
+		case <-ctx.Done():
 			log.Info("Miner generate blocks done.")
-			break out
+			return
 
 		default:
 			// Non-blocking receive fallthrough.
@@ -190,14 +187,16 @@ out:
 		jobID := m.miner.work.jobID
 		m.miner.workMtx.RUnlock()
 
-		if m.solveBlock(headerB, target, ticker) {
+		if m.solveBlock(ctx, headerB, target, ticker) {
 			// Record and send the request.
 			worker := fmt.Sprintf("%s.%s", m.miner.config.Address,
 				m.miner.config.User)
 			id := m.miner.nextID()
+
 			req := network.SubmitWorkRequest(&id, worker, jobID,
 				m.workData.extraNonce2, m.workData.nTime, m.workData.nonce)
 			m.miner.recordRequest(id, network.Submit)
+
 			err := m.miner.encoder.Encode(req)
 			if err != nil {
 				log.Errorf("Failed to encode request: %v", err)
@@ -208,29 +207,11 @@ out:
 	}
 }
 
-// Start begins the CPU mining process as well as the hash rate monitor.
-// Calling this function when the CPU miner has already been started will
-// have no effect.
-//
-// This function is safe for concurrent access.
-func (m *CPUMiner) Start() {
-	if !m.started {
-		m.started = true
-		go m.hashRateMonitor()
-		go m.generateBlocks()
-	}
-}
-
 // HashesPerSecond returns the number of hashes per second the mining process
-// is performing. 0 is returned if the miner is not currently running.
+// is performing.
 //
 // This function is safe for concurrent access.
 func (m *CPUMiner) HashesPerSecond() float64 {
-	// Nothing to do if the miner is not currently running.
-	if !m.started {
-		return 0
-	}
-
 	return <-m.rateCh
 }
 

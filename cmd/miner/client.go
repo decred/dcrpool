@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"net"
 	"strings"
@@ -22,11 +21,6 @@ import (
 	"github.com/dnldd/dcrpool/network"
 )
 
-var (
-	// statum defines the stratum protocol identifier.
-	stratum = "stratum+tcp"
-)
-
 // Work represents the data received from a work notification. It comprises of
 // hex encoded block header and pool target data.
 type Work struct {
@@ -37,8 +31,7 @@ type Work struct {
 
 // Miner represents a stratum mining client.
 type Miner struct {
-	// atomic variables first for alignment
-	id uint64
+	id uint64 // update atomically
 
 	conn            net.Conn
 	core            *CPUMiner
@@ -52,12 +45,16 @@ type Miner struct {
 	chainCh         chan struct{}
 	authorized      bool
 	subscribed      bool
+	connected       bool
+	connectedMtx    sync.RWMutex
+	deadlined       bool
+	deadlinedMtx    sync.RWMutex
 	started         int64
-	ctx             context.Context
 	cancel          context.CancelFunc
 	extraNonce1E    string
 	extraNonce2Size uint64
 	notifyID        string
+	wg              sync.WaitGroup
 }
 
 // recordRequest logs a request as an id/method pair.
@@ -115,94 +112,100 @@ func (m *Miner) subscribe() error {
 	return nil
 }
 
-// NewMiner creates a stratum mining client.
-func NewMiner(cfg *config) (*Miner, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	m := &Miner{
-		config:  cfg,
-		work:    new(Work),
-		ctx:     ctx,
-		cancel:  cancel,
-		chainCh: make(chan struct{}),
-		req:     make(map[uint64]string),
-	}
-
-	poolAddr := strings.Replace(m.config.Pool, stratum, "", 1)
-	log.Tracef("Pool address is: %v", poolAddr)
-
-	conn, err := net.Dial(network.TCP, poolAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to %s, %v", poolAddr, err)
-	}
-
-	m.conn = conn
-	m.encoder = json.NewEncoder(m.conn)
-	m.reader = bufio.NewReader(m.conn)
-
-	err = m.subscribe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to subscribe miner: %v", err)
-	}
-
-	err = m.authenticate()
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate miner: %v", err)
-	}
-
-	m.started = time.Now().Unix()
-	m.core = NewCPUMiner(m)
-	m.core.Start()
-
-	return m, nil
-}
-
-// Reconnect reestablishes a broken stratum connection.
-func (m *Miner) Reconnect() error {
-	poolAddr := strings.Replace(m.config.Pool, stratum, "", 1)
-	conn, err := net.Dial(network.TCP, poolAddr)
-	if err != nil {
-		return fmt.Errorf("failed to reconnect to %s, %v", poolAddr, err)
-	}
-
-	m.conn = conn
-	m.encoder = json.NewEncoder(m.conn)
-	m.reader = bufio.NewReader(m.conn)
-
-	err = m.subscribe()
-	if err != nil {
-		return fmt.Errorf("failed to subscribe miner: %v", err)
-	}
-
-	err = m.authenticate()
-	if err != nil {
-		return fmt.Errorf("fvailed to authenticate miner: %v", err)
-	}
-
-	m.started = time.Now().Unix()
-	return nil
-}
-
-// Listen reads and processes incoming messages from the pool client. It must
-// be run as a goroutine.
-func (m *Miner) Listen() {
-	log.Info("Miner listener started.")
-
-out:
+// connect maintains a connection to the pool by periodically retrying to
+// connect to the pool when the established connection drops.
+func (m *Miner) connect(ctx context.Context) {
 	for {
 		select {
-		case <-m.ctx.Done():
+		case <-ctx.Done():
+			log.Info("Connection handler done.")
+			return
+		default:
+			// Non-blocking receive fallthrough.
+		}
+
+		m.connectedMtx.RLock()
+		if m.connected {
+			m.connectedMtx.RUnlock()
+			continue
+		}
+		m.connectedMtx.RUnlock()
+
+		poolAddr := strings.Replace(m.config.Pool, "stratum+tcp", "", 1)
+		conn, err := net.Dial(network.TCP, poolAddr)
+		if err != nil {
+			log.Errorf("unable connect to %s, %v", poolAddr, err)
+			continue
+		}
+
+		m.conn = conn
+		m.encoder = json.NewEncoder(m.conn)
+		m.reader = bufio.NewReader(m.conn)
+
+		err = m.subscribe()
+		if err != nil {
+			log.Errorf("unable to subscribe miner: %v", err)
+			continue
+		}
+
+		err = m.authenticate()
+		if err != nil {
+			log.Errorf("unable to authenticate miner: %v", err)
+			continue
+		}
+
+		m.connectedMtx.Lock()
+		m.connected = true
+		m.connectedMtx.Unlock()
+	}
+}
+
+// listen reads and processes incoming messages from the pool client. It must
+// be run as a goroutine.
+func (m *Miner) listen(ctx context.Context) {
+	log.Info("Miner listener started.")
+
+	for {
+		select {
+		case <-ctx.Done():
 			close(m.chainCh)
 			log.Info("Miner listener done.")
-			break out
+			return
 
 		default:
 			// Non-blocking receive fallthrough.
 		}
 
-		m.conn.SetReadDeadline(time.Now().Add(time.Minute * 3))
-		m.conn.SetWriteDeadline(time.Now().Add(time.Minute * 3))
+		// Read bytes only if the miner is connected.
+		m.connectedMtx.RLock()
+		if !m.connected {
+			m.connectedMtx.RUnlock()
+			continue
+		}
+
+		m.deadlinedMtx.Lock()
+		if m.connected && !m.deadlined {
+			m.conn.SetReadDeadline(time.Now().Add(time.Minute * 3))
+			m.conn.SetWriteDeadline(time.Now().Add(time.Minute * 3))
+			m.deadlined = true
+		}
+		m.deadlinedMtx.Unlock()
+		m.connectedMtx.RUnlock()
+
 		data, err := m.reader.ReadBytes('\n')
 		if err != nil {
+			m.workMtx.Lock()
+			m.work = new(Work)
+			m.workMtx.Unlock()
+
+			m.deadlinedMtx.Lock()
+			m.deadlined = false
+			m.deadlinedMtx.Unlock()
+
+			m.connectedMtx.Lock()
+			m.connected = false
+			m.connectedMtx.Unlock()
+
 			continue
 		}
 
@@ -362,4 +365,29 @@ out:
 			log.Errorf("Unknown message type received: %s", reqType)
 		}
 	}
+}
+
+// run starts all processes of the miner.
+func (m *Miner) run(ctx context.Context) {
+	m.wg.Add(4)
+	go m.connect(ctx)
+	go m.listen(ctx)
+	go m.core.hashRateMonitor(ctx)
+	go m.core.generateBlocks(ctx)
+	m.wg.Wait()
+}
+
+// NewMiner creates a stratum mining client.
+func NewMiner(cfg *config, cancel context.CancelFunc) (*Miner, error) {
+	m := &Miner{
+		config:  cfg,
+		work:    new(Work),
+		cancel:  cancel,
+		chainCh: make(chan struct{}),
+		req:     make(map[uint64]string),
+		started: time.Now().Unix(),
+	}
+
+	m.core = NewCPUMiner(m)
+	return m, nil
 }
