@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -38,20 +39,22 @@ func main() {
 	log.Infof("Home dir: %s", cfg.HomeDir)
 	log.Infof("Started miner.")
 
-	// Initialize the client.
-	miner, err := NewMiner(cfg)
+	// Initialize and run the client.
+	ctx, cancel := context.WithCancel(context.Background())
+	miner, err := NewMiner(cfg, cancel)
 	if err != nil {
 		log.Errorf("Failed to create miner: %v", err)
 		return
 	}
 
-	go miner.Listen()
+	go miner.run(ctx)
+
 	for {
 		select {
 		case <-interrupt:
 			miner.cancel()
 
-		case <-miner.ctx.Done():
+		case <-ctx.Done():
 			miner.conn.Close()
 			return
 		}
