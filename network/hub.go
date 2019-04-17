@@ -56,8 +56,14 @@ const (
 )
 
 var (
-	// Convenience variable
+	// zeroInt is the default value for a big.Int.
 	zeroInt = new(big.Int).SetInt64(0)
+
+	// zeroRat is the default value for a big.Rat.
+	zeroRat = new(big.Rat).SetInt64(0)
+
+	// teraHash is 1TH represented as a big.int.
+	teraHash = new(big.Int).SetInt64(1000000000000)
 
 	// soloMaxGenTime is the threshold (in seconds) at which pool clients will
 	// generate a valid share when solo pool mode is activated. This is set to a
@@ -106,8 +112,6 @@ type Hub struct {
 	gConn        *grpc.ClientConn
 	grpc         walletrpc.WalletServiceClient
 	grpcMtx      sync.Mutex
-	hashRate     *big.Int
-	hashRateMtx  sync.Mutex
 	poolDiff     map[string]*DifficultyData
 	poolDiffMtx  sync.RWMutex
 	clients      uint32
@@ -235,7 +239,6 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		httpc:    httpc,
 		limiter:  limiter,
 		cfg:      hcfg,
-		hashRate: zeroInt,
 		poolDiff: make(map[string]*DifficultyData),
 		clients:  0,
 		connCh:   make(chan []byte),
@@ -431,14 +434,6 @@ func (h *Hub) AddClient(c *Client) {
 	h.clientsMtx.Lock()
 	h.clients++
 	h.clientsMtx.Unlock()
-
-	// Add the client's hash rate.
-	hash := dividend.MinerHashes[c.endpoint.miner]
-	h.hashRateMtx.Lock()
-	h.hashRate = new(big.Int).Add(h.hashRate, hash)
-	log.Infof("Client (%v/%v) connected, updated pool hash rate is %v",
-		c.extraNonce1, c.endpoint.miner, h.hashRate)
-	h.hashRateMtx.Unlock()
 }
 
 // RemoveClient removes a disconnected client and the hash rate it contributed to
@@ -451,14 +446,6 @@ func (h *Hub) RemoveClient(c *Client) {
 	h.clientsMtx.Lock()
 	h.clients--
 	h.clientsMtx.Unlock()
-
-	// Deduct the disconnected client's hash rate.
-	hash := dividend.MinerHashes[c.endpoint.miner]
-	h.hashRateMtx.Lock()
-	h.hashRate = new(big.Int).Sub(h.hashRate, hash)
-	log.Infof("Client (%v/%v) disconnected, updated pool hash rate is %v",
-		c.extraNonce1, c.endpoint.miner, h.hashRate)
-	h.hashRateMtx.Unlock()
 }
 
 // HasClients asserts the mining pool has clients.
@@ -973,11 +960,19 @@ func RespondWithError(w http.ResponseWriter, code int, message string) {
 
 // FetchHash handles requests on the hash rate of the pool.
 func (h *Hub) FetchHash(w http.ResponseWriter, r *http.Request) {
-	h.hashRateMtx.Lock()
-	hsh := new(big.Rat).SetFrac64(h.hashRate.Int64(), 1000000000000)
-	h.hashRateMtx.Unlock()
+	// Iterate through all connected miners and add hash rates.
+	total := new(big.Rat).SetInt64(0)
+	for _, endpoint := range h.endpoints {
+		endpoint.clientsMtx.Lock()
+		for _, client := range endpoint.clients {
+			client.hashRateMtx.RLock()
+			total = total.Add(total, client.hashRate)
+			client.hashRateMtx.RUnlock()
+		}
+		endpoint.clientsMtx.Unlock()
+	}
 
-	hash := fmt.Sprintf("%s TH/s", hsh.FloatString(6))
+	hash := fmt.Sprintf("%v TH/s", total.FloatString(12))
 	RespondWithJSON(w, http.StatusOK, map[string]string{"hash": hash})
 }
 

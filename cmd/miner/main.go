@@ -47,16 +47,18 @@ func main() {
 		return
 	}
 
-	go miner.run(ctx)
+	go func() {
+		for {
+			select {
+			case <-interrupt:
+				miner.cancel()
 
-	for {
-		select {
-		case <-interrupt:
-			miner.cancel()
-
-		case <-ctx.Done():
-			miner.conn.Close()
-			return
+			case <-ctx.Done():
+				miner.conn.Close()
+				return
+			}
 		}
-	}
+	}()
+
+	miner.run(ctx)
 }

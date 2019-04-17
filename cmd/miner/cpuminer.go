@@ -61,6 +61,7 @@ func (m *CPUMiner) hashRateMonitor(ctx context.Context) {
 		case <-ctx.Done():
 			close(m.updateHashes)
 			log.Info("Miner hash rate monitor done.")
+			m.miner.wg.Done()
 			return
 
 		case numHashes := <-m.updateHashes:
@@ -168,6 +169,7 @@ func (m *CPUMiner) generateBlocks(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Info("Miner generate blocks done.")
+			m.miner.wg.Done()
 			return
 
 		default:
