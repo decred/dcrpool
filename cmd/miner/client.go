@@ -119,6 +119,7 @@ func (m *Miner) connect(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Info("Connection handler done.")
+			m.wg.Done()
 			return
 		default:
 			// Non-blocking receive fallthrough.
@@ -135,6 +136,7 @@ func (m *Miner) connect(ctx context.Context) {
 		conn, err := net.Dial(network.TCP, poolAddr)
 		if err != nil {
 			log.Errorf("unable connect to %s, %v", poolAddr, err)
+			time.Sleep(time.Second * 5)
 			continue
 		}
 
@@ -170,6 +172,7 @@ func (m *Miner) listen(ctx context.Context) {
 		case <-ctx.Done():
 			close(m.chainCh)
 			log.Info("Miner listener done.")
+			m.wg.Done()
 			return
 
 		default:

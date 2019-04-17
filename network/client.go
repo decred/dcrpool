@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net"
 	"strings"
 	"sync"
@@ -37,35 +38,41 @@ const (
 
 // Client represents a client connection.
 type Client struct {
-	conn     net.Conn
-	endpoint *Endpoint
-	encoder  *json.Encoder
-	reader   *bufio.Reader
-	ctx      context.Context
-	cancel   context.CancelFunc
-	ip       string
 	// id          uint64
-	extraNonce1 string
-	ch          chan Message
-	req         map[uint64]string
-	reqMtx      sync.RWMutex
-	account     string
-	authorized  bool
-	subscribed  bool
+
+	conn               net.Conn
+	endpoint           *Endpoint
+	encoder            *json.Encoder
+	reader             *bufio.Reader
+	ctx                context.Context
+	cancel             context.CancelFunc
+	ip                 string
+	extraNonce1        string
+	ch                 chan Message
+	req                map[uint64]string
+	reqMtx             sync.RWMutex
+	account            string
+	authorized         bool
+	subscribed         bool
+	lastSubmissionTime *big.Int
+	hashRate           *big.Rat
+	hashRateMtx        sync.RWMutex
 }
 
 // NewClient creates client connection instance.
 func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
 	ctx, cancel := context.WithCancel(context.TODO())
 	c := &Client{
-		conn:     conn,
-		endpoint: endpoint,
-		ctx:      ctx,
-		cancel:   cancel,
-		ch:       make(chan Message),
-		encoder:  json.NewEncoder(conn),
-		reader:   bufio.NewReaderSize(conn, MaxMessageSize),
-		ip:       ip,
+		conn:               conn,
+		endpoint:           endpoint,
+		ctx:                ctx,
+		cancel:             cancel,
+		ch:                 make(chan Message),
+		encoder:            json.NewEncoder(conn),
+		reader:             bufio.NewReaderSize(conn, MaxMessageSize),
+		ip:                 ip,
+		lastSubmissionTime: zeroInt,
+		hashRate:           zeroRat,
 	}
 	c.GenerateExtraNonce1()
 	endpoint.hub.AddClient(c)
@@ -119,8 +126,41 @@ func (c *Client) Shutdown() {
 	}
 }
 
+// calculateHashRate generates the client hash rate based on work submissions
+// from the miner.
+func (c *Client) calculateHashRate() error {
+	now := new(big.Int).SetInt64(time.Now().Unix())
+	if c.lastSubmissionTime.Cmp(zeroInt) == 0 {
+		c.lastSubmissionTime = now
+		return nil
+	}
+
+	expectedShareTime := new(big.Int).Add(c.lastSubmissionTime,
+		c.endpoint.hub.cfg.MaxGenTime)
+	diff := new(big.Rat).SetFrac(now, expectedShareTime)
+	hash := dividend.MinerHashes[c.endpoint.miner]
+	if hash == nil {
+		return fmt.Errorf("miner hash not found for key (%s)",
+			c.endpoint.miner)
+	}
+
+	c.lastSubmissionTime = now
+
+	c.hashRateMtx.Lock()
+	c.hashRate = new(big.Rat).Quo(new(big.Rat).
+		Mul(diff, new(big.Rat).SetInt(hash)),
+		new(big.Rat).SetInt(teraHash))
+
+	log.Tracef("hash rate of (%v/%v) is %v", c.extraNonce1,
+		c.endpoint.miner, c.hashRate.FloatString(12))
+	c.hashRateMtx.Unlock()
+
+	return nil
+}
+
 // claimWeightedShare records a weighted share for the pool client. This serves
-// as proof of verifiable work contributed to the mining pool.
+// as proof of verifiable work contributed to the mining pool. This also
+// updates the hash rate of the miner based on the last submitted share time.
 func (c *Client) claimWeightedShare() error {
 	if c.endpoint.hub.cfg.ActiveNet.Name == chaincfg.MainNetParams.Name &&
 		c.endpoint.miner == dividend.CPU {
@@ -335,6 +375,13 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		resp := SubmitWorkResponse(*req.ID, false, err)
 		c.ch <- resp
 		return
+	}
+
+	// Calculate the hash rate of the client.
+	err = c.calculateHashRate()
+	if err != nil {
+		log.Errorf("unable to calculate hash rate of (%v/%v): %v",
+			c.extraNonce1, c.endpoint.miner, err)
 	}
 
 	// Claim a weighted share for work contributed to the pool if not mining
