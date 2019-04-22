@@ -48,15 +48,13 @@ func main() {
 	}
 
 	go func() {
-		for {
-			select {
-			case <-interrupt:
-				miner.cancel()
+		select {
+		case <-interrupt:
+			miner.cancel()
 
-			case <-ctx.Done():
-				miner.conn.Close()
-				return
-			}
+		case <-ctx.Done():
+			miner.conn.Close()
+			return
 		}
 	}()
 

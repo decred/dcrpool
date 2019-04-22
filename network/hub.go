@@ -102,6 +102,7 @@ type DifficultyData struct {
 type Hub struct {
 	lastWorkHeight    uint32 // update atomically
 	lastPaymentHeight uint32 // update atomically
+	clients           uint32 // update atomically
 
 	db           *bolt.DB
 	httpc        *http.Client
@@ -114,8 +115,6 @@ type Hub struct {
 	grpcMtx      sync.Mutex
 	poolDiff     map[string]*DifficultyData
 	poolDiffMtx  sync.RWMutex
-	clients      uint32
-	clientsMtx   sync.RWMutex
 	connCh       chan []byte
 	discCh       chan []byte
 	ctx          context.Context
@@ -123,21 +122,7 @@ type Hub struct {
 	txFeeReserve dcrutil.Amount
 	endpoints    []*Endpoint
 	blake256Pad  []byte
-}
-
-// CreateListeners sets up endpoints and listeners for each known pool client.
-func (h *Hub) CreateListeners() error {
-	for miner, port := range dividend.MinerPorts {
-		endpoint, err := NewEndpoint(h, port, miner)
-		if err != nil {
-			return err
-		}
-
-		go endpoint.Listen()
-		h.endpoints = append(h.endpoints, endpoint)
-	}
-
-	return nil
+	wg           sync.WaitGroup
 }
 
 // GenerateBlake256Pad generates the extra padding needed for work submission
@@ -226,7 +211,10 @@ func (h *Hub) processWork(headerE string, target string) {
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
-			client.ch <- workNotif
+			select {
+			case client.ch <- workNotif:
+			default:
+			}
 		}
 		endpoint.clientsMtx.Unlock()
 	}
@@ -338,10 +326,14 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 	}
 
 	// Setup listeners for all known pool clients.
-	err = h.CreateListeners()
-	if err != nil {
-		log.Error("Failed to create listeners: %v", err)
-		return nil, err
+	for miner, port := range dividend.MinerPorts {
+		endpoint, err := NewEndpoint(h, port, miner)
+		if err != nil {
+			log.Error("Failed to create listeners: %v", err)
+			return nil, err
+		}
+
+		h.endpoints = append(h.endpoints, endpoint)
 	}
 
 	// Create handlers for chain notifications being subscribed for.
@@ -421,39 +413,12 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 		log.Infof("GPRC connection established with wallet.")
 	}
 
-	go h.handleGetWork()
-	go h.handleChainUpdates()
-
 	return h, nil
-}
-
-// AddClient records a connected client and the hash rate it contributes to
-// to the pool.
-func (h *Hub) AddClient(c *Client) {
-	// Increment the client count.
-	h.clientsMtx.Lock()
-	h.clients++
-	h.clientsMtx.Unlock()
-}
-
-// RemoveClient removes a disconnected client and the hash rate it contributed to
-// the pool.
-func (h *Hub) RemoveClient(c *Client) {
-	// Remove the client from its associated endpoint.
-	c.endpoint.RemoveClient(c)
-
-	// Decrement the client count.
-	h.clientsMtx.Lock()
-	h.clients--
-	h.clientsMtx.Unlock()
 }
 
 // HasClients asserts the mining pool has clients.
 func (h *Hub) HasClients() bool {
-	h.clientsMtx.RLock()
-	hasClients := h.clients > 0
-	h.clientsMtx.RUnlock()
-	return hasClients
+	return atomic.LoadUint32(&h.clients) > 0
 }
 
 // SubmitWork sends solved block data to the consensus daemon for evaluation.
@@ -534,22 +499,25 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 		return err
 	}
 
-	log.Tracef("Published tx hash is: %x", pubTxResp.TransactionHash)
+	log.Infof("Published tx hash is: %x", pubTxResp.TransactionHash)
 
 	return nil
 }
 
 // handleGetWork periodically fetches available work from the consensus daemon.
-func (h *Hub) handleGetWork() {
+// It must be run as a goroutine.
+func (h *Hub) handleGetWork(ctx context.Context) {
 	var currHeaderE string
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-	log.Info("Started getwork handler")
+	h.wg.Add(1)
+	log.Trace("Started work handler.")
 
 	for {
 		select {
-		case <-h.ctx.Done():
-			log.Info("GetWork handler done.")
+		case <-ctx.Done():
+			log.Trace("Work handler done.")
+			h.wg.Done()
 			return
 		case <-ticker.C:
 			headerE, target, err := h.GetWork()
@@ -662,24 +630,15 @@ func (h *Hub) handleGetWork() {
 
 // handleChainUpdates processes connected and disconnected block notifications
 // from the consensus daemon.
-func (h *Hub) handleChainUpdates() {
-	log.Info("Started chain updates handler.")
+func (h *Hub) handleChainUpdates(ctx context.Context) {
+	h.wg.Add(1)
+	log.Trace("Started chain updates handler.")
 
 	for {
 		select {
-		case <-h.ctx.Done():
-			if !h.cfg.SoloPool {
-				h.gConn.Close()
-			}
-
-			h.rpccMtx.Lock()
-			h.rpcc.Shutdown()
-			h.rpccMtx.Unlock()
-
-			close(h.discCh)
-			close(h.connCh)
-
-			log.Info("Chain updates handler done.")
+		case <-ctx.Done():
+			log.Trace("Chain updates handler done.")
+			h.wg.Done()
 			return
 
 		case headerB := <-h.connCh:
@@ -847,6 +806,40 @@ func (h *Hub) handleChainUpdates() {
 			}
 		}
 	}
+}
+
+// shutdown tears down the hub and releases resources used.
+func (h *Hub) shutdown() {
+	// Close the wallet grpc connection if in pooled mining mode.
+	if !h.cfg.SoloPool {
+		h.gConn.Close()
+	}
+
+	// Shutdown the daemon rpc connection.
+	h.rpccMtx.Lock()
+	h.rpcc.Shutdown()
+	h.rpccMtx.Unlock()
+
+	// Close the connection and disconnection channels.
+	close(h.discCh)
+	close(h.connCh)
+
+	h.db.Close()
+}
+
+// run handles the process lifecycles of the pool hub.
+func (h *Hub) Run(ctx context.Context) {
+	h.wg.Add(len(h.endpoints))
+	for _, e := range h.endpoints {
+		go e.listen()
+		go e.connect(h.ctx)
+	}
+
+	go h.handleGetWork(h.ctx)
+	go h.handleChainUpdates(h.ctx)
+	h.wg.Wait()
+
+	h.shutdown()
 }
 
 // ProcessPayments fetches all eligible payments and publishes a
