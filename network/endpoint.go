@@ -5,14 +5,11 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
-)
-
-const (
-	// TCP represents the tcp network protocol.
-	TCP = "tcp"
+	"sync/atomic"
 )
 
 // Endpoint represents a stratum endpoint.
@@ -22,16 +19,20 @@ type Endpoint struct {
 	miner      string
 	listener   net.Listener
 	hub        *Hub
-	clients    []*Client
+	clients    map[string]*Client
 	clientsMtx sync.Mutex
+	connCh     chan net.Conn
+	wg         sync.WaitGroup
 }
 
 // NewEndpoint creates an endpoint instance.
 func NewEndpoint(hub *Hub, port uint32, miner string) (*Endpoint, error) {
 	endpoint := &Endpoint{
-		port:  port,
-		hub:   hub,
-		miner: miner,
+		port:    port,
+		hub:     hub,
+		miner:   miner,
+		clients: make(map[string]*Client),
+		connCh:  make(chan net.Conn),
 	}
 
 	hub.poolDiffMtx.Lock()
@@ -47,63 +48,71 @@ func NewEndpoint(hub *Hub, port uint32, miner string) (*Endpoint, error) {
 	return endpoint, nil
 }
 
-// Listen sets up a listener for incoming messages on the endpoint. It must be
-// run as a goroutine.
-func (e *Endpoint) Listen() {
-	listener, err := net.Listen(TCP, fmt.Sprintf("%s:%d", "0.0.0.0", e.port))
+// listen sets up a listener for incoming client connections on the endpoint.
+// It must be run as a goroutine.
+func (e *Endpoint) listen() {
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "0.0.0.0", e.port))
 	if err != nil {
-		log.Errorf("Failed to listen on tcp address: %v", err)
+		log.Errorf("unable to listen on tcp address: %v", err)
 		return
 	}
 
 	e.listener = listener
 	defer e.listener.Close()
-
 	log.Infof("Listening on %v for %v", e.port, e.miner)
 
 	for {
-		select {
-		case <-e.hub.ctx.Done():
-			e.clientsMtx.Lock()
-			for _, client := range e.clients {
-				client.cancel()
-			}
-			e.clientsMtx.Unlock()
-
-			log.Infof("Listener for %v on %v done", e.miner, e.port)
-			return
-
-		default:
-			// Non-blocking receive fallthrough.
-		}
-
 		conn, err := e.listener.Accept()
 		if err != nil {
-			log.Tracef("Failed to accept connection: %v for endpoint %v",
+			log.Tracef("unable to accept connection: %v for endpoint %v",
 				err, e.port)
 			return
 		}
 
-		client := NewClient(conn, e, conn.RemoteAddr().String())
-		e.clientsMtx.Lock()
-		e.clients = append(e.clients, client)
-		e.clientsMtx.Unlock()
+		e.connCh <- conn
+	}
+}
 
-		go client.Listen()
-		go client.Send()
+// connect creates new pool clients from established connections.
+// It must be run as a goroutine.
+func (e *Endpoint) connect(ctx context.Context) {
+	log.Tracef("Started connection handler for %v clients.", e.miner)
+
+	for {
+		select {
+		case <-ctx.Done():
+			e.clientsMtx.Lock()
+			for _, client := range e.clients {
+				log.Tracef("Terminating (%v) client.", client.generateID())
+				client.cancel()
+			}
+			e.clientsMtx.Unlock()
+			e.wg.Wait()
+
+			log.Tracef("Connection handler for %v clients done.", e.miner)
+			e.hub.wg.Done()
+			return
+
+		case conn := <-e.connCh:
+			client := NewClient(conn, e, conn.RemoteAddr().String())
+			e.clientsMtx.Lock()
+			e.clients[client.generateID()] = client
+			e.clientsMtx.Unlock()
+
+			updated := atomic.AddUint32(&e.hub.clients, 1)
+			atomic.StoreUint32(&e.hub.clients, updated)
+
+			go client.run(client.ctx)
+		}
+
 	}
 }
 
 // RemoveClient removes a disconnected pool client from its associated endpoint.
 func (e *Endpoint) RemoveClient(c *Client) {
 	e.clientsMtx.Lock()
-	for idx := 0; idx < len(e.clients); idx++ {
-		if c.ip == e.clients[idx].ip {
-			copy(e.clients[idx:], e.clients[idx+1:])
-			e.clients[len(e.clients)-1] = nil
-			e.clients = e.clients[:len(e.clients)-1]
-			break
-		}
-	}
+	id := c.generateID()
+	delete(e.clients, id)
+	log.Tracef("Client (%s) removed.", id)
 	e.clientsMtx.Unlock()
 }

@@ -10,7 +10,9 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math/big"
+	"net"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -45,6 +47,7 @@ type CPUMiner struct {
 	rateCh       chan float64
 	updateHashes chan uint64
 	workData     *SubmitWorkData
+	workCh       chan *network.Request
 }
 
 // hashRateMonitor tracks number of hashes per second the mining process is
@@ -54,13 +57,13 @@ func (m *CPUMiner) hashRateMonitor(ctx context.Context) {
 	var totalHashes uint64
 	ticker := time.NewTicker(time.Second * hpsUpdateSecs)
 	defer ticker.Stop()
-	log.Info("Miner hash rate monitor started.")
+	log.Trace("Miner hash rate monitor started.")
 
 	for {
 		select {
 		case <-ctx.Done():
 			close(m.updateHashes)
-			log.Info("Miner hash rate monitor done.")
+			log.Trace("Miner hash rate monitor done.")
 			m.miner.wg.Done()
 			return
 
@@ -154,28 +157,16 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.I
 	}
 }
 
-// generateBlocks attempts to solve blocks them while detecting when it is
-// performing stale work. When a block is solved, it is submitted.
-//
-// It must be run as a goroutine.
-func (m *CPUMiner) generateBlocks(ctx context.Context) {
+// solve is the main work horse of generateblocks. It attempts to solve
+// blocks while detecting when it is performing stale work. When a
+// a block is solved it is sent via the work channel.
+func (m *CPUMiner) solve(ctx context.Context) {
 	// Start a ticker which is used to signal checks for stale work and
 	// updates to the hash rate monitor.
 	ticker := time.NewTicker(333 * time.Millisecond)
 	defer ticker.Stop()
-	log.Info("Miner generate blocks started.")
 
 	for {
-		select {
-		case <-ctx.Done():
-			log.Info("Miner generate blocks done.")
-			m.miner.wg.Done()
-			return
-
-		default:
-			// Non-blocking receive fallthrough.
-		}
-
 		m.miner.workMtx.RLock()
 		if m.miner.work.target == nil || m.miner.work.jobID == "" ||
 			m.miner.work.header == nil {
@@ -190,20 +181,45 @@ func (m *CPUMiner) generateBlocks(ctx context.Context) {
 		m.miner.workMtx.RUnlock()
 
 		if m.solveBlock(ctx, headerB, target, ticker) {
-			// Record and send the request.
+			// Send the request.
 			worker := fmt.Sprintf("%s.%s", m.miner.config.Address,
 				m.miner.config.User)
 			id := m.miner.nextID()
-
 			req := network.SubmitWorkRequest(&id, worker, jobID,
 				m.workData.extraNonce2, m.workData.nTime, m.workData.nonce)
-			m.miner.recordRequest(id, network.Submit)
+			m.workCh <- req
+		}
+	}
+}
 
-			err := m.miner.encoder.Encode(req)
+// generateBlocks handles sending solved block submissions to the mining pool.
+// It must be run as a goroutine.
+func (m *CPUMiner) generateBlocks(ctx context.Context) {
+	log.Trace("Miner generate blocks started.")
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Trace("Miner generate blocks done.")
+			m.miner.wg.Done()
+			return
+
+		case work := <-m.workCh:
+			m.miner.recordRequest(*work.ID, network.Submit)
+			err := m.miner.encoder.Encode(work)
 			if err != nil {
-				log.Errorf("Failed to encode request: %v", err)
+				if err == io.EOF {
+					return
+				}
+
+				if nErr := err.(*net.OpError); nErr != nil {
+					if nErr.Op == "write" && nErr.Net == "tcp" {
+						continue
+					}
+				}
+
+				log.Errorf("Failed to encode work submission request: %v", err)
 				m.miner.cancel()
-				continue
 			}
 		}
 	}
@@ -225,5 +241,6 @@ func NewCPUMiner(m *Miner) *CPUMiner {
 		updateHashes: make(chan uint64),
 		workData:     new(SubmitWorkData),
 		miner:        m,
+		workCh:       make(chan *network.Request),
 	}
 }

@@ -124,8 +124,8 @@ func (p *Pool) route() {
 	p.router.HandleFunc("/backup", p.hub.BackupDB).Methods("POST")
 }
 
-// serve starts the pool api server.
-func (p *Pool) serve() {
+// serveAPI starts the pool api server.
+func (p *Pool) serveAPI() {
 	p.route()
 	p.server = &http.Server{
 		Addr:         fmt.Sprintf("0.0.0.0:%v", p.cfg.APIPort),
@@ -143,6 +143,15 @@ func (p *Pool) serve() {
 			pLog.Error(err)
 		}
 	}()
+}
+
+// shutdownAPI tears down the pool api server.
+func (p *Pool) shutdownAPI() {
+	ctx, cl := context.WithTimeout(p.ctx, time.Second*5)
+	defer cl()
+	if err := p.server.Shutdown(ctx); err != nil {
+		pLog.Error(err)
+	}
 }
 
 // NewPool initializes the mining pool.
@@ -197,22 +206,7 @@ func NewPool(cfg *config) (*Pool, error) {
 		return nil, err
 	}
 
-	p.serve()
-
 	return p, nil
-}
-
-// shutdown gracefully terminates the mining pool.
-func (p *Pool) shutdown() {
-	pLog.Info("Shutting down dcrpool.")
-	defer p.db.Close()
-	defer p.cancel()
-
-	ctx, cl := context.WithTimeout(p.ctx, 5*time.Second)
-	defer cl()
-	if err := p.server.Shutdown(ctx); err != nil {
-		pLog.Error(err)
-	}
 }
 
 func main() {
@@ -244,13 +238,16 @@ func main() {
 	pLog.Infof("Home dir: %s", cfg.HomeDir)
 	pLog.Infof("Started dcrpool.")
 
-	for {
+	go func() {
 		select {
 		case <-p.ctx.Done():
-			p.shutdown()
 			return
 		case <-interrupt:
 			p.cancel()
 		}
-	}
+	}()
+
+	p.serveAPI()
+	p.hub.Run(p.ctx)
+	p.shutdownAPI()
 }
