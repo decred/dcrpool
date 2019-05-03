@@ -13,9 +13,8 @@ import (
 	"strings"
 
 	"github.com/decred/dcrd/chaincfg"
-	"github.com/dnldd/dcrpool/util"
-
 	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrpool/util"
 	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
 )

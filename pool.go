@@ -18,10 +18,9 @@ import (
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
+	"github.com/decred/dcrpool/database"
+	"github.com/decred/dcrpool/network"
 	"github.com/gorilla/mux"
-
-	"github.com/dnldd/dcrpool/database"
-	"github.com/dnldd/dcrpool/network"
 )
 
 // Pool represents a Proof-of-Work Mining pool for Decred.

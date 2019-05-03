@@ -19,11 +19,10 @@ import (
 	"github.com/decred/dcrd/certgen"
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrpool/dividend"
+	"github.com/decred/dcrpool/util"
 	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
-
-	"github.com/dnldd/dcrpool/dividend"
-	"github.com/dnldd/dcrpool/util"
 )
 
 const (

@@ -10,9 +10,8 @@ import (
 
 	"github.com/decred/dcrd/blockchain"
 	"github.com/decred/dcrd/chaincfg"
-
-	"github.com/dnldd/dcrpool/dividend"
-	"github.com/dnldd/dcrpool/util"
+	"github.com/decred/dcrpool/dividend"
+	"github.com/decred/dcrpool/util"
 )
 
 func TestTargetConversion(t *testing.T) {

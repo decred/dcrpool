@@ -1,6 +1,6 @@
 # dcrpool 
 
-[![Build Status](https://travis-ci.com/dnldd/dcrpool.svg?branch=master)](https://travis-ci.com/dnldd/dcrpool)
+[![Build Status](https://travis-ci.com/decred/dcrpool.svg?branch=master)](https://travis-ci.com/decred/dcrpool)
 
 dcrpool is a stratum decred mining pool. It currently supports:
 * Innosilicon D9 (port: 5552, supported firmware: [D9_20180602_094459.swu](https://drive.google.com/open?id=1wofB_OUDkB2gxz_IS7wM8Br6ogKdYDmY))
@@ -17,7 +17,7 @@ accumulate at the specified mining address for the consensus daemon (dcrd).
 To install and run dcrpool:  
 
 ```sh
-git clone https://github.com/dnldd/dcrpool.git 
+git clone https://github.com/decred/dcrpool.git
 cd dcrpool 
 go install 
 dcrpool --configfile=path/to/config.conf 

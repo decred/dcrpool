@@ -12,9 +12,8 @@ import (
 	"strings"
 
 	bolt "github.com/coreos/bbolt"
-
-	"github.com/dnldd/dcrpool/database"
-	"github.com/dnldd/dcrpool/util"
+	"github.com/decred/dcrpool/database"
+	"github.com/decred/dcrpool/util"
 )
 
 // ErrWorkAlreadyExists is returned when an already existing work is found for

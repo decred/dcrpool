@@ -10,10 +10,9 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/dnldd/dcrpool/util"
-
 	bolt "github.com/coreos/bbolt"
-	"github.com/dnldd/dcrpool/database"
+	"github.com/decred/dcrpool/database"
+	"github.com/decred/dcrpool/util"
 )
 
 // Job represents cached copies of work delivered to clients.

@@ -1,4 +1,4 @@
-module github.com/dnldd/dcrpool
+module github.com/decred/dcrpool
 
 require (
 	github.com/coreos/bbolt v1.3.2
@@ -6,16 +6,17 @@ require (
 	github.com/dchest/blake256 v1.0.0
 	github.com/decred/dcrd/blockchain v1.1.1
 	github.com/decred/dcrd/certgen v1.0.2
-	github.com/decred/dcrd/chaincfg v1.3.0
+	github.com/decred/dcrd/chaincfg v1.4.0
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.1
 	github.com/decred/dcrd/dcrutil v1.2.0
 	github.com/decred/dcrd/rpcclient v1.1.0
 	github.com/decred/dcrd/wire v1.2.0
 	github.com/decred/dcrwallet/rpc/walletrpc v0.2.0
 	github.com/decred/slog v1.0.0
-	github.com/gorilla/mux v1.7.0
+	github.com/gorilla/mux v1.7.1
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/jrick/logrotate v1.0.0
-	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c
-	google.golang.org/grpc v1.18.0
+	go.etcd.io/bbolt v1.3.2 // indirect
+	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
+	google.golang.org/grpc v1.20.1
 )
