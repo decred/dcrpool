@@ -18,17 +18,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/decred/dcrd/chaincfg"
-
-	"github.com/decred/dcrd/wire"
-
-	"github.com/decred/dcrd/blockchain"
-
 	"github.com/davecgh/go-spew/spew"
+	"github.com/decred/dcrd/blockchain"
+	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
-	"github.com/dnldd/dcrpool/database"
-	"github.com/dnldd/dcrpool/dividend"
-	"github.com/dnldd/dcrpool/util"
+	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrpool/database"
+	"github.com/decred/dcrpool/dividend"
+	"github.com/decred/dcrpool/util"
 )
 
 const (

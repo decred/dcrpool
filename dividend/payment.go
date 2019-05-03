@@ -13,13 +13,11 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
-
 	bolt "github.com/coreos/bbolt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/dcrutil"
-
-	"github.com/dnldd/dcrpool/database"
-	"github.com/dnldd/dcrpool/util"
+	"github.com/decred/dcrpool/database"
+	"github.com/decred/dcrpool/util"
 )
 
 // Payment represents an outstanding payment for a pool account.

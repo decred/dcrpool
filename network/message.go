@@ -13,8 +13,8 @@ import (
 	"strings"
 
 	"github.com/decred/dcrd/wire"
-	"github.com/dnldd/dcrpool/dividend"
-	"github.com/dnldd/dcrpool/util"
+	"github.com/decred/dcrpool/dividend"
+	"github.com/decred/dcrpool/util"
 )
 
 // Message types.

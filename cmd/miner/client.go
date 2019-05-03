@@ -17,9 +17,8 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-
-	"github.com/dnldd/dcrpool/dividend"
-	"github.com/dnldd/dcrpool/network"
+	"github.com/decred/dcrpool/dividend"
+	"github.com/decred/dcrpool/network"
 )
 
 // Work represents the data received from a work notification. It comprises of

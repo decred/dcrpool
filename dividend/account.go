@@ -12,7 +12,7 @@ import (
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/dchest/blake256"
-	"github.com/dnldd/dcrpool/database"
+	"github.com/decred/dcrpool/database"
 )
 
 // Account represents an anonymous mining pool account.

@@ -17,21 +17,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
-	"github.com/decred/dcrd/chaincfg/chainhash"
-
 	bolt "github.com/coreos/bbolt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/chaincfg"
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
 	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrpool/database"
+	"github.com/decred/dcrpool/dividend"
+	"github.com/decred/dcrpool/util"
 	"github.com/decred/dcrwallet/rpc/walletrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-
-	"github.com/dnldd/dcrpool/database"
-	"github.com/dnldd/dcrpool/dividend"
-	"github.com/dnldd/dcrpool/util"
 )
 
 const (

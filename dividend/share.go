@@ -14,11 +14,9 @@ import (
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg"
-
 	"github.com/decred/dcrd/dcrutil"
-
-	"github.com/dnldd/dcrpool/database"
-	"github.com/dnldd/dcrpool/util"
+	"github.com/decred/dcrpool/database"
+	"github.com/decred/dcrpool/util"
 )
 
 // Miner types lists all known DCR miners
