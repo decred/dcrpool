@@ -11,10 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"time"
-
 	"sort"
 	"strings"
+	"time"
+
+	flags "github.com/jessevdk/go-flags"
 
 	"github.com/decred/dcrd/certgen"
 	"github.com/decred/dcrd/chaincfg"
@@ -22,7 +23,6 @@ import (
 	"github.com/decred/dcrpool/dividend"
 	"github.com/decred/dcrpool/util"
 	"github.com/decred/slog"
-	flags "github.com/jessevdk/go-flags"
 )
 
 const (
@@ -72,30 +72,30 @@ var runServiceCommand func(string) error
 
 // config defines the configuration options for the pool.
 type config struct {
-	HomeDir         string   `long:"homedir" description:"Path to application home directory."`
-	ConfigFile      string   `long:"configfile" description:"Path to configuration file."`
-	DataDir         string   `long:"datadir" description:"The data directory."`
-	ActiveNet       string   `long:"activenet" description:"The active network being mined on. {testnet3, mainnet, simnet}"`
-	APIPort         uint32   `long:"apiport" description:"The pool API port."`
-	DebugLevel      string   `long:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
-	LogDir          string   `long:"logdir" description:"Directory to log output."`
-	DBFile          string   `long:"dbfile" description:"Path to the database file."`
-	DcrdRPCHost     string   `long:"dcrdrpchost" description:"The ip:port to establish an RPC connection for dcrd."`
-	DcrdRPCCert     string   `long:"dcrdrpccert" description:"The dcrd RPC certificate."`
-	WalletGRPCHost  string   `long:"walletgrpchost" description:"The ip:port to establish a GRPC connection for the wallet."`
-	WalletRPCCert   string   `long:"walletrpccert" description:"The wallet RPC certificate."`
-	RPCUser         string   `long:"rpcuser" description:"Username for RPC connections."`
-	RPCPass         string   `long:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
-	PoolFeeAddrs    []string `long:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
-	PoolFee         float64  `long:"poolfee" description:"The fee charged for pool participation. eg. 0.01 (1%), 0.05 (5%)."`
-	MaxTxFeeReserve float64  `long:"maxtxfeereserve" description:"The maximum amount reserved for transaction fees, in DCR."`
-	MaxGenTime      uint64   `long:"maxgentime" description:"The share creation target time for the pool in seconds."`
-	PaymentMethod   string   `long:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
-	LastNPeriod     uint32   `long:"lastnperiod" description:"The period of interest when using the PPLNS payment scheme."`
-	WalletPass      string   `long:"walletpass" description:"The wallet passphrase."`
-	MinPayment      float64  `long:"minpayment" description:"The minimum payment to process for an account."`
-	SoloPool        bool     `long:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
-	BackupPass      string   `long:"backuppass" description:"The backup password, required for backup over api"`
+	HomeDir         string   `long:"homedir" ini-name:"homedir" description:"Path to application home directory."`
+	ConfigFile      string   `long:"configfile" ini-name:"configfile" description:"Path to configuration file."`
+	DataDir         string   `long:"datadir" ini-name:"datadir" description:"The data directory."`
+	ActiveNet       string   `long:"activenet" ini-name:"activenet" description:"The active network being mined on. {testnet3, mainnet, simnet}"`
+	APIPort         uint32   `long:"apiport" ini-name:"apiport" description:"The pool API port."`
+	DebugLevel      string   `long:"debuglevel" ini-name:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
+	LogDir          string   `long:"logdir" ini-name:"logdir" description:"Directory to log output."`
+	DBFile          string   `long:"dbfile" ini-name:"dbfile" description:"Path to the database file."`
+	DcrdRPCHost     string   `long:"dcrdrpchost" ini-name:"dcrdrpchost" description:"The ip:port to establish an RPC connection for dcrd."`
+	DcrdRPCCert     string   `long:"dcrdrpccert" ini-name:"dcrdrpccert" description:"The dcrd RPC certificate."`
+	WalletGRPCHost  string   `long:"walletgrpchost" ini-name:"walletgrpchost" description:"The ip:port to establish a GRPC connection for the wallet."`
+	WalletRPCCert   string   `long:"walletrpccert" ini-name:"walletrpccert" description:"The wallet RPC certificate."`
+	RPCUser         string   `long:"rpcuser" ini-name:"rpcuser" description:"Username for RPC connections."`
+	RPCPass         string   `long:"rpcpass" ini-name:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
+	PoolFeeAddrs    []string `long:"poolfeeaddrs" ini-name:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
+	PoolFee         float64  `long:"poolfee" ini-name:"poolfee" description:"The fee charged for pool participation. eg. 0.01 (1%), 0.05 (5%)."`
+	MaxTxFeeReserve float64  `long:"maxtxfeereserve" ini-name:"maxtxfeereserve" description:"The maximum amount reserved for transaction fees, in DCR."`
+	MaxGenTime      uint64   `long:"maxgentime" ini-name:"maxgentime" description:"The share creation target time for the pool in seconds."`
+	PaymentMethod   string   `long:"paymentmethod" ini-name:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
+	LastNPeriod     uint32   `long:"lastnperiod" ini-name:"lastnperiod" description:"The period of interest when using the PPLNS payment scheme."`
+	WalletPass      string   `long:"walletpass" ini-name:"walletpass" description:"The wallet passphrase."`
+	MinPayment      float64  `long:"minpayment" ini-name:"minpayment" description:"The minimum payment to process for an account."`
+	SoloPool        bool     `long:"solopool" ini-name:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
+	BackupPass      string   `long:"backuppass" ini-name:"backuppass" description:"The backup password, required for backup over api."`
 	poolFeeAddrs    []dcrutil.Address
 	dcrdRPCCerts    []byte
 	net             *chaincfg.Params
@@ -349,7 +349,8 @@ func loadConfig() (*config, []string, error) {
 	// not specify an override.
 	if !fileExists(preCfg.ConfigFile) {
 		preIni := flags.NewIniParser(preParser)
-		err = preIni.WriteFile(preCfg.ConfigFile, flags.IniDefault)
+		err = preIni.WriteFile(preCfg.ConfigFile,
+			flags.IniIncludeComments|flags.IniIncludeDefaults)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating a default "+
 				"config file: %v", err)
@@ -363,8 +364,7 @@ func loadConfig() (*config, []string, error) {
 		err := flags.NewIniParser(parser).ParseFile(preCfg.ConfigFile)
 		if err != nil {
 			if _, ok := err.(*os.PathError); !ok {
-				fmt.Fprintf(os.Stderr, "Error parsing config "+
-					"file: %v\n", err)
+				fmt.Fprintf(os.Stderr, "error parsing config file: %v\n", err)
 				fmt.Fprintln(os.Stderr, usageMessage)
 				return nil, nil, err
 			}
@@ -391,7 +391,7 @@ func loadConfig() (*config, []string, error) {
 
 	// Ensure the backup password is set.
 	if cfg.BackupPass == "" {
-		str := "%s: backup password not set"
+		str := "%s: pool backup password is not set"
 		err := fmt.Errorf(str, funcName)
 		return nil, nil, err
 	}
