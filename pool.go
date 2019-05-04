@@ -18,9 +18,11 @@ import (
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
-	"github.com/decred/dcrpool/database"
-	"github.com/decred/dcrpool/network"
 	"github.com/gorilla/mux"
+
+	"github.com/decred/dcrpool/database"
+	"github.com/decred/dcrpool/homepage"
+	"github.com/decred/dcrpool/network"
 )
 
 // Pool represents a Proof-of-Work Mining pool for Decred.
@@ -106,16 +108,10 @@ func (p *Pool) initDB() error {
 // route configures the api routes of the pool.
 func (p *Pool) route() {
 	p.router = mux.NewRouter()
-	p.router.Use(p.limiter.LimiterMiddleware)
-	p.router.HandleFunc("/hash", p.hub.FetchHash).Methods("GET")
-	p.router.HandleFunc("/connections", p.hub.FetchConnections).Methods("GET")
-	p.router.HandleFunc("/mined", p.hub.FetchMinedWork).Methods("GET")
-	p.router.HandleFunc("/work/quotas", p.hub.FetchWorkQuotas).
-		Methods("GET")
-	p.router.HandleFunc("/work/height", p.hub.FetchLastWorkHeight).
-		Methods("GET")
-	p.router.HandleFunc("/payment/height", p.hub.FetchLastPaymentHeight).
-		Methods("GET")
+
+	p.router.HandleFunc("/", homepage.Get).Methods("GET")
+	p.router.PathPrefix("/css/").Handler(http.StripPrefix("/css/", http.FileServer(http.Dir("homepage/public/css"))))
+
 	p.router.HandleFunc("/account/mined",
 		p.hub.FetchMinedWorkByAccount).Methods("POST")
 	p.router.HandleFunc("/account/payments",
@@ -125,6 +121,7 @@ func (p *Pool) route() {
 
 // serveAPI starts the pool api server.
 func (p *Pool) serveAPI() {
+	homepage.Init(p.hub)
 	p.route()
 	p.server = &http.Server{
 		Addr:         fmt.Sprintf("0.0.0.0:%v", p.cfg.APIPort),

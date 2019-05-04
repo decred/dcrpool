@@ -1,5 +1,7 @@
 module github.com/decred/dcrpool
 
+go 1.12
+
 require (
 	github.com/coreos/bbolt v1.3.2
 	github.com/davecgh/go-spew v1.1.1

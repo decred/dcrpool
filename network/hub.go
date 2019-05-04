@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -949,8 +950,8 @@ func RespondWithError(w http.ResponseWriter, code int, message string) {
 	RespondWithJSON(w, code, map[string]string{"error": message})
 }
 
-// FetchHash handles requests on the hash rate of the pool.
-func (h *Hub) FetchHash(w http.ResponseWriter, r *http.Request) {
+// FetchHash returns the total hashrate of all connected miners
+func (h *Hub) FetchHash() *big.Rat {
 	// Iterate through all connected miners and add hash rates.
 	total := new(big.Rat).SetInt64(0)
 	for _, endpoint := range h.endpoints {
@@ -962,72 +963,53 @@ func (h *Hub) FetchHash(w http.ResponseWriter, r *http.Request) {
 		}
 		endpoint.clientsMtx.Unlock()
 	}
-
-	hash := fmt.Sprintf("%v TH/s", total.FloatString(12))
-	RespondWithJSON(w, http.StatusOK, map[string]string{"hash": hash})
+	return total
 }
 
-//FetchConnectionInfo handles requests on the number of connected pool clients.
-func (h *Hub) FetchConnections(w http.ResponseWriter, r *http.Request) {
+// FetchConnections returns information about all currently
+// connected clients
+func (h *Hub) FetchConnections() map[string]uint32 {
 	connInfo := make(map[string]uint32)
-	total := 0
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
 			connInfo[client.endpoint.miner]++
-			total++
 		}
 		endpoint.clientsMtx.Unlock()
 	}
-
-	resp := map[string]interface{}{
-		"total":       total,
-		"connections": connInfo,
-	}
-
-	RespondWithJSON(w, http.StatusOK, resp)
+	return connInfo
 }
 
-// FetchLastPaymentHeight handles requests on the last height at which payments
+// FetchLastPaymentHeight returns the last height at which payments
 // were made
-func (h *Hub) FetchLastPaymentHeight(w http.ResponseWriter, r *http.Request) {
-	lastPaymentHeight := atomic.LoadUint32(&h.lastPaymentHeight)
+func (h *Hub) FetchLastPaymentHeight() (uint32, error) {
 	if h.cfg.SoloPool {
-		RespondWithError(w, http.StatusBadRequest,
-			"payment processing is disabled in solo pool mode")
-		return
+		return 0, errors.New("payment processing is disabled in solo pool mode")
 	}
-
-	RespondWithJSON(w, http.StatusOK,
-		map[string]uint32{"lastpaymentheight": lastPaymentHeight})
+	return atomic.LoadUint32(&h.lastPaymentHeight), nil
 }
 
-//FetchLastWorkHeight handles requests on the last height work was generated for.
-func (h *Hub) FetchLastWorkHeight(w http.ResponseWriter, r *http.Request) {
-	lastWorkHeight := atomic.LoadUint32(&h.lastWorkHeight)
-	RespondWithJSON(w, http.StatusOK,
-		map[string]uint32{"lastworkheight": lastWorkHeight})
+//FetchLastWorkHeight returns last height work was generated for.
+func (h *Hub) FetchLastWorkHeight() uint32 {
+	return atomic.LoadUint32(&h.lastWorkHeight)
 }
 
-// FetchMinedWork handles requests on listing mined work by the pool
-func (h *Hub) FetchMinedWork(w http.ResponseWriter, r *http.Request) {
+// FetchMinedWork returns all mined work by the pool
+func (h *Hub) FetchMinedWork() ([]*AcceptedWork, error) {
 	work, err := ListMinedWork(h.db)
 	if err != nil {
-		RespondWithError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, err
 	}
 
-	RespondWithJSON(w, http.StatusOK, work)
+	return work, nil
 }
 
 // FetchWorkQuotas returns the reward distribution to pool accounts
 // based on work contributed per the peyment scheme used by the pool.
-func (h *Hub) FetchWorkQuotas(w http.ResponseWriter, r *http.Request) {
+func (h *Hub) FetchWorkQuotas() (map[string]interface{}, error) {
 	if h.cfg.SoloPool {
-		RespondWithJSON(w, http.StatusOK, map[string]string{
-			"response": "share percentages not available when mining" +
-				" in solo pool mode"})
-		return
+		return nil, errors.New("share percentages not available when mining" +
+			" in solo pool mode")
 	}
 
 	height := atomic.LoadUint32(&h.lastWorkHeight)
@@ -1046,16 +1028,13 @@ func (h *Hub) FetchWorkQuotas(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		RespondWithError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, err
 	}
 
-	resp := map[string]interface{}{
+	return map[string]interface{}{
 		"type":    h.cfg.PaymentMethod,
 		"results": percentages,
-	}
-
-	RespondWithJSON(w, http.StatusOK, resp)
+	}, nil
 }
 
 // FetchMinedWorkByAccount returns a list of mined work by the provided account.

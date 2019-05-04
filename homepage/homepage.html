@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>dcrpool</title>
+        <link rel="stylesheet" type="text/css" href="/css/bootstrap-4.3.1.min.css">
+    </head>
+    <body class="bg-primary">
+        
+        <div class="row justify-content-center">
+            <div class="col-2 m-3 bg-light">
+                <h4>Hash rate</h4>
+                <p>{{.HashRate}}</p>
+            </div>
+            <div class="col-2 m-3 bg-light">
+                <h4>Last Payment Height</h4>
+                {{ with .LastPaymentHeight}}
+                    <p>{{.}}</p>
+                {{else}}
+                    <p>Not applicable - dcrpool is running in solo mode</p>
+                {{end}}
+            </div>
+            <div class="col-2 m-3 bg-light">
+                <h4>Last Work Height</h4>
+                <p>{{.LastWorkHeight}}</p>
+            </div>
+        </div>
+        
+        <div class="row justify-content-center">
+            <div class="col-2 m-3 bg-light">
+                <h4>Connections</h4>
+                {{ range $key, $value := .Connections }}
+                    <p>{{$key}} - {{$value}}</p>
+                {{else}}
+                    <p>No connections</p>
+                {{end}}
+            </div>
+            <div class="col-5 m-3 bg-light">
+                <h4>Work Quotas</h4>
+                <p>Type: {{.WorkQuotas.type}}</P>
+                <p>Results:</P>
+                {{ range $key, $value := .WorkQuotas.results }}
+                    <p>{{$key}} - {{$value}}</p>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-10 m-3 bg-light">
+                <h4>Mined Work</h4>
+                {{ range $key, $value := .MinedWork }}
+                    <p>Block {{$value.BlockHash}} mined by {{$value.MinedBy}}</p>
+                {{else}}
+                    <p>No mined work</p>
+                {{end}}
+            </div>
+        </div>
+
+    </body>
+</html>
