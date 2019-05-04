@@ -45,6 +45,7 @@ DCRD_CONF="${HOME}/.dcrd/dcrd.conf"
 WALLET_RPC_CERT="${HOME}/.dcrwallet/rpc.cert"
 WALLET_RPC_KEY="${HOME}/.dcrwallet/rpc.key"
 
+echo "Writing node config files"
 mkdir -p "${NODES_ROOT}/master"
 mkdir -p "${NODES_ROOT}/wallet"
 mkdir -p "${NODES_ROOT}/pool"
@@ -181,6 +182,7 @@ chmod +x "${NODES_ROOT}/master/ctl"
 tmux rename-window -t $SESSION:0 'master'
 tmux send-keys "cd ${NODES_ROOT}/master" C-m
 
+echo "Starting ${NETWORK} dcrd"
 if [ "${NETWORK}" = "mainnet" ]; then
 tmux send-keys "dcrd -C ${DCRD_CONF} \
 --rpccert=${DCRD_RPC_CERT} --rpckey=${DCRD_RPC_KEY} \
@@ -225,6 +227,7 @@ tmux new-window -t $SESSION:1 -n 'mctl'
 tmux send-keys "cd ${NODES_ROOT}/master" C-m
 
 if [ "${NETWORK}" = "simnet" ]; then
+echo "Waiting for some ${NETWORK} blocks to be mined"
 sleep 2
 # mine some blocks to start the chain if the active network is simnet.
 tmux send-keys "./mine 2" C-m
@@ -243,8 +246,10 @@ chmod +x "${NODES_ROOT}/wallet/ctl"
 tmux new-window -t $SESSION:2 -n 'wallet'
 tmux send-keys "cd ${NODES_ROOT}/wallet" C-m
 tmux send-keys "dcrwallet -C wallet.conf --create" C-m
+echo "Creating ${NETWORK} wallet"
 sleep 2
 tmux send-keys "${WALLET_PASS}" C-m "${WALLET_PASS}" C-m "n" C-m "y" C-m
+echo "Setting wallet passphrase"
 sleep 1
 tmux send-keys "${WALLET_SEED}" C-m C-m
 tmux send-keys "dcrwallet -C wallet.conf" C-m
@@ -252,6 +257,7 @@ tmux send-keys "dcrwallet -C wallet.conf" C-m
 ################################################################################
 # Setup the pool wallet's dcrctl (wctl).
 ################################################################################
+echo "Waiting for nodes to be synced"
 sleep 6
 # The consensus daemon must be synced for account generation to 
 # work as expected.
@@ -270,6 +276,7 @@ fi
 ################################################################################
 # Setup dcrpool.
 ################################################################################
+echo "Starting dcrpool"
 sleep 4
 tmux new-window -t $SESSION:4 -n 'pool'
 tmux send-keys "cd ${NODES_ROOT}/pool" C-m
@@ -279,6 +286,7 @@ if [ "${NETWORK}" = "simnet" ]; then
 ################################################################################
 # Setup first mining client. 
 ################################################################################
+echo "Starting mining client 1"
 sleep 1
 tmux new-window -t $SESSION:5 -n 'c1'
 tmux send-keys "cd ${NODES_ROOT}/c1" C-m
@@ -287,6 +295,7 @@ tmux send-keys "miner --configfile=client.conf --homedir=${NODES_ROOT}/c1" C-m
 ################################################################################
 # Setup another mining client. 
 ################################################################################
+echo "Starting mining client 2"
 sleep 1
 tmux new-window -t $SESSION:6 -n 'c2'
 tmux send-keys "cd ${NODES_ROOT}/c2" C-m
