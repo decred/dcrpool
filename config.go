@@ -440,7 +440,7 @@ func loadConfig() (*config, []string, error) {
 			addr, err := dcrutil.DecodeAddress(pAddr)
 			if err != nil {
 				str := "%s: pool fee address '%v' failed to decode: %v"
-				err := fmt.Errorf(str, funcName, addr, err)
+				err := fmt.Errorf(str, funcName, pAddr, err)
 				fmt.Fprintln(os.Stderr, err)
 				fmt.Fprintln(os.Stderr, usageMessage)
 				return nil, nil, err
