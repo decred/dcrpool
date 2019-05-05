@@ -1,5 +1,7 @@
 module github.com/decred/dcrpool
 
+go 1.12
+
 require (
 	github.com/coreos/bbolt v1.3.2
 	github.com/davecgh/go-spew v1.1.1
@@ -13,7 +15,10 @@ require (
 	github.com/decred/dcrd/wire v1.2.0
 	github.com/decred/dcrwallet/rpc/walletrpc v0.2.0
 	github.com/decred/slog v1.0.0
+	github.com/gorilla/context v1.1.1
+	github.com/gorilla/csrf v1.5.1
 	github.com/gorilla/mux v1.7.1
+	github.com/gorilla/sessions v1.1.3
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/jrick/logrotate v1.0.0
 	go.etcd.io/bbolt v1.3.2 // indirect

@@ -12,15 +12,19 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"time"
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
+	"github.com/gorilla/csrf"
+	"github.com/gorilla/mux"
+
 	"github.com/decred/dcrpool/database"
 	"github.com/decred/dcrpool/network"
-	"github.com/gorilla/mux"
+	"github.com/decred/dcrpool/webui"
 )
 
 // Pool represents a Proof-of-Work Mining pool for Decred.
@@ -106,25 +110,31 @@ func (p *Pool) initDB() error {
 // route configures the api routes of the pool.
 func (p *Pool) route() {
 	p.router = mux.NewRouter()
-	p.router.Use(p.limiter.LimiterMiddleware)
-	p.router.HandleFunc("/hash", p.hub.FetchHash).Methods("GET")
-	p.router.HandleFunc("/connections", p.hub.FetchConnections).Methods("GET")
-	p.router.HandleFunc("/mined", p.hub.FetchMinedWork).Methods("GET")
-	p.router.HandleFunc("/work/quotas", p.hub.FetchWorkQuotas).
-		Methods("GET")
-	p.router.HandleFunc("/work/height", p.hub.FetchLastWorkHeight).
-		Methods("GET")
-	p.router.HandleFunc("/payment/height", p.hub.FetchLastPaymentHeight).
-		Methods("GET")
-	p.router.HandleFunc("/account/mined",
-		p.hub.FetchMinedWorkByAccount).Methods("POST")
-	p.router.HandleFunc("/account/payments",
-		p.hub.FetchProcessedPaymentsForAccount).Methods("POST")
-	p.router.HandleFunc("/backup", p.hub.BackupDB).Methods("POST")
+
+	csrfMiddleware := csrf.Protect(
+		[]byte(p.cfg.Secret),
+		csrf.Secure(p.cfg.SecureCSRF))
+
+	p.router.Use(csrfMiddleware)
+
+	cssDir := http.Dir(filepath.Join(p.cfg.WebUIDir, "public/css"))
+	p.router.PathPrefix("/css/").Handler(http.StripPrefix("/css/", http.FileServer(cssDir)))
+
+	p.router.HandleFunc("/", webui.GetIndex).Methods("GET")
+	p.router.HandleFunc("/admin", webui.GetAdmin).Methods("GET")
+	p.router.HandleFunc("/admin", webui.PostAdmin).Methods("POST")
+	p.router.HandleFunc("/backup", webui.PostBackup).Methods("POST")
+	p.router.HandleFunc("/logout", webui.PostLogout).Methods("POST")
 }
 
 // serveAPI starts the pool api server.
 func (p *Pool) serveAPI() {
+	err := webui.Init(p.hub, p.db, p.cfg.Secret, p.cfg.WebUIDir)
+	if err != nil {
+		pLog.Errorf("Failed to initialise web ui: ", err)
+		return
+	}
+
 	p.route()
 	p.server = &http.Server{
 		Addr:         fmt.Sprintf("0.0.0.0:%v", p.cfg.APIPort),

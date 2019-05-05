@@ -92,6 +92,9 @@ poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
 backuppass=b@ckUp
+webuidir=../../webui
+secret=secret
+securecsrf=false
 EOF
 fi
 
@@ -119,6 +122,9 @@ poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
 backuppass=b@ckUp
+webuidir=../../webui
+secret=secret
+securecsrf=false
 EOF
 
 cat > "${NODES_ROOT}/dcrwctl.conf" <<EOF
@@ -165,6 +171,9 @@ poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
 backuppass=b@ckUp
+webuidir=../../webui
+secret=secret
+securecsrf=false
 EOF
 fi
 

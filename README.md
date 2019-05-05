@@ -14,6 +14,8 @@ mining pool. It supports both PPS (Pay Per Share) and PPLNS
 available mining pool. When configured as a solo pool, mining rewards 
 accumulate at the specified mining address for the consensus daemon (dcrd).
 
+dcpool provides web ui which is available on port 8080 by default.
+
 To install and run dcrpool:  
 
 ```sh
@@ -40,39 +42,6 @@ To run the mining harness:
 ```sh
 cd dcrpool
 ./harness.sh 
-```
-
-dcpool provides API access to mining pool data on. It currently has the following calls available:
-```
-GET /hash - maximum estimated hash of connected pool clients.
-
-GET /connections - number of connected pool clients.
-
-GET /work/quotes [pooled mining call] - PPS/PPLNS work quotas for participating pool clients. 
-
-GET /work/height - the recent work height.
-
-GET /payment/height - the last payment height.
-
-POST /account/mined - list of mined blocks by account.
-payload: {
-	"name":"xxx", - the account name.
-	"address": "xxx" - the account address.
-}
-
-GET /mined - list of mined blocks by the pool.
-
-POST /account/payments [pooled mining call] - list of payments made to the provided account.
-payload: {
-	"name":"xxx", - the account name.
-	"address": "xxx", - the account address.
-	"min": xxxx - the minimum payment time, in seconds, unix time.
-}
-
-POST /backup - database backup.
-payload: {
-	"pass":"xxx" - the backup password.
-}
 ```
 
 Thanks to davecgh, SweeperAA, dhill, jhartbarger and NickH for their contributions.
