@@ -1,0 +1,88 @@
+{{define "admin"}}
+{{template "header" .}}
+
+
+{{ if .Admin }}
+    <div class="row">
+
+        <div class="m-3 p-3 overflow-hidden">
+            <form action="/backup" method="post">
+                <h4>Database Backup</h4>
+                {{.CSRF}}
+                <button type="submit" class="btn btn-primary">Download Backup</button>
+            </form>
+        </div>  
+
+    </div>
+    <div class="row">
+
+        <div class="m-3 p-3 overflow-hidden">
+            <h4>Work Quotas ({{.WorkQuotas.Type}})</h4>
+            <div style="overflow: auto; max-height: 250px;">
+                <table class="table table-striped">
+                    <tr>
+                        <th>User</th>
+                        <th>Percentage</th>
+                    </tr>
+                    {{ range .WorkQuotas.Quotas }}
+                        <tr>
+                            <td>{{.User}}</td>
+                            <td>{{.Percentage}}</td>
+                        </tr>
+                    {{else}}
+                        <tr>
+                            <td colspan="100%">No Connections</td>
+                        </tr>
+                    {{end}}
+                </table>
+            </div>
+        </div>
+
+        <div class="m-3 p-3 overflow-hidden">
+            <h4>Connections</h4>
+            <div style="overflow: auto; max-height: 250px;">
+                <table class="table table-striped">
+                    <tr>
+                        <th>IP</th>
+                        <th>Port</th>
+                        <th>Miner</th>
+                    </tr>
+                    {{ range .Connections }}
+                        <tr>
+                            <td>{{.IP}}</td>
+                            <td>{{.Port}}</td>
+                            <td>{{.Miner}}</td>
+                        </tr>
+                    {{else}}
+                        <tr>
+                            <td colspan="100%">No Connections</td>
+                        </tr>
+                    {{end}}
+                </table>
+            </div>
+        </div>
+        
+    </div>
+
+{{else}}
+
+    <div class="row justify-content-center">
+        <div class="m-3 p-3 overflow-hidden">
+            <form action="/admin" method="post">
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" class="form-control" placeholder="Enter password">
+                </div>
+                {{.CSRF}}
+                <button type="submit" class="btn btn-primary">Submit</button>
+                <a class="float-right" href="/">Return to homepage</a>
+            </form>
+        </div>
+    </div>
+
+{{end}}
+
+</div>
+</body>
+</html>
+{{end}}

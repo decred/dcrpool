@@ -1,0 +1,19 @@
+.site-header {
+    background-color: #091440;
+}
+
+.site-header .logo--logo {
+    padding-right: 5px;
+    border-right: 0.3px solid #f9fafa;
+}
+
+.site-header .logo--text {
+    padding: 0 5px;
+    font-size: 13px;
+    line-height: 1;
+    color: #f9fafa;
+}
+
+body {
+    background-color: #f3f5f6;
+}

@@ -47,6 +47,8 @@ const (
 	defaultMaxTxFeeReserve = 0.1
 	defaultSoloPool        = false
 	defaultAPIPort         = 8080
+	defaultWebUIDir        = "webui"
+	defaultSecureCSRF      = true
 )
 
 var (
@@ -96,6 +98,9 @@ type config struct {
 	MinPayment      float64  `long:"minpayment" ini-name:"minpayment" description:"The minimum payment to process for an account."`
 	SoloPool        bool     `long:"solopool" ini-name:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
 	BackupPass      string   `long:"backuppass" ini-name:"backuppass" description:"The backup password, required for backup over api."`
+	Secret          string   `long:"secret" ini-name:"secret" description:"Secret string used to encrypt session data. Can use openssl rand -hex 32 to generate one."`
+	SecureCSRF      bool     `long:"securecsrf" ini-name:"securecsrf" description:"Should always be enabled if the web UI is served to clients over HTTPS"`
+	WebUIDir        string   `long:"webuidir" ini-name:"webuidir" description:"Directory containing web assets (templates, css etc.)"`
 	poolFeeAddrs    []dcrutil.Address
 	dcrdRPCCerts    []byte
 	net             *chaincfg.Params
@@ -257,6 +262,8 @@ func loadConfig() (*config, []string, error) {
 		MinPayment:      defaultMinPayment,
 		SoloPool:        defaultSoloPool,
 		APIPort:         defaultAPIPort,
+		WebUIDir:        defaultWebUIDir,
+		SecureCSRF:      defaultSecureCSRF,
 	}
 
 	// Service options which are only added on Windows.
@@ -392,6 +399,13 @@ func loadConfig() (*config, []string, error) {
 	// Ensure the backup password is set.
 	if cfg.BackupPass == "" {
 		str := "%s: pool backup password is not set"
+		err := fmt.Errorf(str, funcName)
+		return nil, nil, err
+	}
+
+	// Check Secret is provided
+	if cfg.Secret == "" {
+		str := "%s: secret is not set"
 		err := fmt.Errorf(str, funcName)
 		return nil, nil, err
 	}

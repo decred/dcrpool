@@ -8,11 +8,10 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -949,20 +948,12 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	return err
 }
 
-func RespondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
-	response, _ := json.Marshal(payload)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	w.Write(response)
-}
-
-func RespondWithError(w http.ResponseWriter, code int, message string) {
-	RespondWithJSON(w, code, map[string]string{"error": message})
-}
-
 // hashString formats the provided hashrate per the best-fit unit.
 func hashString(hash *big.Rat) string {
+	if hash.Cmp(zeroRat) == 0 {
+		return "0 H/s"
+	}
+
 	if hash.Cmp(petaHash) > 0 {
 		ph := new(big.Rat).Quo(hash, petaHash)
 		return fmt.Sprintf("%v PH/s", ph.FloatString(4))
@@ -988,93 +979,102 @@ func hashString(hash *big.Rat) string {
 		return fmt.Sprintf("%v KH/s", kh.FloatString(4))
 	}
 
-	return fmt.Sprint("< 1KH/s")
+	return "< 1KH/s"
 }
 
-// FetchHash handles requests on the hash rate of the pool.
-func (h *Hub) FetchHash(w http.ResponseWriter, r *http.Request) {
+type ClientHashRate struct {
+	Name     string
+	Miner    string
+	HashRate string
+}
+
+// FetchHash returns the total hashrate of all connected miners
+func (h *Hub) FetchHash() (string, []ClientHashRate) {
 	// Iterate through all connected miners and add hash rates.
 	total := new(big.Rat).SetInt64(0)
-	cHash := make(map[string]string)
+	cHash := make([]ClientHashRate, 0)
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
 			client.hashRateMtx.RLock()
 			total = total.Add(total, client.hashRate)
-			cHash[fmt.Sprintf("%s/%s", client.name, endpoint.miner)] =
-				hashString(client.hashRate)
+			cHash = append(cHash, ClientHashRate{
+				Name:     client.name,
+				Miner:    endpoint.miner,
+				HashRate: hashString(client.hashRate),
+			})
 			client.hashRateMtx.RUnlock()
 		}
 		endpoint.clientsMtx.Unlock()
 	}
-
-	RespondWithJSON(w, http.StatusOK, map[string]interface{}{
-		"total":   hashString(total),
-		"clients": cHash,
-	})
+	return hashString(total), cHash
 }
 
-//FetchConnectionInfo handles requests on the number of connected pool clients.
-func (h *Hub) FetchConnections(w http.ResponseWriter, r *http.Request) {
-	connInfo := make(map[string]uint32)
-	total := 0
+type Connection struct {
+	IP    string
+	Port  uint32
+	Miner string
+}
+
+// FetchConnections returns information about all currently
+// connected clients
+func (h *Hub) FetchConnections() []Connection {
+	connInfo := make([]Connection, 0)
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
-			connInfo[client.endpoint.miner]++
-			total++
+			connInfo = append(connInfo, Connection{
+				IP:    client.ip,
+				Port:  client.endpoint.port,
+				Miner: client.endpoint.miner,
+			})
 		}
 		endpoint.clientsMtx.Unlock()
 	}
-
-	resp := map[string]interface{}{
-		"total":       total,
-		"connections": connInfo,
-	}
-
-	RespondWithJSON(w, http.StatusOK, resp)
+	return connInfo
 }
 
-// FetchLastPaymentHeight handles requests on the last height at which payments
-// were made
-func (h *Hub) FetchLastPaymentHeight(w http.ResponseWriter, r *http.Request) {
-	lastPaymentHeight := atomic.LoadUint32(&h.lastPaymentHeight)
-	if h.cfg.SoloPool {
-		RespondWithError(w, http.StatusBadRequest,
-			"payment processing is disabled in solo pool mode")
-		return
-	}
-
-	RespondWithJSON(w, http.StatusOK,
-		map[string]uint32{"lastpaymentheight": lastPaymentHeight})
+type PoolStats struct {
+	MinedWork         []*AcceptedWork
+	LastWorkHeight    uint32
+	LastPaymentHeight uint32
 }
 
-//FetchLastWorkHeight handles requests on the last height work was generated for.
-func (h *Hub) FetchLastWorkHeight(w http.ResponseWriter, r *http.Request) {
-	lastWorkHeight := atomic.LoadUint32(&h.lastWorkHeight)
-	RespondWithJSON(w, http.StatusOK,
-		map[string]uint32{"lastworkheight": lastWorkHeight})
-}
-
-// FetchMinedWork handles requests on listing mined work by the pool
-func (h *Hub) FetchMinedWork(w http.ResponseWriter, r *http.Request) {
+//FetchPoolStats returns last height work was generated for.
+func (h *Hub) FetchPoolStats() (*PoolStats, error) {
 	work, err := ListMinedWork(h.db)
 	if err != nil {
-		RespondWithError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, err
 	}
 
-	RespondWithJSON(w, http.StatusOK, work)
+	poolStats := &PoolStats{
+		LastWorkHeight: atomic.LoadUint32(&h.lastWorkHeight),
+		MinedWork:      work,
+	}
+
+	if !h.cfg.SoloPool {
+		poolStats.LastPaymentHeight = atomic.LoadUint32(&h.lastPaymentHeight)
+	}
+
+	return poolStats, nil
+}
+
+type Quota struct {
+	User       string
+	Percentage *big.Rat
+}
+
+type WorkQuotas struct {
+	Type   string
+	Quotas []Quota
 }
 
 // FetchWorkQuotas returns the reward distribution to pool accounts
 // based on work contributed per the peyment scheme used by the pool.
-func (h *Hub) FetchWorkQuotas(w http.ResponseWriter, r *http.Request) {
-	if h.cfg.SoloPool {
-		RespondWithJSON(w, http.StatusOK, map[string]string{
-			"response": "share percentages not available when mining" +
-				" in solo pool mode"})
-		return
+func (h *Hub) FetchWorkQuotas() (*WorkQuotas, error) {
+	if h.SoloPoolMode() {
+		return nil, errors.New("share percentages not available when mining" +
+			" in solo pool mode")
 	}
 
 	height := atomic.LoadUint32(&h.lastWorkHeight)
@@ -1093,126 +1093,57 @@ func (h *Hub) FetchWorkQuotas(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		RespondWithError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, err
 	}
 
-	results := make(map[string]string, len(percentages))
-	for id, quota := range percentages {
-		results[id] = quota.FloatString(4)
+	quotas := make([]Quota, 0)
+	for key, value := range percentages {
+		quotas = append(quotas, Quota{
+			User:       key,
+			Percentage: value,
+		})
 	}
 
-	resp := map[string]interface{}{
-		"type":    h.cfg.PaymentMethod,
-		"results": results,
-	}
-
-	RespondWithJSON(w, http.StatusOK, resp)
+	return &WorkQuotas{
+		Type:   h.cfg.PaymentMethod,
+		Quotas: quotas,
+	}, nil
 }
 
-// FetchMinedWorkByAccount returns a list of mined work by the provided account.
-func (h *Hub) FetchMinedWorkByAccount(w http.ResponseWriter, r *http.Request) {
-	params := map[string]string{}
-	dc := json.NewDecoder(r.Body)
-	err := dc.Decode(&params)
-	if err != nil {
-		RespondWithError(w, http.StatusBadRequest,
-			"request body is invalid json")
-		return
-	}
+type UserStats struct {
+	AccountID *string
+	MinedWork []*AcceptedWork
+	Payments  []*dividend.Payment
+}
 
-	id := dividend.AccountID(params["address"])
+// FetchUserStats returns a list of mined work by the provided account, and
+// archived payments made to the provided account.
+func (h *Hub) FetchUserStats(address string) (*UserStats, error) {
+	id := dividend.AccountID(address)
 	work, err := ListMinedWorkByAccount(h.db, *id)
 	if err != nil {
-		RespondWithError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, err
 	}
 
-	resp := map[string]interface{}{
-		"accountid": id,
-		"results":   work,
-	}
-
-	RespondWithJSON(w, http.StatusOK, resp)
-}
-
-// FetchProcessedPaymentsForAccount returns archived payments made to the
-// provided account up to the minimum time (in unix time seconds) provided.
-func (h *Hub) FetchProcessedPaymentsForAccount(w http.ResponseWriter, r *http.Request) {
-	params := map[string]interface{}{}
-	dc := json.NewDecoder(r.Body)
-	err := dc.Decode(&params)
-	if err != nil {
-		RespondWithError(w, http.StatusBadRequest,
-			"request body is invalid json")
-		return
-	}
-
-	address, ok := params["address"].(string)
-	if !ok {
-		RespondWithError(w, http.StatusBadRequest,
-			"provided 'address' parameter is not a string")
-		return
-	}
-
-	min, ok := params["min"].(float64)
-	if !ok {
-		RespondWithError(w, http.StatusBadRequest,
-			"provided 'min' parameter is not a numeric")
-		return
-	}
-
-	id := dividend.AccountID(address)
-	minNano := util.NanoToBigEndianBytes(time.Unix(int64(min), 0).UnixNano())
+	minNano := util.NanoToBigEndianBytes(time.Unix(1, 0).UnixNano())
 	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db,
 		[]byte(*id), minNano)
 	if err != nil {
-		RespondWithError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, err
 	}
 
-	resp := map[string]interface{}{
-		"accountid": id,
-		"results":   payments,
-	}
-
-	RespondWithJSON(w, http.StatusOK, resp)
+	return &UserStats{
+		AccountID: id,
+		MinedWork: work,
+		Payments:  payments,
+	}, nil
 }
 
-// BackupHandler returns a copy of the db for backup purposes.
-func (h *Hub) BackupDB(w http.ResponseWriter, r *http.Request) {
-	params := map[string]interface{}{}
-	dc := json.NewDecoder(r.Body)
-	err := dc.Decode(&params)
-	if err != nil {
-		RespondWithError(w, http.StatusBadRequest,
-			"request body is invalid json")
-		return
-	}
+// CheckBackupPass returns true if the parameter is the correct backup password.
+func (h *Hub) CheckBackupPass(pass string) bool {
+	return h.cfg.BackupPass == pass
+}
 
-	pass, ok := params["pass"].(string)
-	if !ok {
-		RespondWithError(w, http.StatusBadRequest,
-			"provided 'pass' parameter is not a string")
-		return
-	}
-
-	if h.cfg.BackupPass != pass {
-		RespondWithError(w, http.StatusBadRequest, "unauthorized access")
-		return
-	}
-
-	err = h.db.View(func(tx *bolt.Tx) error {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", `attachment; filename="backup.db"`)
-		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
-		_, err := tx.WriteTo(w)
-		return err
-	})
-
-	if err != nil {
-		msg := fmt.Sprintf("failed to backup db: %v", err.Error())
-		RespondWithError(w, http.StatusInternalServerError, msg)
-		return
-	}
+func (h *Hub) SoloPoolMode() bool {
+	return h.cfg.SoloPool
 }
