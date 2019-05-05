@@ -20,18 +20,14 @@ import (
 var (
 	// TestDB represents the testing database.
 	testDB = "testdb"
-	// Account X.
-	accX = "x"
 	// Account X address.
 	xAddr = "SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc"
 	// Account X id.
-	xID = *AccountID(accX, xAddr)
-	// Account Y.
-	accY = "y"
+	xID = *AccountID(xAddr)
 	// Account Y address.
 	yAddr = "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
 	// Account Y id.
-	yID = *AccountID(accY, yAddr)
+	yID = *AccountID(yAddr)
 	// Pool fee address.
 	poolFeeAddrs, _ = dcrutil.DecodeAddress("SsnbEmxCVXskgTHXvf3rEa17NA39qQuGHwQ")
 )
@@ -55,12 +51,12 @@ func setupDB() (*bolt.DB, error) {
 		return nil, err
 	}
 
-	err = createPersistedAccount(db, accX, xAddr)
+	err = createPersistedAccount(db, xAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	err = createPersistedAccount(db, accY, yAddr)
+	err = createPersistedAccount(db, yAddr)
 	if err != nil {
 		return nil, err
 	}

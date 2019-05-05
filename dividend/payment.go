@@ -575,7 +575,7 @@ func FetchArchivedPaymentsForAccount(db *bolt.DB, account []byte, minNano []byte
 			accountE := k[16:]
 			minNanoE := k[:16]
 			minNanoB := make([]byte, hex.DecodedLen(len(minNanoE)))
-			hex.Decode(minNano, minNanoE)
+			hex.Decode(minNanoB, minNanoE)
 			if bytes.Equal(accountE, account) &&
 				bytes.Compare(minNanoB, minNano) > 0 {
 				var payment Payment
