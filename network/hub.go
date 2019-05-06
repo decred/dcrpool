@@ -60,8 +60,20 @@ var (
 	// zeroRat is the default value for a big.Rat.
 	zeroRat = new(big.Rat).SetInt64(0)
 
-	// teraHash is 1TH represented as a big.int.
-	teraHash = new(big.Int).SetInt64(1000000000000)
+	// kiloHash is 1 KH represented as a big.Rat.
+	kiloHash = new(big.Rat).SetInt64(1000)
+
+	// megaHash is 1MH represented as a big.Rat.
+	megaHash = new(big.Rat).SetInt64(1000000)
+
+	// gigaHash is 1GH represented as a big.Rat.
+	gigaHash = new(big.Rat).SetInt64(1000000000)
+
+	// teraHash is 1TH represented as a big.Rat.
+	teraHash = new(big.Rat).SetInt64(1000000000000)
+
+	// petaHash is 1PH represented as a big.Rat
+	petaHash = new(big.Rat).SetInt64(1000000000000000)
 
 	// soloMaxGenTime is the threshold (in seconds) at which pool clients will
 	// generate a valid share when solo pool mode is activated. This is set to a
@@ -949,22 +961,57 @@ func RespondWithError(w http.ResponseWriter, code int, message string) {
 	RespondWithJSON(w, code, map[string]string{"error": message})
 }
 
+// hashString formats the provided hashrate per the best-fit unit.
+func hashString(hash *big.Rat) string {
+	if hash.Cmp(petaHash) > 0 {
+		ph := new(big.Rat).Quo(hash, petaHash)
+		return fmt.Sprintf("%v PH/s", ph.FloatString(4))
+	}
+
+	if hash.Cmp(teraHash) > 0 {
+		th := new(big.Rat).Quo(hash, teraHash)
+		return fmt.Sprintf("%v TH/s", th.FloatString(4))
+	}
+
+	if hash.Cmp(gigaHash) > 0 {
+		gh := new(big.Rat).Quo(hash, gigaHash)
+		return fmt.Sprintf("%v GH/s", gh.FloatString(4))
+	}
+
+	if hash.Cmp(megaHash) > 0 {
+		mh := new(big.Rat).Quo(hash, megaHash)
+		return fmt.Sprintf("%v MH/s", mh.FloatString(4))
+	}
+
+	if hash.Cmp(kiloHash) > 0 {
+		kh := new(big.Rat).Quo(hash, kiloHash)
+		return fmt.Sprintf("%v KH/s", kh.FloatString(4))
+	}
+
+	return fmt.Sprint("< 1KH/s")
+}
+
 // FetchHash handles requests on the hash rate of the pool.
 func (h *Hub) FetchHash(w http.ResponseWriter, r *http.Request) {
 	// Iterate through all connected miners and add hash rates.
 	total := new(big.Rat).SetInt64(0)
+	cHash := make(map[string]string)
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
 			client.hashRateMtx.RLock()
 			total = total.Add(total, client.hashRate)
+			cHash[fmt.Sprintf("%s/%s", client.name, endpoint.miner)] =
+				hashString(client.hashRate)
 			client.hashRateMtx.RUnlock()
 		}
 		endpoint.clientsMtx.Unlock()
 	}
 
-	hash := fmt.Sprintf("%v TH/s", total.FloatString(12))
-	RespondWithJSON(w, http.StatusOK, map[string]string{"hash": hash})
+	RespondWithJSON(w, http.StatusOK, map[string]interface{}{
+		"total":   hashString(total),
+		"clients": cHash,
+	})
 }
 
 //FetchConnectionInfo handles requests on the number of connected pool clients.
@@ -1050,9 +1097,14 @@ func (h *Hub) FetchWorkQuotas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	results := make(map[string]string, len(percentages))
+	for id, quota := range percentages {
+		results[id] = quota.FloatString(4)
+	}
+
 	resp := map[string]interface{}{
 		"type":    h.cfg.PaymentMethod,
-		"results": percentages,
+		"results": results,
 	}
 
 	RespondWithJSON(w, http.StatusOK, resp)
@@ -1069,7 +1121,7 @@ func (h *Hub) FetchMinedWorkByAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := dividend.AccountID(params["name"], params["address"])
+	id := dividend.AccountID(params["address"])
 	work, err := ListMinedWorkByAccount(h.db, *id)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, err.Error())
@@ -1096,13 +1148,6 @@ func (h *Hub) FetchProcessedPaymentsForAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	name, ok := params["name"].(string)
-	if !ok {
-		RespondWithError(w, http.StatusBadRequest,
-			"provided 'name' parameter is not a string")
-		return
-	}
-
 	address, ok := params["address"].(string)
 	if !ok {
 		RespondWithError(w, http.StatusBadRequest,
@@ -1117,7 +1162,7 @@ func (h *Hub) FetchProcessedPaymentsForAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	id := dividend.AccountID(name, address)
+	id := dividend.AccountID(address)
 	minNano := util.NanoToBigEndianBytes(time.Unix(int64(min), 0).UnixNano())
 	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db,
 		[]byte(*id), minNano)

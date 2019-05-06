@@ -7,7 +7,6 @@ package dividend
 import (
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	bolt "github.com/coreos/bbolt"
@@ -18,26 +17,23 @@ import (
 // Account represents an anonymous mining pool account.
 type Account struct {
 	UUID      string `json:"uuid"`
-	Name      string `json:"name"`
 	Address   string `json:"address"`
 	CreatedOn uint64 `json:"createdon"`
 }
 
-// AccountID forms a unique id for an account using the provided name
-// and address.
-func AccountID(name, address string) *string {
+// AccountID geenrates an id using provided address of the account.
+func AccountID(address string) *string {
 	hasher := blake256.New()
-	hasher.Write([]byte(fmt.Sprintf("%s.%s", address, name)))
+	hasher.Write([]byte(address))
 	id := hex.EncodeToString(hasher.Sum(nil))
 	return &id
 }
 
 // NewAccount generates a new account.
-func NewAccount(name string, address string) (*Account, error) {
-	id := AccountID(name, address)
+func NewAccount(address string) (*Account, error) {
+	id := AccountID(address)
 	account := &Account{
 		UUID:      *id,
-		Name:      name,
 		Address:   address,
 		CreatedOn: uint64(time.Now().Unix()),
 	}

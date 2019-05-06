@@ -19,8 +19,8 @@ import (
 
 // createPersistedAccount creates a pool account with the provided parameters
 // and persists it to the database.
-func createPersistedAccount(db *bolt.DB, name string, address string) error {
-	account, err := NewAccount(name, address)
+func createPersistedAccount(db *bolt.DB, address string) error {
+	account, err := NewAccount(address)
 	if err != nil {
 		return err
 	}

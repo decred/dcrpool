@@ -43,6 +43,7 @@ type Client struct {
 	ctx                context.Context
 	cancel             context.CancelFunc
 	ip                 string
+	name               string
 	extraNonce1        string
 	ch                 chan Message
 	readCh             chan []byte
@@ -131,12 +132,7 @@ func (c *Client) calculateHashRate() error {
 	c.lastSubmissionTime = now
 
 	c.hashRateMtx.Lock()
-	c.hashRate = new(big.Rat).Quo(new(big.Rat).
-		Mul(diff, new(big.Rat).SetInt(hash)),
-		new(big.Rat).SetInt(teraHash))
-
-	log.Tracef("hash rate of (%v) is %v", c.generateID(),
-		c.hashRate.FloatString(12))
+	c.hashRate = new(big.Rat).Mul(diff, new(big.Rat).SetInt(hash))
 	c.hashRateMtx.Unlock()
 
 	return nil
@@ -174,19 +170,19 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 		return
 	}
 
-	// Usernames are expected to be of `address:id` format when in not in
-	// solo pool mode. A username name does not have to be provided when in
-	// solo pool mode.
-	if !c.endpoint.hub.cfg.SoloPool {
-		username, err := ParseAuthorizeRequest(req)
-		if err != nil {
-			log.Errorf("unable to parse authorize request: %v", err)
-			err := NewStratumError(Unknown, nil)
-			resp := AuthorizeResponse(*req.ID, false, err)
-			c.ch <- resp
-			return
-		}
+	// The client's username is expected to be of the format address.clientname
+	// when in pool mining mode. For solo pool mode the username expected is
+	// just the client's name.
+	username, err := ParseAuthorizeRequest(req)
+	if err != nil {
+		log.Errorf("unable to parse authorize request: %v", err)
+		err := NewStratumError(Unknown, nil)
+		resp := AuthorizeResponse(*req.ID, false, err)
+		c.ch <- resp
+		return
+	}
 
+	if !c.endpoint.hub.cfg.SoloPool {
 		parts := strings.Split(username, ".")
 		if len(parts) != 2 {
 			log.Errorf("Invalid username format, expected `address.id`,got %v",
@@ -220,7 +216,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 			return
 		}
 
-		id := dividend.AccountID(name, address)
+		id := dividend.AccountID(address)
 		_, err = dividend.FetchAccount(c.endpoint.hub.db, []byte(*id))
 		if err != nil && err.Error() !=
 			database.ErrValueNotFound([]byte(*id)).Error() {
@@ -232,7 +228,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 		}
 
 		// Create the account if it does not already exist.
-		account, err := dividend.NewAccount(name, address)
+		account, err := dividend.NewAccount(address)
 		if err != nil {
 			log.Errorf("unable to create account: %v", err)
 			err := NewStratumError(Unknown, nil)
@@ -251,6 +247,11 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 		}
 
 		c.account = *id
+		c.name = name
+	}
+
+	if c.endpoint.hub.cfg.SoloPool {
+		c.name = username
 	}
 
 	c.authorized = true
