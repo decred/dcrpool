@@ -18,10 +18,10 @@ var db *bolt.DB
 var templates *template.Template
 var store *sessions.CookieStore
 
-func Init(h *network.Hub, d *bolt.DB, secret string, webUiDir string) error {
+func Init(h *network.Hub, d *bolt.DB, secret string, webUIDir string) error {
 	hub = h
 	db = d
-	err := loadTemplates(filepath.Join(webUiDir, "templates"))
+	err := loadTemplates(filepath.Join(webUIDir, "templates"))
 	if err != nil {
 		return err
 	}
