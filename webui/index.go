@@ -1,19 +1,28 @@
 package webui
 
 import (
+	"fmt"
+	"math/big"
 	"net/http"
 
+	"github.com/decred/dcrpool/dividend"
 	"github.com/decred/dcrpool/network"
 )
 
 type indexData struct {
 	PoolStats    *network.PoolStats
-	HashRate     string
-	CHash        []network.ClientHashRate
+	PoolHashRate *big.Rat
 	SoloPoolMode bool
-	UserStats    *network.UserStats
+	UserStats    *UserStats
 	Address      string
 	Admin        bool
+	Error        string
+}
+
+type UserStats struct {
+	MinedWork []*network.AcceptedWork
+	Payments  []*dividend.Payment
+	Clients   []*network.ClientInfo
 }
 
 func (ui *WebUI) GetIndex(w http.ResponseWriter, r *http.Request) {
@@ -24,14 +33,21 @@ func (ui *WebUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reverse for display purposes. We want the most recent block to be first.
 	reverseSlice(poolStats.MinedWork)
 
-	poolHashRate, cHash := ui.hub.FetchHash()
+	clientInfo := ui.hub.FetchClientInfo()
+
+	poolHashRate := new(big.Rat).SetInt64(0)
+	for _, clients := range clientInfo {
+		for _, client := range clients {
+			poolHashRate = poolHashRate.Add(poolHashRate, client.HashRate)
+		}
+	}
 
 	data := indexData{
 		PoolStats:    poolStats,
-		HashRate:     poolHashRate,
-		CHash:        cHash,
+		PoolHashRate: poolHashRate,
 		SoloPoolMode: ui.hub.SoloPoolMode(),
 		Admin:        false,
 	}
@@ -45,16 +61,44 @@ func (ui *WebUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := ui.hub.FetchUserStats(address)
+	if len(address) != 35 {
+		data.Error = fmt.Sprintf("Address should be 35 characters")
+		ui.renderTemplate(w, r, "index", data)
+		return
+	}
+
+	accountID := *dividend.AccountID(address)
+
+	work, err := ui.hub.FetchMinedWorkByAddress(accountID)
 	if err != nil {
 		log.Error(err)
-		http.Error(w, "FetchUserStats error: "+err.Error(),
+		http.Error(w, "FetchMinedWorkByAddress error: "+err.Error(),
 			http.StatusInternalServerError)
 		return
 	}
 
-	reverseSlice(resp.MinedWork)
-	data.UserStats = resp
+	payments, err := ui.hub.FetchPaymentsForAddress(accountID)
+	if err != nil {
+		log.Error(err)
+		http.Error(w, "FetchPaymentsForAddress error: "+err.Error(),
+			http.StatusInternalServerError)
+		return
+	}
+
+	if len(work) == 0 && len(payments) == 0 {
+		log.Infof("Nothing found for address: %s", address)
+		data.Error = fmt.Sprintf("Nothing found for address: %s", address)
+		ui.renderTemplate(w, r, "index", data)
+		return
+	}
+
+	// Reverse for display purposes. We want the most recent block to be first.
+	reverseSlice(work)
+	data.UserStats = &UserStats{
+		MinedWork: work,
+		Payments:  payments,
+		Clients:   clientInfo[accountID],
+	}
 
 	ui.renderTemplate(w, r, "index", data)
 }

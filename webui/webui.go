@@ -2,7 +2,9 @@ package webui
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
+	"math/big"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -34,6 +36,9 @@ func (ui *WebUI) GetRouter(secret string, secureCSRF bool, webUIDir string) *mux
 
 	cssDir := http.Dir(filepath.Join(webUIDir, "public/css"))
 	router.PathPrefix("/css/").Handler(http.StripPrefix("/css/", http.FileServer(cssDir)))
+
+	imagesDir := http.Dir(filepath.Join(webUIDir, "public/images"))
+	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(imagesDir)))
 
 	router.HandleFunc("/", ui.GetIndex).Methods("GET")
 	router.HandleFunc("/admin", ui.GetAdmin).Methods("GET")
@@ -75,10 +80,14 @@ func (ui *WebUI) loadTemplates(templatePath string) error {
 		return err
 	}
 
+	httpTemplates := template.New("template").Funcs(template.FuncMap{
+		"hashString": hashString,
+	})
+
 	// Since template.Must panics with non-nil error, it is much more
 	// informative to pass the error to the caller to log it and exit
 	// gracefully.
-	httpTemplates, err := template.ParseFiles(templateFilename...)
+	httpTemplates, err = httpTemplates.ParseFiles(templateFilename...)
 	if err != nil {
 		return err
 	}
@@ -101,4 +110,58 @@ func InitUI(hub *network.Hub, d *bolt.DB, secret string, UIDir string) (*WebUI, 
 	}
 
 	return ui, nil
+}
+
+var (
+	// zeroRat is the default value for a big.Rat.
+	zeroRat = new(big.Rat).SetInt64(0)
+
+	// kiloHash is 1 KH represented as a big.Rat.
+	kiloHash = new(big.Rat).SetInt64(1000)
+
+	// megaHash is 1MH represented as a big.Rat.
+	megaHash = new(big.Rat).SetInt64(1000000)
+
+	// gigaHash is 1GH represented as a big.Rat.
+	gigaHash = new(big.Rat).SetInt64(1000000000)
+
+	// teraHash is 1TH represented as a big.Rat.
+	teraHash = new(big.Rat).SetInt64(1000000000000)
+
+	// petaHash is 1PH represented as a big.Rat
+	petaHash = new(big.Rat).SetInt64(1000000000000000)
+)
+
+// hashString formats the provided hashrate per the best-fit unit.
+func hashString(hash *big.Rat) string {
+	if hash.Cmp(zeroRat) == 0 {
+		return "0 H/s"
+	}
+
+	if hash.Cmp(petaHash) > 0 {
+		ph := new(big.Rat).Quo(hash, petaHash)
+		return fmt.Sprintf("%v PH/s", ph.FloatString(2))
+	}
+
+	if hash.Cmp(teraHash) > 0 {
+		th := new(big.Rat).Quo(hash, teraHash)
+		return fmt.Sprintf("%v TH/s", th.FloatString(2))
+	}
+
+	if hash.Cmp(gigaHash) > 0 {
+		gh := new(big.Rat).Quo(hash, gigaHash)
+		return fmt.Sprintf("%v GH/s", gh.FloatString(2))
+	}
+
+	if hash.Cmp(megaHash) > 0 {
+		mh := new(big.Rat).Quo(hash, megaHash)
+		return fmt.Sprintf("%v MH/s", mh.FloatString(2))
+	}
+
+	if hash.Cmp(kiloHash) > 0 {
+		kh := new(big.Rat).Quo(hash, kiloHash)
+		return fmt.Sprintf("%v KH/s", kh.FloatString(2))
+	}
+
+	return "< 1KH/s"
 }

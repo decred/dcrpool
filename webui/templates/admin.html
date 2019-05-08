@@ -9,6 +9,7 @@
             <form action="/backup" method="post">
                 <h4>Database Backup</h4>
                 {{.CSRF}}
+                <p>Click this button to download a snapshot of the dcrpool database.</p>
                 <button type="submit" class="btn btn-primary">Download Backup</button>
             </form>
         </div>  
@@ -43,16 +44,20 @@
             <div style="overflow: auto; max-height: 250px;">
                 <table class="table table-striped">
                     <tr>
+                        <th>Account</th>
                         <th>IP</th>
-                        <th>Port</th>
                         <th>Miner</th>
+                        <th>Hash Rate</th>
                     </tr>
-                    {{ range .Connections }}
-                        <tr>
-                            <td>{{.IP}}</td>
-                            <td>{{.Port}}</td>
-                            <td>{{.Miner}}</td>
-                        </tr>
+                    {{range $accountID, $clients := .Connections}}
+                        {{range $client := $clients}}
+                            <tr>
+                                <td>{{$accountID}}</td>
+                                <td>{{$client.IP}}</td>
+                                <td>{{$client.Miner}}</td>
+                                <td>{{hashString $client.HashRate}}</td>
+                            </tr>
+                        {{end}}
                     {{else}}
                         <tr>
                             <td colspan="100%">No Connections</td>

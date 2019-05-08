@@ -59,21 +59,6 @@ var (
 	// zeroRat is the default value for a big.Rat.
 	zeroRat = new(big.Rat).SetInt64(0)
 
-	// kiloHash is 1 KH represented as a big.Rat.
-	kiloHash = new(big.Rat).SetInt64(1000)
-
-	// megaHash is 1MH represented as a big.Rat.
-	megaHash = new(big.Rat).SetInt64(1000000)
-
-	// gigaHash is 1GH represented as a big.Rat.
-	gigaHash = new(big.Rat).SetInt64(1000000000)
-
-	// teraHash is 1TH represented as a big.Rat.
-	teraHash = new(big.Rat).SetInt64(1000000000000)
-
-	// petaHash is 1PH represented as a big.Rat
-	petaHash = new(big.Rat).SetInt64(1000000000000000)
-
 	// soloMaxGenTime is the threshold (in seconds) at which pool clients will
 	// generate a valid share when solo pool mode is activated. This is set to a
 	// high value to reduce the number of round trips to the pool by connected
@@ -948,90 +933,31 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	return err
 }
 
-// hashString formats the provided hashrate per the best-fit unit.
-func hashString(hash *big.Rat) string {
-	if hash.Cmp(zeroRat) == 0 {
-		return "0 H/s"
-	}
-
-	if hash.Cmp(petaHash) > 0 {
-		ph := new(big.Rat).Quo(hash, petaHash)
-		return fmt.Sprintf("%v PH/s", ph.FloatString(4))
-	}
-
-	if hash.Cmp(teraHash) > 0 {
-		th := new(big.Rat).Quo(hash, teraHash)
-		return fmt.Sprintf("%v TH/s", th.FloatString(4))
-	}
-
-	if hash.Cmp(gigaHash) > 0 {
-		gh := new(big.Rat).Quo(hash, gigaHash)
-		return fmt.Sprintf("%v GH/s", gh.FloatString(4))
-	}
-
-	if hash.Cmp(megaHash) > 0 {
-		mh := new(big.Rat).Quo(hash, megaHash)
-		return fmt.Sprintf("%v MH/s", mh.FloatString(4))
-	}
-
-	if hash.Cmp(kiloHash) > 0 {
-		kh := new(big.Rat).Quo(hash, kiloHash)
-		return fmt.Sprintf("%v KH/s", kh.FloatString(4))
-	}
-
-	return "< 1KH/s"
-}
-
-type ClientHashRate struct {
-	Name     string
+type ClientInfo struct {
+	IP       string
 	Miner    string
-	HashRate string
+	HashRate *big.Rat
 }
 
-// FetchHash returns the total hashrate of all connected miners
-func (h *Hub) FetchHash() (string, []ClientHashRate) {
-	// Iterate through all connected miners and add hash rates.
-	total := new(big.Rat).SetInt64(0)
-	cHash := make([]ClientHashRate, 0)
+// FetchClientInfo returns information about all connected clients
+func (h *Hub) FetchClientInfo() map[string][]*ClientInfo {
+	clientInfo := make(map[string][]*ClientInfo, 0)
+
+	// Iterate through all connected miners
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
 			client.hashRateMtx.RLock()
-			total = total.Add(total, client.hashRate)
-			cHash = append(cHash, ClientHashRate{
-				Name:     client.name,
+			clientInfo[client.account] = append(clientInfo[client.account], &ClientInfo{
 				Miner:    endpoint.miner,
-				HashRate: hashString(client.hashRate),
+				IP:       client.ip,
+				HashRate: client.hashRate,
 			})
 			client.hashRateMtx.RUnlock()
 		}
 		endpoint.clientsMtx.Unlock()
 	}
-	return hashString(total), cHash
-}
-
-type Connection struct {
-	IP    string
-	Port  uint32
-	Miner string
-}
-
-// FetchConnections returns information about all currently
-// connected clients
-func (h *Hub) FetchConnections() []Connection {
-	connInfo := make([]Connection, 0)
-	for _, endpoint := range h.endpoints {
-		endpoint.clientsMtx.Lock()
-		for _, client := range endpoint.clients {
-			connInfo = append(connInfo, Connection{
-				IP:    client.ip,
-				Port:  client.endpoint.port,
-				Miner: client.endpoint.miner,
-			})
-		}
-		endpoint.clientsMtx.Unlock()
-	}
-	return connInfo
+	return clientInfo
 }
 
 type PoolStats struct {
@@ -1110,33 +1036,18 @@ func (h *Hub) FetchWorkQuotas() (*WorkQuotas, error) {
 	}, nil
 }
 
-type UserStats struct {
-	AccountID *string
-	MinedWork []*AcceptedWork
-	Payments  []*dividend.Payment
+// FetchMinedWorkByAddress returns a list of mined work by the provided address.
+func (h *Hub) FetchMinedWorkByAddress(id string) ([]*AcceptedWork, error) {
+	work, err := ListMinedWorkByAccount(h.db, id)
+	return work, err
 }
 
-// FetchUserStats returns a list of mined work by the provided account, and
-// archived payments made to the provided account.
-func (h *Hub) FetchUserStats(address string) (*UserStats, error) {
-	id := dividend.AccountID(address)
-	work, err := ListMinedWorkByAccount(h.db, *id)
-	if err != nil {
-		return nil, err
-	}
-
+// FetchPaymentsForAddress returns a list or payments made to the provided address.
+func (h *Hub) FetchPaymentsForAddress(id string) ([]*dividend.Payment, error) {
 	minNano := util.NanoToBigEndianBytes(time.Unix(1, 0).UnixNano())
 	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db,
-		[]byte(*id), minNano)
-	if err != nil {
-		return nil, err
-	}
-
-	return &UserStats{
-		AccountID: id,
-		MinedWork: work,
-		Payments:  payments,
-	}, nil
+		[]byte(id), minNano)
+	return payments, err
 }
 
 // CheckBackupPass returns true if the parameter is the correct backup password.
