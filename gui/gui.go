@@ -60,6 +60,10 @@ func (ui *GUI) route() {
 	ui.router.PathPrefix("/css/").Handler(http.StripPrefix("/css/",
 		http.FileServer(cssDir)))
 
+	imagesDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "public/images"))
+	ui.router.PathPrefix("/images/").Handler(http.StripPrefix("/images/",
+		http.FileServer(imagesDir)))
+
 	ui.router.HandleFunc("/", ui.GetIndex).Methods("GET")
 	ui.router.HandleFunc("/admin", ui.GetAdmin).Methods("GET")
 	ui.router.HandleFunc("/admin", ui.PostAdmin).Methods("POST")
