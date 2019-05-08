@@ -44,13 +44,18 @@ DCRD_RPC_KEY="${HOME}/.dcrd/rpc.key"
 DCRD_CONF="${HOME}/.dcrd/dcrd.conf"
 WALLET_RPC_CERT="${HOME}/.dcrwallet/rpc.cert"
 WALLET_RPC_KEY="${HOME}/.dcrwallet/rpc.key"
+WEBUI_DIR="${NODES_ROOT}/webui"
 
 echo "Writing node config files"
 mkdir -p "${NODES_ROOT}/master"
 mkdir -p "${NODES_ROOT}/wallet"
 mkdir -p "${NODES_ROOT}/pool"
+mkdir -p "${NODES_ROOT}/webui"
 mkdir -p "${NODES_ROOT}/c1"
 mkdir -p "${NODES_ROOT}/c2"
+
+cp -r webui/public ${WEBUI_DIR}/public
+cp -r webui/templates ${WEBUI_DIR}/templates
 
 cat > "${NODES_ROOT}/c1/client.conf" <<EOF
 debuglevel=trace
@@ -92,7 +97,7 @@ poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
 backuppass=b@ckUp
-webuidir=../../webui
+webuidir=${WEBUI_DIR}
 secret=secret
 securecsrf=false
 EOF
@@ -122,7 +127,7 @@ poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
 backuppass=b@ckUp
-webuidir=../../webui
+webuidir=${WEBUI_DIR}
 secret=secret
 securecsrf=false
 EOF
@@ -171,7 +176,7 @@ poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
 backuppass=b@ckUp
-webuidir=../../webui
+webuidir=${WEBUI_DIR}
 secret=secret
 securecsrf=false
 EOF
