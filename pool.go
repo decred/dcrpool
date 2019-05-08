@@ -12,15 +12,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"time"
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
-	"github.com/gorilla/csrf"
-	"github.com/gorilla/mux"
 
 	"github.com/decred/dcrpool/database"
 	"github.com/decred/dcrpool/network"
@@ -37,7 +34,6 @@ type Pool struct {
 	hub     *network.Hub
 	limiter *network.RateLimiter
 	server  *http.Server
-	router  *mux.Router
 }
 
 // initDB handles the creation, upgrading and backup of the database
@@ -107,41 +103,21 @@ func (p *Pool) initDB() error {
 	return nil
 }
 
-// route configures the api routes of the pool.
-func (p *Pool) route() {
-	p.router = mux.NewRouter()
-
-	csrfMiddleware := csrf.Protect(
-		[]byte(p.cfg.Secret),
-		csrf.Secure(p.cfg.SecureCSRF))
-
-	p.router.Use(csrfMiddleware)
-
-	cssDir := http.Dir(filepath.Join(p.cfg.WebUIDir, "public/css"))
-	p.router.PathPrefix("/css/").Handler(http.StripPrefix("/css/", http.FileServer(cssDir)))
-
-	p.router.HandleFunc("/", webui.GetIndex).Methods("GET")
-	p.router.HandleFunc("/admin", webui.GetAdmin).Methods("GET")
-	p.router.HandleFunc("/admin", webui.PostAdmin).Methods("POST")
-	p.router.HandleFunc("/backup", webui.PostBackup).Methods("POST")
-	p.router.HandleFunc("/logout", webui.PostLogout).Methods("POST")
-}
-
 // serveAPI starts the pool api server.
 func (p *Pool) serveAPI() {
-	err := webui.Init(p.hub, p.db, p.cfg.Secret, p.cfg.WebUIDir)
+	webUI, err := webui.InitUI(p.hub, p.db, p.cfg.Secret, p.cfg.WebUIDir)
 	if err != nil {
 		pLog.Errorf("Failed to initialise web ui: ", err)
 		return
 	}
 
-	p.route()
+	router := webUI.GetRouter(p.cfg.Secret, p.cfg.SecureCSRF, p.cfg.WebUIDir)
 	p.server = &http.Server{
 		Addr:         fmt.Sprintf("0.0.0.0:%v", p.cfg.APIPort),
 		WriteTimeout: time.Second * 30,
 		ReadTimeout:  time.Second * 5,
 		IdleTimeout:  time.Second * 30,
-		Handler:      p.router,
+		Handler:      router,
 	}
 
 	pLog.Infof("API server listening on port %v.", p.cfg.APIPort)

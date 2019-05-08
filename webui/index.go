@@ -11,14 +11,13 @@ type indexData struct {
 	HashRate     string
 	CHash        []network.ClientHashRate
 	SoloPoolMode bool
-
-	UserStats *network.UserStats
-	Address   string
-	Admin     bool
+	UserStats    *network.UserStats
+	Address      string
+	Admin        bool
 }
 
-func GetIndex(w http.ResponseWriter, r *http.Request) {
-	poolStats, err := hub.FetchPoolStats()
+func (ui *WebUI) GetIndex(w http.ResponseWriter, r *http.Request) {
+	poolStats, err := ui.hub.FetchPoolStats()
 	if err != nil {
 		log.Error(err)
 		http.Error(w, "FetchPoolStats error: "+err.Error(), http.StatusInternalServerError)
@@ -27,13 +26,13 @@ func GetIndex(w http.ResponseWriter, r *http.Request) {
 
 	reverseSlice(poolStats.MinedWork)
 
-	poolHashRate, cHash := hub.FetchHash()
+	poolHashRate, cHash := ui.hub.FetchHash()
 
 	data := indexData{
 		PoolStats:    poolStats,
 		HashRate:     poolHashRate,
 		CHash:        cHash,
-		SoloPoolMode: hub.SoloPoolMode(),
+		SoloPoolMode: ui.hub.SoloPoolMode(),
 		Admin:        false,
 	}
 
@@ -42,21 +41,22 @@ func GetIndex(w http.ResponseWriter, r *http.Request) {
 	data.Address = address
 
 	if address == "" {
-		renderTemplate(w, r, "index", data)
+		ui.renderTemplate(w, r, "index", data)
 		return
 	}
 
-	resp, err := hub.FetchUserStats(address)
+	resp, err := ui.hub.FetchUserStats(address)
 	if err != nil {
 		log.Error(err)
-		http.Error(w, "FetchUserStats error: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "FetchUserStats error: "+err.Error(),
+			http.StatusInternalServerError)
 		return
 	}
 
 	reverseSlice(resp.MinedWork)
 	data.UserStats = resp
 
-	renderTemplate(w, r, "index", data)
+	ui.renderTemplate(w, r, "index", data)
 }
 
 func reverseSlice(slice []*network.AcceptedWork) {
