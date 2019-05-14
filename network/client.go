@@ -71,8 +71,8 @@ func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
 		encoder:            json.NewEncoder(conn),
 		reader:             bufio.NewReaderSize(conn, MaxMessageSize),
 		ip:                 ip,
-		lastSubmissionTime: zeroInt,
-		hashRate:           zeroRat,
+		lastSubmissionTime: util.ZeroInt,
+		hashRate:           util.ZeroRat,
 	}
 
 	c.GenerateExtraNonce1()
@@ -115,7 +115,7 @@ func (c *Client) shutdown() {
 // from the miner.
 func (c *Client) calculateHashRate() error {
 	now := new(big.Int).SetInt64(time.Now().Unix())
-	if c.lastSubmissionTime.Cmp(zeroInt) == 0 {
+	if c.lastSubmissionTime.Cmp(util.ZeroInt) == 0 {
 		c.lastSubmissionTime = now
 		return nil
 	}

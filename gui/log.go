@@ -1,4 +1,4 @@
-package webui
+package gui
 
 import (
 	"github.com/decred/slog"

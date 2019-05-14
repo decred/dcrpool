@@ -1,0 +1,137 @@
+{{define "index"}}
+{{template "header" .}}
+
+
+
+<div class="row justify-content-center">
+
+    <div class="col p-3 col-s-12 col-md-4">
+        <form style="min-width:300px;" action="" method="get">
+            <p>Enter your address to see your mining stats.</p>
+            <div class="form-group">
+                <label>Address:</label>
+                <input type="text" name="address" class="form-control" placeholder="Enter address">
+            </div>
+            <button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+    </div>
+
+    <div class="col p-3 col-s-12 col-md-8">
+
+        {{ if not .AccountStats }}
+        <div class="row justify-content-center">
+            <div class="row px-2 m-2 overflow-hidden">
+                <p><span class="font-weight-bold">Pool Hash Rate:&nbsp;</span>{{.HashRate}}</p>
+                <p></p>
+            </div>
+
+            <div class="row px-2 m-2 overflow-hidden">
+                <p><span class="font-weight-bold">Last Work Height:&nbsp;</span>{{ .PoolStats.LastWorkHeight }}</p>
+                <p></p>
+            </div>
+
+            {{ if not .SoloPool }}
+            <div class="row px-2 m-2 overflow-hidden">
+                <p><span class="font-weight-bold">Last Payment Height:&nbsp;</span>{{ .PoolStats.LastPaymentHeight }}
+                </p>
+                <p></p>
+            </div>
+            {{end}}
+        </div>
+
+        <p class="font-weight-bold">Blocks Mined by this Pool</p>
+        <div style="overflow: auto; max-height: 400px;">
+            <table class="table table-striped">
+                <tr>
+                    <th>Height</th>
+                    <th>Confirmed</th>
+                    <th>Miner</th>
+                    <th>MinedBy</th>
+                </tr>
+                {{ range .MinedWork }}
+                <tr>
+                    <td>{{.Height}}</td>
+                    <td>{{.Confirmed}}</td>
+                    <td>{{.Miner}}</td>
+                    <td>{{ printf "%.12s" .MinedBy}}...</td>
+                </tr>
+                {{else}}
+                <tr>
+                    <td colspan="100%">No mined work</td>
+                </tr>
+                {{end}}
+            </table>
+        </div>
+        {{ else }}
+
+        <div class="col">
+            <p><span class="font-weight-bold">Address:&nbsp;</span>{{.Address}}</p>
+            <p><span class="font-weight-bold">Account ID:&nbsp;</span>{{.AccountStats.AccountID}}</p>
+
+            <div class="p-3">
+                <p class="font-weight-bold">Blocks Mined by this Account</p>
+                <div style="overflow: auto; max-height: 250px;">
+                    <table class="table table-striped">
+                        <tr>
+                            <th>Height</th>
+                            <th>Confirmed</th>
+                            <th>Miner</th>
+                        </tr>
+                        {{ range .AccountStats.MinedWork }}
+                        <tr>
+                            <td>{{.Height}}</td>
+                            <td>{{.Confirmed}}</td>
+                            <td>{{.Miner}}</td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td colspan="100%">No mined work</td>
+                        </tr>
+                        {{end}}
+                    </table>
+                </div>
+            </div>
+
+            <div class="p-3">
+                <p class="font-weight-bold">Payments made to this Account</p>
+                <div style="overflow: auto; max-height: 250px;">
+                    <table class="table table-striped">
+                        <tr>
+                            <th>Account</th>
+                            <th>EstimatedMaturity</th>
+                            <th>Height</th>
+                            <th>Amount</th>
+                            <th>CreatedOn</th>
+                            <th>PaidOnHeight</th>
+                        </tr>
+                        {{ range .AccountStats.Payments }}
+                        <tr>
+                            <td>{{.Account}}</td>
+                            <td>{{.EstimatedMaturity}}</td>
+                            <td>{{.Height}}</td>
+                            <td>{{.Amount}}</td>
+                            <td>{{.CreatedOn}}</td>
+                            <td>{{.PaidOnHeight}}</td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td colspan="100%">No payments for account</td>
+                        </tr>
+                        {{end}}
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        {{end}}
+
+    </div>
+
+</div>
+
+</div>
+</body>
+
+</html>
+{{end}}

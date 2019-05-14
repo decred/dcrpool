@@ -46,9 +46,8 @@ const (
 	defaultWalletPass      = ""
 	defaultMaxTxFeeReserve = 0.1
 	defaultSoloPool        = false
-	defaultAPIPort         = 8080
-	defaultWebUIDir        = "webui"
-	defaultSecureCSRF      = true
+	defaultGUIPort         = 8080
+	defaultGUIDir          = "gui"
 )
 
 var (
@@ -78,7 +77,7 @@ type config struct {
 	ConfigFile      string   `long:"configfile" ini-name:"configfile" description:"Path to configuration file."`
 	DataDir         string   `long:"datadir" ini-name:"datadir" description:"The data directory."`
 	ActiveNet       string   `long:"activenet" ini-name:"activenet" description:"The active network being mined on. {testnet3, mainnet, simnet}"`
-	APIPort         uint32   `long:"apiport" ini-name:"apiport" description:"The pool API port."`
+	GUIPort         uint32   `long:"guiport" ini-name:"guiport" description:"The pool GUI port."`
 	DebugLevel      string   `long:"debuglevel" ini-name:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir          string   `long:"logdir" ini-name:"logdir" description:"Directory to log output."`
 	DBFile          string   `long:"dbfile" ini-name:"dbfile" description:"Path to the database file."`
@@ -97,10 +96,8 @@ type config struct {
 	WalletPass      string   `long:"walletpass" ini-name:"walletpass" description:"The wallet passphrase."`
 	MinPayment      float64  `long:"minpayment" ini-name:"minpayment" description:"The minimum payment to process for an account."`
 	SoloPool        bool     `long:"solopool" ini-name:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
-	BackupPass      string   `long:"backuppass" ini-name:"backuppass" description:"The backup password, required for backup over api."`
-	Secret          string   `long:"secret" ini-name:"secret" description:"Secret string used to encrypt session data. Can use openssl rand -hex 32 to generate one."`
-	SecureCSRF      bool     `long:"securecsrf" ini-name:"securecsrf" description:"Should always be enabled if the web UI is served to clients over HTTPS"`
-	WebUIDir        string   `long:"webuidir" ini-name:"webuidir" description:"Directory containing web assets (templates, css etc.)"`
+	BackupPass      string   `long:"backuppass" ini-name:"backuppass" description:"The admin password, required for database backup."`
+	GUIDir          string   `long:"guidir" ini-name:"guidir" description:"The path to the directory containing the pool's user interface assets (templates, css etc.)"`
 	poolFeeAddrs    []dcrutil.Address
 	dcrdRPCCerts    []byte
 	net             *chaincfg.Params
@@ -261,9 +258,8 @@ func loadConfig() (*config, []string, error) {
 		WalletPass:      defaultWalletPass,
 		MinPayment:      defaultMinPayment,
 		SoloPool:        defaultSoloPool,
-		APIPort:         defaultAPIPort,
-		WebUIDir:        defaultWebUIDir,
-		SecureCSRF:      defaultSecureCSRF,
+		GUIPort:         defaultGUIPort,
+		GUIDir:          defaultGUIDir,
 	}
 
 	// Service options which are only added on Windows.
@@ -399,13 +395,6 @@ func loadConfig() (*config, []string, error) {
 	// Ensure the backup password is set.
 	if cfg.BackupPass == "" {
 		str := "%s: pool backup password is not set"
-		err := fmt.Errorf(str, funcName)
-		return nil, nil, err
-	}
-
-	// Check Secret is provided
-	if cfg.Secret == "" {
-		str := "%s: secret is not set"
 		err := fmt.Errorf(str, funcName)
 		return nil, nil, err
 	}

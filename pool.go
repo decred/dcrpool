@@ -7,21 +7,19 @@ package main
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"math/big"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
-	"time"
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
 
 	"github.com/decred/dcrpool/database"
+	"github.com/decred/dcrpool/gui"
 	"github.com/decred/dcrpool/network"
-	"github.com/decred/dcrpool/webui"
 )
 
 // Pool represents a Proof-of-Work Mining pool for Decred.
@@ -32,8 +30,8 @@ type Pool struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	hub     *network.Hub
+	gui     *gui.GUI
 	limiter *network.RateLimiter
-	server  *http.Server
 }
 
 // initDB handles the creation, upgrading and backup of the database
@@ -103,42 +101,6 @@ func (p *Pool) initDB() error {
 	return nil
 }
 
-// serveAPI starts the pool api server.
-func (p *Pool) serveAPI() {
-	webUI, err := webui.InitUI(p.hub, p.db, p.cfg.Secret, p.cfg.WebUIDir)
-	if err != nil {
-		pLog.Errorf("Failed to initialise web ui: ", err)
-		return
-	}
-
-	router := webUI.GetRouter(p.cfg.Secret, p.cfg.SecureCSRF, p.cfg.WebUIDir)
-	p.server = &http.Server{
-		Addr:         fmt.Sprintf("0.0.0.0:%v", p.cfg.APIPort),
-		WriteTimeout: time.Second * 30,
-		ReadTimeout:  time.Second * 5,
-		IdleTimeout:  time.Second * 30,
-		Handler:      router,
-	}
-
-	pLog.Infof("API server listening on port %v.", p.cfg.APIPort)
-
-	go func() {
-		if err := p.server.ListenAndServeTLS(defaultTLSCertFile, defaultTLSKeyFile); err != nil &&
-			err != http.ErrServerClosed {
-			pLog.Error(err)
-		}
-	}()
-}
-
-// shutdownAPI tears down the pool api server.
-func (p *Pool) shutdownAPI() {
-	ctx, cl := context.WithTimeout(p.ctx, time.Second*5)
-	defer cl()
-	if err := p.server.Shutdown(ctx); err != nil {
-		pLog.Error(err)
-	}
-}
-
 // NewPool initializes the mining pool.
 func NewPool(cfg *config) (*Pool, error) {
 	p := new(Pool)
@@ -183,10 +145,24 @@ func NewPool(cfg *config) (*Pool, error) {
 		MinPayment:        minPmt,
 		PoolFeeAddrs:      cfg.poolFeeAddrs,
 		SoloPool:          cfg.SoloPool,
-		BackupPass:        cfg.BackupPass,
 	}
 
 	p.hub, err = network.NewHub(p.ctx, p.cancel, p.db, p.httpc, hcfg, p.limiter)
+	if err != nil {
+		return nil, err
+	}
+
+	gcfg := &gui.Config{
+		Ctx:         p.ctx,
+		SoloPool:    cfg.SoloPool,
+		GUIDir:      cfg.GUIDir,
+		BackupPass:  cfg.BackupPass,
+		GUIPort:     cfg.GUIPort,
+		TLSCertFile: defaultTLSCertFile,
+		TLSKeyFile:  defaultTLSKeyFile,
+	}
+
+	p.gui, err = gui.NewGUI(gcfg, p.hub, p.db)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +208,7 @@ func main() {
 		}
 	}()
 
-	p.serveAPI()
+	p.gui.Run()
 	p.hub.Run(p.ctx)
-	p.shutdownAPI()
+	p.gui.Shutdown()
 }
