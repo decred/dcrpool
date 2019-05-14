@@ -15,8 +15,8 @@ import (
 
 	"github.com/decred/dcrpool/database"
 	"github.com/decred/dcrpool/dividend"
+	"github.com/decred/dcrpool/gui"
 	"github.com/decred/dcrpool/network"
-	"github.com/decred/dcrpool/webui"
 )
 
 // logWriter implements an io.Writer that outputs to both standard output and
@@ -58,7 +58,7 @@ func init() {
 	database.UseLogger(dbLog)
 	dividend.UseLogger(divLog)
 	network.UseLogger(netLog)
-	webui.UseLogger(guiLog)
+	gui.UseLogger(guiLog)
 }
 
 // subsystemLoggers maps each subsystem identifier to its associated logger.

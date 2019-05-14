@@ -53,27 +53,6 @@ const (
 )
 
 var (
-	// zeroInt is the default value for a big.Int.
-	zeroInt = new(big.Int).SetInt64(0)
-
-	// zeroRat is the default value for a big.Rat.
-	zeroRat = new(big.Rat).SetInt64(0)
-
-	// kiloHash is 1 KH represented as a big.Rat.
-	kiloHash = new(big.Rat).SetInt64(1000)
-
-	// megaHash is 1MH represented as a big.Rat.
-	megaHash = new(big.Rat).SetInt64(1000000)
-
-	// gigaHash is 1GH represented as a big.Rat.
-	gigaHash = new(big.Rat).SetInt64(1000000000)
-
-	// teraHash is 1TH represented as a big.Rat.
-	teraHash = new(big.Rat).SetInt64(1000000000000)
-
-	// petaHash is 1PH represented as a big.Rat
-	petaHash = new(big.Rat).SetInt64(1000000000000000)
-
 	// soloMaxGenTime is the threshold (in seconds) at which pool clients will
 	// generate a valid share when solo pool mode is activated. This is set to a
 	// high value to reduce the number of round trips to the pool by connected
@@ -97,6 +76,7 @@ type HubConfig struct {
 	SoloPool          bool
 	PoolFeeAddrs      []dcrutil.Address
 	BackupPass        string
+	Secret            string
 }
 
 // DifficultyData captures the pool target difficulty and pool difficulty
@@ -948,68 +928,36 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	return err
 }
 
-// hashString formats the provided hashrate per the best-fit unit.
-func hashString(hash *big.Rat) string {
-	if hash.Cmp(zeroRat) == 0 {
-		return "0 H/s"
-	}
-
-	if hash.Cmp(petaHash) > 0 {
-		ph := new(big.Rat).Quo(hash, petaHash)
-		return fmt.Sprintf("%v PH/s", ph.FloatString(4))
-	}
-
-	if hash.Cmp(teraHash) > 0 {
-		th := new(big.Rat).Quo(hash, teraHash)
-		return fmt.Sprintf("%v TH/s", th.FloatString(4))
-	}
-
-	if hash.Cmp(gigaHash) > 0 {
-		gh := new(big.Rat).Quo(hash, gigaHash)
-		return fmt.Sprintf("%v GH/s", gh.FloatString(4))
-	}
-
-	if hash.Cmp(megaHash) > 0 {
-		mh := new(big.Rat).Quo(hash, megaHash)
-		return fmt.Sprintf("%v MH/s", mh.FloatString(4))
-	}
-
-	if hash.Cmp(kiloHash) > 0 {
-		kh := new(big.Rat).Quo(hash, kiloHash)
-		return fmt.Sprintf("%v KH/s", kh.FloatString(4))
-	}
-
-	return "< 1KH/s"
-}
-
-type ClientHashRate struct {
+// ClientHash represents a connected client's hash rate.
+type ClientHash struct {
 	Name     string
 	Miner    string
 	HashRate string
 }
 
 // FetchHash returns the total hashrate of all connected miners
-func (h *Hub) FetchHash() (string, []ClientHashRate) {
+func (h *Hub) FetchHash() (string, []ClientHash) {
 	// Iterate through all connected miners and add hash rates.
 	total := new(big.Rat).SetInt64(0)
-	cHash := make([]ClientHashRate, 0)
+	hashSet := make([]ClientHash, 0)
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
 			client.hashRateMtx.RLock()
 			total = total.Add(total, client.hashRate)
-			cHash = append(cHash, ClientHashRate{
+			hashSet = append(hashSet, ClientHash{
 				Name:     client.name,
 				Miner:    endpoint.miner,
-				HashRate: hashString(client.hashRate),
+				HashRate: util.HashString(client.hashRate),
 			})
 			client.hashRateMtx.RUnlock()
 		}
 		endpoint.clientsMtx.Unlock()
 	}
-	return hashString(total), cHash
+	return util.HashString(total), hashSet
 }
 
+// Connection details a pool client's connection.
 type Connection struct {
 	IP    string
 	Port  uint32
@@ -1034,22 +982,16 @@ func (h *Hub) FetchConnections() []Connection {
 	return connInfo
 }
 
+// PoolStats details the pool's work and payment statistics.
 type PoolStats struct {
-	MinedWork         []*AcceptedWork
 	LastWorkHeight    uint32
 	LastPaymentHeight uint32
 }
 
-//FetchPoolStats returns last height work was generated for.
+// FetchPoolStats returns last height work was generated for.
 func (h *Hub) FetchPoolStats() (*PoolStats, error) {
-	work, err := ListMinedWork(h.db)
-	if err != nil {
-		return nil, err
-	}
-
 	poolStats := &PoolStats{
 		LastWorkHeight: atomic.LoadUint32(&h.lastWorkHeight),
-		MinedWork:      work,
 	}
 
 	if !h.cfg.SoloPool {
@@ -1059,20 +1001,48 @@ func (h *Hub) FetchPoolStats() (*PoolStats, error) {
 	return poolStats, nil
 }
 
+// MinedWork details confirmed mined work by the pool.
+type MinedWork struct {
+	Truncated bool
+	Size      int
+	Work      []*AcceptedWork
+}
+
+// FetchMinedWork returns work confirmed as mined by the pool with the option
+// of truncatng the data set if specified.
+func (h *Hub) FetchMinedWork(truncate bool) (*MinedWork, error) {
+	work, err := ListMinedWork(h.db, truncate)
+	if err != nil {
+		return nil, err
+	}
+
+	minedWork := &MinedWork{
+		Truncated: truncate,
+		Size:      len(work),
+		Work:      work,
+	}
+
+	return minedWork, nil
+}
+
+// Quota details the portion of mining rewrds due an account for work
+// contributed to the pool.
 type Quota struct {
-	User       string
+	AccountID  string
 	Percentage *big.Rat
 }
 
+// WorkQuota details the how mining rewards are to be distributed to
+// participating accounts when a block is found, per the payment scheme.
 type WorkQuotas struct {
-	Type   string
-	Quotas []Quota
+	PaymentScheme string
+	Quotas        []Quota
 }
 
 // FetchWorkQuotas returns the reward distribution to pool accounts
 // based on work contributed per the peyment scheme used by the pool.
 func (h *Hub) FetchWorkQuotas() (*WorkQuotas, error) {
-	if h.SoloPoolMode() {
+	if h.cfg.SoloPool {
 		return nil, errors.New("share percentages not available when mining" +
 			" in solo pool mode")
 	}
@@ -1099,51 +1069,46 @@ func (h *Hub) FetchWorkQuotas() (*WorkQuotas, error) {
 	quotas := make([]Quota, 0)
 	for key, value := range percentages {
 		quotas = append(quotas, Quota{
-			User:       key,
+			AccountID:  key,
 			Percentage: value,
 		})
 	}
 
 	return &WorkQuotas{
-		Type:   h.cfg.PaymentMethod,
-		Quotas: quotas,
+		PaymentScheme: h.cfg.PaymentMethod,
+		Quotas:        quotas,
 	}, nil
 }
 
-type UserStats struct {
+// AccountStats is a snapshot of an accounts contribution to the pool. This
+// comprises of blocks mined by the pool and payments made to the account.
+type AccountStats struct {
 	AccountID *string
 	MinedWork []*AcceptedWork
 	Payments  []*dividend.Payment
 }
 
-// FetchUserStats returns a list of mined work by the provided account, and
+// FetchAccountStats returns a list of mined work by the provided account, and
 // archived payments made to the provided account.
-func (h *Hub) FetchUserStats(address string) (*UserStats, error) {
+func (h *Hub) FetchAccountStats(address string) (*AccountStats, error) {
 	id := dividend.AccountID(address)
 	work, err := ListMinedWorkByAccount(h.db, *id)
 	if err != nil {
 		return nil, err
 	}
 
-	minNano := util.NanoToBigEndianBytes(time.Unix(1, 0).UnixNano())
+	// Using unix time here as the minimum time in order to fetch the
+	// full data set.
+	minNano := util.NanoToBigEndianBytes(time.Unix(0, 0).UnixNano())
 	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db,
 		[]byte(*id), minNano)
 	if err != nil {
 		return nil, err
 	}
 
-	return &UserStats{
+	return &AccountStats{
 		AccountID: id,
 		MinedWork: work,
 		Payments:  payments,
 	}, nil
-}
-
-// CheckBackupPass returns true if the parameter is the correct backup password.
-func (h *Hub) CheckBackupPass(pass string) bool {
-	return h.cfg.BackupPass == pass
-}
-
-func (h *Hub) SoloPoolMode() bool {
-	return h.cfg.SoloPool
 }

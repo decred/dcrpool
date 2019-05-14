@@ -1,4 +1,4 @@
-package webui
+package gui
 
 import (
 	"html/template"
@@ -17,8 +17,8 @@ type adminPageData struct {
 	CSRF        template.HTML
 }
 
-func (ui *WebUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
-	session, _ := ui.store.Get(r, "session")
+func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
+	session, _ := ui.cookieStore.Get(r, "session")
 	if session.Values["IsAdmin"] != true {
 		ui.renderTemplate(w, r, "admin", adminPageData{
 			Admin: false,
@@ -42,32 +42,32 @@ func (ui *WebUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (ui *WebUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
 	pass := r.FormValue("password")
 
-	if !ui.hub.CheckBackupPass(pass) {
-		log.Warn("Admin password test failed")
+	if ui.cfg.BackupPass != pass {
+		log.Warn("Unauthorized access")
 		ui.GetAdmin(w, r)
 		return
 	}
 
-	session, _ := ui.store.Get(r, "session")
+	session, _ := ui.cookieStore.Get(r, "session")
 	session.Values["IsAdmin"] = true
 	session.Save(r, w)
 
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
-func (ui *WebUI) PostLogout(w http.ResponseWriter, r *http.Request) {
-	session, _ := ui.store.Get(r, "session")
+func (ui *GUI) PostLogout(w http.ResponseWriter, r *http.Request) {
+	session, _ := ui.cookieStore.Get(r, "session")
 	session.Values["IsAdmin"] = nil
 	session.Save(r, w)
 
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
-func (ui *WebUI) PostBackup(w http.ResponseWriter, r *http.Request) {
-	session, _ := ui.store.Get(r, "session")
+func (ui *GUI) PostBackup(w http.ResponseWriter, r *http.Request) {
+	session, _ := ui.cookieStore.Get(r, "session")
 	if session.Values["IsAdmin"] != true {
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return

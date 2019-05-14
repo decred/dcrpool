@@ -57,6 +57,9 @@ var (
 
 	// SoloPool is the solo pool mode key.
 	SoloPool = []byte("solopool")
+
+	// CSRFSecret is the CSRF secret key.
+	CSRFSecret = []byte("csrfsecret")
 )
 
 // ErrValueNotFound is returned when a provided database key does not map
@@ -245,6 +248,12 @@ func Purge(db *bolt.DB) error {
 		if err != nil {
 			return fmt.Errorf("failed to delete '%v' k/v: %v",
 				string(SoloPool), err)
+		}
+
+		err = pbkt.Delete(CSRFSecret)
+		if err != nil {
+			return fmt.Errorf("failed to delete '%v' k/v: %v",
+				string(CSRFSecret), err)
 		}
 
 		return nil

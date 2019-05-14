@@ -152,8 +152,9 @@ func (work *AcceptedWork) Delete(db *bolt.DB) error {
 
 // ListMinedWork returns work data associated with blocks mined by
 // the pool.
-func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
+func ListMinedWork(db *bolt.DB, truncate bool) ([]*AcceptedWork, error) {
 	minedWork := make([]*AcceptedWork, 0)
+	truncatedSize := 5
 	err := db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		if pbkt == nil {
@@ -166,7 +167,7 @@ func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
 		}
 
 		cursor := bkt.Cursor()
-		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+		for k, v := cursor.Last(); k != nil; k, v = cursor.Prev() {
 			var work AcceptedWork
 			err := json.Unmarshal(v, &work)
 			if err != nil {
@@ -175,6 +176,10 @@ func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
 
 			if work.Confirmed {
 				minedWork = append(minedWork, &work)
+
+				if truncate && len(minedWork) == truncatedSize {
+					return nil
+				}
 			}
 		}
 

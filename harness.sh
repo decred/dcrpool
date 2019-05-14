@@ -7,6 +7,7 @@ RPC_USER="user"
 RPC_PASS="pass"
 WALLET_SEED="b280922d2cffda44648346412c5ec97f429938105003730414f10b01e1402eac"
 WALLET_PASS=123
+BACKUP_PASS=b@ckUp
 NETWORK="simnet"
 # NETWORK="testnet3"
 # NETWORK="mainnet"
@@ -44,18 +45,18 @@ DCRD_RPC_KEY="${HOME}/.dcrd/rpc.key"
 DCRD_CONF="${HOME}/.dcrd/dcrd.conf"
 WALLET_RPC_CERT="${HOME}/.dcrwallet/rpc.cert"
 WALLET_RPC_KEY="${HOME}/.dcrwallet/rpc.key"
-WEBUI_DIR="${NODES_ROOT}/webui"
+GUI_DIR="${NODES_ROOT}/gui"
 
 echo "Writing node config files"
 mkdir -p "${NODES_ROOT}/master"
 mkdir -p "${NODES_ROOT}/wallet"
 mkdir -p "${NODES_ROOT}/pool"
-mkdir -p "${NODES_ROOT}/webui"
+mkdir -p "${NODES_ROOT}/gui"
 mkdir -p "${NODES_ROOT}/c1"
 mkdir -p "${NODES_ROOT}/c2"
 
-cp -r webui/public ${WEBUI_DIR}/public
-cp -r webui/templates ${WEBUI_DIR}/templates
+cp -r gui/public ${GUI_DIR}/public
+cp -r gui/templates ${GUI_DIR}/templates
 
 cat > "${NODES_ROOT}/c1/client.conf" <<EOF
 debuglevel=trace
@@ -96,10 +97,8 @@ walletpass=${WALLET_PASS}
 poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
-backuppass=b@ckUp
-webuidir=${WEBUI_DIR}
-secret=secret
-securecsrf=false
+backuppass=${BACKUP_PASS}
+guidir=${GUI_DIR}
 EOF
 fi
 
@@ -126,10 +125,8 @@ walletpass=${WALLET_PASS}
 poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
-backuppass=b@ckUp
-webuidir=${WEBUI_DIR}
-secret=secret
-securecsrf=false
+backuppass=${BACKUP_PASS}
+guidir=${GUI_DIR}
 EOF
 
 cat > "${NODES_ROOT}/dcrwctl.conf" <<EOF
@@ -175,10 +172,8 @@ walletpass=${WALLET_PASS}
 poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
-backuppass=b@ckUp
-webuidir=${WEBUI_DIR}
-secret=secret
-securecsrf=false
+backuppass=${BACKUP_PASS}
+guidir=${GUI_DIR}
 EOF
 fi
 
