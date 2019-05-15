@@ -634,7 +634,7 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 			var header wire.BlockHeader
 			err := header.FromBytes(headerB)
 			if err != nil {
-				log.Errorf("Failed to create header from bytes: %v", err)
+				log.Errorf("unable to create header from bytes: %v", err)
 				h.cancel()
 				continue
 			}
@@ -644,7 +644,7 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 				pruneLimit := header.Height - MaxReorgLimit
 				err := PruneJobs(h.db, pruneLimit)
 				if err != nil {
-					log.Errorf("Failed to prune jobs to height %d: %v",
+					log.Errorf("unable to prune jobs to height %d: %v",
 						pruneLimit, err)
 					h.cancel()
 					continue
@@ -653,17 +653,34 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 				log.Tracef("Pruned jobs below height: %v", pruneLimit)
 			}
 
-			blockHash := header.BlockHash()
-			id := AcceptedWorkID(blockHash.String(), header.Height)
-			work, err := FetchAcceptedWork(h.db, id)
+			// If the parent of the connected block is an accepted work of the
+			// pool, confirmed it as mined. The parent of a connected block
+			// at this point is guaranteed to have its corresponding accepted
+			// work persisted if it was mined by the pool.
+			parentID := AcceptedWorkID(header.PrevBlock.String(),
+				header.Height-1)
+			work, err := FetchAcceptedWork(h.db, parentID)
 			if err != nil {
-				log.Errorf("Failed to fetch accepted work: %v", err)
+				log.Errorf(
+					"unable to fetch accepted work for block #%v's parent"+
+						" (%v) : %v", header.Height,
+					header.PrevBlock.String(), err)
 				continue
 			}
 
-			prevWork, err := work.FilterParentAcceptedWork(h.db)
+			if work == nil {
+				log.Tracef("No mined work found for block #%v's parent (%v)",
+					header.Height, header.PrevBlock.String())
+				continue
+			}
+
+			// Update accepted work as confirmed mined.
+			work.Confirmed = true
+			err = work.Update(h.db)
 			if err != nil {
-				log.Errorf("Failed to filter parent accepted work: %v", err)
+				log.Errorf("unable to confirm accepted work for block"+
+					"(%v): %v", header.PrevBlock.String(), err)
+				h.cancel()
 				continue
 			}
 
@@ -672,8 +689,8 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 				pruneLimit := header.Height - MaxReorgLimit
 				err = PruneAcceptedWork(h.db, pruneLimit)
 				if err != nil {
-					log.Errorf("Failed to prune accepted work below height (%v)"+
-						": %v", pruneLimit, err)
+					log.Errorf("unable to prune accepted work below"+
+						" height (%v): %v", pruneLimit, err)
 					h.cancel()
 					continue
 				}
@@ -681,31 +698,19 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 				log.Tracef("Pruned accepted work below height: %v", pruneLimit)
 			}
 
-			if prevWork == nil {
-				log.Tracef("No mined work found")
-				continue
-			}
+			log.Tracef("Found mined parent (%v) for connected block (%v)",
+				header.PrevBlock.String(), header.BlockHash().String())
 
-			log.Tracef("Found mined parent %v for work %v",
-				prevWork.BlockHash, header.BlockHash().String())
-
-			// Update accepted work as confirmed mined.
-			prevWork.Confirmed = true
-			err = prevWork.Update(h.db)
-			if err != nil {
-				log.Errorf("Failed to confirm accepted work: %v", err)
-				h.cancel()
-				continue
-			}
-
-			// Only process shares and payments when not mining in solo
-			// pool mode.
+			// Fetch the coinbase of the the confirmed accepted work
+			// (the parent of the connected block) and process payments
+			//  when not mining in solo pool mode.
 			if !h.cfg.SoloPool {
 				h.rpccMtx.Lock()
-				block, err := h.rpcc.GetBlock(&blockHash)
+				block, err := h.rpcc.GetBlock(&header.PrevBlock)
 				h.rpccMtx.Unlock()
 				if err != nil {
-					log.Errorf("Failed to fetch block: %v", err)
+					log.Errorf("unable to fetch block (%v): %v",
+						header.PrevBlock.String(), err)
 					h.cancel()
 					continue
 				}
@@ -714,7 +719,8 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 					dcrutil.Amount(block.Transactions[0].TxOut[2].Value)
 
 				log.Tracef("Accepted work (%v) at height %v has coinbase"+
-					" of %v", header.BlockHash(), header.Height, coinbase)
+					" of %v", header.PrevBlock.String(), header.Height-1,
+					coinbase)
 
 				// Pay dividends per the configured payment scheme and process
 				// mature payments.
@@ -723,7 +729,7 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 					err := dividend.PayPerShare(h.db, coinbase, h.cfg.PoolFee,
 						header.Height, h.cfg.ActiveNet.CoinbaseMaturity)
 					if err != nil {
-						log.Error("Failed to process generate PPS shares: %v", err)
+						log.Error("unable to process generate PPS shares: %v", err)
 						h.cancel()
 						continue
 					}
@@ -733,7 +739,7 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 						h.cfg.PoolFee, header.Height,
 						h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
 					if err != nil {
-						log.Errorf("Failed to generate PPLNS shares: %v", err)
+						log.Errorf("unable to generate PPLNS shares: %v", err)
 						h.cancel()
 						continue
 					}
@@ -742,7 +748,7 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 				// Process mature payments.
 				err = h.ProcessPayments(header.Height)
 				if err != nil {
-					log.Errorf("Failed to process payments: %v", err)
+					log.Errorf("unable to process payments: %v", err)
 				}
 			}
 
@@ -750,23 +756,25 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 			var header wire.BlockHeader
 			err := header.FromBytes(headerB)
 			if err != nil {
-				log.Errorf("Failed to create header from bytes: %v", err)
+				log.Errorf("unable to create header from bytes: %v", err)
 				h.cancel()
 				continue
 			}
 			log.Tracef("Block disconnected at height %v", header.Height)
 
-			// Delete mined work if it is disconnected from the chain.
+			// Delete mined work if it is disconnected from the chain. At this
+			// point a mined confirmed block will have its corresponding
+			// accepted block record persisted.
 			id := AcceptedWorkID(header.BlockHash().String(), header.Height)
 			work, err := FetchAcceptedWork(h.db, id)
 			if err != nil {
-				log.Errorf("Failed to fetch mined work: %v", err)
+				log.Errorf("unable to fetch mined work: %v", err)
 				continue
 			}
 
 			err = work.Delete(h.db)
 			if err != nil {
-				log.Errorf("Failed to delete mined work: %v", err)
+				log.Errorf("unable to delete mined work: %v", err)
 				h.cancel()
 				continue
 			}
@@ -787,7 +795,7 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 				for _, pmt := range payments {
 					err = pmt.Delete(h.db)
 					if err != nil {
-						log.Errorf("Failed to delete payment", err)
+						log.Errorf("unable to delete pending payment", err)
 						h.cancel()
 						break
 					}

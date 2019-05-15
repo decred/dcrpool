@@ -5,11 +5,11 @@
 package network
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrpool/database"
@@ -35,6 +35,7 @@ type AcceptedWork struct {
 	Height    uint32 `json:"height"`
 	MinedBy   string `json:"minedby"`
 	Miner     string `json:"miner"`
+	CreatedOn int64  `json:"createdon"`
 
 	// An accepted work becomes mined work once it is confirmed by an incoming
 	// work as the parent block it was built on.
@@ -58,6 +59,7 @@ func NewAcceptedWork(blockHash string, prevHash string, height uint32, minedBy s
 		Height:    height,
 		MinedBy:   minedBy,
 		Miner:     miner,
+		CreatedOn: time.Now().Unix(),
 	}
 }
 
@@ -227,68 +229,6 @@ func ListMinedWorkByAccount(db *bolt.DB, accountID string) ([]*AcceptedWork, err
 	}
 
 	return minedWork, nil
-}
-
-// FilterParentAcceptedWork locates the accepted work associated with the
-// previous block hash of the provided accepted work. It also removes all
-// invalidated accepted work at the same height.
-func (work *AcceptedWork) FilterParentAcceptedWork(db *bolt.DB) (*AcceptedWork, error) {
-	var prevWork AcceptedWork
-	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.WorkBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.WorkBkt)
-		}
-
-		heightB := util.HeightToBigEndianBytes(work.Height - 1)
-		prefix := make([]byte, hex.EncodedLen(len(heightB)))
-		hex.Encode(prefix, heightB)
-
-		toDelete := [][]byte{}
-		match := false
-		prevHashB := []byte(work.PrevHash)
-		cursor := bkt.Cursor()
-		for k, v := cursor.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = cursor.Next() {
-			parentWork := k[len(prefix):]
-			if !match {
-				if bytes.Equal(parentWork, prevHashB) {
-					err := json.Unmarshal(v, &prevWork)
-					if err != nil {
-						return err
-					}
-					match = true
-					continue
-				}
-			}
-
-			if match {
-				toDelete = append(toDelete, k)
-			}
-		}
-
-		for _, entry := range toDelete {
-			err := bkt.Delete(entry)
-			if err != nil {
-				return err
-			}
-		}
-
-		if !match {
-			return fmt.Errorf("no accepted work found for: %v", work.PrevHash)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &prevWork, nil
 }
 
 // PruneAcceptedWork removes all accepted work not confirmed as mined work with
