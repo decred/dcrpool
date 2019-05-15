@@ -394,30 +394,6 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	}
 
 	if hashNum.Cmp(target) < 0 {
-		// Persist the accepted work before submiting to the network. This is
-		// a workaround in order to have an accepted work record available
-		// when a block connected notification is received.
-
-		work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
-			header.Height, c.account, c.endpoint.miner)
-		err := work.Create(c.endpoint.hub.db)
-		if err != nil {
-			// If the submitted accetped work already exists, ignore the submission.
-			if err.Error() == ErrWorkAlreadyExists([]byte(work.UUID)).Error() {
-				log.Tracef("Work already exists, ignoring.")
-				err := NewStratumError(DuplicateShare, nil)
-				resp := SubmitWorkResponse(*req.ID, false, err)
-				c.ch <- resp
-				return
-			}
-
-			log.Errorf("unable to persist accepted work: %v", err)
-			err := NewStratumError(Unknown, nil)
-			resp := SubmitWorkResponse(*req.ID, false, err)
-			c.ch <- resp
-			return
-		}
-
 		// Generate and send the work submission.
 		headerB, err := header.Bytes()
 		if err != nil {
@@ -445,9 +421,29 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		log.Tracef("Work accepted status is: %v", accepted)
 		c.ch <- SubmitWorkResponse(*req.ID, accepted, nil)
 
-		// Remove the work record if it is not accepted by the network.
-		if !accepted {
-			work.Delete(c.endpoint.hub.db)
+		// Create accepted if the work submission is accepted by the mining node.
+		if accepted {
+			work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
+				header.Height, c.account, c.endpoint.miner)
+			err := work.Create(c.endpoint.hub.db)
+			if err != nil {
+				// If the submitted accetped work already exists, ignore the
+				// submission.
+				if err.Error() ==
+					ErrWorkAlreadyExists([]byte(work.UUID)).Error() {
+					log.Tracef("Work already exists, ignoring.")
+					err := NewStratumError(DuplicateShare, nil)
+					resp := SubmitWorkResponse(*req.ID, false, err)
+					c.ch <- resp
+					return
+				}
+
+				log.Errorf("unable to persist accepted work: %v", err)
+				err := NewStratumError(Unknown, nil)
+				resp := SubmitWorkResponse(*req.ID, false, err)
+				c.ch <- resp
+				return
+			}
 		}
 	}
 }
