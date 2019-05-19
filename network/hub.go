@@ -994,6 +994,7 @@ func (h *Hub) FetchConnections() []Connection {
 type PoolStats struct {
 	LastWorkHeight    uint32
 	LastPaymentHeight uint32
+	MinedWork         []*AcceptedWork
 }
 
 // FetchPoolStats returns last height work was generated for.
@@ -1006,31 +1007,10 @@ func (h *Hub) FetchPoolStats() (*PoolStats, error) {
 		poolStats.LastPaymentHeight = atomic.LoadUint32(&h.lastPaymentHeight)
 	}
 
-	return poolStats, nil
-}
+	work, err := ListMinedWork(h.db)
+	poolStats.MinedWork = work
 
-// MinedWork details confirmed mined work by the pool.
-type MinedWork struct {
-	Truncated bool
-	Size      int
-	Work      []*AcceptedWork
-}
-
-// FetchMinedWork returns work confirmed as mined by the pool with the option
-// of truncatng the data set if specified.
-func (h *Hub) FetchMinedWork(truncate bool) (*MinedWork, error) {
-	work, err := ListMinedWork(h.db, truncate)
-	if err != nil {
-		return nil, err
-	}
-
-	minedWork := &MinedWork{
-		Truncated: truncate,
-		Size:      len(work),
-		Work:      work,
-	}
-
-	return minedWork, nil
+	return poolStats, err
 }
 
 // Quota details the portion of mining rewrds due an account for work
@@ -1105,11 +1085,7 @@ func (h *Hub) FetchAccountStats(address string) (*AccountStats, error) {
 		return nil, err
 	}
 
-	// Using unix time here as the minimum time in order to fetch the
-	// full data set.
-	minNano := util.NanoToBigEndianBytes(time.Unix(0, 0).UnixNano())
-	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db,
-		[]byte(*id), minNano)
+	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db, *id)
 	if err != nil {
 		return nil, err
 	}

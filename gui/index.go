@@ -2,6 +2,7 @@ package gui
 
 import (
 	"net/http"
+	"reflect"
 
 	"github.com/decred/dcrpool/network"
 )
@@ -10,7 +11,6 @@ type indexData struct {
 	PoolStats    *network.PoolStats
 	HashRate     string
 	HashSet      []network.ClientHash
-	MinedWork    *network.MinedWork
 	SoloPool     bool
 	AccountStats *network.AccountStats
 	Address      string
@@ -44,18 +44,6 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 
 	data.Address = address
 
-	minedWork, err := ui.hub.FetchMinedWork(true)
-	if err != nil {
-		log.Error(err)
-		http.Error(w, "FetchMinedWork error: "+err.Error(),
-			http.StatusInternalServerError)
-		return
-	}
-
-	log.Tracef("mined work length is: %v", minedWork)
-
-	data.MinedWork = minedWork
-
 	resp, err := ui.hub.FetchAccountStats(address)
 	if err != nil {
 		log.Error(err)
@@ -66,5 +54,16 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 
 	data.AccountStats = resp
 
+	reverseSlice(data.AccountStats.MinedWork)
+	reverseSlice(data.AccountStats.Payments)
+
 	ui.renderTemplate(w, r, "index", data)
+}
+
+func reverseSlice(s interface{}) {
+	size := reflect.ValueOf(s).Len()
+	swap := reflect.Swapper(s)
+	for i, j := 0, size-1; i < j; i, j = i+1, j-1 {
+		swap(i, j)
+	}
 }
