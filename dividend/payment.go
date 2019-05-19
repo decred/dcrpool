@@ -556,8 +556,8 @@ func GeneratePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address, eligibl
 }
 
 // FetchArchivedPaymentsForAccount fetches archived payments for the provided
-// account that were created before the provided timestamp.
-func FetchArchivedPaymentsForAccount(db *bolt.DB, account []byte, minNano []byte) ([]*Payment, error) {
+// account.
+func FetchArchivedPaymentsForAccount(db *bolt.DB, account string) ([]*Payment, error) {
 	pmts := make([]*Payment, 0)
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
@@ -576,8 +576,7 @@ func FetchArchivedPaymentsForAccount(db *bolt.DB, account []byte, minNano []byte
 			minNanoE := k[:16]
 			minNanoB := make([]byte, hex.DecodedLen(len(minNanoE)))
 			hex.Decode(minNanoB, minNanoE)
-			if bytes.Equal(accountE, account) &&
-				bytes.Compare(minNanoB, minNano) > 0 {
+			if bytes.Equal(accountE, []byte(account)) {
 				var payment Payment
 				err := json.Unmarshal(v, &payment)
 				if err != nil {

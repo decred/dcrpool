@@ -48,7 +48,7 @@
                     <th>Miner</th>
                     <th>MinedBy</th>
                 </tr>
-                {{ range .MinedWork }}
+                {{ range .PoolStats.MinedWork }}
                 <tr>
                     <td>{{.Height}}</td>
                     <td>{{.Confirmed}}</td>
@@ -97,7 +97,6 @@
                 <div style="overflow: auto; max-height: 250px;">
                     <table class="table table-striped">
                         <tr>
-                            <th>Account</th>
                             <th>EstimatedMaturity</th>
                             <th>Height</th>
                             <th>Amount</th>
@@ -106,7 +105,6 @@
                         </tr>
                         {{ range .AccountStats.Payments }}
                         <tr>
-                            <td>{{.Account}}</td>
                             <td>{{.EstimatedMaturity}}</td>
                             <td>{{.Height}}</td>
                             <td>{{.Amount}}</td>
