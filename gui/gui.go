@@ -19,6 +19,7 @@ import (
 
 	"github.com/decred/dcrpool/database"
 	"github.com/decred/dcrpool/network"
+	"github.com/decred/dcrpool/util"
 )
 
 // Config represents configuration details for the pool user interface.
@@ -154,10 +155,14 @@ func (ui *GUI) loadTemplates() error {
 		return err
 	}
 
+	httpTemplates := template.New("template").Funcs(template.FuncMap{
+		"hashString": util.HashString,
+	})
+
 	// Since template.Must panics with non-nil error, it is much more
 	// informative to pass the error to the caller to log it and exit
 	// gracefully.
-	httpTemplates, err := template.ParseFiles(templates...)
+	httpTemplates, err = httpTemplates.ParseFiles(templates...)
 	if err != nil {
 		return err
 	}

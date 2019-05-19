@@ -936,58 +936,31 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	return err
 }
 
-// ClientHash represents a connected client's hash rate.
-type ClientHash struct {
-	Name     string
+type ClientInfo struct {
 	Miner    string
-	HashRate string
+	IP       string
+	HashRate *big.Rat
 }
 
-// FetchHash returns the total hashrate of all connected miners
-func (h *Hub) FetchHash() (string, []ClientHash) {
-	// Iterate through all connected miners and add hash rates.
-	total := new(big.Rat).SetInt64(0)
-	hashSet := make([]ClientHash, 0)
+// FetchClientInfo returns information about all connected clients
+func (h *Hub) FetchClientInfo() map[string][]*ClientInfo {
+	clientInfo := make(map[string][]*ClientInfo, 0)
+
+	// Iterate through all connected miners
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
 			client.hashRateMtx.RLock()
-			total = total.Add(total, client.hashRate)
-			hashSet = append(hashSet, ClientHash{
-				Name:     client.name,
+			clientInfo[client.account] = append(clientInfo[client.account], &ClientInfo{
 				Miner:    endpoint.miner,
-				HashRate: util.HashString(client.hashRate),
+				IP:       client.ip,
+				HashRate: client.hashRate,
 			})
 			client.hashRateMtx.RUnlock()
 		}
 		endpoint.clientsMtx.Unlock()
 	}
-	return util.HashString(total), hashSet
-}
-
-// Connection details a pool client's connection.
-type Connection struct {
-	IP    string
-	Port  uint32
-	Miner string
-}
-
-// FetchConnections returns information about all currently
-// connected clients
-func (h *Hub) FetchConnections() []Connection {
-	connInfo := make([]Connection, 0)
-	for _, endpoint := range h.endpoints {
-		endpoint.clientsMtx.Lock()
-		for _, client := range endpoint.clients {
-			connInfo = append(connInfo, Connection{
-				IP:    client.ip,
-				Port:  client.endpoint.port,
-				Miner: client.endpoint.miner,
-			})
-		}
-		endpoint.clientsMtx.Unlock()
-	}
-	return connInfo
+	return clientInfo
 }
 
 // PoolStats details the pool's work and payment statistics.
@@ -1068,31 +1041,14 @@ func (h *Hub) FetchWorkQuotas() (*WorkQuotas, error) {
 	}, nil
 }
 
-// AccountStats is a snapshot of an accounts contribution to the pool. This
-// comprises of blocks mined by the pool and payments made to the account.
-type AccountStats struct {
-	AccountID *string
-	MinedWork []*AcceptedWork
-	Payments  []*dividend.Payment
+// FetchMinedWorkByAddress returns a list of mined work by the provided address.
+func (h *Hub) FetchMinedWorkByAddress(id string) ([]*AcceptedWork, error) {
+	work, err := ListMinedWorkByAccount(h.db, id)
+	return work, err
 }
 
-// FetchAccountStats returns a list of mined work by the provided account, and
-// archived payments made to the provided account.
-func (h *Hub) FetchAccountStats(address string) (*AccountStats, error) {
-	id := dividend.AccountID(address)
-	work, err := ListMinedWorkByAccount(h.db, *id)
-	if err != nil {
-		return nil, err
-	}
-
-	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db, *id)
-	if err != nil {
-		return nil, err
-	}
-
-	return &AccountStats{
-		AccountID: id,
-		MinedWork: work,
-		Payments:  payments,
-	}, nil
+// FetchPaymentsForAddress returns a list or payments made to the provided address.
+func (h *Hub) FetchPaymentsForAddress(id string) ([]*dividend.Payment, error) {
+	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db, id)
+	return payments, err
 }
