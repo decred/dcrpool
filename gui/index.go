@@ -1,20 +1,31 @@
 package gui
 
 import (
+	"fmt"
+	"math/big"
 	"net/http"
 	"reflect"
 
+	"github.com/decred/dcrpool/dividend"
 	"github.com/decred/dcrpool/network"
 )
 
 type indexData struct {
 	PoolStats    *network.PoolStats
-	HashRate     string
-	HashSet      []network.ClientHash
+	PoolHashRate *big.Rat
 	SoloPool     bool
-	AccountStats *network.AccountStats
+	AccountStats *AccountStats
 	Address      string
 	Admin        bool
+	Error        string
+}
+
+// AccountStats is a snapshot of an accounts contribution to the pool. This
+// comprises of blocks mined by the pool and payments made to the account.
+type AccountStats struct {
+	MinedWork []*network.AcceptedWork
+	Payments  []*dividend.Payment
+	Clients   []*network.ClientInfo
 }
 
 func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
@@ -25,14 +36,20 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	poolHashRate, hashSet := ui.hub.FetchHash()
+	clientInfo := ui.hub.FetchClientInfo()
+
+	poolHashRate := new(big.Rat).SetInt64(0)
+	for _, clients := range clientInfo {
+		for _, client := range clients {
+			poolHashRate = poolHashRate.Add(poolHashRate, client.HashRate)
+		}
+	}
 
 	data := indexData{
-		PoolStats: poolStats,
-		HashRate:  poolHashRate,
-		HashSet:   hashSet,
-		SoloPool:  ui.cfg.SoloPool,
-		Admin:     false,
+		PoolStats:    poolStats,
+		PoolHashRate: poolHashRate,
+		SoloPool:     ui.cfg.SoloPool,
+		Admin:        false,
 	}
 
 	address := r.FormValue("address")
@@ -44,18 +61,46 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 
 	data.Address = address
 
-	resp, err := ui.hub.FetchAccountStats(address)
+	if len(address) != 35 {
+		data.Error = fmt.Sprintf("Address should be 35 characters")
+		ui.renderTemplate(w, r, "index", data)
+		return
+	}
+
+	accountID := *dividend.AccountID(address)
+
+	work, err := ui.hub.FetchMinedWorkByAddress(accountID)
 	if err != nil {
 		log.Error(err)
-		http.Error(w, "FetchAccountStats error: "+err.Error(),
+		http.Error(w, "FetchMinedWorkByAddress error: "+err.Error(),
 			http.StatusInternalServerError)
 		return
 	}
 
-	data.AccountStats = resp
+	payments, err := ui.hub.FetchPaymentsForAddress(accountID)
+	if err != nil {
+		log.Error(err)
+		http.Error(w, "FetchPaymentsForAddress error: "+err.Error(),
+			http.StatusInternalServerError)
+		return
+	}
 
-	reverseSlice(data.AccountStats.MinedWork)
-	reverseSlice(data.AccountStats.Payments)
+	if len(work) == 0 && len(payments) == 0 {
+		log.Infof("Nothing found for address: %s", address)
+		data.Error = fmt.Sprintf("Nothing found for address: %s", address)
+		ui.renderTemplate(w, r, "index", data)
+		return
+	}
+
+	// // Reverse for display purposes. We want the most recent block/payments to be first.
+	reverseSlice(work)
+	reverseSlice(payments)
+
+	data.AccountStats = &AccountStats{
+		MinedWork: work,
+		Payments:  payments,
+		Clients:   clientInfo[accountID],
+	}
 
 	ui.renderTemplate(w, r, "index", data)
 }

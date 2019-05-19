@@ -11,7 +11,7 @@ import (
 )
 
 type adminPageData struct {
-	Connections []network.Connection
+	Connections map[string][]*network.ClientInfo
 	WorkQuotas  *network.WorkQuotas
 	Admin       bool
 	CSRF        template.HTML
@@ -35,7 +35,7 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ui.renderTemplate(w, r, "admin", adminPageData{
-		Connections: ui.hub.FetchConnections(),
+		Connections: ui.hub.FetchClientInfo(),
 		WorkQuotas:  workQuotas,
 		Admin:       true,
 		CSRF:        csrf.TemplateField(r),
