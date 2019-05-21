@@ -532,7 +532,7 @@ func TestArchivedPaymentsFiltering(t *testing.T) {
 	bx.ArchivePayments(db)
 
 	// Fetch archived payments for account x.
-	pmts, err := FetchArchivedPaymentsForAccount(db, xID)
+	pmts, err := FetchArchivedPaymentsForAccount(db, xID, 10)
 	if err != nil {
 		t.Error(err)
 	}
@@ -544,7 +544,7 @@ func TestArchivedPaymentsFiltering(t *testing.T) {
 	}
 
 	// Fetch archived payments for account y.
-	pmts, err = FetchArchivedPaymentsForAccount(db, yID)
+	pmts, err = FetchArchivedPaymentsForAccount(db, yID, 10)
 	if err != nil {
 		t.Error(err)
 	}
