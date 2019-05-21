@@ -188,6 +188,7 @@ func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
 
 // ListMinedWorkByAccount returns all mined work data on blocks mined by the
 // provided pool account id.
+// List is ordered, most recent comes first.
 func ListMinedWorkByAccount(db *bolt.DB, accountID string) ([]*AcceptedWork, error) {
 	minedWork := make([]*AcceptedWork, 0)
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -202,7 +203,7 @@ func ListMinedWorkByAccount(db *bolt.DB, accountID string) ([]*AcceptedWork, err
 		}
 
 		cursor := bkt.Cursor()
-		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+		for k, v := cursor.Last(); k != nil; k, v = cursor.Prev() {
 			var work AcceptedWork
 			err := json.Unmarshal(v, &work)
 			if err != nil {

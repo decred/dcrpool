@@ -557,6 +557,7 @@ func GeneratePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address, eligibl
 
 // FetchArchivedPaymentsForAccount fetches archived payments for the provided
 // account.
+// List is ordered, most recent comes first.
 func FetchArchivedPaymentsForAccount(db *bolt.DB, account string) ([]*Payment, error) {
 	pmts := make([]*Payment, 0)
 	err := db.View(func(tx *bolt.Tx) error {
@@ -571,7 +572,7 @@ func FetchArchivedPaymentsForAccount(db *bolt.DB, account string) ([]*Payment, e
 
 		c := abkt.Cursor()
 
-		for k, v := c.First(); k != nil; k, v = c.Next() {
+		for k, v := c.Last(); k != nil; k, v = c.Prev() {
 			accountE := k[16:]
 			minNanoE := k[:16]
 			minNanoB := make([]byte, hex.DecodedLen(len(minNanoE)))
