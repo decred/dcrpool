@@ -555,10 +555,10 @@ func GeneratePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address, eligibl
 	return pmts, &targetAmt, nil
 }
 
-// FetchArchivedPaymentsForAccount fetches archived payments for the provided
-// account.
+// FetchArchivedPaymentsForAccount fetches the N most recent archived payments
+// for the provided account.
 // List is ordered, most recent comes first.
-func FetchArchivedPaymentsForAccount(db *bolt.DB, account string) ([]*Payment, error) {
+func FetchArchivedPaymentsForAccount(db *bolt.DB, account string, n int) ([]*Payment, error) {
 	pmts := make([]*Payment, 0)
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
@@ -585,14 +585,15 @@ func FetchArchivedPaymentsForAccount(db *bolt.DB, account string) ([]*Payment, e
 				}
 
 				pmts = append(pmts, &payment)
+
+				if len(pmts) == n {
+					return nil
+				}
 			}
 		}
 
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
 
-	return pmts, nil
+	return pmts, err
 }

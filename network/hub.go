@@ -980,7 +980,7 @@ func (h *Hub) FetchPoolStats() (*PoolStats, error) {
 		poolStats.LastPaymentHeight = atomic.LoadUint32(&h.lastPaymentHeight)
 	}
 
-	work, err := ListMinedWork(h.db)
+	work, err := ListMinedWork(h.db, 10)
 	poolStats.MinedWork = work
 
 	return poolStats, err
@@ -993,7 +993,7 @@ type Quota struct {
 	Percentage *big.Rat
 }
 
-// WorkQuota details the how mining rewards are to be distributed to
+// WorkQuotas details the how mining rewards are to be distributed to
 // participating accounts when a block is found, per the payment scheme.
 type WorkQuotas struct {
 	PaymentScheme string
@@ -1044,13 +1044,13 @@ func (h *Hub) FetchWorkQuotas() (*WorkQuotas, error) {
 // FetchMinedWorkByAddress returns a list of mined work by the provided address.
 // List is ordered, most recent comes first.
 func (h *Hub) FetchMinedWorkByAddress(id string) ([]*AcceptedWork, error) {
-	work, err := ListMinedWorkByAccount(h.db, id)
+	work, err := ListMinedWorkByAccount(h.db, id, 10)
 	return work, err
 }
 
 // FetchPaymentsForAddress returns a list or payments made to the provided address.
 // List is ordered, most recent comes first.
 func (h *Hub) FetchPaymentsForAddress(id string) ([]*dividend.Payment, error) {
-	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db, id)
+	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db, id, 10)
 	return payments, err
 }
