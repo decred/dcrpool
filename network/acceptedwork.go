@@ -191,7 +191,11 @@ func ListMinedWork(db *bolt.DB, n uint) ([]*AcceptedWork, error) {
 		return nil
 	})
 
-	return minedWork, err
+	if err != nil {
+		return nil, err
+	}
+
+	return minedWork, nil
 }
 
 // ListMinedWorkByAccount returns the N most recent mined work data on
@@ -233,7 +237,11 @@ func ListMinedWorkByAccount(db *bolt.DB, accountID string, n uint) ([]*AcceptedW
 		return nil
 	})
 
-	return minedWork, err
+	if err != nil {
+		return nil, err
+	}
+
+	return minedWork, nil
 }
 
 // PruneAcceptedWork removes all accepted work not confirmed as mined work with

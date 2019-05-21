@@ -599,5 +599,9 @@ func FetchArchivedPaymentsForAccount(db *bolt.DB, account string, n uint) ([]*Pa
 		return nil
 	})
 
-	return pmts, err
+	if err != nil {
+		return nil, err
+	}
+
+	return pmts, nil
 }
