@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"reflect"
 
 	"github.com/decred/dcrpool/dividend"
 	"github.com/decred/dcrpool/network"
@@ -92,10 +91,6 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// // Reverse for display purposes. We want the most recent block/payments to be first.
-	reverseSlice(work)
-	reverseSlice(payments)
-
 	data.AccountStats = &AccountStats{
 		MinedWork: work,
 		Payments:  payments,
@@ -103,12 +98,4 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ui.renderTemplate(w, r, "index", data)
-}
-
-func reverseSlice(s interface{}) {
-	size := reflect.ValueOf(s).Len()
-	swap := reflect.Swapper(s)
-	for i, j := 0, size-1; i < j; i, j = i+1, j-1 {
-		swap(i, j)
-	}
 }

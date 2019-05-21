@@ -1042,12 +1042,14 @@ func (h *Hub) FetchWorkQuotas() (*WorkQuotas, error) {
 }
 
 // FetchMinedWorkByAddress returns a list of mined work by the provided address.
+// List is ordered, most recent comes first.
 func (h *Hub) FetchMinedWorkByAddress(id string) ([]*AcceptedWork, error) {
 	work, err := ListMinedWorkByAccount(h.db, id)
 	return work, err
 }
 
 // FetchPaymentsForAddress returns a list or payments made to the provided address.
+// List is ordered, most recent comes first.
 func (h *Hub) FetchPaymentsForAddress(id string) ([]*dividend.Payment, error) {
 	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db, id)
 	return payments, err
