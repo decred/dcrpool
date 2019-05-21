@@ -155,8 +155,12 @@ func (work *AcceptedWork) Delete(db *bolt.DB) error {
 // ListMinedWork returns the N most recent work data associated
 // with blocks mined by the pool.
 // List is ordered, most recent comes first.
-func ListMinedWork(db *bolt.DB, n int) ([]*AcceptedWork, error) {
+func ListMinedWork(db *bolt.DB, n uint) ([]*AcceptedWork, error) {
 	minedWork := make([]*AcceptedWork, 0)
+	if n == 0 {
+		return minedWork, nil
+	}
+
 	err := db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		if pbkt == nil {
@@ -178,7 +182,7 @@ func ListMinedWork(db *bolt.DB, n int) ([]*AcceptedWork, error) {
 
 			if work.Confirmed {
 				minedWork = append(minedWork, &work)
-				if len(minedWork) == n {
+				if len(minedWork) == int(n) {
 					return nil
 				}
 			}
@@ -193,8 +197,12 @@ func ListMinedWork(db *bolt.DB, n int) ([]*AcceptedWork, error) {
 // ListMinedWorkByAccount returns the N most recent mined work data on
 // blocks mined by the provided pool account id.
 // List is ordered, most recent comes first.
-func ListMinedWorkByAccount(db *bolt.DB, accountID string, n int) ([]*AcceptedWork, error) {
+func ListMinedWorkByAccount(db *bolt.DB, accountID string, n uint) ([]*AcceptedWork, error) {
 	minedWork := make([]*AcceptedWork, 0)
+	if n == 0 {
+		return minedWork, nil
+	}
+
 	err := db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
 		if pbkt == nil {
@@ -216,7 +224,7 @@ func ListMinedWorkByAccount(db *bolt.DB, accountID string, n int) ([]*AcceptedWo
 
 			if strings.Compare(work.MinedBy, accountID) == 0 {
 				minedWork = append(minedWork, &work)
-				if len(minedWork) == n {
+				if len(minedWork) == int(n) {
 					return nil
 				}
 			}
