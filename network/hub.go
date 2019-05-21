@@ -944,7 +944,7 @@ type ClientInfo struct {
 
 // FetchClientInfo returns information about all connected clients
 func (h *Hub) FetchClientInfo() map[string][]*ClientInfo {
-	clientInfo := make(map[string][]*ClientInfo, 0)
+	clientInfo := make(map[string][]*ClientInfo)
 
 	// Iterate through all connected miners
 	for _, endpoint := range h.endpoints {
