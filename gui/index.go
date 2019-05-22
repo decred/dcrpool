@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"net/http"
 
+	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrpool/dividend"
 	"github.com/decred/dcrpool/network"
 )
@@ -58,10 +59,28 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Add address to template data so the input field can be repopulated
+	// with the users input.
 	data.Address = address
 
+	// Ensure address is correct length
 	if len(address) != 35 {
 		data.Error = fmt.Sprintf("Address should be 35 characters")
+		ui.renderTemplate(w, r, "index", data)
+		return
+	}
+
+	// Ensure address can be decoded
+	addr, err := dcrutil.DecodeAddress(address)
+	if err != nil {
+		data.Error = fmt.Sprintf("Failed to decode address")
+		ui.renderTemplate(w, r, "index", data)
+		return
+	}
+
+	// Ensure address is on the active network.
+	if !addr.IsForNet(ui.cfg.ActiveNet) {
+		data.Error = fmt.Sprintf("This is not a %s address", ui.cfg.ActiveNet.Name)
 		ui.renderTemplate(w, r, "index", data)
 		return
 	}
