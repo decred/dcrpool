@@ -160,6 +160,7 @@ func NewPool(cfg *config) (*Pool, error) {
 		GUIPort:     cfg.GUIPort,
 		TLSCertFile: defaultTLSCertFile,
 		TLSKeyFile:  defaultTLSKeyFile,
+		ActiveNet:   cfg.net,
 	}
 
 	p.gui, err = gui.NewGUI(gcfg, p.hub, p.db)

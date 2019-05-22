@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 
+	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrpool/database"
 	"github.com/decred/dcrpool/network"
 	"github.com/decred/dcrpool/util"
@@ -32,6 +33,7 @@ type Config struct {
 	GUIPort     uint32
 	TLSCertFile string
 	TLSKeyFile  string
+	ActiveNet   *chaincfg.Params
 }
 
 // GUI represents the the mining pool user interface.

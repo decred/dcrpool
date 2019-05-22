@@ -14,7 +14,8 @@
             <p>Enter your address to see your mining stats.</p>
             <div class="form-group">
                 <label>Address:</label>
-                <input type="text" name="address" class="form-control" placeholder="Enter address">
+                <input type="text" name="address" class="form-control" placeholder="Enter address"
+                    value="{{if .Address}}{{if not .AccountStats}}{{.Address}}{{end}}{{end}}">
             </div>
             <button type="submit" class="btn btn-primary">Submit</button>
         </form>
