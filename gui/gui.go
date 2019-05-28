@@ -25,16 +25,17 @@ import (
 
 // Config represents configuration details for the pool user interface.
 type Config struct {
-	Ctx           context.Context
-	SoloPool      bool
-	PaymentMethod string
-	GUIDir        string
-	CSRFSecret    []byte
-	BackupPass    string
-	GUIPort       uint32
-	TLSCertFile   string
-	TLSKeyFile    string
-	ActiveNet     *chaincfg.Params
+	Ctx              context.Context
+	SoloPool         bool
+	PaymentMethod    string
+	GUIDir           string
+	CSRFSecret       []byte
+	BackupPass       string
+	GUIPort          uint32
+	TLSCertFile      string
+	TLSKeyFile       string
+	ActiveNet        *chaincfg.Params
+	BlockExplorerURL string
 }
 
 // GUI represents the the mining pool user interface.

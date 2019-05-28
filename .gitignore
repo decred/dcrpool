@@ -2,7 +2,6 @@ vendor
 .DS_Store
 tmp
 dcrpool
-dcrp*
 /miner/miner
 logs
 *.log
