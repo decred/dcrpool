@@ -159,8 +159,9 @@ func (ui *GUI) loadTemplates() error {
 	}
 
 	httpTemplates := template.New("template").Funcs(template.FuncMap{
-		"hashString": util.HashString,
-		"upper":      strings.ToUpper,
+		"hashString":    util.HashString,
+		"upper":         strings.ToUpper,
+		"percentString": util.PercentString,
 	})
 
 	// Since template.Must panics with non-nil error, it is much more
