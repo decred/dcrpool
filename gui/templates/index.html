@@ -3,185 +3,241 @@
 
 <div class="row justify-content-center">
 
-    <div class="col p-3 col-s-12 col-md-4">
-        {{ with .Error }}
-            <div style="background-color:black;color:red;font-weight:bold;">
-                {{.}}
-            </div>
-        {{end}}
+    <div class="row col-12">
+        <div class="col-md-6 col-12">
 
-        <form style="min-width:300px;" action="" method="get">
-            <p>Enter your address to see your mining stats.</p>
-            <div class="form-group">
-                <label>Address:</label>
-                <input type="text" name="address" class="form-control" placeholder="Enter address"
-                    value="{{if .Address}}{{if not .AccountStats}}{{.Address}}{{end}}{{end}}">
-            </div>
-            <button type="submit" class="btn btn-primary">Submit</button>
-        </form>
-    </div>
-
-    <div class="col p-3 col-s-12 col-md-8">
-
-        {{ if not .AccountStats }}
-        <div class="row justify-content-center">
-            <div class="col px-2 overflow-hidden text-center">
-                <p class="m-0 font-weight-bold">Pool Hash Rate</p>
-                <p>{{hashString .PoolHashRate}}</p>
-            </div>
-
-            <div class="col px-2 overflow-hidden text-center">
-                <p class="m-0 font-weight-bold">Last Work Height</p>
-                <p>{{ .PoolStats.LastWorkHeight }}</p>
-            </div>
-
-            {{ if not .SoloPool }}
-            <div class="col px-2 overflow-hidden text-center">
-                <p class="m-0 font-weight-bold">Last Payment Height</p>
-                <p>{{ .PoolStats.LastPaymentHeight }}</p>
-            </div>
-
-            <div class="col px-2 overflow-hidden text-center">
-                <p class="m-0 font-weight-bold">Payment Method</p>
-                <p>{{ upper .PaymentMethod }}</p>
-            </div>
-            {{end}}
-        </div>
-
-        <h3>Blocks Mined by this Pool</h3>
-        <div style="overflow: auto; max-height: 400px;">
-            <table class="table table-striped">
-                <tr>
-                    <th>Height</th>
-                    <th>Confirmed</th>
-                    <th>Miner</th>
-                    <th>MinedBy</th>
-                </tr>
-                {{ range .PoolStats.MinedWork }}
-                <tr>
-                    <td>{{.Height}}</td>
-                    <td>{{.Confirmed}}</td>
-                    <td>{{.Miner}}</td>
-                    <td>{{ printf "%.12s" .MinedBy}}...</td>
-                </tr>
-                {{else}}
-                <tr>
-                    <td colspan="100%">No mined work</td>
-                </tr>
-                {{end}}
-            </table>
-        </div>
-
-        <div class="m-3 p-3 overflow-hidden">
-            <h4>Next Reward Payment</h4>
-            <div style="overflow: auto; max-height: 250px;">
-                <table class="table table-striped">
-                    <tr>
-                        <th>User</th>
-                        <th>Reward Percentage</th>
-                    </tr>
-                    {{ range .WorkQuotas }}
-                        <tr>
-                            <td>{{.AccountID}}</td>
-                            <td>{{percentString .Percentage}}</td>
-                        </tr>
-                    {{else}}
-                        <tr>
-                            <td colspan="100%">No work quotas</td>
-                        </tr>
-                    {{end}}
-                </table>
-            </div>
-        </div>
-        {{ else }}
-
-        <div class="col">
-            <p><span class="font-weight-bold">Address:&nbsp;</span>{{.Address}}</p>
-
-            <div class="p-3">
-                    <h3>Connected Clients</h3>
-                    <div style="overflow: auto; max-height: 250px;">
-                        <table class="table table-striped">
-                            <tr>
-                                <th>Miner</th>
-                                <th>Hash Rate</th>
-                            </tr>
-                            {{ range .AccountStats.Clients }}
-                                <tr>
-                                    <td>{{.Miner}}</td>
-                                    <td>{{hashString .HashRate}}</td>
-                                </tr>
-                            {{else}}
-                                <tr>
-                                    <td colspan="100%">No connected clients</td>
-                                </tr>
-                            {{end}}
-                        </table>
+            {{ if  .AccountStats }}
+            <div class="row">
+                <section class="block">
+                    <div class="col-12 block__title">
+                        <h1><span>Account Information</span></h1>
                     </div>
-                </div>
+                    <div class="col-12 block__content">
+                        
+                        <p>Address: {{.Address}}</p>
+                        <p>Blocks Mined by this Account</p>
+                        <div style="overflow: auto; max-height: 250px;">
+                            <table class="table">
+                                <tr>
+                                    <th>Height</th>
+                                    <th>Confirmed</th>
+                                    <th>Miner</th>
+                                </tr>
+                                {{ range .AccountStats.MinedWork }}
+                                <tr>
+                                    <td><a href={{$.BlockExplorerURL}}/block/{{.Height}} rel="noopener noreferrer">{{.Height}}</a></td>
+                                    <td>{{.Confirmed}}</td>
+                                    <td>{{.Miner}}</td>
+                                </tr>
+                                {{else}}
+                                <tr>
+                                    <td colspan="100%">No mined work</td>
+                                </tr>
+                                {{end}}
+                            </table>
+                        </div>
 
-            <div class="p-3">
-                <h3>Blocks Mined by this Account</h3>
-                <div style="overflow: auto; max-height: 250px;">
-                    <table class="table table-striped">
-                        <tr>
-                            <th>Height</th>
-                            <th>Confirmed</th>
-                            <th>Miner</th>
-                        </tr>
-                        {{ range .AccountStats.MinedWork }}
-                        <tr>
-                            <td>{{.Height}}</td>
-                            <td>{{.Confirmed}}</td>
-                            <td>{{.Miner}}</td>
-                        </tr>
-                        {{else}}
-                        <tr>
-                            <td colspan="100%">No mined work</td>
-                        </tr>
-                        {{end}}
-                    </table>
-                </div>
+                        <p>Connected Clients</p>
+                        <div style="overflow: auto; max-height: 250px;">
+                            <table class="table">
+                                <tr>
+                                    <th>Miner</th>
+                                    <th>Hash Rate</th>
+                                </tr>
+                                {{ range .AccountStats.Clients }}
+                                    <tr>
+                                        <td>{{.Miner}}</td>
+                                        <td>{{hashString .HashRate}}</td>
+                                    </tr>
+                                {{else}}
+                                    <tr>
+                                        <td colspan="100%">No connected clients</td>
+                                    </tr>
+                                {{end}}
+                            </table>
+                        </div>
+
+                        
+
+                        <p>Payments made to this Account</p>
+                        <div style="overflow: auto; max-height: 250px;">
+                            <table class="table">
+                                <tr>
+                                    <th>EstimatedMaturity</th>
+                                    <th>Height</th>
+                                    <th>Amount</th>
+                                    <th>CreatedOn</th>
+                                    <th>PaidOnHeight</th>
+                                </tr>
+                                {{ range .AccountStats.Payments }}
+                                <tr>
+                                    <td>{{.EstimatedMaturity}}</td>
+                                    <td>{{.Height}}</td>
+                                    <td>{{.Amount}}</td>
+                                    <td>{{.CreatedOn}}</td>
+                                    <td>{{.PaidOnHeight}}</td>
+                                </tr>
+                                {{else}}
+                                <tr>
+                                    <td colspan="100%">No payments for account</td>
+                                </tr>
+                                {{end}}
+                            </table>
+                        </div>
+                    </div>
+                </section>
             </div>
 
-            <div class="p-3">
-                <h3>Payments made to this Account</h3>
-                <div style="overflow: auto; max-height: 250px;">
-                    <table class="table table-striped">
-                        <tr>
-                            <th>EstimatedMaturity</th>
-                            <th>Height</th>
-                            <th>Amount</th>
-                            <th>CreatedOn</th>
-                            <th>PaidOnHeight</th>
-                        </tr>
-                        {{ range .AccountStats.Payments }}
-                        <tr>
-                            <td>{{.EstimatedMaturity}}</td>
-                            <td>{{.Height}}</td>
-                            <td>{{.Amount}}</td>
-                            <td>{{.CreatedOn}}</td>
-                            <td>{{.PaidOnHeight}}</td>
-                        </tr>
-                        {{else}}
-                        <tr>
-                            <td colspan="100%">No payments for account</td>
-                        </tr>
+            {{else}}
+
+            <div class="row">
+                <section class="block">
+                    <div class="col-12 block__title">
+                        <h1><span>dcrpool Overview</span></h1>
+                    </div>
+                    <div class="col-12 block__content">
+                        <p>Voting Service Providers (VSPs) allow you to participate in Decred’s proof-of-stake (PoS) system without the need to keep a constantly unlocked wallet or worry about losses due to downtime, flaky internet.</p>
+
+                        <p>VSPs are used to delegate your voting powers. The VSP can cast a vote on your behalf when a ticket is called to vote. VSPs do not hold, manage, or transfer any of your DCR funds. The VSP cannot steal your funds.</p>
+
+                        <a href="/" class="btn btn-outline-primary btn-outline-primary--inverted d-lg-inline-block d-block mb-3" rel="noopener noreferrer">Register</a>
+                    </div>
+                </section>
+            </div>
+
+            {{end}}
+
+            <div class="row">
+                <section class="block">
+                    <div class="col-12 block__title">
+                        <h1><span>Search</span></h1>
+                    </div>
+                    <div class="col-12 block__content">
+                        {{ with .Error }}
+                            <div style="background-color:black;color:red;font-weight:bold;">
+                                {{.}}
+                            </div>
                         {{end}}
-                    </table>
-                </div>
+
+                        <form style="min-width:300px;" action="" method="get">
+                            <p>Enter your address to see your mining stats.</p>
+                            <div class="form-group">
+                                <input type="text" name="address" class="form-control" placeholder="Enter address"
+                                    value="{{if .Address}}{{if not .AccountStats}}{{.Address}}{{end}}{{end}}">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Submit</button>
+                        </form>
+                    </div>
+                </section>
             </div>
 
         </div>
+        <div class="col-md-6 col-12">
 
-        {{end}}
+            <div class="row ml-md-1">
+                <section class="block">
+                    <div class="col-12 block__title">
+                        <h1><span>Pool Information</span></h1>
+                    </div>
+                    <div class="col-12 block__content">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <div class="d-lg-flex align-items-start align-items-lg-center">
+                                    <img class="info-icon mb-1" src="/images/miningPow.svg" alt="">
+                                    <p class="ml-lg-3 mb-0"><strong>Pool Hash Rate:&nbsp;</strong>{{ hashString .PoolHashRate }}</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="d-lg-flex align-items-start align-items-lg-center">
+                                    <img class="info-icon mb-1" src="/images/blockHeight.svg" alt="">
+                                    <p class="ml-lg-3 mb-0"><strong>Last Work Height:&nbsp;</strong>{{ .PoolStats.LastWorkHeight }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {{ if not .SoloPool }}
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <div class="d-lg-flex align-items-start align-items-lg-center">
+                                    <img class="info-icon mb-1" src="/images/cryptocurrency.svg" alt="">
+                                    <p class="ml-lg-3 mb-0"><strong>Payment Method:&nbsp;</strong>{{ upper .PaymentMethod }}</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="d-lg-flex align-items-start align-items-lg-center">
+                                    <img class="info-icon mb-1" src="/images/blockrewardOpen.svg" alt="">
+                                    <p class="ml-lg-3 mb-0"><strong>Last Payment Height:&nbsp;</strong>{{ .PoolStats.LastPaymentHeight }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {{end}}
+                    </div>
+                </section>
+            </div>
 
+            <div class="row ml-md-1">
+                <section class="block">
+                    <div class="col-12 block__title">
+                        <h1><span>Next Reward Payment</span></h1>
+                    </div>
+                    <div class="col-12 block__content">
+                        <div style="overflow: auto; max-height: 250px;">
+                            <table class="table">
+                                <tr>
+                                    <th>User</th>
+                                    <th>Reward Percentage</th>
+                                </tr>
+                                {{ range .WorkQuotas }}
+                                    <tr>
+                                        <td>{{ printf "%.12s" .AccountID}}...</td>
+                                        <td>{{percentString .Percentage}}</td>
+                                    </tr>
+                                {{else}}
+                                    <tr>
+                                        <td colspan="100%">No work quotas</td>
+                                    </tr>
+                                {{end}}
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            
+            <div class="row ml-md-1">
+                <section class="block">
+                    <div class="col-12 block__title">
+                        <h1><span>Blocks Mined by Pool</span></h1>
+                    </div>
+                    <div class="col-12 block__content">
+                        <div style="overflow: auto; max-height: 400px;">
+                            <table class="table">
+                                <tr>
+                                    <th>Height</th>
+                                    <th>Confirmed</th>
+                                    <th>Miner</th>
+                                    <th>MinedBy</th>
+                                </tr>
+                                {{ range .PoolStats.MinedWork }}
+                                <tr>
+                                    <td><a href={{$.BlockExplorerURL}}/block/{{.Height}} rel="noopener noreferrer">{{.Height}}</a></td>
+                                    <td>{{.Confirmed}}</td>
+                                    <td>{{.Miner}}</td>
+                                    <td>{{ printf "%.12s" .MinedBy}}...</td>
+                                </tr>
+                                {{else}}
+                                <tr>
+                                    <td colspan="100%">No mined work</td>
+                                </tr>
+                                {{end}}
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+        </div>
     </div>
 
 </div>
 
-</div>
-</body>
-
-</html>
+{{template "footer" .}}
 {{end}}

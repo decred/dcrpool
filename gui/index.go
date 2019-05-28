@@ -11,15 +11,16 @@ import (
 )
 
 type indexData struct {
-	PoolStats     *network.PoolStats
-	WorkQuotas    []network.Quota
-	PoolHashRate  *big.Rat
-	SoloPool      bool
-	PaymentMethod string
-	AccountStats  *AccountStats
-	Address       string
-	Admin         bool
-	Error         string
+	PoolStats        *network.PoolStats
+	WorkQuotas       []network.Quota
+	PoolHashRate     *big.Rat
+	SoloPool         bool
+	PaymentMethod    string
+	AccountStats     *AccountStats
+	Address          string
+	Admin            bool
+	Error            string
+	BlockExplorerURL string
 }
 
 // AccountStats is a snapshot of an accounts contribution to the pool. This
@@ -55,12 +56,13 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := indexData{
-		WorkQuotas:    workQuotas,
-		PaymentMethod: ui.cfg.PaymentMethod,
-		PoolStats:     poolStats,
-		PoolHashRate:  poolHashRate,
-		SoloPool:      ui.cfg.SoloPool,
-		Admin:         false,
+		WorkQuotas:       workQuotas,
+		PaymentMethod:    ui.cfg.PaymentMethod,
+		PoolStats:        poolStats,
+		PoolHashRate:     poolHashRate,
+		SoloPool:         ui.cfg.SoloPool,
+		Admin:            false,
+		BlockExplorerURL: ui.cfg.BlockExplorerURL,
 	}
 
 	address := r.FormValue("address")

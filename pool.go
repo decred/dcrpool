@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"github.com/decred/dcrd/chaincfg"
 	"math/big"
 	"net/http"
 	"os"
@@ -152,16 +153,25 @@ func NewPool(cfg *config) (*Pool, error) {
 		return nil, err
 	}
 
+	var blockExplorerURL string
+	switch cfg.ActiveNet {
+	case chaincfg.TestNet3Params.Name:
+		blockExplorerURL = "https://testnet.dcrdata.org"
+	default:
+		blockExplorerURL = "https://explorer.dcrdata.org"
+	}
+
 	gcfg := &gui.Config{
-		Ctx:           p.ctx,
-		SoloPool:      cfg.SoloPool,
-		GUIDir:        cfg.GUIDir,
-		BackupPass:    cfg.BackupPass,
-		GUIPort:       cfg.GUIPort,
-		TLSCertFile:   defaultTLSCertFile,
-		TLSKeyFile:    defaultTLSKeyFile,
-		ActiveNet:     cfg.net,
-		PaymentMethod: cfg.PaymentMethod,
+		Ctx:              p.ctx,
+		SoloPool:         cfg.SoloPool,
+		GUIDir:           cfg.GUIDir,
+		BackupPass:       cfg.BackupPass,
+		GUIPort:          cfg.GUIPort,
+		TLSCertFile:      defaultTLSCertFile,
+		TLSKeyFile:       defaultTLSKeyFile,
+		ActiveNet:        cfg.net,
+		PaymentMethod:    cfg.PaymentMethod,
+		BlockExplorerURL: blockExplorerURL,
 	}
 
 	p.gui, err = gui.NewGUI(gcfg, p.hub, p.db)

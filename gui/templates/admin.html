@@ -1,71 +1,75 @@
 {{define "admin"}}
 {{template "header" .}}
 
-
-{{ if .Admin }}
-    <div class="row">
-
-        <div class="m-3 p-3 overflow-hidden">
-            <form action="/backup" method="post">
-                <h4>Database Backup</h4>
-                {{.CSRF}}
-                <p>Click this button to download a snapshot of the dcrpool database.</p>
-                <button type="submit" class="btn btn-primary">Download Backup</button>
-            </form>
-        </div>  
-
-    </div>
-    <div class="row">
-
-        <div class="m-3 p-3 overflow-hidden">
-            <h4>All Connected Miners</h4>
-            <div style="overflow: auto; max-height: 250px;">
-                <table class="table table-striped">
-                    <tr>
-                        <th>Account</th>
-                        <th>IP</th>
-                        <th>Miner</th>
-                        <th>Hash Rate</th>
-                    </tr>
-                    {{range $accountID, $clients := .Connections}}
-                        {{range $client := $clients}}
-                            <tr>
-                                <td>{{$accountID}}</td>
-                                <td>{{$client.IP}}</td>	                                
-                                <td>{{$client.Miner}}</td>
-                                <td>{{hashString $client.HashRate}}</td>
-                            </tr>
-                        {{end}}
-                    {{else}}
-                        <tr>
-                            <td colspan="100%">No miners connected</td>
-                        </tr>
-                    {{end}}
-                </table>
-            </div>
-        </div>
+<div class="col">
+    
+    <div class="row justify-content-around align-items-center">
         
-    </div>
+        <div class="row">
+            <section class="block">
+                <div class="col-12 block__content">
+                    <p>Click this button to download a snapshot of the dcrpool database.</p>
+                    <form action="/backup" method="post">
+                        {{.CSRF}}
+                        <button type="submit" class="btn btn-primary">Download Backup</button>
+                    </form>
 
-{{else}}
+                </div>
+            </section>
+        </div>
+
+        <div class="row">
+            <section class="block">
+                <div class="col-12 block__content">
+                    <form action="/logout" method="post">
+                        {{.CSRF}}
+                        <button type="submit" class="btn btn-primary">Logout</button>
+                    </form>
+                </div>
+            </section>
+        </div>
+    
+    </div>
 
     <div class="row justify-content-center">
-        <div class="m-3 p-3 overflow-hidden">
-            <form action="/admin" method="post">
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" name="password" class="form-control" placeholder="Enter password">
+
+        <div class="row">
+            <section class="block">
+                <div class="col-12 block__title">
+                    <h1><span>All Connected Miners</span></h1>
                 </div>
-                {{.CSRF}}
-                <button type="submit" class="btn btn-primary">Submit</button>
-                <a class="float-right" href="/">Return to homepage</a>
-            </form>
+                <div class="col-12 block__content">
+                    <div style="overflow: auto; max-height: 250px;">
+                        <table class="table">
+                            <tr>
+                                <th>Account</th>
+                                <th>IP</th>
+                                <th>Miner</th>
+                                <th>Hash Rate</th>
+                            </tr>
+                            {{range $accountID, $clients := .Connections}}
+                                {{range $client := $clients}}
+                                    <tr>
+                                        <td>{{$accountID}}</td>
+                                        <td>{{$client.IP}}</td>	                                
+                                        <td>{{$client.Miner}}</td>
+                                        <td>{{hashString $client.HashRate}}</td>
+                                    </tr>
+                                {{end}}
+                            {{else}}
+                                <tr>
+                                    <td colspan="100%">No miners connected</td>
+                                </tr>
+                            {{end}}
+                        </table>
+                    </div>
+                </div>
+            </section>
         </div>
+
     </div>
 
-{{end}}
-
 </div>
-</body>
-</html>
+
+{{template "footer" .}}
 {{end}}
