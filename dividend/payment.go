@@ -353,7 +353,7 @@ func CalculatePPSSharePercentages(db *bolt.DB, poolFee float64, height uint32) (
 	}
 
 	if len(shares) == 0 {
-		return nil, fmt.Errorf("no eligible shares found (PPS)")
+		return make(map[string]*big.Rat), nil
 	}
 
 	// Deduct pool fees and calculate the payment due each participating
@@ -441,7 +441,7 @@ func CalculatePPLNSSharePercentages(db *bolt.DB, poolFee float64, height uint32,
 	}
 
 	if len(shares) == 0 {
-		return nil, fmt.Errorf("no eligible shares found (PPLNS)")
+		return make(map[string]*big.Rat), nil
 	}
 
 	// Deduct pool fees and calculate the payment due each participating

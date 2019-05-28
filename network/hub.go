@@ -993,16 +993,9 @@ type Quota struct {
 	Percentage *big.Rat
 }
 
-// WorkQuotas details the how mining rewards are to be distributed to
-// participating accounts when a block is found, per the payment scheme.
-type WorkQuotas struct {
-	PaymentScheme string
-	Quotas        []Quota
-}
-
 // FetchWorkQuotas returns the reward distribution to pool accounts
 // based on work contributed per the peyment scheme used by the pool.
-func (h *Hub) FetchWorkQuotas() (*WorkQuotas, error) {
+func (h *Hub) FetchWorkQuotas() ([]Quota, error) {
 	if h.cfg.SoloPool {
 		return nil, errors.New("share percentages not available when mining" +
 			" in solo pool mode")
@@ -1035,10 +1028,7 @@ func (h *Hub) FetchWorkQuotas() (*WorkQuotas, error) {
 		})
 	}
 
-	return &WorkQuotas{
-		PaymentScheme: h.cfg.PaymentMethod,
-		Quotas:        quotas,
-	}, nil
+	return quotas, nil
 }
 
 // FetchMinedWorkByAddress returns a list of mined work by the provided address.

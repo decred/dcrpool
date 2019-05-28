@@ -153,14 +153,15 @@ func NewPool(cfg *config) (*Pool, error) {
 	}
 
 	gcfg := &gui.Config{
-		Ctx:         p.ctx,
-		SoloPool:    cfg.SoloPool,
-		GUIDir:      cfg.GUIDir,
-		BackupPass:  cfg.BackupPass,
-		GUIPort:     cfg.GUIPort,
-		TLSCertFile: defaultTLSCertFile,
-		TLSKeyFile:  defaultTLSKeyFile,
-		ActiveNet:   cfg.net,
+		Ctx:           p.ctx,
+		SoloPool:      cfg.SoloPool,
+		GUIDir:        cfg.GUIDir,
+		BackupPass:    cfg.BackupPass,
+		GUIPort:       cfg.GUIPort,
+		TLSCertFile:   defaultTLSCertFile,
+		TLSKeyFile:    defaultTLSKeyFile,
+		ActiveNet:     cfg.net,
+		PaymentMethod: cfg.PaymentMethod,
 	}
 
 	p.gui, err = gui.NewGUI(gcfg, p.hub, p.db)

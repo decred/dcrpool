@@ -12,7 +12,6 @@ import (
 
 type adminPageData struct {
 	Connections map[string][]*network.ClientInfo
-	WorkQuotas  *network.WorkQuotas
 	Admin       bool
 	CSRF        template.HTML
 }
@@ -27,16 +26,8 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workQuotas, err := ui.hub.FetchWorkQuotas()
-	if err != nil {
-		log.Error(err)
-		http.Error(w, "FetchWorkQuotas error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	ui.renderTemplate(w, r, "admin", adminPageData{
 		Connections: ui.hub.FetchClientInfo(),
-		WorkQuotas:  workQuotas,
 		Admin:       true,
 		CSRF:        csrf.TemplateField(r),
 	})
