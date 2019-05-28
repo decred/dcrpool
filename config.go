@@ -399,6 +399,13 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
+	// Ensure a valid payment method is set.
+	if cfg.PaymentMethod != dividend.PPS && cfg.PaymentMethod != dividend.PPLNS {
+		str := "%s: paymentmethod must be either %s or %s"
+		err := fmt.Errorf(str, funcName, dividend.PPS, dividend.PPLNS)
+		return nil, nil, err
+	}
+
 	// Create the data directory.
 	err = os.MkdirAll(cfg.DataDir, 0700)
 	if err != nil {
