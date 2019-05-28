@@ -65,3 +65,12 @@ func HashString(hash *big.Rat) string {
 
 	return "< 1KH/s"
 }
+
+// PercentString formats the provided big.Rat as a percentage,
+// rounded to the nearest decimal place. eg. "10.5%"
+func PercentString(rat *big.Rat) string {
+	real, _ := rat.Float64()
+	real = real * 100
+	str := fmt.Sprintf("%.1f", real)
+	return str + "%"
+}

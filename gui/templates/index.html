@@ -25,21 +25,25 @@
 
         {{ if not .AccountStats }}
         <div class="row justify-content-center">
-            <div class="row px-2 m-2 overflow-hidden">
-                <p><span class="font-weight-bold">Pool Hash Rate:&nbsp;</span>{{hashString .PoolHashRate}}</p>
-                <p></p>
+            <div class="col px-2 overflow-hidden text-center">
+                <p class="m-0 font-weight-bold">Pool Hash Rate</p>
+                <p>{{hashString .PoolHashRate}}</p>
             </div>
 
-            <div class="row px-2 m-2 overflow-hidden">
-                <p><span class="font-weight-bold">Last Work Height:&nbsp;</span>{{ .PoolStats.LastWorkHeight }}</p>
-                <p></p>
+            <div class="col px-2 overflow-hidden text-center">
+                <p class="m-0 font-weight-bold">Last Work Height</p>
+                <p>{{ .PoolStats.LastWorkHeight }}</p>
             </div>
 
             {{ if not .SoloPool }}
-            <div class="row px-2 m-2 overflow-hidden">
-                <p><span class="font-weight-bold">Last Payment Height:&nbsp;</span>{{ .PoolStats.LastPaymentHeight }}
-                </p>
-                <p></p>
+            <div class="col px-2 overflow-hidden text-center">
+                <p class="m-0 font-weight-bold">Last Payment Height</p>
+                <p>{{ .PoolStats.LastPaymentHeight }}</p>
+            </div>
+
+            <div class="col px-2 overflow-hidden text-center">
+                <p class="m-0 font-weight-bold">Payment Method</p>
+                <p>{{ upper .PaymentMethod }}</p>
             </div>
             {{end}}
         </div>
@@ -69,21 +73,21 @@
         </div>
 
         <div class="m-3 p-3 overflow-hidden">
-            <h4>Next Payment ({{upper .PaymentMethod}})</h4>
+            <h4>Next Reward Payment</h4>
             <div style="overflow: auto; max-height: 250px;">
                 <table class="table table-striped">
                     <tr>
                         <th>User</th>
-                        <th>Percentage</th>
+                        <th>Reward Percentage</th>
                     </tr>
                     {{ range .WorkQuotas }}
                         <tr>
                             <td>{{.AccountID}}</td>
-                            <td>{{.Percentage}}</td>
+                            <td>{{percentString .Percentage}}</td>
                         </tr>
                     {{else}}
                         <tr>
-                            <td colspan="100%">No Connections</td>
+                            <td colspan="100%">No work quotas</td>
                         </tr>
                     {{end}}
                 </table>
