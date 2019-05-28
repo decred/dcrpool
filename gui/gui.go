@@ -25,15 +25,16 @@ import (
 
 // Config represents configuration details for the pool user interface.
 type Config struct {
-	Ctx         context.Context
-	SoloPool    bool
-	GUIDir      string
-	CSRFSecret  []byte
-	BackupPass  string
-	GUIPort     uint32
-	TLSCertFile string
-	TLSKeyFile  string
-	ActiveNet   *chaincfg.Params
+	Ctx           context.Context
+	SoloPool      bool
+	PaymentMethod string
+	GUIDir        string
+	CSRFSecret    []byte
+	BackupPass    string
+	GUIPort       uint32
+	TLSCertFile   string
+	TLSKeyFile    string
+	ActiveNet     *chaincfg.Params
 }
 
 // GUI represents the the mining pool user interface.
@@ -159,6 +160,7 @@ func (ui *GUI) loadTemplates() error {
 
 	httpTemplates := template.New("template").Funcs(template.FuncMap{
 		"hashString": util.HashString,
+		"upper":      strings.ToUpper,
 	})
 
 	// Since template.Must panics with non-nil error, it is much more

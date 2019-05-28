@@ -67,6 +67,28 @@
                 {{end}}
             </table>
         </div>
+
+        <div class="m-3 p-3 overflow-hidden">
+            <h4>Next Payment ({{upper .PaymentMethod}})</h4>
+            <div style="overflow: auto; max-height: 250px;">
+                <table class="table table-striped">
+                    <tr>
+                        <th>User</th>
+                        <th>Percentage</th>
+                    </tr>
+                    {{ range .WorkQuotas }}
+                        <tr>
+                            <td>{{.AccountID}}</td>
+                            <td>{{.Percentage}}</td>
+                        </tr>
+                    {{else}}
+                        <tr>
+                            <td colspan="100%">No Connections</td>
+                        </tr>
+                    {{end}}
+                </table>
+            </div>
+        </div>
         {{ else }}
 
         <div class="col">
