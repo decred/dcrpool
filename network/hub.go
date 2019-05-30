@@ -91,7 +91,7 @@ type DifficultyData struct {
 type Hub struct {
 	lastWorkHeight    uint32 // update atomically
 	lastPaymentHeight uint32 // update atomically
-	clients           uint32 // update atomically
+	clients           int32  // update atomically
 
 	db           *bolt.DB
 	httpc        *http.Client
@@ -168,7 +168,7 @@ func (h *Hub) processWork(headerE string, target string) {
 
 	log.Tracef("New work at height (%v) received (%v)", height, headerE)
 
-	// Do not process work data id there are no connected  pool clients.
+	// Do not process work data id there are no connected pool clients.
 	if !h.HasClients() {
 		return
 	}
@@ -407,7 +407,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, db *bolt.DB, httpc *
 
 // HasClients asserts the mining pool has clients.
 func (h *Hub) HasClients() bool {
-	return atomic.LoadUint32(&h.clients) > 0
+	return atomic.LoadInt32(&h.clients) > 0
 }
 
 // SubmitWork sends solved block data to the consensus daemon for evaluation.

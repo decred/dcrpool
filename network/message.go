@@ -250,7 +250,7 @@ func ParseSubscribeRequest(req *Request) (string, string, error) {
 }
 
 // SubscribeResponse creates a mining.subscribe response.
-func SubscribeResponse(id uint64, notifyID string, extraNonce1 string, err *StratumError) *Response {
+func SubscribeResponse(id uint64, notifyID string, extraNonce1 string, extraNonce2Size int, err *StratumError) *Response {
 	if err != nil {
 		return &Response{
 			ID:     id,
@@ -264,7 +264,7 @@ func SubscribeResponse(id uint64, notifyID string, extraNonce1 string, err *Stra
 		Error: nil,
 		Result: []interface{}{[][]string{
 			{"mining.set_difficulty", notifyID}, {"mining.notify", notifyID}},
-			extraNonce1, ExtraNonce2Size},
+			extraNonce1, extraNonce2Size},
 	}
 }
 
@@ -456,10 +456,11 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 		copy(headerEB[288:296], []byte(extraNonce1E))
 		copy(headerEB[296:304], []byte(extraNonce2E))
 
-	// The Antiminer DR3 and DR5 return a 12-byte entraNonce regardless of the
-	// extraNonce2Size specified in the mining.subscribe message. The nTime and
-	// nonce values submitted are big endian, they have to be reversed before
-	// block header reconstruction.
+	// The Antiminer DR3 and DR5 return a 12-byte entraNonce comprised of the
+	// the extraNonce1 and extraNonce2 regardless of the extraNonce2Size
+	// specified in the mining.subscribe message. The nTime and nonce values
+	// submitted are big endian, they have to be reversed before block header
+	// reconstruction.
 	case dividend.AntminerDR3, dividend.AntminerDR5:
 		nTimeERev, err := util.HexReversed(nTimeE)
 		if err != nil {
