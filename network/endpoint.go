@@ -99,8 +99,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 			e.clients[client.generateID()] = client
 			e.clientsMtx.Unlock()
 
-			updated := atomic.AddUint32(&e.hub.clients, 1)
-			atomic.StoreUint32(&e.hub.clients, updated)
+			atomic.AddInt32(&e.hub.clients, 1)
 
 			go client.run(client.ctx)
 		}
@@ -113,6 +112,7 @@ func (e *Endpoint) RemoveClient(c *Client) {
 	e.clientsMtx.Lock()
 	id := c.generateID()
 	delete(e.clients, id)
+	atomic.AddInt32(&e.hub.clients, -1)
 	log.Tracef("Client (%s) removed.", id)
 	e.clientsMtx.Unlock()
 }

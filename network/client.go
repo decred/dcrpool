@@ -264,7 +264,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 	if !allowed {
 		log.Errorf("unable to process subscribe request, limit reached")
 		err := NewStratumError(Unknown, nil)
-		resp := SubscribeResponse(*req.ID, "", "", err)
+		resp := SubscribeResponse(*req.ID, "", "", 0, err)
 		c.ch <- resp
 		return
 	}
@@ -273,7 +273,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 	if err != nil {
 		log.Errorf("unable to parse subscribe request: %v", err)
 		err := NewStratumError(Unknown, nil)
-		resp := SubscribeResponse(*req.ID, "", "", err)
+		resp := SubscribeResponse(*req.ID, "", "", 0, err)
 		c.ch <- resp
 		return
 	}
@@ -282,8 +282,42 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 		nid = fmt.Sprintf("mn%v", c.extraNonce1)
 	}
 
-	resp := SubscribeResponse(*req.ID, nid, c.extraNonce1, nil)
-	log.Tracef("Subscribe response is: %v", spew.Sdump(resp))
+	var resp *Response
+	switch c.endpoint.miner {
+	case dividend.AntminerDR3, dividend.AntminerDR5:
+		// The DR5 and DR3 are not fully complaint with the stratum spec.
+		// They use an 8-byte extraNonce2 regardless of the
+		// extraNonce2Size provided.
+		//
+		// The extraNonce1 is appended to the extraNonce2 in the
+		// extraNonce2 value returned in mining.submit. As a result,
+		// the extraNonce1 sent in mining.subscribe response is formatted as:
+		// 	extraNonce2 space (8-byte) + miner's extraNonce1 (4-byte)
+		paddedExtraNonce1 := strings.Repeat("0", 16) + c.extraNonce1
+
+		resp = SubscribeResponse(*req.ID, nid, paddedExtraNonce1, 8, nil)
+		log.Tracef("Subscribe response is: %v", spew.Sdump(resp))
+
+	case dividend.WhatsminerD1:
+		// The D1 is not fully complaint with the stratum spec.
+		// It uses a 4-byte extraNonce2 regardless of the
+		// extraNonce2Size provided.
+		//
+		// The extraNonce1 is appended to the extraNonce2 in the
+		// extraNonce2 value returned in mining.submit. As a result,
+		// the extraNonce1 sent in mining.subscribe response is formatted as:
+		// 	extraNonce2 space (4-byte) + miner's extraNonce1 (4-byte)
+		paddedExtraNonce1 := strings.Repeat("0", 8) + c.extraNonce1
+
+		resp = SubscribeResponse(*req.ID, nid, paddedExtraNonce1,
+			ExtraNonce2Size, nil)
+		log.Tracef("Subscribe response is: %v", spew.Sdump(resp))
+
+	default:
+		resp = SubscribeResponse(*req.ID, nid, c.extraNonce1,
+			ExtraNonce2Size, nil)
+		log.Tracef("Subscribe response is: %v", spew.Sdump(resp))
+	}
 
 	c.ch <- resp
 	c.subscribed = true
@@ -451,10 +485,10 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 // read receives incoming data and passes the message received for
 // processing. This must be run as goroutine.
 func (c *Client) read() {
-	c.conn.SetReadDeadline(time.Now().Add(time.Minute * 3))
-	c.conn.SetWriteDeadline(time.Now().Add(time.Minute * 3))
-
 	for {
+		c.conn.SetReadDeadline(time.Now().Add(time.Minute * 3))
+		c.conn.SetWriteDeadline(time.Now().Add(time.Minute * 3))
+
 		data, err := c.reader.ReadBytes('\n')
 		if err != nil {
 			if err == io.EOF {
