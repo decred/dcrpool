@@ -29,6 +29,7 @@ type AccountStats struct {
 	MinedWork []*network.AcceptedWork
 	Payments  []*dividend.Payment
 	Clients   []*network.ClientInfo
+	AccountID string
 }
 
 func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
@@ -127,6 +128,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		MinedWork: work,
 		Payments:  payments,
 		Clients:   clientInfo[accountID],
+		AccountID: accountID,
 	}
 
 	ui.renderTemplate(w, r, "index", data)

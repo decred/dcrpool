@@ -163,6 +163,7 @@ func (ui *GUI) loadTemplates() error {
 		"hashString":    util.HashString,
 		"upper":         strings.ToUpper,
 		"percentString": util.PercentString,
+		"time":          util.FormatUnixTime,
 	})
 
 	// Since template.Must panics with non-nil error, it is much more
