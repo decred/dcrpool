@@ -31,6 +31,7 @@ var (
 	defaultHomeDir    = dcrutil.AppDataDir("miner", false)
 	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFilename)
 	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogDirname)
+	defaultMaxProcs   = runtime.NumCPU()
 )
 
 // runServiceCommand is only set to a real function on Windows.  It is used
@@ -47,6 +48,7 @@ type config struct {
 	Pool       string `long:"pool" description:"The stratum domain and port of the mining pool to connect to. eg. dcrpool.com:4445"`
 	DebugLevel string `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir     string `long:"logdir" description:"The log output directory."`
+	MaxProcs   int    `long:"maxprocs" description:"Number of CPU cores to use. Default is all cores."`
 
 	net *chaincfg.Params
 }

@@ -13,6 +13,7 @@ NETWORK="simnet"
 # NETWORK="mainnet"
 SOLO_POOL=0
 MAX_GEN_TIME=20
+MINER_MAX_PROCS=1
 PAYMENT_METHOD="pplns"
 LAST_N_PERIOD=300 # PPLNS range, 5 minutes.
 
@@ -64,6 +65,7 @@ activenet=${NETWORK}
 user=m1
 address=${CLIENT_ONE_ADDR}
 pool=127.0.0.1:5550
+maxprocs=${MINER_MAX_PROCS}
 EOF
 
 cat > "${NODES_ROOT}/c2/client.conf" <<EOF
@@ -72,6 +74,7 @@ activenet=${NETWORK}
 user=m2
 address=${CLIENT_TWO_ADDR}
 pool=127.0.0.1:5550
+maxprocs=${MINER_MAX_PROCS}
 EOF
 
 if [ "${NETWORK}" = "mainnet" ]; then
