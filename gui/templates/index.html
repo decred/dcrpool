@@ -70,11 +70,11 @@
                                     </tr>
                                     {{ range .AccountStats.Payments }}
                                     <tr>
-                                        <td>{{.EstimatedMaturity}}</td>
-                                        <td>{{.Height}}</td>
+                                        <td><a href={{$.BlockExplorerURL}}/block/{{.EstimatedMaturity}} rel="noopener noreferrer">{{.EstimatedMaturity}}</a></td>
+                                        <td><a href={{$.BlockExplorerURL}}/block/{{.Height}} rel="noopener noreferrer">{{.Height}}</a></td>
                                         <td>{{ printf "%.3f" .Amount.ToCoin }}&nbsp;DCR</td>
                                         <td>{{ time .CreatedOn }}</td>
-                                        <td>{{.PaidOnHeight}}</td>
+                                        <td><a href={{$.BlockExplorerURL}}/block/{{.PaidOnHeight}} rel="noopener noreferrer">{{.PaidOnHeight}}</a></td>
                                     </tr>
                                     {{else}}
                                     <tr>
