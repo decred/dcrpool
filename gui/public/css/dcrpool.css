@@ -8786,4 +8786,8 @@ input:-webkit-autofill {
   
 .top-search::-ms-input-placeholder { /* Microsoft Edge */ 
     color: #99c1e3; 
-} 
+}
+
+table td {
+  white-space: nowrap;
+}

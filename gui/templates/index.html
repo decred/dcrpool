@@ -15,6 +15,7 @@
                         <div class="col-12 block__content">
                             
                             <p>Address: {{.Address}}</p>
+                            <p>Account: {{.AccountStats.AccountID}}</p>
                             <p>Blocks Mined by this Account</p>
                             <div style="overflow: auto; max-height: 250px;">
                                 <table class="table">
@@ -61,18 +62,18 @@
                             <div style="overflow: auto; max-height: 250px;">
                                 <table class="table">
                                     <tr>
-                                        <th>EstimatedMaturity</th>
+                                        <th>Estimated Maturity</th>
                                         <th>Height</th>
                                         <th>Amount</th>
-                                        <th>CreatedOn</th>
-                                        <th>PaidOnHeight</th>
+                                        <th>Created On</th>
+                                        <th>Paid on Height</th>
                                     </tr>
                                     {{ range .AccountStats.Payments }}
                                     <tr>
                                         <td>{{.EstimatedMaturity}}</td>
                                         <td>{{.Height}}</td>
-                                        <td>{{.Amount}}</td>
-                                        <td>{{.CreatedOn}}</td>
+                                        <td>{{ printf "%.3f" .Amount.ToCoin }}&nbsp;DCR</td>
+                                        <td>{{ time .CreatedOn }}</td>
                                         <td>{{.PaidOnHeight}}</td>
                                     </tr>
                                     {{else}}
@@ -100,7 +101,7 @@
 
                     <section class="block">
                         <div class="col-12 block__title">
-                            <h1><span>dcrpool Overview</span></h1>
+                            <h1><span>Mining Pool Overview</span></h1>
                         </div>
                         <div class="col-12 block__content">
                             <p>Voting Service Providers (VSPs) allow you to participate in Decred’s proof-of-stake (PoS) system without the need to keep a constantly unlocked wallet or worry about losses due to downtime, flaky internet.</p>
@@ -166,7 +167,7 @@
                         <div style="overflow: auto; max-height: 250px;">
                             <table class="table">
                                 <tr>
-                                    <th>User</th>
+                                    <th>Account</th>
                                     <th>Reward Percentage</th>
                                 </tr>
                                 {{ range .WorkQuotas }}
@@ -195,14 +196,12 @@
                             <table class="table">
                                 <tr>
                                     <th>Height</th>
-                                    <th>Confirmed</th>
                                     <th>Miner</th>
-                                    <th>MinedBy</th>
+                                    <th>Mined By</th>
                                 </tr>
                                 {{ range .PoolStats.MinedWork }}
                                 <tr>
                                     <td><a href={{$.BlockExplorerURL}}/block/{{.Height}} rel="noopener noreferrer">{{.Height}}</a></td>
-                                    <td>{{.Confirmed}}</td>
                                     <td>{{.Miner}}</td>
                                     <td>{{ printf "%.12s" .MinedBy}}...</td>
                                 </tr>

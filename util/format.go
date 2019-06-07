@@ -7,6 +7,7 @@ package util
 import (
 	"fmt"
 	"math/big"
+	"time"
 )
 
 var (
@@ -73,4 +74,9 @@ func PercentString(rat *big.Rat) string {
 	real = real * 100
 	str := fmt.Sprintf("%.1f", real)
 	return str + "%"
+}
+
+// FormatUnixTime formats the provided integer as a UTC time string,
+func FormatUnixTime(unix int64) string {
+	return time.Unix(0, unix).Format("2-Jan-2006 15:04:05 MST")
 }
