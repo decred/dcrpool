@@ -13,8 +13,6 @@ import (
 )
 
 func main() {
-	// Use all processor cores.
-	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	// Listen for interrupt signals.
 	interrupt := make(chan os.Signal, 1)
@@ -27,6 +25,8 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+
+	runtime.GOMAXPROCS(cfg.MaxProcs)
 
 	defer func() {
 		if logRotator != nil {
