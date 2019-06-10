@@ -522,13 +522,13 @@ func TestArchivedPaymentsFiltering(t *testing.T) {
 	amt, _ := dcrutil.NewAmount(5)
 
 	bx := CreatePaymentBundle(xID, count, amt)
-	bx.UpdateAsPaid(db, 10)
+	bx.UpdateAsPaid(db, 10, "")
 	bx.ArchivePayments(db)
 
 	time.Sleep(time.Second * 10)
 
 	bx = CreatePaymentBundle(yID, count, amt)
-	bx.UpdateAsPaid(db, 10)
+	bx.UpdateAsPaid(db, 10, "")
 	bx.ArchivePayments(db)
 
 	// Fetch archived payments for account x.

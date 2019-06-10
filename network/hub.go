@@ -435,7 +435,7 @@ func (h *Hub) GetWork() (string, string, error) {
 }
 
 // PublishTransaction creates a transaction paying pool accounts for work done.
-func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, targetAmt dcrutil.Amount) error {
+func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, targetAmt dcrutil.Amount) (string, error) {
 	outs := make([]*walletrpc.ConstructTransactionRequest_Output, 0, len(payouts))
 	for addr, amt := range payouts {
 		out := &walletrpc.ConstructTransactionRequest_Output{
@@ -460,7 +460,7 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 	constructTxResp, err := h.grpc.ConstructTransaction(context.TODO(), constructTxReq)
 	h.grpcMtx.Unlock()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Sign the transaction.
@@ -473,7 +473,7 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 	signedTxResp, err := h.grpc.SignTransaction(context.TODO(), signTxReq)
 	h.grpcMtx.Unlock()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Publish the transaction.
@@ -485,12 +485,14 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 	pubTxResp, err := h.grpc.PublishTransaction(context.TODO(), pubTxReq)
 	h.grpcMtx.Unlock()
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	log.Infof("Published tx hash is: %x", pubTxResp.TransactionHash)
+	txid := fmt.Sprintf("%x", pubTxResp.TransactionHash)
 
-	return nil
+	log.Debugf("Published tx hash is: %s", txid)
+
+	return txid, nil
 }
 
 // handleGetWork periodically fetches available work from the consensus daemon.
@@ -890,14 +892,14 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	}
 
 	// Publish the transaction.
-	err = h.PublishTransaction(pmts, *targetAmt)
+	txid, err := h.PublishTransaction(pmts, *targetAmt)
 	if err != nil {
 		return err
 	}
 
 	// Update all payments published by the tx as paid and archive them.
 	for _, bundle := range eligiblePmts {
-		bundle.UpdateAsPaid(h.db, height)
+		bundle.UpdateAsPaid(h.db, height, txid)
 		err = bundle.ArchivePayments(h.db)
 		if err != nil {
 			return err

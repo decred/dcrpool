@@ -28,6 +28,7 @@ type Payment struct {
 	Amount            dcrutil.Amount `json:"amount"`
 	CreatedOn         int64          `json:"createdon"`
 	PaidOnHeight      uint32         `json:"paidonheight"`
+	TransactionID     string         `json:"transactionid"`
 }
 
 // NewPayment creates a payment instance.
@@ -136,8 +137,9 @@ func (bundle *PaymentBundle) Total() dcrutil.Amount {
 
 // UpdateAsPaid updates all associated payments referenced by a payment bundle
 // as paid.
-func (bundle *PaymentBundle) UpdateAsPaid(db *bolt.DB, height uint32) {
+func (bundle *PaymentBundle) UpdateAsPaid(db *bolt.DB, height uint32, txid string) {
 	for idx := 0; idx < len(bundle.Payments); idx++ {
+		bundle.Payments[idx].TransactionID = txid
 		bundle.Payments[idx].PaidOnHeight = height
 	}
 }
