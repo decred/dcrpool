@@ -709,6 +709,11 @@ func (c *Client) send(ctx context.Context) {
 				if req.Method == Notify {
 					id := c.generateID()
 
+					// Only send work to authorized and subscribed clients.
+					if !c.authorized || !c.subscribed {
+						continue
+					}
+
 					switch c.endpoint.miner {
 					case dividend.CPU:
 						err := c.encoder.Encode(msg)
