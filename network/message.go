@@ -438,7 +438,7 @@ func GenerateBlockHeader(blockVersionE string, prevBlockE string, genTx1E string
 	var header wire.BlockHeader
 	err = header.FromBytes(headerD)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create header from bytes: %v", err)
 	}
 
 	return &header, nil

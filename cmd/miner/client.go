@@ -343,6 +343,12 @@ func (m *Miner) process(ctx context.Context) {
 					m.workMtx.Unlock()
 
 				case network.Notify:
+					// Do not process work notifications if the miner is not
+					// authorized or subscribed.
+					if !m.authorized || !m.subscribed {
+						continue
+					}
+
 					jobID, prevBlockE, genTx1E, genTx2E, blockVersionE, _, _, _, err :=
 						network.ParseWorkNotification(notif)
 					if err != nil {
