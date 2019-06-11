@@ -31,7 +31,6 @@ var (
 	defaultHomeDir    = dcrutil.AppDataDir("miner", false)
 	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFilename)
 	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogDirname)
-	defaultMaxProcs   = runtime.NumCPU()
 )
 
 // runServiceCommand is only set to a real function on Windows.  It is used
@@ -322,6 +321,12 @@ func loadConfig() (*config, []string, error) {
 		cfg.net = &chaincfg.TestNet3Params
 	case chaincfg.MainNetParams.Name:
 		cfg.net = &chaincfg.MainNetParams
+	}
+
+	availableCPUs := runtime.NumCPU()
+	if cfg.MaxProcs < 1 || cfg.MaxProcs > availableCPUs {
+		log.Warnf("%d is not a valid value for MaxProcs. Defaulting to %d.", cfg.MaxProcs, availableCPUs)
+		cfg.MaxProcs = availableCPUs
 	}
 
 	// Warn about missing config file only after all other configuration is
