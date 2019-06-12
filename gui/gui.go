@@ -53,7 +53,6 @@ type GUI struct {
 	cookieStore *sessions.CookieStore
 	router      *mux.Router
 	server      *http.Server
-	certMgr     *autocert.Manager
 }
 
 // GenerateSecret generates the CSRF secret.
@@ -204,7 +203,7 @@ func (ui *GUI) Run() {
 
 		if ui.cfg.UseLEHTTPS {
 			certCache := autocert.DirCache("certs")
-			ui.certMgr = &autocert.Manager{
+			certMgr := &autocert.Manager{
 				Prompt:     autocert.AcceptTOS,
 				Cache:      certCache,
 				HostPolicy: autocert.HostWhitelist(ui.cfg.Domain),
@@ -223,7 +222,7 @@ func (ui *GUI) Run() {
 			// Redirect all regular http requests to their https endpoints.
 			go func() {
 				if err := http.ListenAndServe(port80,
-					ui.certMgr.HTTPHandler(nil)); err != nil &&
+					certMgr.HTTPHandler(nil)); err != nil &&
 					err != http.ErrServerClosed {
 					log.Error(err)
 				}
@@ -236,7 +235,7 @@ func (ui *GUI) Run() {
 				Addr:         ":https",
 				Handler:      ui.router,
 				TLSConfig: &tls.Config{
-					GetCertificate: ui.certMgr.GetCertificate,
+					GetCertificate: certMgr.GetCertificate,
 					MinVersion:     tls.VersionTLS12,
 					CipherSuites: []uint16{
 						tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
