@@ -187,6 +187,9 @@ func (m *CPUMiner) solve(ctx context.Context) {
 			req := pool.SubmitWorkRequest(&id, worker, jobID,
 				m.workData.extraNonce2, m.workData.nTime, m.workData.nonce)
 			m.workCh <- req
+
+			// Stall to prevent mining too quickly.
+			time.Sleep(time.Millisecond * 500)
 		}
 	}
 }
