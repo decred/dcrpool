@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"encoding/binary"
-	"github.com/decred/dcrd/chaincfg"
 	"math/big"
 	"net/http"
 	"os"
@@ -90,8 +89,7 @@ func (p *Pool) initDB() error {
 		}
 	}
 
-	// If the pool mode did not change, upgrade the database if there is a
-	// pending upgrade.
+	// If the pool mode did not change, upgrade the database.
 	if !switchMode {
 		err = database.Upgrade(p.db)
 		if err != nil {
@@ -153,25 +151,18 @@ func NewPool(cfg *config) (*Pool, error) {
 		return nil, err
 	}
 
-	var blockExplorerURL string
-	switch cfg.ActiveNet {
-	case chaincfg.TestNet3Params.Name:
-		blockExplorerURL = "https://testnet.dcrdata.org"
-	default:
-		blockExplorerURL = "https://explorer.dcrdata.org"
-	}
-
 	gcfg := &gui.Config{
-		Ctx:              p.ctx,
-		SoloPool:         cfg.SoloPool,
-		GUIDir:           cfg.GUIDir,
-		BackupPass:       cfg.BackupPass,
-		GUIPort:          cfg.GUIPort,
-		TLSCertFile:      defaultTLSCertFile,
-		TLSKeyFile:       defaultTLSKeyFile,
-		ActiveNet:        cfg.net,
-		PaymentMethod:    cfg.PaymentMethod,
-		BlockExplorerURL: blockExplorerURL,
+		Ctx:           p.ctx,
+		SoloPool:      cfg.SoloPool,
+		GUIDir:        cfg.GUIDir,
+		BackupPass:    cfg.BackupPass,
+		GUIPort:       cfg.GUIPort,
+		UseLEHTTPS:    cfg.UseLEHTTPS,
+		Domain:        cfg.Domain,
+		TLSCertFile:   defaultTLSCertFile,
+		TLSKeyFile:    defaultTLSKeyFile,
+		ActiveNet:     cfg.net,
+		PaymentMethod: cfg.PaymentMethod,
 	}
 
 	p.gui, err = gui.NewGUI(gcfg, p.hub, p.db)
@@ -222,5 +213,4 @@ func main() {
 
 	p.gui.Run()
 	p.hub.Run(p.ctx)
-	p.gui.Shutdown()
 }

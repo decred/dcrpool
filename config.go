@@ -48,6 +48,7 @@ const (
 	defaultSoloPool        = false
 	defaultGUIPort         = 8080
 	defaultGUIDir          = "gui"
+	defaultUseLEHTTPS      = false
 )
 
 var (
@@ -98,6 +99,8 @@ type config struct {
 	SoloPool        bool     `long:"solopool" ini-name:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
 	BackupPass      string   `long:"backuppass" ini-name:"backuppass" description:"The admin password, required for database backup."`
 	GUIDir          string   `long:"guidir" ini-name:"guidir" description:"The path to the directory containing the pool's user interface assets (templates, css etc.)"`
+	Domain          string   `long:"domain" ini-name:"domain" description:"The domain of the mining pool, required for TLS."`
+	UseLEHTTPS      bool     `long:"uselehttps" ini-name:"uselehttps" description:"This enables HTTPS using a Letsencrypt certificate. By default the pool uses a self-signed certificate for HTTPS."`
 	poolFeeAddrs    []dcrutil.Address
 	dcrdRPCCerts    []byte
 	net             *chaincfg.Params
@@ -260,6 +263,7 @@ func loadConfig() (*config, []string, error) {
 		SoloPool:        defaultSoloPool,
 		GUIPort:         defaultGUIPort,
 		GUIDir:          defaultGUIDir,
+		UseLEHTTPS:      defaultUseLEHTTPS,
 	}
 
 	// Service options which are only added on Windows.
@@ -474,8 +478,15 @@ func loadConfig() (*config, []string, error) {
 		pLog.Warnf("%v", configFileError)
 	}
 
-	// Generate the TLS cert and key if they not already exist.
-	if !fileExists(defaultTLSCertFile) || !fileExists(defaultTLSKeyFile) {
+	// Ensure a domain is set if HTTPS via letsencrypt is preferred.
+	if cfg.UseLEHTTPS && cfg.Domain == "" {
+		return nil, nil, fmt.Errorf("a valid domain is required for HTTPS " +
+			"via letsencrypt")
+	}
+
+	// Generate self-signed TLS cert and key if they do not already exist.
+	if !cfg.UseLEHTTPS && (!fileExists(defaultTLSCertFile) ||
+		!fileExists(defaultTLSKeyFile)) {
 		err := genCertPair(defaultTLSCertFile, defaultTLSKeyFile)
 		if err != nil {
 			return nil, nil,

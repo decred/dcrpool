@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"fmt"
 	"html/template"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/acme/autocert"
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/gorilla/csrf"
@@ -34,6 +38,8 @@ type Config struct {
 	GUIPort          uint32
 	TLSCertFile      string
 	TLSKeyFile       string
+	UseLEHTTPS       bool
+	Domain           string
 	ActiveNet        *chaincfg.Params
 	BlockExplorerURL string
 }
@@ -98,6 +104,13 @@ func NewGUI(cfg *Config, hub *network.Hub, db *bolt.DB) (*GUI, error) {
 		db:  db,
 	}
 
+	switch cfg.ActiveNet.Name {
+	case chaincfg.TestNet3Params.Name:
+		ui.cfg.BlockExplorerURL = "https://testnet.dcrdata.org"
+	default:
+		ui.cfg.BlockExplorerURL = "https://explorer.dcrdata.org"
+	}
+
 	// Fetch or generate the CSRF secret.
 	err := db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(database.PoolBkt)
@@ -127,14 +140,6 @@ func NewGUI(cfg *Config, hub *network.Hub, db *bolt.DB) (*GUI, error) {
 	ui.cookieStore = sessions.NewCookieStore(cfg.CSRFSecret)
 	ui.loadTemplates()
 	ui.route()
-
-	ui.server = &http.Server{
-		Addr:         fmt.Sprintf("0.0.0.0:%v", cfg.GUIPort),
-		WriteTimeout: time.Second * 30,
-		ReadTimeout:  time.Second * 5,
-		IdleTimeout:  time.Second * 30,
-		Handler:      ui.router,
-	}
 
 	return ui, nil
 }
@@ -180,22 +185,73 @@ func (ui *GUI) loadTemplates() error {
 
 // Run starts the user interface.
 func (ui *GUI) Run() {
-	log.Infof("GUI served on port %v.", ui.cfg.GUIPort)
-
 	go func() {
-		if err := ui.server.ListenAndServeTLS(ui.cfg.TLSCertFile,
-			ui.cfg.TLSKeyFile); err != nil &&
-			err != http.ErrServerClosed {
-			log.Error(err)
+		if !ui.cfg.UseLEHTTPS {
+			ui.server = &http.Server{
+				WriteTimeout: time.Second * 30,
+				ReadTimeout:  time.Second * 30,
+				IdleTimeout:  time.Second * 30,
+				Addr:         fmt.Sprintf("0.0.0.0:%v", ui.cfg.GUIPort),
+				Handler:      ui.router,
+			}
+
+			if err := ui.server.ListenAndServeTLS(ui.cfg.TLSCertFile,
+				ui.cfg.TLSKeyFile); err != nil &&
+				err != http.ErrServerClosed {
+				log.Error(err)
+			}
+		}
+
+		if ui.cfg.UseLEHTTPS {
+			certCache := autocert.DirCache("certs")
+			certMgr := &autocert.Manager{
+				Prompt:     autocert.AcceptTOS,
+				Cache:      certCache,
+				HostPolicy: autocert.HostWhitelist(ui.cfg.Domain),
+			}
+
+			// Ensure port 80 is not already in use.
+			port80 := ":80"
+			listener, err := net.Listen("tcp", port80)
+			if err != nil {
+				log.Error("port 80 is already in use")
+				return
+			}
+
+			listener.Close()
+
+			// Redirect all regular http requests to their https endpoints.
+			go func() {
+				if err := http.ListenAndServe(port80,
+					certMgr.HTTPHandler(nil)); err != nil &&
+					err != http.ErrServerClosed {
+					log.Error(err)
+				}
+			}()
+
+			ui.server = &http.Server{
+				WriteTimeout: time.Second * 30,
+				ReadTimeout:  time.Second * 30,
+				IdleTimeout:  time.Second * 30,
+				Addr:         ":https",
+				Handler:      ui.router,
+				TLSConfig: &tls.Config{
+					GetCertificate: certMgr.GetCertificate,
+					MinVersion:     tls.VersionTLS12,
+					CipherSuites: []uint16{
+						tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+						tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+						tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+						tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+						tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+						tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+					},
+				},
+			}
+
+			if err := ui.server.ListenAndServeTLS("", ""); err != nil {
+				log.Error(err)
+			}
 		}
 	}()
-}
-
-// Shutdown tears down the user interface.
-func (ui *GUI) Shutdown() {
-	ctx, cl := context.WithTimeout(ui.cfg.Ctx, time.Second*5)
-	defer cl()
-	if err := ui.server.Shutdown(ctx); err != nil {
-		log.Error(err)
-	}
 }
