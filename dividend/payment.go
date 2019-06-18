@@ -321,7 +321,7 @@ func replenishTxFeeReserve(maxTxFeeReserve dcrutil.Amount, txFeeReserve *dcrutil
 	return poolFee
 }
 
-// CalculatePPLNSSharePercentages computes the current dividend
+// CalculatePPSSharePercentages computes the current dividend
 // percentages due pool accounts based on work performed measured by the
 // PPS payment scheme.
 func CalculatePPSSharePercentages(db *bolt.DB, poolFee float64, height uint32) (map[string]*big.Rat, error) {

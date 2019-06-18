@@ -486,8 +486,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 // processing. This must be run as goroutine.
 func (c *Client) read() {
 	for {
-		c.conn.SetReadDeadline(time.Now().Add(time.Minute * 3))
-		c.conn.SetWriteDeadline(time.Now().Add(time.Minute * 3))
+		c.conn.SetDeadline(time.Now().Add(time.Minute * 4))
 
 		data, err := c.reader.ReadBytes('\n')
 		if err != nil {
@@ -497,6 +496,13 @@ func (c *Client) read() {
 
 			if nErr := err.(*net.OpError); nErr != nil {
 				if nErr.Op == "read" && nErr.Net == "tcp" {
+					switch {
+					case nErr.Timeout():
+						log.Errorf("%v: read timeout: %v", c.generateID(), err)
+					case !nErr.Timeout():
+						log.Errorf("%v: read error: %v", c.generateID(), err)
+					}
+
 					c.cancel()
 					return
 				}

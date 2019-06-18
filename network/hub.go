@@ -1044,3 +1044,14 @@ func (h *Hub) FetchPaymentsForAddress(id string) ([]*dividend.Payment, error) {
 	payments, err := dividend.FetchArchivedPaymentsForAccount(h.db, id, 10)
 	return payments, err
 }
+
+// AccountExists asserts if the provided account id references a pool account.
+func (h *Hub) AccountExists(accountID string) bool {
+	_, err := dividend.FetchAccount(h.db, []byte(accountID))
+	if err != nil {
+		log.Tracef("Unable to fetch account for id: %s", accountID)
+		return false
+	}
+
+	return true
+}

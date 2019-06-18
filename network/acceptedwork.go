@@ -226,7 +226,7 @@ func ListMinedWorkByAccount(db *bolt.DB, accountID string, n uint) ([]*AcceptedW
 				return err
 			}
 
-			if strings.Compare(work.MinedBy, accountID) == 0 {
+			if strings.Compare(work.MinedBy, accountID) == 0 && work.Confirmed {
 				minedWork = append(minedWork, &work)
 				if len(minedWork) == int(n) {
 					return nil
