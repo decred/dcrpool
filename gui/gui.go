@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"html/template"
+	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -22,10 +23,79 @@ import (
 	"github.com/gorilla/sessions"
 
 	"github.com/decred/dcrd/chaincfg"
-	"github.com/decred/dcrpool/database"
-	"github.com/decred/dcrpool/network"
-	"github.com/decred/dcrpool/util"
+	"github.com/decred/dcrpool/pool"
 )
+
+var (
+	// ZeroInt is the default value for a big.Int.
+	ZeroInt = new(big.Int).SetInt64(0)
+
+	// ZeroRat is the default value for a big.Rat.
+	ZeroRat = new(big.Rat).SetInt64(0)
+
+	// KiloHash is 1 KH represented as a big.Rat.
+	KiloHash = new(big.Rat).SetInt64(1000)
+
+	// MegaHash is 1MH represented as a big.Rat.
+	MegaHash = new(big.Rat).SetInt64(1000000)
+
+	// GigaHash is 1GH represented as a big.Rat.
+	GigaHash = new(big.Rat).SetInt64(1000000000)
+
+	// TeraHash is 1TH represented as a big.Rat.
+	TeraHash = new(big.Rat).SetInt64(1000000000000)
+
+	// PetaHash is 1PH represented as a big.Rat
+	PetaHash = new(big.Rat).SetInt64(1000000000000000)
+)
+
+// HashString formats the provided hashrate per the best-fit unit.
+func hashString(hash *big.Rat) string {
+	if hash.Cmp(ZeroRat) == 0 {
+		return "0 H/s"
+	}
+
+	if hash.Cmp(PetaHash) > 0 {
+		ph := new(big.Rat).Quo(hash, PetaHash)
+		return fmt.Sprintf("%v PH/s", ph.FloatString(4))
+	}
+
+	if hash.Cmp(TeraHash) > 0 {
+		th := new(big.Rat).Quo(hash, TeraHash)
+		return fmt.Sprintf("%v TH/s", th.FloatString(4))
+	}
+
+	if hash.Cmp(GigaHash) > 0 {
+		gh := new(big.Rat).Quo(hash, GigaHash)
+		return fmt.Sprintf("%v GH/s", gh.FloatString(4))
+	}
+
+	if hash.Cmp(MegaHash) > 0 {
+		mh := new(big.Rat).Quo(hash, MegaHash)
+		return fmt.Sprintf("%v MH/s", mh.FloatString(4))
+	}
+
+	if hash.Cmp(KiloHash) > 0 {
+		kh := new(big.Rat).Quo(hash, KiloHash)
+		return fmt.Sprintf("%v KH/s", kh.FloatString(4))
+	}
+
+	return "< 1KH/s"
+}
+
+// percentString formats the provided big.Rat as a percentage,
+// rounded to the nearest decimal place. eg. "10.5%"
+func percentString(rat *big.Rat) string {
+	real, _ := rat.Float64()
+	real = real * 100
+	str := fmt.Sprintf("%.1f", real)
+	return str + "%"
+}
+
+// formatUnixTime formats the provided integer as a UTC time string,
+func formatUnixTime(unix int64) string {
+	return time.Unix(0, unix).Format("2-Jan-2006 15:04:05 MST")
+}
 
 // Config represents configuration details for the pool user interface.
 type Config struct {
@@ -49,7 +119,7 @@ type Config struct {
 // GUI represents the the mining pool user interface.
 type GUI struct {
 	cfg         *Config
-	hub         *network.Hub
+	hub         *pool.Hub
 	db          *bolt.DB
 	templates   *template.Template
 	cookieStore *sessions.CookieStore
@@ -57,8 +127,8 @@ type GUI struct {
 	server      *http.Server
 }
 
-// GenerateSecret generates the CSRF secret.
-func (ui *GUI) GenerateSecret() []byte {
+// generateSecret generates the CSRF secret.
+func (ui *GUI) generateSecret() []byte {
 	secret := make([]byte, 32)
 	rand.Read(secret)
 	return secret
@@ -99,7 +169,7 @@ func (ui *GUI) renderTemplate(w http.ResponseWriter, r *http.Request, name strin
 }
 
 // NewGUI creates an instance of the user interface.
-func NewGUI(cfg *Config, hub *network.Hub, db *bolt.DB) (*GUI, error) {
+func NewGUI(cfg *Config, hub *pool.Hub, db *bolt.DB) (*GUI, error) {
 	ui := &GUI{
 		cfg: cfg,
 		hub: hub,
@@ -113,28 +183,8 @@ func NewGUI(cfg *Config, hub *network.Hub, db *bolt.DB) (*GUI, error) {
 		ui.cfg.BlockExplorerURL = "https://explorer.dcrdata.org"
 	}
 
-	// Fetch or generate the CSRF secret.
-	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-
-		CSRFSecret := pbkt.Get(database.CSRFSecret)
-		if CSRFSecret == nil {
-			log.Info("CSRF secret value not found in db, initializing.")
-
-			CSRFSecret = ui.GenerateSecret()
-			err := pbkt.Put(database.CSRFSecret, CSRFSecret)
-			if err != nil {
-				return err
-			}
-		}
-
-		if CSRFSecret != nil {
-			ui.cfg.CSRFSecret = CSRFSecret
-		}
-
-		return nil
-	})
-
+	var err error
+	ui.cfg.CSRFSecret, err = ui.hub.CSRFSecret(ui.generateSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -167,11 +217,11 @@ func (ui *GUI) loadTemplates() error {
 	}
 
 	httpTemplates := template.New("template").Funcs(template.FuncMap{
-		"hashString":     util.HashString,
+		"hashString":     hashString,
 		"upper":          strings.ToUpper,
-		"ratToPercent":   util.RatToPercent,
-		"floatToPercent": util.FloatToPercent,
-		"time":           util.FormatUnixTime,
+		"ratToPercent":   ratToPercent,
+		"floatToPercent": floatToPercent,
+		"time":           formatUnixTime,
 	})
 
 	// Since template.Must panics with non-nil error, it is much more

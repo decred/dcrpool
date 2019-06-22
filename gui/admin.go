@@ -6,12 +6,13 @@ import (
 	"strconv"
 
 	bolt "github.com/coreos/bbolt"
-	"github.com/decred/dcrpool/network"
 	"github.com/gorilla/csrf"
+
+	"github.com/decred/dcrpool/pool"
 )
 
 type adminPageData struct {
-	Connections map[string][]*network.ClientInfo
+	Connections map[string][]*pool.ClientInfo
 	CSRF        template.HTML
 	Designation string
 }
