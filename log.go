@@ -13,10 +13,8 @@ import (
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
 
-	"github.com/decred/dcrpool/database"
-	"github.com/decred/dcrpool/dividend"
 	"github.com/decred/dcrpool/gui"
-	"github.com/decred/dcrpool/network"
+	"github.com/decred/dcrpool/pool"
 )
 
 // logWriter implements an io.Writer that outputs to both standard output and
@@ -46,27 +44,21 @@ var (
 	// application shutdown.
 	logRotator *rotator.Rotator
 
-	pLog   = backendLog.Logger("MP")
-	divLog = backendLog.Logger("DIV")
-	netLog = backendLog.Logger("NET")
-	dbLog  = backendLog.Logger("DB")
-	guiLog = backendLog.Logger("GUI")
+	mpLog   = backendLog.Logger("MP")
+	poolLog = backendLog.Logger("POOL")
+	guiLog  = backendLog.Logger("GUI")
 )
 
 // Initialize package-global logger variables.
 func init() {
-	database.UseLogger(dbLog)
-	dividend.UseLogger(divLog)
-	network.UseLogger(netLog)
+	pool.UseLogger(poolLog)
 	gui.UseLogger(guiLog)
 }
 
 // subsystemLoggers maps each subsystem identifier to its associated logger.
 var subsystemLoggers = map[string]slog.Logger{
-	"MP":  pLog,
-	"DIV": divLog,
-	"NET": netLog,
-	"DB":  dbLog,
+	"MP":  mpLog,
+	"NET": poolLog,
 	"GUI": guiLog,
 }
 

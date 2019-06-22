@@ -1,8 +1,8 @@
-// Copyright (c) 2018 The Decred developers
+// Copyright (c) 2019 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package network
+package pool
 
 import (
 	"context"
@@ -39,8 +39,9 @@ func NewEndpoint(hub *Hub, port uint32, miner string) (*Endpoint, error) {
 	diffData := hub.poolDiff[miner]
 	hub.poolDiffMtx.Unlock()
 	if diffData == nil {
-		return nil, fmt.Errorf("pool difficulty data not found for miner (%s)",
-			miner)
+		desc := fmt.Sprintf("pool difficulty data not found for "+
+			"%s miner", miner)
+		return nil, MakeError(ErrDifficultyNotFound, desc, nil)
 	}
 
 	endpoint.diffData = diffData
@@ -59,13 +60,13 @@ func (e *Endpoint) listen() {
 
 	e.listener = listener
 	defer e.listener.Close()
-	log.Infof("Listening on %v for %v", e.port, e.miner)
+	log.Tracef("Listening on %v for %v", e.port, e.miner)
 
 	for {
 		conn, err := e.listener.Accept()
 		if err != nil {
-			log.Tracef("unable to accept connection: %v for endpoint %v",
-				err, e.port)
+			log.Tracef("unable to accept client connection for "+
+				"%s endpoint: %v", e.miner, err)
 			return
 		}
 
@@ -76,20 +77,16 @@ func (e *Endpoint) listen() {
 // connect creates new pool clients from established connections.
 // It must be run as a goroutine.
 func (e *Endpoint) connect(ctx context.Context) {
-	log.Tracef("Started connection handler for %v clients.", e.miner)
-
 	for {
 		select {
 		case <-ctx.Done():
 			e.clientsMtx.Lock()
 			for _, client := range e.clients {
-				log.Tracef("Terminating (%v) client.", client.generateID())
 				client.cancel()
 			}
 			e.clientsMtx.Unlock()
 			e.wg.Wait()
 
-			log.Tracef("Connection handler for %v clients done.", e.miner)
 			e.hub.wg.Done()
 			return
 
@@ -107,8 +104,8 @@ func (e *Endpoint) connect(ctx context.Context) {
 	}
 }
 
-// RemoveClient removes a disconnected pool client from its associated endpoint.
-func (e *Endpoint) RemoveClient(c *Client) {
+// removeClient removes a disconnected pool client from its associated endpoint.
+func (e *Endpoint) removeClient(c *Client) {
 	e.clientsMtx.Lock()
 	id := c.generateID()
 	delete(e.clients, id)

@@ -1,8 +1,8 @@
-// Copyright (c) 2018 The Decred developers
+// Copyright (c) 2019 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package network
+package pool
 
 import (
 	"bytes"
@@ -13,8 +13,6 @@ import (
 	"strings"
 
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrpool/dividend"
-	"github.com/decred/dcrpool/util"
 )
 
 // Message types.
@@ -168,17 +166,20 @@ func AuthorizeRequest(id *uint64, name string, address string) *Request {
 // ParseAuthorizeRequest resolves an authorize request into its components.
 func ParseAuthorizeRequest(req *Request) (string, error) {
 	if req.Method != Authorize {
-		return "", fmt.Errorf("request method is not authorize")
+		desc := "request method is not authorize"
+		return "", MakeError(ErrParse, desc, nil)
 	}
 
 	auth, ok := req.Params.([]interface{})
 	if !ok {
-		return "", fmt.Errorf("failed to parse authorize parameters")
+		desc := "failed to parse authorize parameters"
+		return "", MakeError(ErrParse, desc, nil)
 	}
 
 	username, ok := auth[0].(string)
 	if !ok {
-		return "", fmt.Errorf("failed to parse username parameter")
+		desc := "failed to parse username parameter"
+		return "", MakeError(ErrParse, desc, nil)
 	}
 
 	return username, nil
@@ -197,7 +198,8 @@ func AuthorizeResponse(id uint64, status bool, err *StratumError) *Response {
 func ParseAuthorizeResponse(resp *Response) (bool, *StratumError, error) {
 	status, ok := resp.Result.(bool)
 	if !ok {
-		return false, nil, fmt.Errorf("failed to parse result parameter")
+		desc := "failed to parse result parameter"
+		return false, nil, MakeError(ErrParse, desc, nil)
 	}
 
 	return status, resp.Error, nil
@@ -205,7 +207,7 @@ func ParseAuthorizeResponse(resp *Response) (bool, *StratumError, error) {
 
 // SubscribeRequest creates a subscribe request message.
 func SubscribeRequest(id *uint64, userAgent string, version string, notifyID string) *Request {
-	agent := fmt.Sprintf("%v/%v", userAgent, version)
+	agent := fmt.Sprintf("%s/%s", userAgent, version)
 	params := []string{agent}
 	if notifyID != "" {
 		params = append(params, notifyID)
@@ -221,28 +223,33 @@ func SubscribeRequest(id *uint64, userAgent string, version string, notifyID str
 // ParseSubscribeRequest resolves a subscribe request into its components.
 func ParseSubscribeRequest(req *Request) (string, string, error) {
 	if req.Method != Subscribe {
-		return "", "", fmt.Errorf("request method is not subscribe")
+		desc := "request method is not subscribe"
+		return "", "", MakeError(ErrParse, desc, nil)
 	}
 
 	params, ok := req.Params.([]interface{})
 	if !ok {
-		return "", "", fmt.Errorf("failed to parse subscribe parameters")
+		desc := "failed to parse subscribe parameters"
+		return "", "", MakeError(ErrParse, desc, nil)
 	}
 
 	if len(params) == 0 {
-		return "", "", fmt.Errorf("no user agent provided for subscribe request")
+		desc := "no user agent provided for subscribe request"
+		return "", "", MakeError(ErrParse, desc, nil)
 	}
 
 	miner, ok := params[0].(string)
 	if !ok {
-		return "", "", fmt.Errorf("failed to parse miner parameter")
+		desc := "failed to parse miner parameter"
+		return "", "", MakeError(ErrParse, desc, nil)
 	}
 
 	id := ""
 	if len(params) == 2 {
 		id, ok = params[1].(string)
 		if !ok {
-			return "", "", fmt.Errorf("failed to parse id parameter")
+			desc := "failed to parse id parameter"
+			return "", "", MakeError(ErrParse, desc, nil)
 		}
 	}
 
@@ -271,50 +278,57 @@ func SubscribeResponse(id uint64, notifyID string, extraNonce1 string, extraNonc
 // ParseSubscribeResponse resolves a subscribe response into its components.
 func ParseSubscribeResponse(resp *Response) (string, string, string, uint64, error) {
 	if resp.Error != nil {
-		return "", "", "", 0, fmt.Errorf("%d, %s, %v",
-			resp.Error.Code, resp.Error.Message, resp.Error.Traceback)
+		desc := fmt.Sprintf("%d, %s, %v", resp.Error.Code,
+			resp.Error.Message, resp.Error.Traceback)
+		return "", "", "", 0, MakeError(ErrParse, desc, nil)
 	}
 
 	res, ok := resp.Result.([]interface{})
 	if !ok {
-		return "", "", "", 0, fmt.Errorf("failed to parse result parameter")
+		desc := "failed to parse result parameter"
+		return "", "", "", 0, MakeError(ErrParse, desc, nil)
 	}
 
 	subs, ok := res[0].([]interface{})
 	if !ok {
-		return "", "", "", 0, fmt.Errorf("failed to parse subscription details")
+		desc := "failed to parse subscription details"
+		return "", "", "", 0, MakeError(ErrParse, desc, nil)
 	}
 
 	diff, ok := subs[0].([]interface{})
 	if !ok {
-		return "", "", "", 0, fmt.Errorf("failed to parse difficulty id details")
+		desc := "failed to parse difficulty id details"
+		return "", "", "", 0, MakeError(ErrParse, desc, nil)
 	}
 
 	diffID, ok := diff[1].(string)
 	if !ok {
-		return "", "", "", 0, fmt.Errorf("failed to parse difficulty id")
+		desc := "failed to parse difficulty id"
+		return "", "", "", 0, MakeError(ErrParse, desc, nil)
 	}
 
 	notify, ok := subs[1].([]interface{})
 	if !ok {
-		return "", "", "", 0, fmt.Errorf("failed to parse notify id details")
+		desc := "failed to parse notify id details"
+		return "", "", "", 0, MakeError(ErrParse, desc, nil)
 	}
 
 	notifyID, ok := notify[1].(string)
 	if !ok {
-		return "", "", "", 0, fmt.Errorf("failed to parse notify id")
+		desc := "failed to parse notify id"
+		return "", "", "", 0, MakeError(ErrParse, desc, nil)
 	}
 
 	extraNonce1, ok := res[1].(string)
 	if !ok {
-		return "", "", "", 0,
-			fmt.Errorf("failed to parse ExtraNonce1 parameter")
+		desc := "failed to parse ExtraNonce1 parameter"
+		return "", "", "", 0, MakeError(ErrParse, desc, nil)
 	}
 
 	nonce2Size, ok := res[2].(float64)
 	if !ok {
-		return "", "", "", 0,
-			fmt.Errorf("failed to parse ExtraNonce2Size parameter")
+		desc := "failed to parse ExtraNonce2Size parameter"
+		return "", "", "", 0, MakeError(ErrParse, desc, nil)
 	}
 
 	extraNonce2Size := uint64(nonce2Size)
@@ -334,12 +348,14 @@ func SetDifficultyNotification(difficulty *big.Int) *Request {
 // its components.
 func ParseSetDifficultyNotification(req *Request) (uint64, error) {
 	if req.Method != SetDifficulty {
-		return 0, fmt.Errorf("notification method is not set difficulty")
+		desc := "notification method is not set difficulty"
+		return 0, MakeError(ErrParse, desc, nil)
 	}
 
 	params, ok := req.Params.([]interface{})
 	if !ok {
-		return 0, fmt.Errorf("failed to parse set difficulty parameters")
+		desc := "failed to parse set difficulty parameters"
+		return 0, MakeError(ErrParse, desc, nil)
 	}
 
 	return uint64(params[0].(float64)), nil
@@ -357,70 +373,82 @@ func WorkNotification(jobID string, prevBlock string, genTx1 string, genTx2 stri
 // ParseWorkNotification resolves a work notification message into its components.
 func ParseWorkNotification(req *Request) (string, string, string, string, string, string, string, bool, error) {
 	if req.Method != Notify {
+		desc := "notification method is not notify"
 		return "", "", "", "", "", "", "", false,
-			fmt.Errorf("notification method is not notify")
+			MakeError(ErrParse, desc, nil)
 	}
 
 	params, ok := req.Params.([]interface{})
 	if !ok {
+		desc := "failed to parse work parameters"
 		return "", "", "", "", "", "", "", false,
-			fmt.Errorf("failed to parse work parameters")
+			MakeError(ErrParse, desc, nil)
 	}
 
 	jobID, ok := params[0].(string)
 	if !ok {
+		desc := "failed to parse jobID parameter"
 		return "", "", "", "", "", "", "", false,
-			fmt.Errorf("failed to parse jobID parameter")
+			MakeError(ErrParse, desc, nil)
 	}
 
 	prevBlock, ok := params[1].(string)
 	if !ok {
+		desc := "failed to parse prevBlock parameter"
 		return "", "", "", "", "", "", "", false,
-			fmt.Errorf("failed to parse prevBlock parameter")
+			MakeError(ErrParse, desc, nil)
 	}
 
 	genTx1, ok := params[2].(string)
 	if !ok {
+		desc := "failed to parse genTx1 parameter"
 		return "", "", "", "", "", "", "", false,
-			fmt.Errorf("failed to parse genTx1 parameter")
+			MakeError(ErrParse, desc, nil)
 	}
 
 	genTx2, ok := params[3].(string)
 	if !ok {
+		desc := "failed to parse genTx2 parameter"
 		return "", "", "", "", "", "", "", false,
-			fmt.Errorf("failed to parse genTx2 parameter")
+			MakeError(ErrParse, desc, nil)
 	}
 
 	blockVersion, ok := params[5].(string)
 	if !ok {
+		desc := "failed to parse blockVersion parameter"
 		return "", "", "", "", "", "", "", false,
-			fmt.Errorf("failed to parse blockVersion parameter")
+			MakeError(ErrParse, desc, nil)
 	}
 
 	nBits, ok := params[6].(string)
 	if !ok {
+		desc := "failed to parse nBits parameter"
 		return "", "", "", "", "", "", "", false,
-			fmt.Errorf("failed to parse nBits parameter")
+			MakeError(ErrParse, desc, nil)
 	}
 
 	nTime, ok := params[7].(string)
 	if !ok {
+		desc := "failed to parse nTime parameter"
 		return "", "", "", "", "", "", "", false,
-			fmt.Errorf("failed to parse nTime parameter")
+			MakeError(ErrParse, desc, nil)
 	}
 
 	cleanJob, ok := params[8].(bool)
 	if !ok {
+		desc := "failed to parse cleanJob parameter"
 		return "", "", "", "", "", "", "", false,
-			fmt.Errorf("failed to parse cleanJob parameter")
+			MakeError(ErrParse, desc, nil)
 	}
 
-	return jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime, cleanJob, nil
+	return jobID, prevBlock, genTx1, genTx2, blockVersion,
+		nBits, nTime, cleanJob, nil
 }
 
 // GenerateBlockHeader creates a block header from a mining.notify
 // message and the extraNonce1 of the client.
-func GenerateBlockHeader(blockVersionE string, prevBlockE string, genTx1E string, extraNonce1E string, genTx2E string) (*wire.BlockHeader, error) {
+func GenerateBlockHeader(blockVersionE string, prevBlockE string,
+	genTx1E string, extraNonce1E string, genTx2E string) (*wire.BlockHeader, error) {
 	buf := bytes.NewBufferString("")
 	buf.WriteString(blockVersionE)
 	buf.WriteString(prevBlockE)
@@ -432,13 +460,15 @@ func GenerateBlockHeader(blockVersionE string, prevBlockE string, genTx1E string
 
 	headerD, err := hex.DecodeString(headerE)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode block header: %v", err)
+		desc := fmt.Sprintf("failed to decode block header %s", headerE)
+		return nil, MakeError(ErrDecode, desc, err)
 	}
 
 	var header wire.BlockHeader
 	err = header.FromBytes(headerD)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create header from bytes: %v", err)
+		desc := fmt.Sprintf("failed to create header from bytes %s", headerE)
+		return nil, MakeError(ErrOther, desc, err)
 	}
 
 	return &header, nil
@@ -446,11 +476,12 @@ func GenerateBlockHeader(blockVersionE string, prevBlockE string, genTx1E string
 
 // GenerateSolvedBlockHeader create a block header from a mining.submit message
 // and its associated job.
-func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E string, nTimeE string, nonceE string, miner string) (*wire.BlockHeader, error) {
+func GenerateSolvedBlockHeader(headerE string, extraNonce1E string,
+	extraNonce2E string, nTimeE string, nonceE string, miner string) (*wire.BlockHeader, error) {
 	headerEB := []byte(headerE)
 
 	switch miner {
-	case dividend.CPU:
+	case CPU:
 		copy(headerEB[272:280], []byte(nTimeE))
 		copy(headerEB[280:288], []byte(nonceE))
 		copy(headerEB[288:296], []byte(extraNonce1E))
@@ -461,14 +492,14 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 	// specified in the mining.subscribe message. The nTime and nonce values
 	// submitted are big endian, they have to be reversed before block header
 	// reconstruction.
-	case dividend.AntminerDR3, dividend.AntminerDR5:
-		nTimeERev, err := util.HexReversed(nTimeE)
+	case AntminerDR3, AntminerDR5:
+		nTimeERev, err := hexReversed(nTimeE)
 		if err != nil {
 			return nil, err
 		}
 		copy(headerEB[272:280], []byte(nTimeERev))
 
-		nonceERev, err := util.HexReversed(nonceE)
+		nonceERev, err := hexReversed(nonceE)
 		if err != nil {
 			return nil, err
 		}
@@ -480,14 +511,14 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 	// exclusively the extraNonce2. The nTime and nonce values submitted are
 	// big endian, they have to be reversed to little endian before header
 	// reconstruction.
-	case dividend.InnosiliconD9:
-		nTimeERev, err := util.HexReversed(nTimeE)
+	case InnosiliconD9:
+		nTimeERev, err := hexReversed(nTimeE)
 		if err != nil {
 			return nil, err
 		}
 		copy(headerEB[272:280], []byte(nTimeERev))
 
-		nonceERev, err := util.HexReversed(nonceE)
+		nonceERev, err := hexReversed(nonceE)
 		if err != nil {
 			return nil, err
 		}
@@ -500,14 +531,14 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 	// is for the extraNonce1 and extraNonce2. The nTime and nonce values
 	// submitted are big endian, they have to be reversed to little endian
 	// before header reconstruction.
-	case dividend.WhatsminerD1:
-		nTimeERev, err := util.HexReversed(nTimeE)
+	case WhatsminerD1:
+		nTimeERev, err := hexReversed(nTimeE)
 		if err != nil {
 			return nil, err
 		}
 		copy(headerEB[272:280], []byte(nTimeERev))
 
-		nonceERev, err := util.HexReversed(nonceE)
+		nonceERev, err := hexReversed(nonceE)
 		if err != nil {
 			return nil, err
 		}
@@ -515,18 +546,21 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string, extraNonce2E
 		copy(headerEB[288:304], []byte(extraNonce2E))
 
 	default:
-		return nil, fmt.Errorf("unknown miner (%v) provided for block", miner)
+		desc := fmt.Sprintf("specified miner %s is unknown", miner)
+		return nil, MakeError(ErrOther, desc, nil)
 	}
 
 	solvedHeaderD, err := hex.DecodeString(string(headerEB))
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode solved header: %v", err)
+		desc := fmt.Sprintf("failed to decode solved header %s", miner)
+		return nil, MakeError(ErrDecode, desc, err)
 	}
 
 	var solvedHeader wire.BlockHeader
 	err = solvedHeader.FromBytes(solvedHeaderD)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create header from bytes: %v", err)
+		desc := fmt.Sprintf("failed to create header from bytes %s", miner)
+		return nil, MakeError(ErrDecode, desc, err)
 	}
 
 	return &solvedHeader, nil
@@ -544,43 +578,44 @@ func SubmitWorkRequest(id *uint64, workerName string, jobID string, extraNonce2 
 // ParseSubmitWorkRequest resolves a submit work request into its components.
 func ParseSubmitWorkRequest(req *Request, miner string) (string, string, string, string, string, error) {
 	if req.Method != Submit {
-		return "", "", "", "", "", fmt.Errorf("request method is not submit")
+		desc := "request method is not submit"
+		return "", "", "", "", "", MakeError(ErrParse, desc, nil)
 	}
 
 	params, ok := req.Params.([]interface{})
 	if !ok {
-		return "", "", "", "", "",
-			fmt.Errorf("failed to parse submit work parameters")
+		desc := "failed to parse submit work parameters"
+		return "", "", "", "", "", MakeError(ErrParse, desc, nil)
 	}
 
 	workerName, ok := params[0].(string)
 	if !ok {
-		return "", "", "", "", "",
-			fmt.Errorf("failed to parse workerName parameter")
+		desc := "failed to parse workerName parameter"
+		return "", "", "", "", "", MakeError(ErrParse, desc, nil)
 	}
 
 	jobID, ok := params[1].(string)
 	if !ok {
-		return "", "", "", "", "",
-			fmt.Errorf("failed to parse jobID parameter")
+		desc := "failed to parse jobID parameter"
+		return "", "", "", "", "", MakeError(ErrParse, desc, nil)
 	}
 
 	extraNonce2, ok := params[2].(string)
 	if !ok {
-		return "", "", "", "", "",
-			fmt.Errorf("failed to parse extraNonce2 parameter")
+		desc := "failed to parse extraNonce2 parameter"
+		return "", "", "", "", "", MakeError(ErrParse, desc, nil)
 	}
 
 	nTime, ok := params[3].(string)
 	if !ok {
-		return "", "", "", "", "",
-			fmt.Errorf("failed to parse nTime parameter")
+		desc := "failed to parse nTime parameter"
+		return "", "", "", "", "", MakeError(ErrParse, desc, nil)
 	}
 
 	nonce, ok := params[4].(string)
 	if !ok {
-		return "", "", "", "", "",
-			fmt.Errorf("failed to parse nonce parameter")
+		desc := "failed to parse nonce parameter"
+		return "", "", "", "", "", MakeError(ErrParse, desc, nil)
 	}
 
 	return workerName, jobID, extraNonce2, nTime, nonce, nil
@@ -599,7 +634,8 @@ func SubmitWorkResponse(id uint64, status bool, err *StratumError) *Response {
 func ParseSubmitWorkResponse(resp *Response) (bool, *StratumError, error) {
 	status, ok := resp.Result.(bool)
 	if !ok {
-		return false, nil, fmt.Errorf("failed to parse result parameter")
+		desc := "failed to parse result parameter"
+		return false, nil, MakeError(ErrParse, desc, nil)
 	}
 
 	return status, resp.Error, nil

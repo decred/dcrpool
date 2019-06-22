@@ -1,18 +1,18 @@
-// Copyright (c) 2018 The Decred developers
+// Copyright (c) 2019 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package network
+package pool
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	bolt "github.com/coreos/bbolt"
-	"github.com/decred/dcrpool/database"
-	"github.com/decred/dcrpool/util"
 )
 
 // Job represents cached copies of work delivered to clients.
@@ -22,11 +22,19 @@ type Job struct {
 	Header string `json:"header"`
 }
 
+// nanoToBigEndianBytes returns an 8-byte big endian representation of
+// the provided nanosecond time.
+func nanoToBigEndianBytes(nano int64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(nano))
+	return b
+}
+
 // GenerateJobID generates a unique job id of the provided block height.
 func GenerateJobID(height uint32) (string, error) {
 	buf := bytes.Buffer{}
-	buf.Write(util.HeightToBigEndianBytes(height))
-	buf.Write(util.NanoToBigEndianBytes(time.Now().UnixNano()))
+	buf.Write(heightToBigEndianBytes(height))
+	buf.Write(nanoToBigEndianBytes(time.Now().UnixNano()))
 	return hex.EncodeToString(buf.Bytes()), nil
 }
 
@@ -44,23 +52,37 @@ func NewJob(header string, height uint32) (*Job, error) {
 	}, nil
 }
 
+// fetchJobBucket is a helper function for getting the job bucket.
+func fetchJobBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+		return nil, MakeError(ErrBucketNotFound, desc, nil)
+	}
+	bkt := pbkt.Bucket(jobBkt)
+	if bkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(jobBkt))
+		return nil, MakeError(ErrBucketNotFound, desc, nil)
+	}
+
+	return bkt, nil
+}
+
 // FetchJob fetches the job referenced by the provided id.
 func FetchJob(db *bolt.DB, id []byte) (*Job, error) {
 	var job Job
 	err := db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
+		bkt, err := fetchJobBucket(tx)
+		if err != nil {
+			return err
 		}
-		bkt := pbkt.Bucket(database.JobBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.JobBkt)
-		}
+
 		v := bkt.Get(id)
 		if v == nil {
-			return database.ErrValueNotFound(id)
+			desc := fmt.Sprintf("no value found for job id %s", string(id))
+			return MakeError(ErrValueNotFound, desc, nil)
 		}
-		err := json.Unmarshal(v, &job)
+		err = json.Unmarshal(v, &job)
 		return err
 	})
 	if err != nil {
@@ -73,14 +95,11 @@ func FetchJob(db *bolt.DB, id []byte) (*Job, error) {
 // Create persists the job to the database.
 func (job *Job) Create(db *bolt.DB) error {
 	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
+		bkt, err := fetchJobBucket(tx)
+		if err != nil {
+			return err
 		}
-		bkt := pbkt.Bucket(database.JobBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.JobBkt)
-		}
+
 		jobBytes, err := json.Marshal(job)
 		if err != nil {
 			return err
@@ -98,20 +117,16 @@ func (job *Job) Update(db *bolt.DB) error {
 
 // Delete removes the associated job from the database.
 func (job *Job) Delete(db *bolt.DB) error {
-	return database.Delete(db, database.JobBkt, []byte(job.UUID))
+	return deleteEntry(db, jobBkt, []byte(job.UUID))
 }
 
 // PruneJobs removes all jobs with heights less than the provided height.
 func PruneJobs(db *bolt.DB, height uint32) error {
-	heightBE := util.HeightToBigEndianBytes(height)
+	heightBE := heightToBigEndianBytes(height)
 	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.JobBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.JobBkt)
+		bkt, err := fetchJobBucket(tx)
+		if err != nil {
+			return err
 		}
 
 		toDelete := [][]byte{}

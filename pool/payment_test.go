@@ -2,10 +2,11 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package dividend
+package pool
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -13,8 +14,6 @@ import (
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrpool/database"
-	"github.com/decred/dcrpool/util"
 )
 
 // createPersistedAccount creates a pool account with the provided parameters
@@ -44,9 +43,9 @@ func TestPayPerShare(t *testing.T) {
 	defer td()
 
 	now := time.Now()
-	nowBytes := util.NanoToBigEndianBytes(now.UnixNano())
+	nowBytes := nanoToBigEndianBytes(now.UnixNano())
 	minNano := now.Add(-(time.Second * 60)).UnixNano()
-	minBytes := util.NanoToBigEndianBytes(minNano)
+	minBytes := nanoToBigEndianBytes(minNano)
 	maxNano := now.Add(-(time.Second * 30)).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
 	shareCount := 10
@@ -88,14 +87,15 @@ func TestPayPerShare(t *testing.T) {
 	}
 
 	// Assert the last payment created time was updated.
-	var lastPaymentCreatedOn []byte
+	var lastPmtCreatedOn []byte
 	err = db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
+		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
+			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+			return MakeError(ErrBucketNotFound, desc, nil)
 		}
 
-		lastPaymentCreatedOn = pbkt.Get(database.LastPaymentCreatedOn)
+		lastPmtCreatedOn = pbkt.Get(lastPaymentCreatedOn)
 		return nil
 	})
 
@@ -103,9 +103,9 @@ func TestPayPerShare(t *testing.T) {
 		t.Error(err)
 	}
 
-	if bytes.Compare(lastPaymentCreatedOn, nowBytes) < 0 {
-		t.Error("The last payment created on time is less than" +
-			" the current time")
+	if bytes.Compare(lastPmtCreatedOn, nowBytes) < 0 {
+		t.Error("The last payment created on time is less than " +
+			"the current time")
 	}
 
 	// Assert the payments created are for accounts x, y and a fee
@@ -132,7 +132,7 @@ func TestPayPerShare(t *testing.T) {
 			yb = bundles[idx]
 		}
 
-		if bundles[idx].Account == PoolFeesK {
+		if bundles[idx].Account == poolFeesK {
 			fb = bundles[idx]
 		}
 	}
@@ -175,9 +175,9 @@ func TestPayPerLastShare(t *testing.T) {
 	defer td()
 
 	now := time.Now()
-	nowBytes := util.NanoToBigEndianBytes(now.UnixNano())
+	nowBytes := nanoToBigEndianBytes(now.UnixNano())
 	minNano := now.Add(-(time.Second * 60)).UnixNano()
-	minBytes := util.NanoToBigEndianBytes(minNano)
+	minBytes := nanoToBigEndianBytes(minNano)
 	xAboveMinNano := now.Add(-(time.Second * 30)).UnixNano()
 	yAboveMinNano := now.Add(-(time.Second * 10)).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
@@ -221,14 +221,15 @@ func TestPayPerLastShare(t *testing.T) {
 	}
 
 	// Assert the last payment created time was updated.
-	var lastPaymentCreatedOn []byte
+	var lastPmtCreatedOn []byte
 	err = db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
+		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
+			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+			return MakeError(ErrBucketNotFound, desc, nil)
 		}
 
-		lastPaymentCreatedOn = pbkt.Get(database.LastPaymentCreatedOn)
+		lastPmtCreatedOn = pbkt.Get(lastPaymentCreatedOn)
 		return nil
 	})
 
@@ -236,8 +237,8 @@ func TestPayPerLastShare(t *testing.T) {
 		t.Error(err)
 	}
 
-	if bytes.Compare(lastPaymentCreatedOn, nowBytes) < 0 {
-		t.Error("The last payment created on time is less than" +
+	if bytes.Compare(lastPmtCreatedOn, nowBytes) < 0 {
+		t.Error("The last payment created on time is less than " +
 			"the current time")
 	}
 
@@ -266,7 +267,7 @@ func TestPayPerLastShare(t *testing.T) {
 			yb = bundles[idx]
 		}
 
-		if bundles[idx].Account == PoolFeesK {
+		if bundles[idx].Account == poolFeesK {
 			fb = bundles[idx]
 		}
 	}
@@ -485,7 +486,7 @@ func TestPaymentsMaturity(t *testing.T) {
 			accXBundle = pmts[idx]
 		}
 
-		if pmts[idx].Account == PoolFeesK {
+		if pmts[idx].Account == poolFeesK {
 			feeBundle = pmts[idx]
 		}
 	}
@@ -532,19 +533,19 @@ func TestArchivedPaymentsFiltering(t *testing.T) {
 	bx.ArchivePayments(db)
 
 	// Fetch archived payments for account x.
-	pmts, err := FetchArchivedPaymentsForAccount(db, xID, 10)
+	pmts, err := fetchArchivedPaymentsForAccount(db, xID, 10)
 	if err != nil {
 		t.Error(err)
 	}
 
 	expectedPmts := 0
 	if len(pmts) != expectedPmts {
-		t.Logf("Expected %v archived payments for account x"+
-			" (per filter criteria), got %v", expectedPmts, len(pmts))
+		t.Logf("Expected %v archived payments for account x "+
+			"(per filter criteria), got %v", expectedPmts, len(pmts))
 	}
 
 	// Fetch archived payments for account y.
-	pmts, err = FetchArchivedPaymentsForAccount(db, yID, 10)
+	pmts, err = fetchArchivedPaymentsForAccount(db, yID, 10)
 	if err != nil {
 		t.Error(err)
 	}

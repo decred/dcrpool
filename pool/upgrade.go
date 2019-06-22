@@ -1,8 +1,4 @@
-// Copyright (c) 2018 The Decred developers
-// Use of this source code is governed by an ISC
-// license that can be found in the LICENSE file.
-
-package database
+package pool
 
 import (
 	"encoding/binary"
@@ -24,19 +20,19 @@ const (
 // upgrade the database to the next version.
 var upgrades = [...]func(tx *bolt.Tx) error{}
 
-// Upgrade checks whether the any upgrades are necessary before the database is
+// upgradeDB checks whether the any upgrades are necessary before the database is
 // ready for application usage.  If any are, they are performed.
-func Upgrade(db *bolt.DB) error {
+func upgradeDB(db *bolt.DB) error {
 	var version uint32
 	err := db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(PoolBkt)
-		if PoolBkt == nil {
-			return fmt.Errorf("'%s' bucket does not exist", string(PoolBkt))
+		pbkt := tx.Bucket(poolBkt)
+		if poolBkt == nil {
+			return fmt.Errorf("'%s' bucket does not exist", string(poolBkt))
 		}
-		v := pbkt.Get(VersionK)
+		v := pbkt.Get(versionK)
 		if v == nil {
 			return fmt.Errorf("associated value for '%s' not found",
-				string(VersionK))
+				string(versionK))
 		}
 
 		version = binary.LittleEndian.Uint32(v)

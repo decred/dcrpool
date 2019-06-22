@@ -1,27 +1,27 @@
-// Copyright (c) 2018 The Decred developers
+// Copyright (c) 2019 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package dividend
+package pool
 
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/dchest/blake256"
-	"github.com/decred/dcrpool/database"
 )
 
-// Account represents an anonymous mining pool account.
+// Account represents a mining pool account.
 type Account struct {
 	UUID      string `json:"uuid"`
 	Address   string `json:"address"`
 	CreatedOn uint64 `json:"createdon"`
 }
 
-// AccountID geenrates an id using provided address of the account.
+// AccountID generates an id using provided address of the account.
 func AccountID(address string) *string {
 	hasher := blake256.New()
 	hasher.Write([]byte(address))
@@ -37,26 +37,42 @@ func NewAccount(address string) (*Account, error) {
 		Address:   address,
 		CreatedOn: uint64(time.Now().Unix()),
 	}
+
 	return account, nil
+}
+
+// fetchAccountBucket is a helper function for getting the account bucket.
+func fetchAccountBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+		return nil, MakeError(ErrBucketNotFound, desc, nil)
+	}
+	bkt := pbkt.Bucket(accountBkt)
+	if bkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(accountBkt))
+		return nil, MakeError(ErrBucketNotFound, desc, nil)
+	}
+
+	return bkt, nil
 }
 
 // FetchAccount fetches the account referenced by the provided id.
 func FetchAccount(db *bolt.DB, id []byte) (*Account, error) {
 	var account Account
 	err := db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
+		bkt, err := fetchAccountBucket(tx)
+		if err != nil {
+			return err
 		}
-		bkt := pbkt.Bucket(database.AccountBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.AccountBkt)
-		}
+
 		v := bkt.Get(id)
 		if v == nil {
-			return database.ErrValueNotFound(id)
+			desc := fmt.Sprintf("no account found for id %s", string(id))
+			return MakeError(ErrValueNotFound, desc, nil)
 		}
-		err := json.Unmarshal(v, &account)
+
+		err = json.Unmarshal(v, &account)
 		return err
 	})
 	if err != nil {
@@ -69,14 +85,11 @@ func FetchAccount(db *bolt.DB, id []byte) (*Account, error) {
 // Create persists the account to the database.
 func (acc *Account) Create(db *bolt.DB) error {
 	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
+		bkt, err := fetchAccountBucket(tx)
+		if err != nil {
+			return err
 		}
-		bkt := pbkt.Bucket(database.AccountBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.AccountBkt)
-		}
+
 		accBytes, err := json.Marshal(acc)
 		if err != nil {
 			return err
@@ -89,10 +102,11 @@ func (acc *Account) Create(db *bolt.DB) error {
 
 // Update is not supported for accounts.
 func (acc *Account) Update(db *bolt.DB) error {
-	return ErrNotSupported("account", "update")
+	desc := "account update not supported"
+	return MakeError(ErrNotSupported, desc, nil)
 }
 
 // Delete purges the referenced account from the database.
 func (acc *Account) Delete(db *bolt.DB) error {
-	return database.Delete(db, database.AccountBkt, []byte(acc.UUID))
+	return deleteEntry(db, accountBkt, []byte(acc.UUID))
 }

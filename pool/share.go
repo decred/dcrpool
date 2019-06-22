@@ -1,8 +1,8 @@
-// Copyright (c) 2018 The Decred developers
+// Copyright (c) 2019 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package dividend
+package pool
 
 import (
 	"bytes"
@@ -13,54 +13,12 @@ import (
 	"time"
 
 	bolt "github.com/coreos/bbolt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrpool/database"
-	"github.com/decred/dcrpool/util"
-)
-
-// Miner types lists all known DCR miners
-const (
-	CPU           = "cpu"
-	InnosiliconD9 = "innosilicond9"
-	// ObeliskDCR1   = "obeliskdcr1"
-	AntminerDR3  = "antminerdr3"
-	AntminerDR5  = "antminerdr5"
-	WhatsminerD1 = "whatsminerd1"
-)
-
-// MinerHashes is a map of all known DCR miners and their coressponding
-// hashrates.
-var MinerHashes = map[string]*big.Int{
-	CPU:           new(big.Int).SetInt64(70E3),
-	InnosiliconD9: new(big.Int).SetInt64(2.4E12),
-	// ObeliskDCR1:   new(big.Int).SetInt64(1.1E12),
-	AntminerDR3:  new(big.Int).SetInt64(7.8E12),
-	AntminerDR5:  new(big.Int).SetInt64(35E12),
-	WhatsminerD1: new(big.Int).SetInt64(48E12),
-}
-
-// MinerPorts is a map of all known DCR miners and the coressponding
-// ports configured to be connected on.
-var MinerPorts = map[string]uint32{
-	CPU: 5550,
-	// ObeliskDCR1:   5551,
-	InnosiliconD9: 5552,
-	AntminerDR3:   5553,
-	AntminerDR5:   5554,
-	WhatsminerD1:  5555,
-}
-
-// Convenience variables.
-var (
-	zeroRat = new(big.Rat).SetInt64(0)
-	zeroInt = new(big.Int).SetInt64(0)
 )
 
 var (
-	// PoolFeesK is the key used to track pool fee payouts.
-	PoolFeesK = "fees"
-
 	// PPS represents the pay per share payment method.
 	PPS = "pps"
 
@@ -102,7 +60,7 @@ func CalculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTime
 	diff := new(big.Int).Quo(difficulty.Num(), difficulty.Denom())
 
 	// Clamp the difficulty to 1 if needed.
-	if diff.Cmp(zeroInt) == 0 {
+	if diff.Cmp(ZeroInt) == 0 {
 		diff = new(big.Int).SetInt64(1)
 	}
 
@@ -147,7 +105,7 @@ type Share struct {
 	CreatedOn int64    `json:"createdOn"`
 }
 
-// NewShare creates a shate with the provided account and weight.
+// NewShare creates a share with the provided account and weight.
 func NewShare(account string, weight *big.Rat) *Share {
 	return &Share{
 		Account:   account,
@@ -156,28 +114,35 @@ func NewShare(account string, weight *big.Rat) *Share {
 	}
 }
 
-// ErrNotSupported is returned when an entity does not support an action.
-func ErrNotSupported(tp, action string) error {
-	return fmt.Errorf("action (%v) not supported for type (%v)",
-		action, tp)
+// fetchShareBucket is a helper function for getting the share bucket.
+func fetchShareBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+		return nil, MakeError(ErrBucketNotFound, desc, nil)
+	}
+	bkt := pbkt.Bucket(shareBkt)
+	if bkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(shareBkt))
+		return nil, MakeError(ErrBucketNotFound, desc, nil)
+	}
+
+	return bkt, nil
 }
 
 // Create persists a share to the database.
 func (s *Share) Create(db *bolt.DB) error {
 	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
+		bkt, err := fetchShareBucket(tx)
+		if err != nil {
+			return err
 		}
-		bkt := pbkt.Bucket(database.ShareBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.ShareBkt)
-		}
+
 		sBytes, err := json.Marshal(s)
 		if err != nil {
 			return err
 		}
-		err = bkt.Put(util.NanoToBigEndianBytes(s.CreatedOn), sBytes)
+		err = bkt.Put(nanoToBigEndianBytes(s.CreatedOn), sBytes)
 		return err
 	})
 	return err
@@ -185,30 +150,23 @@ func (s *Share) Create(db *bolt.DB) error {
 
 // Update is not supported for shares.
 func (s *Share) Update(db *bolt.DB) error {
-	return ErrNotSupported("share", "update")
+	desc := "share update not supported"
+	return MakeError(ErrNotSupported, desc, nil)
 }
 
 // Delete is not supported for shares.
 func (s *Share) Delete(db *bolt.DB) error {
-	return ErrNotSupported("share", "delete")
-}
-
-// ErrDivideByZero is returned the divisor of division operation is zero.
-func ErrDivideByZero() error {
-	return fmt.Errorf("divide by zero: divisor is zero")
+	desc := "share deletion not supported"
+	return MakeError(ErrNotSupported, desc, nil)
 }
 
 // PPSEligibleShares fetches all shares within the provided inclusive bounds.
 func PPSEligibleShares(db *bolt.DB, min []byte, max []byte) ([]*Share, error) {
 	eligibleShares := make([]*Share, 0)
 	err := db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.ShareBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.ShareBkt)
+		bkt, err := fetchShareBucket(tx)
+		if err != nil {
+			return err
 		}
 
 		c := bkt.Cursor()
@@ -250,13 +208,9 @@ func PPSEligibleShares(db *bolt.DB, min []byte, max []byte) ([]*Share, error) {
 func PPLNSEligibleShares(db *bolt.DB, min []byte) ([]*Share, error) {
 	eligibleShares := make([]*Share, 0)
 	err := db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.ShareBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.ShareBkt)
+		bkt, err := fetchShareBucket(tx)
+		if err != nil {
+			return err
 		}
 
 		c := bkt.Cursor()
@@ -279,9 +233,9 @@ func PPLNSEligibleShares(db *bolt.DB, min []byte) ([]*Share, error) {
 	return eligibleShares, err
 }
 
-// CalculateSharePercentages calculates the percentages due each account according
+// sharePercentages calculates the percentages due each account according
 // to their weighted shares.
-func CalculateSharePercentages(shares []*Share) (map[string]*big.Rat, error) {
+func sharePercentages(shares []*Share) (map[string]*big.Rat, error) {
 	totalShares := new(big.Rat)
 	tally := make(map[string]*big.Rat)
 	dividends := make(map[string]*big.Rat)
@@ -300,8 +254,8 @@ func CalculateSharePercentages(shares []*Share) (map[string]*big.Rat, error) {
 
 	// Calculate each participating account to be claimed.
 	for account, shareCount := range tally {
-		if tally[account].Cmp(zeroRat) == 0 {
-			return nil, ErrDivideByZero()
+		if tally[account].Cmp(ZeroRat) == 0 {
+			return nil, MakeError(ErrDivideByZero, "division by zero", nil)
 		}
 
 		dividend := new(big.Rat).Quo(shareCount, totalShares)
@@ -312,7 +266,8 @@ func CalculateSharePercentages(shares []*Share) (map[string]*big.Rat, error) {
 }
 
 // CalculatePayments calculates the payments due participating accounts.
-func CalculatePayments(percentages map[string]*big.Rat, total dcrutil.Amount, poolFee float64, height uint32, estMaturity uint32) ([]*Payment, error) {
+func CalculatePayments(percentages map[string]*big.Rat, total dcrutil.Amount,
+	poolFee float64, height uint32, estMaturity uint32) ([]*Payment, error) {
 	// Deduct pool fee from the amount to be shared.
 	fee := total.MulF64(poolFee)
 	amtSansFees := total - fee
@@ -326,22 +281,18 @@ func CalculatePayments(percentages map[string]*big.Rat, total dcrutil.Amount, po
 	}
 
 	// Add a payout entry for pool fees.
-	payments = append(payments, NewPayment(PoolFeesK, fee, height, estMaturity))
+	payments = append(payments, NewPayment(poolFeesK, fee, height, estMaturity))
 
 	return payments, nil
 }
 
 // PruneShares removes invalidated shares from the db.
 func PruneShares(db *bolt.DB, minNano int64) error {
-	minBytes := util.NanoToBigEndianBytes(minNano)
+	minBytes := nanoToBigEndianBytes(minNano)
 	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.ShareBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.ShareBkt)
+		bkt, err := fetchShareBucket(tx)
+		if err != nil {
+			return err
 		}
 
 		toDelete := [][]byte{}
@@ -363,4 +314,77 @@ func PruneShares(db *bolt.DB, minNano int64) error {
 	})
 
 	return err
+}
+
+// PPLNSSharePercentages computes the current mining reward percentages
+// due pool accounts based on work performed measured by the PPS payment scheme.
+func PPSSharePercentages(db *bolt.DB, poolFee float64, height uint32) (map[string]*big.Rat, error) {
+	now := time.Now()
+	nowNano := nanoToBigEndianBytes(now.UnixNano())
+
+	// Fetch the last payment created time.
+	var lastPaymentTimeNano []byte
+	err := db.View(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(poolBkt)
+		if pbkt == nil {
+			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+			return MakeError(ErrBucketNotFound, desc, nil)
+		}
+
+		v := pbkt.Get(lastPaymentCreatedOn)
+		lastPaymentTimeNano = v
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch all eligible shares for payment calculations.
+	shares, err := PPSEligibleShares(db, lastPaymentTimeNano, nowNano)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(shares) == 0 {
+		return make(map[string]*big.Rat), nil
+	}
+
+	// Deduct pool fees and calculate the payment due each participating
+	// account.
+	percentages, err := sharePercentages(shares)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Tracef("Share PPS percentages are: %v", spew.Sdump(percentages))
+	return percentages, nil
+}
+
+// PPLNSSharePercentages computes the current mining reward percentages due pool
+// accounts based on work performed measured by the PPLNS payment scheme.
+func PPLNSSharePercentages(db *bolt.DB, poolFee float64, height uint32, periodSecs uint32) (map[string]*big.Rat, error) {
+	now := time.Now()
+	min := now.Add(-(time.Second * time.Duration(periodSecs)))
+	minNano := nanoToBigEndianBytes(min.UnixNano())
+
+	// Fetch all eligible shares within the specified period.
+	shares, err := PPLNSEligibleShares(db, minNano)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(shares) == 0 {
+		return make(map[string]*big.Rat), nil
+	}
+
+	// Deduct pool fees and calculate the payment due each participating
+	// account.
+	percentages, err := sharePercentages(shares)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Tracef("Share PPLNS percentages are: %v", spew.Sdump(percentages))
+	return percentages, nil
 }
