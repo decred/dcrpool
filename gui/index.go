@@ -6,14 +6,13 @@ import (
 	"net/http"
 
 	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrpool/dividend"
-	"github.com/decred/dcrpool/network"
+	"github.com/decred/dcrpool/pool"
 )
 
 type indexData struct {
-	PoolStats        *network.PoolStats
+	PoolStats        *pool.Stats
 	PoolDomain       string
-	WorkQuotas       []network.Quota
+	WorkQuotas       []pool.Quota
 	PoolHashRate     *big.Rat
 	SoloPool         bool
 	PaymentMethod    string
@@ -30,14 +29,14 @@ type indexData struct {
 // AccountStats is a snapshot of an accounts contribution to the pool. This
 // comprises of blocks mined by the pool and payments made to the account.
 type AccountStats struct {
-	MinedWork []*network.AcceptedWork
-	Payments  []*dividend.Payment
-	Clients   []*network.ClientInfo
+	MinedWork []*pool.AcceptedWork
+	Payments  []*pool.Payment
+	Clients   []*pool.ClientInfo
 	AccountID string
 }
 
 func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
-	poolStats, err := ui.hub.FetchPoolStats()
+	poolStats, err := ui.hub.FetchStats()
 	if err != nil {
 		log.Error(err)
 		http.Error(w, "FetchPoolStats error: "+err.Error(), http.StatusInternalServerError)
@@ -56,7 +55,8 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	workQuotas, err := ui.hub.FetchWorkQuotas()
 	if err != nil {
 		log.Error(err)
-		http.Error(w, "FetchWorkQuotas error: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "FetchWorkQuotas error: "+err.Error(),
+			http.StatusInternalServerError)
 		return
 	}
 
@@ -100,14 +100,14 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure address is on the active network.
+	// Ensure address is on the active pool.
 	if !addr.IsForNet(ui.cfg.ActiveNet) {
 		data.Error = fmt.Sprintf("Invalid %s addresss", ui.cfg.ActiveNet.Name)
 		ui.renderTemplate(w, r, "index", data)
 		return
 	}
 
-	accountID := *dividend.AccountID(address)
+	accountID := *pool.AccountID(address)
 	if !ui.hub.AccountExists(accountID) {
 		data.Error = fmt.Sprintf("Nothing found for address %s", address)
 		ui.renderTemplate(w, r, "index", data)
