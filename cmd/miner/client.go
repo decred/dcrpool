@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Decred developers
+// Copyright (c) 2019 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/decred/dcrpool/dividend"
-	"github.com/decred/dcrpool/network"
+
+	"github.com/decred/dcrpool/pool"
 )
 
 // Work represents the data received from a work notification. It comprises of
@@ -80,7 +80,7 @@ func (m *Miner) nextID() uint64 {
 // authenticate sends a stratum miner authentication message.
 func (m *Miner) authenticate() error {
 	id := m.nextID()
-	req := network.AuthorizeRequest(&id, m.config.User, m.config.Address)
+	req := pool.AuthorizeRequest(&id, m.config.User, m.config.Address)
 	err := m.encoder.Encode(req)
 	if err != nil {
 		return err
@@ -94,7 +94,7 @@ func (m *Miner) authenticate() error {
 // subscribe sends a stratum miner subscribe message.
 func (m *Miner) subscribe() error {
 	id := m.nextID()
-	req := network.SubscribeRequest(&id, "cpuminer", version(), m.notifyID)
+	req := pool.SubscribeRequest(&id, "cpuminer", version(), m.notifyID)
 	err := m.encoder.Encode(req)
 	if err != nil {
 		return err
@@ -229,7 +229,7 @@ func (m *Miner) process(ctx context.Context) {
 			return
 
 		case data := <-m.readCh:
-			msg, reqType, err := network.IdentifyMessage(data)
+			msg, reqType, err := pool.IdentifyMessage(data)
 			if err != nil {
 				log.Errorf("Message identification error: %v", err)
 				m.cancel()
@@ -237,15 +237,15 @@ func (m *Miner) process(ctx context.Context) {
 			}
 
 			switch reqType {
-			case network.RequestType:
-				req := msg.(*network.Request)
+			case pool.RequestType:
+				req := msg.(*pool.Request)
 				switch req.Method {
 				// Process requests from the mining pool. There are none
 				// expected currently.
 				}
 
-			case network.ResponseType:
-				resp := msg.(*network.Response)
+			case pool.ResponseType:
+				resp := msg.(*pool.Response)
 				method := m.fetchRequest(resp.ID)
 				if method == "" {
 					log.Error("No request found for response with id: ", resp.ID,
@@ -255,8 +255,8 @@ func (m *Miner) process(ctx context.Context) {
 				}
 
 				switch method {
-				case network.Authorize:
-					status, errStr, err := network.ParseAuthorizeResponse(resp)
+				case pool.Authorize:
+					status, errStr, err := pool.ParseAuthorizeResponse(resp)
 					if err != nil {
 						log.Errorf("Parse authorize response error: %v", err)
 						m.cancel()
@@ -278,9 +278,9 @@ func (m *Miner) process(ctx context.Context) {
 					m.authorized = true
 					log.Trace("Miner successfully authorized")
 
-				case network.Subscribe:
+				case pool.Subscribe:
 					diffID, notifyID, extraNonce1E, extraNonce2Size, err :=
-						network.ParseSubscribeResponse(resp)
+						pool.ParseSubscribeResponse(resp)
 					if err != nil {
 						log.Errorf("Parse subscribe response error: %v", err)
 						m.cancel()
@@ -295,8 +295,8 @@ func (m *Miner) process(ctx context.Context) {
 					m.notifyID = notifyID
 					m.subscribed = true
 
-				case network.Submit:
-					accepted, sErr, err := network.ParseSubmitWorkResponse(resp)
+				case pool.Submit:
+					accepted, sErr, err := pool.ParseSubmitWorkResponse(resp)
 					if err != nil {
 						log.Errorf("Parse submit response error: %v", err)
 						m.cancel()
@@ -315,11 +315,11 @@ func (m *Miner) process(ctx context.Context) {
 					log.Errorf("Unknown request method for response: %s", method)
 				}
 
-			case network.NotificationType:
-				notif := msg.(*network.Request)
+			case pool.NotificationType:
+				notif := msg.(*pool.Request)
 				switch notif.Method {
-				case network.SetDifficulty:
-					difficulty, err := network.ParseSetDifficultyNotification(notif)
+				case pool.SetDifficulty:
+					difficulty, err := pool.ParseSetDifficultyNotification(notif)
 					if err != nil {
 						log.Errorf("Parse set difficulty response error: %v", err)
 						m.cancel()
@@ -329,7 +329,7 @@ func (m *Miner) process(ctx context.Context) {
 					log.Tracef("Difficulty is %v", difficulty)
 
 					diff := new(big.Int).SetUint64(difficulty)
-					target, err := dividend.DifficultyToTarget(m.config.net, diff)
+					target, err := pool.DifficultyToTarget(m.config.net, diff)
 					if err != nil {
 						log.Errorf("Difficulty to target conversion error: %v", err)
 						m.cancel()
@@ -342,7 +342,7 @@ func (m *Miner) process(ctx context.Context) {
 					m.work.target = target
 					m.workMtx.Unlock()
 
-				case network.Notify:
+				case pool.Notify:
 					// Do not process work notifications if the miner is not
 					// authorized or subscribed.
 					if !m.authorized || !m.subscribed {
@@ -350,14 +350,14 @@ func (m *Miner) process(ctx context.Context) {
 					}
 
 					jobID, prevBlockE, genTx1E, genTx2E, blockVersionE, _, _, _, err :=
-						network.ParseWorkNotification(notif)
+						pool.ParseWorkNotification(notif)
 					if err != nil {
 						log.Errorf("Parse job notification error: %v", err)
 						m.cancel()
 						continue
 					}
 
-					blockHeader, err := network.GenerateBlockHeader(blockVersionE,
+					blockHeader, err := pool.GenerateBlockHeader(blockVersionE,
 						prevBlockE, genTx1E, m.extraNonce1E, genTx2E)
 					if err != nil {
 						log.Errorf("Generate block header error: %v", err)

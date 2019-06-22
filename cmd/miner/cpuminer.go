@@ -18,7 +18,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/blockchain"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrpool/network"
+	"github.com/decred/dcrpool/pool"
 )
 
 const (
@@ -46,7 +46,7 @@ type CPUMiner struct {
 	rateCh       chan float64
 	updateHashes chan uint64
 	workData     *SubmitWorkData
-	workCh       chan *network.Request
+	workCh       chan *pool.Request
 }
 
 // hashRateMonitor tracks number of hashes per second the mining process is
@@ -184,7 +184,7 @@ func (m *CPUMiner) solve(ctx context.Context) {
 			worker := fmt.Sprintf("%s.%s", m.miner.config.Address,
 				m.miner.config.User)
 			id := m.miner.nextID()
-			req := network.SubmitWorkRequest(&id, worker, jobID,
+			req := pool.SubmitWorkRequest(&id, worker, jobID,
 				m.workData.extraNonce2, m.workData.nTime, m.workData.nonce)
 			m.workCh <- req
 		}
@@ -204,7 +204,7 @@ func (m *CPUMiner) generateBlocks(ctx context.Context) {
 			return
 
 		case work := <-m.workCh:
-			m.miner.recordRequest(*work.ID, network.Submit)
+			m.miner.recordRequest(*work.ID, pool.Submit)
 			err := m.miner.encoder.Encode(work)
 			if err != nil {
 				if err == io.EOF {
@@ -240,6 +240,6 @@ func NewCPUMiner(m *Miner) *CPUMiner {
 		updateHashes: make(chan uint64),
 		workData:     new(SubmitWorkData),
 		miner:        m,
-		workCh:       make(chan *network.Request),
+		workCh:       make(chan *pool.Request),
 	}
 }
