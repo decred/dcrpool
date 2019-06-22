@@ -2,10 +2,11 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package network
+package pool
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -23,9 +24,6 @@ import (
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrpool/database"
-	"github.com/decred/dcrpool/dividend"
-	"github.com/decred/dcrpool/util"
 )
 
 const (
@@ -33,6 +31,42 @@ const (
 	// allowed, in bytes.
 	MaxMessageSize = 250
 )
+
+var (
+	// ZeroInt is the default value for a big.Int.
+	ZeroInt = new(big.Int).SetInt64(0)
+
+	// ZeroRat is the default value for a big.Rat.
+	ZeroRat = new(big.Rat).SetInt64(0)
+)
+
+// hexReversed reverses a hex string.
+func hexReversed(in string) (string, error) {
+	if len(in)%2 != 0 {
+		desc := fmt.Sprintf("expected even hex input length, got %d", len(in))
+		return "", MakeError(ErrWrongInputLength, desc, nil)
+	}
+
+	buf := bytes.NewBufferString("")
+	for i := len(in) - 1; i > -1; i -= 2 {
+		buf.WriteByte(in[i-1])
+		buf.WriteByte(in[i])
+	}
+	return buf.String(), nil
+}
+
+// reversePrevBlockWords reverses each 4-byte word in the provided hex encoded
+// previous block hash.
+func reversePrevBlockWords(hashE string) string {
+	buf := bytes.NewBufferString("")
+	for i := 0; i < len(hashE); i += 8 {
+		buf.WriteString(hashE[i+6 : i+8])
+		buf.WriteString(hashE[i+4 : i+6])
+		buf.WriteString(hashE[i+2 : i+4])
+		buf.WriteString(hashE[i : i+2])
+	}
+	return buf.String()
+}
 
 // Client represents a client connection.
 type Client struct {
@@ -58,6 +92,14 @@ type Client struct {
 	wg                 sync.WaitGroup
 }
 
+// generateExtraNonce1 generates a random 4-byte extraNonce1 for the
+// client.
+func (c *Client) generateExtraNonce1() {
+	id := make([]byte, 4)
+	rand.Read(id)
+	c.extraNonce1 = hex.EncodeToString(id)
+}
+
 // NewClient creates client connection instance.
 func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
 	ctx, cancel := context.WithCancel(context.TODO())
@@ -71,11 +113,11 @@ func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
 		encoder:            json.NewEncoder(conn),
 		reader:             bufio.NewReaderSize(conn, MaxMessageSize),
 		ip:                 ip,
-		lastSubmissionTime: util.ZeroInt,
-		hashRate:           util.ZeroRat,
+		lastSubmissionTime: ZeroInt,
+		hashRate:           ZeroRat,
 	}
 
-	c.GenerateExtraNonce1()
+	c.generateExtraNonce1()
 
 	return c
 }
@@ -85,16 +127,8 @@ func (c *Client) generateID() string {
 	return fmt.Sprintf("%v/%v", c.extraNonce1, c.endpoint.miner)
 }
 
-// GenerateExtraNonce1 generates a random 4-byte extraNonce1 for the
-// client.
-func (c *Client) GenerateExtraNonce1() {
-	id := make([]byte, 4)
-	rand.Read(id)
-	c.extraNonce1 = hex.EncodeToString(id)
-}
-
-// fetchRequest fetches the method of the recorded request id.
-func (c *Client) fetchRequest(id uint64) string {
+// fetchStratumMethod fetches the method of the associated request.
+func (c *Client) fetchStratumMethod(id uint64) string {
 	c.reqMtx.RLock()
 	method := c.req[id]
 	c.reqMtx.RUnlock()
@@ -107,7 +141,7 @@ func (c *Client) shutdown() {
 	close(c.ch)
 	close(c.readCh)
 	c.endpoint.hub.limiter.RemoveLimiter(c.ip)
-	c.endpoint.RemoveClient(c)
+	c.endpoint.removeClient(c)
 	log.Tracef("Connection to (%v) terminated.", c.generateID())
 }
 
@@ -115,7 +149,7 @@ func (c *Client) shutdown() {
 // from the miner.
 func (c *Client) calculateHashRate() error {
 	now := new(big.Int).SetInt64(time.Now().Unix())
-	if c.lastSubmissionTime.Cmp(util.ZeroInt) == 0 {
+	if c.lastSubmissionTime.Cmp(ZeroInt) == 0 {
 		c.lastSubmissionTime = now
 		return nil
 	}
@@ -123,10 +157,10 @@ func (c *Client) calculateHashRate() error {
 	expectedShareTime := new(big.Int).Add(c.lastSubmissionTime,
 		c.endpoint.hub.cfg.MaxGenTime)
 	diff := new(big.Rat).SetFrac(now, expectedShareTime)
-	hash := dividend.MinerHashes[c.endpoint.miner]
+	hash := minerHashes[c.endpoint.miner]
 	if hash == nil {
-		return fmt.Errorf("miner hash not found for key (%s)",
-			c.endpoint.miner)
+		desc := fmt.Sprintf("miner hash not found for %s", c.endpoint.miner)
+		return MakeError(ErrValueNotFound, desc, nil)
 	}
 
 	c.lastSubmissionTime = now
@@ -143,19 +177,19 @@ func (c *Client) calculateHashRate() error {
 // updates the hash rate of the miner based on the last submitted share time.
 func (c *Client) claimWeightedShare() error {
 	if c.endpoint.hub.cfg.ActiveNet.Name == chaincfg.MainNetParams.Name &&
-		c.endpoint.miner == dividend.CPU {
+		c.endpoint.miner == CPU {
 		log.Error("CPU miners are reserved for only simnet testing purposes")
 		return nil
 	}
 
-	weight := dividend.ShareWeights[c.endpoint.miner]
-	share := dividend.NewShare(c.account, weight)
+	weight := ShareWeights[c.endpoint.miner]
+	share := NewShare(c.account, weight)
 	err := share.Create(c.endpoint.hub.db)
 	if err != nil {
 		return err
 	}
 
-	log.Tracef("Weighted share of (%v) for pool client (%v) claimed",
+	log.Tracef("Weighted share of %v for pool client %v claimed",
 		weight, c.generateID())
 	return nil
 }
@@ -170,9 +204,9 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 		return
 	}
 
-	// The client's username is expected to be of the format address.clientname
+	// The client's username is expected to be of the format address.clientid
 	// when in pool mining mode. For solo pool mode the username expected is
-	// just the client's name.
+	// just the client's id.
 	username, err := ParseAuthorizeRequest(req)
 	if err != nil {
 		log.Errorf("unable to parse authorize request: %v", err)
@@ -185,8 +219,8 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	if !c.endpoint.hub.cfg.SoloPool {
 		parts := strings.Split(username, ".")
 		if len(parts) != 2 {
-			log.Errorf("Invalid username format, expected `address.id`,got %v",
-				username)
+			log.Errorf("Invalid username format, expected `address.clientid`,"+
+				"got %v", username)
 			err := NewStratumError(Unknown, nil)
 			resp := AuthorizeResponse(*req.ID, false, err)
 			c.ch <- resp
@@ -208,27 +242,28 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 		}
 
 		if !addr.IsForNet(c.endpoint.hub.cfg.ActiveNet) {
-			log.Errorf("Address (%v) is not associated with the active network"+
-				" (%v)", address, c.endpoint.hub.cfg.ActiveNet.Name)
+			log.Errorf("Address %s is not associated with the active "+
+				"network %s", address, c.endpoint.hub.cfg.ActiveNet.Name)
 			err := NewStratumError(Unknown, nil)
 			resp := AuthorizeResponse(*req.ID, false, err)
 			c.ch <- resp
 			return
 		}
 
-		id := dividend.AccountID(address)
-		_, err = dividend.FetchAccount(c.endpoint.hub.db, []byte(*id))
-		if err != nil && err.Error() !=
-			database.ErrValueNotFound([]byte(*id)).Error() {
-			log.Errorf("unable to fetch account: %v", err)
-			err := NewStratumError(Unknown, nil)
-			resp := AuthorizeResponse(*req.ID, false, err)
-			c.ch <- resp
-			return
+		id := AccountID(address)
+		_, err = FetchAccount(c.endpoint.hub.db, []byte(*id))
+		if err != nil {
+			if !IsError(err, ErrValueNotFound) {
+				log.Errorf("unable to fetch account: %v", err)
+				err := NewStratumError(Unknown, nil)
+				resp := AuthorizeResponse(*req.ID, false, err)
+				c.ch <- resp
+				return
+			}
 		}
 
 		// Create the account if it does not already exist.
-		account, err := dividend.NewAccount(address)
+		account, err := NewAccount(address)
 		if err != nil {
 			log.Errorf("unable to create account: %v", err)
 			err := NewStratumError(Unknown, nil)
@@ -284,7 +319,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 
 	var resp *Response
 	switch c.endpoint.miner {
-	case dividend.AntminerDR3, dividend.AntminerDR5:
+	case AntminerDR3, AntminerDR5:
 		// The DR5 and DR3 are not fully complaint with the stratum spec.
 		// They use an 8-byte extraNonce2 regardless of the
 		// extraNonce2Size provided.
@@ -298,7 +333,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 		resp = SubscribeResponse(*req.ID, nid, paddedExtraNonce1, 8, nil)
 		log.Tracef("Subscribe response is: %v", spew.Sdump(resp))
 
-	case dividend.WhatsminerD1:
+	case WhatsminerD1:
 		// The D1 is not fully complaint with the stratum spec.
 		// It uses a 4-byte extraNonce2 regardless of the
 		// extraNonce2Size provided.
@@ -340,7 +375,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		return
 	}
 
-	log.Tracef("Received work submission from (%v) is %v",
+	log.Tracef("Received work submission from %s is: %v",
 		c.generateID(), spew.Sdump(req))
 
 	_, jobID, extraNonce2E, nTimeE, nonceE, err := ParseSubmitWorkRequest(req,
@@ -372,24 +407,36 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		return
 	}
 
-	log.Tracef("Submitted work from (%v) is %v", c.generateID(),
+	log.Tracef("Submitted work from %s is: %v", c.generateID(),
 		spew.Sdump(header))
-	log.Infof("Submited work hash at height (%v) is (%v)", header.Height,
+	log.Infof("Submited work hash at height #%v is %s", header.Height,
 		header.BlockHash().String())
 
 	poolTarget := c.endpoint.diffData.target
 	target := blockchain.CompactToBig(header.Bits)
+
+	// The target difficulty must be larger than zero.
+	if target.Sign() <= 0 {
+		log.Errorf("block target difficulty of %064x is too "+
+			"low", target)
+		err := NewStratumError(Unknown, nil)
+		resp := SubmitWorkResponse(*req.ID, false, err)
+		c.ch <- resp
+		return
+	}
+
 	hash := header.BlockHash()
 	hashNum := blockchain.HashToBig(&hash)
 
+	log.Tracef("target is: %v", target)
 	log.Tracef("pool target is: %v", poolTarget)
 	log.Tracef("hash target is: %v", hashNum)
 
 	// Only submit work to the network if the submitted blockhash is
-	// below the pool target for the client.
+	// less than the pool target for the client.
 	if hashNum.Cmp(poolTarget) > 0 {
-		log.Errorf("submitted work from (%v) is not less than its"+
-			" corresponding pool target", c.generateID())
+		log.Errorf("submitted work from %s is not less than its "+
+			"corresponding pool target", c.generateID())
 		err := NewStratumError(LowDifficultyShare, nil)
 		resp := SubmitWorkResponse(*req.ID, false, err)
 		c.ch <- resp
@@ -399,8 +446,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	// Calculate the hash rate of the client.
 	err = c.calculateHashRate()
 	if err != nil {
-		log.Errorf("unable to calculate hash rate of (%v): %v",
-			c.generateID(), err)
+		log.Errorf("unable to calculate hash rate of %s: %v", c.generateID(), err)
 	}
 
 	// Claim a weighted share for work contributed to the pool if not mining
@@ -408,7 +454,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	if !c.endpoint.hub.cfg.SoloPool {
 		err := c.claimWeightedShare()
 		if err != nil {
-			log.Errorf("failed to persist weighted share for (%v): %v",
+			log.Errorf("failed to persist weighted share for %v: %v",
 				c.generateID(), err)
 			err := NewStratumError(Unknown, nil)
 			resp := SubmitWorkResponse(*req.ID, false, err)
@@ -418,67 +464,70 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	}
 
 	// Only submit work to the network if the submitted blockhash is
-	// below the network target difficulty.
+	// less than the network target difficulty.
 	if hashNum.Cmp(target) > 0 {
-		log.Tracef("submitted work from (%v) is not less than the"+
-			" network target difficulty", c.generateID())
+		log.Tracef("submitted work from %s is not less than the "+
+			"network target difficulty", c.generateID())
 		resp := SubmitWorkResponse(*req.ID, true, nil)
 		c.ch <- resp
 		return
 	}
 
-	if hashNum.Cmp(target) < 0 {
-		// Generate and send the work submission.
-		headerB, err := header.Bytes()
+	// Generate and send the work submission.
+	headerB, err := header.Bytes()
+	if err != nil {
+		log.Errorf("unable to fetch block header bytes: %v", err)
+		err := NewStratumError(Unknown, nil)
+		resp := SubmitWorkResponse(*req.ID, false, err)
+		c.ch <- resp
+		return
+	}
+
+	submissionB := make([]byte, getworkDataLen)
+	copy(submissionB[:wire.MaxBlockHeaderPayload], headerB)
+	copy(submissionB[wire.MaxBlockHeaderPayload:],
+		c.endpoint.hub.blake256Pad)
+	submission := hex.EncodeToString(submissionB)
+	accepted, err := c.endpoint.hub.SubmitWork(&submission)
+	if err != nil {
+		log.Errorf("unable to submit work request: %v", err)
+		err := NewStratumError(Unknown, nil)
+		resp := SubmitWorkResponse(*req.ID, false, err)
+		c.ch <- resp
+		return
+	}
+
+	// Create accepted work if the work submission is accepted by the mining node.
+	if accepted {
+		work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
+			header.Height, c.account, c.endpoint.miner)
+		err := work.Create(c.endpoint.hub.db)
 		if err != nil {
-			log.Errorf("unable to fetch block header bytes: %v", err)
-			err := NewStratumError(Unknown, nil)
-			resp := SubmitWorkResponse(*req.ID, false, err)
-			c.ch <- resp
-			return
-		}
-
-		submissionB := make([]byte, getworkDataLen)
-		copy(submissionB[:wire.MaxBlockHeaderPayload], headerB)
-		copy(submissionB[wire.MaxBlockHeaderPayload:],
-			c.endpoint.hub.blake256Pad)
-		submission := hex.EncodeToString(submissionB)
-		accepted, err := c.endpoint.hub.SubmitWork(&submission)
-		if err != nil {
-			log.Errorf("unable to submit work request: %v", err)
-			err := NewStratumError(Unknown, nil)
-			resp := SubmitWorkResponse(*req.ID, false, err)
-			c.ch <- resp
-			return
-		}
-
-		log.Tracef("Work accepted status is: %v", accepted)
-		c.ch <- SubmitWorkResponse(*req.ID, accepted, nil)
-
-		// Create accepted if the work submission is accepted by the mining node.
-		if accepted {
-			work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
-				header.Height, c.account, c.endpoint.miner)
-			err := work.Create(c.endpoint.hub.db)
-			if err != nil {
-				// If the submitted accetped work already exists, ignore the
-				// submission.
-				if err.Error() ==
-					ErrWorkAlreadyExists([]byte(work.UUID)).Error() {
-					log.Tracef("Work already exists, ignoring.")
-					err := NewStratumError(DuplicateShare, nil)
-					resp := SubmitWorkResponse(*req.ID, false, err)
-					c.ch <- resp
-					return
-				}
-
-				log.Errorf("unable to persist accepted work: %v", err)
-				err := NewStratumError(Unknown, nil)
+			// If the submitted accetped work already exists, ignore the
+			// submission.
+			if IsError(err, ErrWorkExists) {
+				log.Tracef("Work already exists, ignoring.")
+				err := NewStratumError(DuplicateShare, nil)
 				resp := SubmitWorkResponse(*req.ID, false, err)
 				c.ch <- resp
 				return
 			}
+
+			log.Errorf("unable to persist accepted work: %v", err)
+			err := NewStratumError(Unknown, nil)
+			resp := SubmitWorkResponse(*req.ID, false, err)
+			c.ch <- resp
+			return
 		}
+
+		log.Tracef("Work accepted by the network")
+		return
+	}
+
+	if !accepted {
+		log.Tracef("Work rejected by the network")
+		c.ch <- SubmitWorkResponse(*req.ID, false, nil)
+		return
 	}
 }
 
@@ -498,9 +547,9 @@ func (c *Client) read() {
 				if nErr.Op == "read" && nErr.Net == "tcp" {
 					switch {
 					case nErr.Timeout():
-						log.Errorf("%v: read timeout: %v", c.generateID(), err)
+						log.Errorf("%v: read timeout: %s", c.generateID(), err)
 					case !nErr.Timeout():
-						log.Errorf("%v: read error: %v", c.generateID(), err)
+						log.Errorf("%v: read error: %s", c.generateID(), err)
 					}
 
 					c.cancel()
@@ -513,7 +562,7 @@ func (c *Client) read() {
 			return
 		}
 
-		log.Tracef("Message received from (%v) is %v", c.generateID(),
+		log.Tracef("Message received from %s is: %v", c.generateID(),
 			spew.Sdump(data))
 
 		c.readCh <- data
@@ -523,12 +572,9 @@ func (c *Client) read() {
 // process  handles incoming messages from the connected pool client.
 // It must be run as a goroutine.
 func (c *Client) process(ctx context.Context) {
-	log.Tracef("Listener for (%v) started.", c.generateID())
-
 	for {
 		select {
 		case <-ctx.Done():
-			log.Tracef("Listener for (%v) done.", c.generateID())
 			c.wg.Done()
 			return
 
@@ -563,10 +609,10 @@ func (c *Client) process(ctx context.Context) {
 
 			case ResponseType:
 				resp := msg.(*Response)
-				method := c.fetchRequest(resp.ID)
+				method := c.fetchStratumMethod(resp.ID)
 				if method == "" {
-					log.Errorf("no request found for response with id: ", resp.ID,
-						spew.Sdump(resp))
+					log.Errorf("no request found for response with id: %d",
+						resp.ID, spew.Sdump(resp))
 					c.cancel()
 					continue
 				}
@@ -590,21 +636,21 @@ func (c *Client) handleAntminerDR3Work(req *Request) {
 
 	// The DR3 requires the nBits and nTime fields of a mining.notify message
 	// as big endian.
-	nBits, err = util.HexReversed(nBits)
+	nBits, err = hexReversed(nBits)
 	if err != nil {
 		log.Errorf("unable to hex reverse nBits: %v", err)
 		c.cancel()
 		return
 	}
 
-	nTime, err = util.HexReversed(nTime)
+	nTime, err = hexReversed(nTime)
 	if err != nil {
 		log.Errorf("unable to hex reverse nTime: %v", err)
 		c.cancel()
 		return
 	}
 
-	prevBlockRev := util.ReversePrevBlockWords(prevBlock)
+	prevBlockRev := reversePrevBlockWords(prevBlock)
 	workNotif := WorkNotification(jobID, prevBlockRev,
 		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
 
@@ -628,21 +674,21 @@ func (c *Client) handleInnosiliconD9Work(req *Request) {
 
 	// The D9 requires the nBits and nTime fields of a mining.notify message
 	// as big endian.
-	nBits, err = util.HexReversed(nBits)
+	nBits, err = hexReversed(nBits)
 	if err != nil {
 		log.Errorf("unable to hex reverse nBits: %v", err)
 		c.cancel()
 		return
 	}
 
-	nTime, err = util.HexReversed(nTime)
+	nTime, err = hexReversed(nTime)
 	if err != nil {
 		log.Errorf("unable to hex reverse nTime: %v", err)
 		c.cancel()
 		return
 	}
 
-	prevBlockRev := util.ReversePrevBlockWords(prevBlock)
+	prevBlockRev := reversePrevBlockWords(prevBlock)
 	workNotif := WorkNotification(jobID, prevBlockRev,
 		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
 
@@ -668,7 +714,7 @@ func (c *Client) handleWhatsminerD1Work(req *Request) {
 	// as little endian. Since they're already in the preferred format there
 	// is no need to reverse bytes for nBits and nTime.
 
-	prevBlockRev := util.ReversePrevBlockWords(prevBlock)
+	prevBlockRev := reversePrevBlockWords(prevBlock)
 	workNotif := WorkNotification(jobID, prevBlockRev,
 		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
 
@@ -684,12 +730,9 @@ func (c *Client) handleWhatsminerD1Work(req *Request) {
 
 // Send dispatches messages to a pool client. It must be run as a goroutine.
 func (c *Client) send(ctx context.Context) {
-	log.Tracef("Send handler for (%v) started.", c.generateID())
-
 	for {
 		select {
 		case <-ctx.Done():
-			log.Tracef("Send handler for (%v) done.", c.generateID())
 			c.wg.Done()
 			return
 
@@ -698,7 +741,7 @@ func (c *Client) send(ctx context.Context) {
 				continue
 			}
 
-			log.Tracef("Message sent to (%v) is %v", c.generateID(),
+			log.Tracef("Message sent to %s is: %v", c.generateID(),
 				spew.Sdump(msg))
 
 			if msg.MessageType() == ResponseType {
@@ -721,7 +764,7 @@ func (c *Client) send(ctx context.Context) {
 					}
 
 					switch c.endpoint.miner {
-					case dividend.CPU:
+					case CPU:
 						err := c.encoder.Encode(msg)
 						if err != nil {
 							log.Errorf("Message encoding error: %v", err)
@@ -729,22 +772,23 @@ func (c *Client) send(ctx context.Context) {
 							continue
 						}
 
-						log.Tracef("Client (%v) notified of new work", id)
+						log.Tracef("%s notified of new work", id)
 
-					case dividend.AntminerDR3, dividend.AntminerDR5:
+					case AntminerDR3, AntminerDR5:
 						c.handleAntminerDR3Work(req)
-						log.Tracef("Client (%v) notified of new work", id)
+						log.Tracef("%s notified of new work", id)
 
-					case dividend.InnosiliconD9:
+					case InnosiliconD9:
 						c.handleInnosiliconD9Work(req)
-						log.Tracef("Client (%v) notified of new work", id)
+						log.Tracef("%s notified of new work", id)
 
-					case dividend.WhatsminerD1:
+					case WhatsminerD1:
+
 						c.handleWhatsminerD1Work(req)
-						log.Tracef("Client (%v) notified of new work", id)
+						log.Tracef("%s notified of new work", id)
 
 					default:
-						log.Errorf("unknown miner provided to receive work: %v",
+						log.Errorf("unknown miner provided to receive work: %s",
 							c.endpoint.miner)
 						c.cancel()
 						continue

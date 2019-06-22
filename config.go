@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Decred developers
+// Copyright (c) 2019 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -20,9 +21,9 @@ import (
 	"github.com/decred/dcrd/certgen"
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrpool/dividend"
-	"github.com/decred/dcrpool/util"
 	"github.com/decred/slog"
+
+	"github.com/decred/dcrpool/pool"
 )
 
 const (
@@ -54,7 +55,7 @@ const (
 
 var (
 	defaultActiveNet     = chaincfg.SimNetParams.Name
-	defaultPaymentMethod = dividend.PPS
+	defaultPaymentMethod = pool.PPS
 	defaultMinPayment    = 0.2
 	dcrpoolHomeDir       = dcrutil.AppDataDir("dcrpool", false)
 	dcrwalletHomeDir     = dcrutil.AppDataDir("dcrwallet", false)
@@ -226,6 +227,60 @@ func newConfigParser(cfg *config, so *serviceOptions, options flags.Options) *fl
 	return parser
 }
 
+// CleanAndExpandPath expands environment variables and leading ~ in the
+// passed path, cleans the result, and returns it.
+func CleanAndExpandPath(path string) string {
+	// Nothing to do when no path is given.
+	if path == "" {
+		return path
+	}
+
+	// NOTE: The os.ExpandEnv doesn't work with Windows cmd.exe-style
+	// %VARIABLE%, but the variables can still be expanded via POSIX-style
+	// $VARIABLE.
+	path = os.ExpandEnv(path)
+
+	if !strings.HasPrefix(path, "~") {
+		return filepath.Clean(path)
+	}
+
+	// Expand initial ~ to the current user's home directory, or ~otheruser
+	// to otheruser's home directory.  On Windows, both forward and backward
+	// slashes can be used.
+	path = path[1:]
+
+	var pathSeparators string
+	if runtime.GOOS == "windows" {
+		pathSeparators = string(os.PathSeparator) + "/"
+	} else {
+		pathSeparators = string(os.PathSeparator)
+	}
+
+	userName := ""
+	if i := strings.IndexAny(path, pathSeparators); i != -1 {
+		userName = path[:i]
+		path = path[i:]
+	}
+
+	homeDir := ""
+	var u *user.User
+	var err error
+	if userName == "" {
+		u, err = user.Current()
+	} else {
+		u, err = user.Lookup(userName)
+	}
+	if err == nil {
+		homeDir = u.HomeDir
+	}
+	// Fallback to CWD if user lookup fails or user has no home directory.
+	if homeDir == "" {
+		homeDir = "."
+	}
+
+	return filepath.Join(homeDir, path)
+}
+
 // loadConfig initializes and parses the config using a config file and command
 // line options.
 //
@@ -391,8 +446,8 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	cfg.DataDir = util.CleanAndExpandPath(cfg.DataDir)
-	cfg.LogDir = util.CleanAndExpandPath(cfg.LogDir)
+	cfg.DataDir = CleanAndExpandPath(cfg.DataDir)
+	cfg.LogDir = CleanAndExpandPath(cfg.LogDir)
 	logRotator = nil
 
 	// Initialize log rotation.  After log rotation has been initialized, the
@@ -447,9 +502,9 @@ func loadConfig() (*config, []string, error) {
 
 	if !cfg.SoloPool {
 		// Ensure a valid payment method is set.
-		if cfg.PaymentMethod != dividend.PPS && cfg.PaymentMethod != dividend.PPLNS {
+		if cfg.PaymentMethod != pool.PPS && cfg.PaymentMethod != pool.PPLNS {
 			str := "%s: paymentmethod must be either %s or %s"
-			err := fmt.Errorf(str, funcName, dividend.PPS, dividend.PPLNS)
+			err := fmt.Errorf(str, funcName, pool.PPS, pool.PPLNS)
 			return nil, nil, err
 		}
 
@@ -463,7 +518,7 @@ func loadConfig() (*config, []string, error) {
 				return nil, nil, err
 			}
 
-			// Ensure pool fee address is valid and on the active network.
+			// Ensure pool fee address is valid and on the active pool.
 			if !addr.IsForNet(cfg.net) {
 				return nil, nil,
 					fmt.Errorf("pool fee address (%v) not on the active network "+
@@ -478,7 +533,7 @@ func loadConfig() (*config, []string, error) {
 	// done. This prevents the warning on help messages and invalid
 	// options. Note this should go directly before the return.
 	if configFileError != nil {
-		pLog.Warnf("%v", configFileError)
+		mpLog.Warnf("%v", configFileError)
 	}
 
 	// Ensure a domain is set if HTTPS via letsencrypt is preferred.

@@ -2,7 +2,7 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package dividend
+package pool
 
 import (
 	"math/big"
@@ -13,8 +13,6 @@ import (
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrpool/database"
-	"github.com/decred/dcrpool/util"
 )
 
 var (
@@ -36,17 +34,17 @@ var (
 func setupDB() (*bolt.DB, error) {
 	os.Remove(testDB)
 
-	db, err := database.OpenDB(testDB)
+	db, err := openDB(testDB)
 	if err != nil {
 		return nil, err
 	}
 
-	err = database.CreateBuckets(db)
+	err = createBuckets(db)
 	if err != nil {
 		return nil, err
 	}
 
-	err = database.Upgrade(db)
+	err = upgradeDB(db)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +62,7 @@ func setupDB() (*bolt.DB, error) {
 	return db, err
 }
 
-// teardownDB closes the connection to the db and deletes the file.
+// teardownDB closes the connection to the db and deletes the db file.
 func teardownDB(db *bolt.DB) error {
 	err := db.Close()
 	if err != nil {
@@ -149,8 +147,8 @@ func TestPPSEligibleShares(t *testing.T) {
 		t.Error(err)
 	}
 
-	minNanoBytes := util.NanoToBigEndianBytes(minNano)
-	nowNanoBytes := util.NanoToBigEndianBytes(now.UnixNano())
+	minNanoBytes := nanoToBigEndianBytes(minNano)
+	nowNanoBytes := nanoToBigEndianBytes(now.UnixNano())
 	shares, err := PPSEligibleShares(db, minNanoBytes, nowNanoBytes)
 	if err != nil {
 		t.Error(err)
@@ -224,7 +222,7 @@ func TestPPLNSEligibleShares(t *testing.T) {
 		t.Error(err)
 	}
 
-	minNanoBytes := util.NanoToBigEndianBytes(minNano)
+	minNanoBytes := nanoToBigEndianBytes(minNano)
 	shares, err := PPLNSEligibleShares(db, minNanoBytes)
 	if err != nil {
 		t.Error(err)
@@ -285,36 +283,41 @@ func TestCalculateDividend(t *testing.T) {
 				NewShare("e", new(big.Rat)),
 			},
 			output: nil,
-			err:    ErrDivideByZero(),
+			err:    MakeError(ErrDivideByZero, "division by zero", nil),
 		},
 	}
 
 	for name, test := range set {
-		actual, err := CalculateSharePercentages(test.input)
-
+		actual, err := sharePercentages(test.input)
 		if err != test.err {
-			errValue := ""
-			expectedValue := ""
+			var errCode ErrorCode
+			var expectedCode ErrorCode
 
 			if err != nil {
-				errValue = err.Error()
+				e, ok := err.(Error)
+				if ok {
+					errCode = e.ErrorCode
+				}
+
 			}
 
 			if test.err != nil {
-				expectedValue = test.err.Error()
+				e, ok := test.err.(Error)
+				if ok {
+					expectedCode = e.ErrorCode
+				}
 			}
 
-			if errValue != expectedValue {
-				t.Errorf("(%s): error generated was (%v), expected (%v).",
-					name, errValue, expectedValue)
+			if errCode.String() != expectedCode.String() {
+				t.Errorf("%s: error generated was %v, expected %v.",
+					name, errCode.String(), expectedCode.String())
 			}
 		}
 
 		for account, dividend := range test.output {
 			if actual[account].Cmp(dividend) != 0 {
-				t.Errorf("(%s): account (%v) dividend was (%v), "+
-					"expected (%v).", name, account, actual[account],
-					dividend)
+				t.Errorf("%s: account %v dividend was %v, "+
+					"expected %v.", name, account, actual[account], dividend)
 			}
 		}
 	}
@@ -347,12 +350,12 @@ func TestCalculatePoolTarget(t *testing.T) {
 
 		expected, success := new(big.Int).SetString(test.expected, 10)
 		if !success {
-			t.Errorf("Failed to parse (%v) as a big.Int", test.expected)
+			t.Errorf("failed to parse %v as a big.Int", test.expected)
 		}
 
 		if target.Cmp(expected) != 0 {
-			t.Errorf("For a hashrate of (%v) and a target time of (%v) the "+
-				"expected target is (%v), got (%v).", test.hashRate,
+			t.Errorf("for a hashrate of %v and a target time of %v the "+
+				"expected target is %v, got %v", test.hashRate,
 				test.targetTime, expected, target)
 		}
 	}
@@ -386,13 +389,9 @@ func TestBoltDBCursorDeletion(t *testing.T) {
 	}
 
 	err = db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.ShareBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.ShareBkt)
+		bkt, err := fetchShareBucket(tx)
+		if err != nil {
+			return err
 		}
 
 		c := bkt.Cursor()

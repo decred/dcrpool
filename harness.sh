@@ -292,7 +292,7 @@ echo "Starting dcrpool"
 sleep 4
 tmux new-window -t $SESSION:4 -n 'pool'
 tmux send-keys "cd ${NODES_ROOT}/pool" C-m
-tmux send-keys "dcrpool --configfile pool.conf --homedir=${NODES_ROOT}/pool" C-m
+tmux send-keys "dcrpool --configfile=pool.conf --homedir=${NODES_ROOT}/pool" C-m
 
 if [ "${NETWORK}" = "simnet" ]; then
 ################################################################################

@@ -2,9 +2,10 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package network
+package pool
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -12,20 +13,7 @@ import (
 	"time"
 
 	bolt "github.com/coreos/bbolt"
-	"github.com/decred/dcrpool/database"
-	"github.com/decred/dcrpool/util"
 )
-
-// ErrWorkAlreadyExists is returned when an already existing work is found for
-// the provided work id.
-func ErrWorkAlreadyExists(id []byte) error {
-	return fmt.Errorf("work '%v' already exists", string(id))
-}
-
-// ErrWorkNotFound is returned when no work is found for the provided work id.
-func ErrWorkNotFound(id []byte) error {
-	return fmt.Errorf("work '%v' not found", string(id))
-}
 
 // AcceptedWork represents an accepted work submission to the network.
 type AcceptedWork struct {
@@ -42,9 +30,23 @@ type AcceptedWork struct {
 	Confirmed bool `json:"confirmed"`
 }
 
+// heightToBigEndianBytes returns a 4-byte big endian representation of
+// the provided block height.
+func heightToBigEndianBytes(height uint32) []byte {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, height)
+	return b
+}
+
+// bigEndianBytesToHeight returns the block height of the provided 4-byte big
+// endian representation.
+func bigEndianBytesToHeight(b []byte) uint32 {
+	return binary.BigEndian.Uint32(b[0:4])
+}
+
 // AcceptedWorkID generates a unique id for the work accepted by the network.
 func AcceptedWorkID(blockHash string, blockHeight uint32) []byte {
-	heightE := hex.EncodeToString(util.HeightToBigEndianBytes(blockHeight))
+	heightE := hex.EncodeToString(heightToBigEndianBytes(blockHeight))
 	id := fmt.Sprintf("%v%v", heightE, blockHash)
 	return []byte(id)
 }
@@ -63,23 +65,38 @@ func NewAcceptedWork(blockHash string, prevHash string, height uint32, minedBy s
 	}
 }
 
+// fetchWorkBucket is a helper function for getting the work bucket.
+func fetchWorkBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+		return nil, MakeError(ErrBucketNotFound, desc, nil)
+	}
+	bkt := pbkt.Bucket(workBkt)
+	if bkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(workBkt))
+		return nil, MakeError(ErrBucketNotFound, desc, nil)
+	}
+
+	return bkt, nil
+}
+
 // FetchAcceptedWork fetches the accepted work referenced by the provided id.
 func FetchAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
 	var work AcceptedWork
 	err := db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
+		bkt, err := fetchWorkBucket(tx)
+		if err != nil {
+			return err
 		}
-		bkt := pbkt.Bucket(database.WorkBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.WorkBkt)
-		}
+
 		v := bkt.Get(id)
 		if v == nil {
-			return database.ErrValueNotFound(id)
+			desc := fmt.Sprintf("no value for key %s", string(id))
+			return MakeError(ErrValueNotFound, desc, nil)
 		}
-		err := json.Unmarshal(v, &work)
+
+		err = json.Unmarshal(v, &work)
 		return err
 	})
 	if err != nil {
@@ -92,20 +109,17 @@ func FetchAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
 // Create persists the accepted work to the database.
 func (work *AcceptedWork) Create(db *bolt.DB) error {
 	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.WorkBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.WorkBkt)
+		bkt, err := fetchWorkBucket(tx)
+		if err != nil {
+			return err
 		}
 
 		// Do not persist already existing accepted work.
 		id := []byte(work.UUID)
 		v := bkt.Get(id)
 		if v != nil {
-			return ErrWorkAlreadyExists(id)
+			desc := fmt.Sprintf("work %s already exists", work.UUID)
+			return MakeError(ErrWorkExists, desc, nil)
 		}
 
 		workBytes, err := json.Marshal(work)
@@ -113,7 +127,7 @@ func (work *AcceptedWork) Create(db *bolt.DB) error {
 			return err
 		}
 
-		return bkt.Put([]byte(work.UUID), workBytes)
+		return bkt.Put(id, workBytes)
 	})
 	return err
 }
@@ -121,20 +135,17 @@ func (work *AcceptedWork) Create(db *bolt.DB) error {
 // Update persists modifications to an existing work.
 func (work *AcceptedWork) Update(db *bolt.DB) error {
 	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.WorkBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.WorkBkt)
+		bkt, err := fetchWorkBucket(tx)
+		if err != nil {
+			return err
 		}
 
-		// Assert work associated with the provided id exists before updating.
+		// Assert the work provided exists before updating.
 		id := []byte(work.UUID)
 		v := bkt.Get(id)
 		if v == nil {
-			return ErrWorkNotFound(id)
+			desc := fmt.Sprintf("work %s not found", work.UUID)
+			return MakeError(ErrWorkNotFound, desc, nil)
 		}
 
 		workBytes, err := json.Marshal(work)
@@ -142,34 +153,30 @@ func (work *AcceptedWork) Update(db *bolt.DB) error {
 			return err
 		}
 
-		return bkt.Put([]byte(work.UUID), workBytes)
+		return bkt.Put(id, workBytes)
 	})
 	return err
 }
 
 // Delete removes the associated accepted work from the database.
 func (work *AcceptedWork) Delete(db *bolt.DB) error {
-	return database.Delete(db, database.WorkBkt, []byte(work.UUID))
+	return deleteEntry(db, workBkt, []byte(work.UUID))
 }
 
-// ListMinedWork returns the N most recent work data associated
-// with blocks mined by the pool.
+// ListMinedWork returns the N most recent work data associated with blocks
+// mined by the pool.
+//
 // List is ordered, most recent comes first.
-func ListMinedWork(db *bolt.DB, n uint) ([]*AcceptedWork, error) {
+func ListMinedWork(db *bolt.DB, n int) ([]*AcceptedWork, error) {
 	minedWork := make([]*AcceptedWork, 0)
 	if n == 0 {
 		return minedWork, nil
 	}
 
 	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-
-		bkt := pbkt.Bucket(database.WorkBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.WorkBkt)
+		bkt, err := fetchWorkBucket(tx)
+		if err != nil {
+			return err
 		}
 
 		cursor := bkt.Cursor()
@@ -182,7 +189,7 @@ func ListMinedWork(db *bolt.DB, n uint) ([]*AcceptedWork, error) {
 
 			if work.Confirmed {
 				minedWork = append(minedWork, &work)
-				if len(minedWork) == int(n) {
+				if len(minedWork) == n {
 					return nil
 				}
 			}
@@ -190,7 +197,6 @@ func ListMinedWork(db *bolt.DB, n uint) ([]*AcceptedWork, error) {
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -198,24 +204,20 @@ func ListMinedWork(db *bolt.DB, n uint) ([]*AcceptedWork, error) {
 	return minedWork, nil
 }
 
-// ListMinedWorkByAccount returns the N most recent mined work data on
+// listMinedWorkByAccount returns the N most recent mined work data on
 // blocks mined by the provided pool account id.
+//
 // List is ordered, most recent comes first.
-func ListMinedWorkByAccount(db *bolt.DB, accountID string, n uint) ([]*AcceptedWork, error) {
+func listMinedWorkByAccount(db *bolt.DB, accountID string, n int) ([]*AcceptedWork, error) {
 	minedWork := make([]*AcceptedWork, 0)
 	if n == 0 {
 		return minedWork, nil
 	}
 
 	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-
-		bkt := pbkt.Bucket(database.WorkBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.WorkBkt)
+		bkt, err := fetchWorkBucket(tx)
+		if err != nil {
+			return err
 		}
 
 		cursor := bkt.Cursor()
@@ -228,7 +230,7 @@ func ListMinedWorkByAccount(db *bolt.DB, accountID string, n uint) ([]*AcceptedW
 
 			if strings.Compare(work.MinedBy, accountID) == 0 && work.Confirmed {
 				minedWork = append(minedWork, &work)
-				if len(minedWork) == int(n) {
+				if len(minedWork) == n {
 					return nil
 				}
 			}
@@ -236,7 +238,6 @@ func ListMinedWorkByAccount(db *bolt.DB, accountID string, n uint) ([]*AcceptedW
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -248,13 +249,9 @@ func ListMinedWorkByAccount(db *bolt.DB, accountID string, n uint) ([]*AcceptedW
 // heights less than the provided height.
 func PruneAcceptedWork(db *bolt.DB, height uint32) error {
 	err := db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(database.PoolBkt)
-		if pbkt == nil {
-			return database.ErrBucketNotFound(database.PoolBkt)
-		}
-		bkt := pbkt.Bucket(database.WorkBkt)
-		if bkt == nil {
-			return database.ErrBucketNotFound(database.WorkBkt)
+		bkt, err := fetchWorkBucket(tx)
+		if err != nil {
+			return err
 		}
 
 		toDelete := [][]byte{}
@@ -266,7 +263,7 @@ func PruneAcceptedWork(db *bolt.DB, height uint32) error {
 				return err
 			}
 
-			workHeight := util.BigEndianBytesToHeight(workHeightB)
+			workHeight := bigEndianBytesToHeight(workHeightB)
 			if workHeight < height {
 				var work AcceptedWork
 				err := json.Unmarshal(v, &work)
