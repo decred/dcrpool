@@ -94,12 +94,17 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 
 	// Ensure address is on the active network.
 	if !addr.IsForNet(ui.cfg.ActiveNet) {
-		data.Error = fmt.Sprintf("This is not a %s address", ui.cfg.ActiveNet.Name)
+		data.Error = fmt.Sprintf("Invalid %s addresss", ui.cfg.ActiveNet.Name)
 		ui.renderTemplate(w, r, "index", data)
 		return
 	}
 
 	accountID := *dividend.AccountID(address)
+	if !ui.hub.AccountExists(accountID) {
+		data.Error = fmt.Sprintf("Nothing found for address %s", address)
+		ui.renderTemplate(w, r, "index", data)
+		return
+	}
 
 	work, err := ui.hub.FetchMinedWorkByAddress(accountID)
 	if err != nil {
@@ -118,8 +123,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(work) == 0 && len(payments) == 0 {
-		log.Infof("Nothing found for address: %s", address)
-		data.Error = fmt.Sprintf("Nothing found for address: %s", address)
+		data.Error = fmt.Sprintf("No confirmed work for %s", address)
 		ui.renderTemplate(w, r, "index", data)
 		return
 	}
