@@ -163,6 +163,7 @@ func NewPool(cfg *config) (*Pool, error) {
 		TLSKeyFile:    defaultTLSKeyFile,
 		ActiveNet:     cfg.net,
 		PaymentMethod: cfg.PaymentMethod,
+		Designation:   cfg.Designation,
 	}
 
 	p.gui, err = gui.NewGUI(gcfg, p.hub, p.db)

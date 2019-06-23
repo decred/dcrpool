@@ -49,6 +49,7 @@ const (
 	defaultGUIPort         = 8080
 	defaultGUIDir          = "gui"
 	defaultUseLEHTTPS      = false
+	defaultDesignation     = "MyPool"
 )
 
 var (
@@ -101,6 +102,7 @@ type config struct {
 	GUIDir          string   `long:"guidir" ini-name:"guidir" description:"The path to the directory containing the pool's user interface assets (templates, css etc.)"`
 	Domain          string   `long:"domain" ini-name:"domain" description:"The domain of the mining pool, required for TLS."`
 	UseLEHTTPS      bool     `long:"uselehttps" ini-name:"uselehttps" description:"This enables HTTPS using a Letsencrypt certificate. By default the pool uses a self-signed certificate for HTTPS."`
+	Designation     string   `long:"designation" ini-name:"designation" description:"The designated codename for this pool. Customises the logo in the top toolbar."`
 	poolFeeAddrs    []dcrutil.Address
 	dcrdRPCCerts    []byte
 	net             *chaincfg.Params
@@ -264,6 +266,7 @@ func loadConfig() (*config, []string, error) {
 		GUIPort:         defaultGUIPort,
 		GUIDir:          defaultGUIDir,
 		UseLEHTTPS:      defaultUseLEHTTPS,
+		Designation:     defaultDesignation,
 	}
 
 	// Service options which are only added on Windows.

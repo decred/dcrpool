@@ -21,6 +21,7 @@ type indexData struct {
 	Admin            bool
 	Error            string
 	BlockExplorerURL string
+	Designation      string
 }
 
 // AccountStats is a snapshot of an accounts contribution to the pool. This
@@ -64,6 +65,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		SoloPool:         ui.cfg.SoloPool,
 		Admin:            false,
 		BlockExplorerURL: ui.cfg.BlockExplorerURL,
+		Designation:      ui.cfg.Designation,
 	}
 
 	address := r.FormValue("address")

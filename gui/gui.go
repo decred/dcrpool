@@ -42,6 +42,7 @@ type Config struct {
 	Domain           string
 	ActiveNet        *chaincfg.Params
 	BlockExplorerURL string
+	Designation      string
 }
 
 // GUI represents the the mining pool user interface.
