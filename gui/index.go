@@ -21,6 +21,7 @@ type indexData struct {
 	Admin            bool
 	Error            string
 	BlockExplorerURL string
+	Network          string
 	Designation      string
 	PoolFee          float64
 }
@@ -68,6 +69,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		BlockExplorerURL: ui.cfg.BlockExplorerURL,
 		Designation:      ui.cfg.Designation,
 		PoolFee:          ui.cfg.PoolFee,
+		Network:          ui.cfg.ActiveNet.Name,
 	}
 
 	address := r.FormValue("address")
