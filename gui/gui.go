@@ -43,6 +43,7 @@ type Config struct {
 	ActiveNet        *chaincfg.Params
 	BlockExplorerURL string
 	Designation      string
+	PoolFee          float64
 }
 
 // GUI represents the the mining pool user interface.
@@ -166,10 +167,11 @@ func (ui *GUI) loadTemplates() error {
 	}
 
 	httpTemplates := template.New("template").Funcs(template.FuncMap{
-		"hashString":    util.HashString,
-		"upper":         strings.ToUpper,
-		"percentString": util.PercentString,
-		"time":          util.FormatUnixTime,
+		"hashString":     util.HashString,
+		"upper":          strings.ToUpper,
+		"ratToPercent":   util.RatToPercent,
+		"floatToPercent": util.FloatToPercent,
+		"time":           util.FormatUnixTime,
 	})
 
 	// Since template.Must panics with non-nil error, it is much more

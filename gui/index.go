@@ -22,6 +22,7 @@ type indexData struct {
 	Error            string
 	BlockExplorerURL string
 	Designation      string
+	PoolFee          float64
 }
 
 // AccountStats is a snapshot of an accounts contribution to the pool. This
@@ -66,6 +67,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		Admin:            false,
 		BlockExplorerURL: ui.cfg.BlockExplorerURL,
 		Designation:      ui.cfg.Designation,
+		PoolFee:          ui.cfg.PoolFee,
 	}
 
 	address := r.FormValue("address")
