@@ -152,6 +152,14 @@
                             </div>
                         </div>
                         {{end}}
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <div class="d-lg-flex align-items-start align-items-lg-center">
+                                    <img class="info-icon mb-1" src="/images/charts.svg" alt="">
+                                    <p class="ml-lg-3 mb-0"><strong>Pool Fee:&nbsp;</strong>{{floatToPercent .PoolFee }}</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -171,7 +179,7 @@
                                 {{ range .WorkQuotas }}
                                     <tr>
                                         <td>{{ printf "%.12s" .AccountID}}...</td>
-                                        <td>{{percentString .Percentage}}</td>
+                                        <td>{{ratToPercent .Percentage}}</td>
                                     </tr>
                                 {{else}}
                                     <tr>

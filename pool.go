@@ -164,6 +164,7 @@ func NewPool(cfg *config) (*Pool, error) {
 		ActiveNet:     cfg.net,
 		PaymentMethod: cfg.PaymentMethod,
 		Designation:   cfg.Designation,
+		PoolFee:       cfg.PoolFee,
 	}
 
 	p.gui, err = gui.NewGUI(gcfg, p.hub, p.db)
