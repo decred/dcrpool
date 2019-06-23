@@ -13,21 +13,24 @@ import (
 type adminPageData struct {
 	Connections map[string][]*network.ClientInfo
 	CSRF        template.HTML
+	Designation string
 }
 
 func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
+	pageData := adminPageData{
+		CSRF:        csrf.TemplateField(r),
+		Designation: ui.cfg.Designation,
+	}
+
 	session, _ := ui.cookieStore.Get(r, "session")
 	if session.Values["IsAdmin"] != true {
-		ui.renderTemplate(w, r, "login", adminPageData{
-			CSRF: csrf.TemplateField(r),
-		})
+		ui.renderTemplate(w, r, "login", pageData)
 		return
 	}
 
-	ui.renderTemplate(w, r, "admin", adminPageData{
-		Connections: ui.hub.FetchClientInfo(),
-		CSRF:        csrf.TemplateField(r),
-	})
+	pageData.Connections = ui.hub.FetchClientInfo()
+
+	ui.renderTemplate(w, r, "admin", pageData)
 }
 
 func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
