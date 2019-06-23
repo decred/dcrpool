@@ -570,7 +570,7 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 		return "", err
 	}
 
-	log.Tracef("published tx hash is: %x", pubTxResp.TransactionHash)
+	log.Tracef("published tx hash is %s", string(pubTxResp.TransactionHash))
 
 	return txid, nil
 }
@@ -716,6 +716,12 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 			}
 			log.Tracef("Block connected at height #%d", header.Height)
 
+			// Process mature payments.
+			err = h.ProcessPayments(header.Height)
+			if err != nil {
+				log.Errorf("unable to process payments: %v", err)
+			}
+
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit
 				err := PruneJobs(h.db, pruneLimit)
@@ -730,7 +736,7 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 			}
 
 			// If the parent of the connected block is an accepted work of the
-			// pool, confirmed it as mined. The parent of a connected block
+			// pool, confirm it as mined. The parent of a connected block
 			// at this point is guaranteed to have its corresponding accepted
 			// work persisted if it was mined by the pool.
 			parentID := AcceptedWorkID(header.PrevBlock.String(), header.Height-1)
@@ -817,12 +823,6 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 						h.cancel()
 						continue
 					}
-				}
-
-				// Process mature payments.
-				err = h.ProcessPayments(header.Height)
-				if err != nil {
-					log.Errorf("unable to process payments: %v", err)
 				}
 			}
 
