@@ -229,6 +229,7 @@
                 </section>
             </div>
 
+            {{ with .WorkQuotas}}
             <div class="row ml-md-1">
                 <section class="block">
                     <div class="col-12 block__title">
@@ -241,14 +242,10 @@
                                     <th>Account</th>
                                     <th>Reward Percentage</th>
                                 </tr>
-                                {{ range .WorkQuotas }}
+                                {{ range . }}
                                     <tr>
                                         <td>{{ printf "%.12s" .AccountID}}...</td>
                                         <td>{{ratToPercent .Percentage}}</td>
-                                    </tr>
-                                {{else}}
-                                    <tr>
-                                        <td colspan="100%">No work quotas</td>
                                     </tr>
                                 {{end}}
                             </table>
@@ -256,6 +253,7 @@
                     </div>
                 </section>
             </div>
+            {{end}}
             
             <div class="row ml-md-1">
                 <section class="block">
