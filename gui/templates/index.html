@@ -62,10 +62,11 @@
                             <div style="overflow: auto; max-height: 250px;">
                                 <table class="table">
                                     <tr>
-                                        <th>Height</th>
-                                        <th>Paid on Height</th>
+                                        <th>Work Height</th>
+                                        <th>Payment Height</th>
                                         <th>Created On</th>
                                         <th>Amount</th>
+                                        <th>Tx ID</th>
                                     </tr>
                                     {{ range .AccountStats.Payments }}
                                     <tr>
@@ -73,6 +74,7 @@
                                         <td><a href={{$.BlockExplorerURL}}/block/{{.PaidOnHeight}} rel="noopener noreferrer">{{.PaidOnHeight}}</a></td>
                                         <td>{{ time .CreatedOn }}</td>
                                         <td>{{ printf "%.3f" .Amount.ToCoin }}&nbsp;DCR</td>
+                                        <td><a href="{{$.BlockExplorerURL}}/tx/{{ .TransactionID }}">{{ printf "%.10s" .TransactionID }}...</a></td>
                                     </tr>
                                     {{else}}
                                     <tr>
@@ -102,12 +104,69 @@
                             <h1><span>Mining Pool Overview</span></h1>
                         </div>
                         <div class="col-12 block__content">
-                            <p>Voting Service Providers (VSPs) allow you to participate in Decred’s proof-of-stake (PoS) system without the need to keep a constantly unlocked wallet or worry about losses due to downtime, flaky internet.</p>
+                            <p>You don't need to create an account to mine with dcrpool. Simply direct your miner to the pool and provide an address for receiving reward payments.</p>
 
-                            <p>VSPs are used to delegate your voting powers. The VSP can cast a vote on your behalf when a ticket is called to vote. VSPs do not hold, manage, or transfer any of your DCR funds. The VSP cannot steal your funds.</p>
+                            <p>If you have contributed some work to the pool, you can search for your mining address in the toolbar above. You can view your contributions to the pool and any payment information.</p>
 
-                            <a href="/" class="btn btn-outline-primary btn-outline-primary--inverted d-lg-inline-block d-block mb-3" rel="noopener noreferrer">Register</a>
+                            <p>The pool currently supports the following miners:</p>
+
+                            <ul>
+                                <li>Innosilicon D9</li>
+                                <li>Antminer DR3</li>
+                                <li>Antminer DR5</li>
+                                <li>Whatsminer D1</li>
+                            </ul>
+
                         </div>
+                    </section>
+
+                    <section class="block">
+                        <div class="col-12 block__title">
+                            <h1><span>Miner Configuration</span></h1>
+                        </div>
+                        <div class="col-12 block__content">
+                            
+                            <table>
+                                <tr>
+                                    <th>Pool URL:</th>
+                                    <td><span class="config">{{if .PoolDomain}}{{.PoolDomain}}{{else}}localhost{{end}}</span></td>
+                                </tr>
+                                <tr>
+                                    <td><br/></td>
+                                </tr>
+                                <tr>
+                                    <th>Port:</th>
+                                    <td><span class="config">5552</span>&nbsp;(Innosilicon D9)</td>
+                                </tr>
+                                <tr>
+                                    <th></th>
+                                    <td><span class="config">5553</span>&nbsp;(Antminer DR3)</td>
+                                </tr>
+                                <tr>
+                                    <th></th>
+                                    <td><span class="config">5554</span>&nbsp;(Antminer DR5)</td>
+                                </tr>
+                                <tr>
+                                    <th></th>
+                                    <td><span class="config">5555</span>&nbsp;(Whatsminer D1)</td>
+                                </tr>
+                                <tr>
+                                    <td><br/></td>
+                                </tr>
+                                <tr>
+                                    <th>Username:</th>
+                                    <td>
+                                    {{ if .SoloPool }}
+                                        Any unique name identifying the client
+                                    {{else}}
+                                        The payment address for receiving rewards and a unique name identifying the client, formatted as <span class="config">address.name</span>
+                                    {{end}}
+                                    </td>
+                                </tr>
+                            </table>
+
+                        </div>
+
                     </section>
                 </div>
 

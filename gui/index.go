@@ -12,6 +12,7 @@ import (
 
 type indexData struct {
 	PoolStats        *network.PoolStats
+	PoolDomain       string
 	WorkQuotas       []network.Quota
 	PoolHashRate     *big.Rat
 	SoloPool         bool
@@ -64,6 +65,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		PaymentMethod:    ui.cfg.PaymentMethod,
 		PoolStats:        poolStats,
 		PoolHashRate:     poolHashRate,
+		PoolDomain:       ui.cfg.Domain,
 		SoloPool:         ui.cfg.SoloPool,
 		Admin:            false,
 		BlockExplorerURL: ui.cfg.BlockExplorerURL,
