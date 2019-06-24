@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -999,8 +998,7 @@ type Quota struct {
 // based on work contributed per the peyment scheme used by the pool.
 func (h *Hub) FetchWorkQuotas() ([]Quota, error) {
 	if h.cfg.SoloPool {
-		return nil, errors.New("share percentages not available when mining" +
-			" in solo pool mode")
+		return nil, nil
 	}
 
 	height := atomic.LoadUint32(&h.lastWorkHeight)
