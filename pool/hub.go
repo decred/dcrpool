@@ -134,7 +134,7 @@ type Hub struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	txFeeReserve dcrutil.Amount
-	endpoints    []*Endpoint
+	endpoints    []*endpoint
 	blake256Pad  []byte
 	wg           sync.WaitGroup
 }
@@ -219,7 +219,7 @@ func (h *Hub) generateDifficultyData() error {
 
 	h.poolDiffMtx.Lock()
 	for miner, hashrate := range minerHashes {
-		target, difficulty, err := CalculatePoolTarget(h.cfg.ActiveNet,
+		target, difficulty, err := calculatePoolTarget(h.cfg.ActiveNet,
 			hashrate, maxGenTime)
 		if err != nil {
 			desc := fmt.Sprintf("failed to calculate pool target for %s", miner)
@@ -398,7 +398,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, httpc *http.Client, 
 
 	// Setup listeners for all supported pool clients.
 	for miner, port := range minerPorts {
-		endpoint, err := NewEndpoint(h, port, miner)
+		endpoint, err := newEndpoint(h, port, miner)
 		if err != nil {
 			return nil, MakeError(ErrOther, "failed to create listeners", err)
 		}
@@ -722,7 +722,7 @@ func (h *Hub) handleChainUpdates(ctx context.Context) {
 			log.Tracef("Block connected at height #%d", header.Height)
 
 			// Process mature payments.
-			err = h.ProcessPayments(header.Height)
+			err = h.processPayments(header.Height)
 			if err != nil {
 				log.Errorf("unable to process payments: %v", err)
 			}
@@ -919,9 +919,9 @@ func (h *Hub) Run(ctx context.Context) {
 	h.shutdown()
 }
 
-// ProcessPayments fetches all eligible payments and publishes a
+// processPayments fetches all eligible payments and publishes a
 // transaction to the network paying dividends to participating accounts.
-func (h *Hub) ProcessPayments(height uint32) error {
+func (h *Hub) processPayments(height uint32) error {
 	// Waiting two blocks after a successful payment before proceeding with
 	// another one because the reserved amount for transaction fees becomes
 	// change after a successful transaction. Change matures after the next
@@ -949,7 +949,7 @@ func (h *Hub) ProcessPayments(height uint32) error {
 	log.Tracef("eligible payments are: %v", spew.Sdump(eligiblePmts))
 
 	// Generate the payment details from the eligible payments fetched.
-	details, targetAmt, err := GeneratePaymentDetails(h.db,
+	details, targetAmt, err := generatePaymentDetails(h.db,
 		h.cfg.PoolFeeAddrs, eligiblePmts, h.cfg.MaxTxFeeReserve, &h.txFeeReserve)
 	if err != nil {
 		return err
@@ -1141,17 +1141,26 @@ func (h *Hub) AccountExists(accountID string) bool {
 }
 
 // CSRFSecret fetches a persisted secret or generates a new one.
-func (h *Hub) CSRFSecret(getCSRF func() []byte) ([]byte, error) {
+func (h *Hub) CSRFSecret(getCSRF func() ([]byte, error)) ([]byte, error) {
 	secret := make([]byte, 0)
 	err := h.db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
+		if pbkt == nil {
+			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+			return MakeError(ErrBucketNotFound, desc, nil)
+		}
 
 		secret = pbkt.Get(csrfSecret)
 		if secret == nil {
 			log.Info("CSRF secret value not found in db, initializing.")
 
-			secret = getCSRF()
-			err := pbkt.Put(csrfSecret, secret)
+			var err error
+			secret, err = getCSRF()
+			if err != nil {
+				return err
+			}
+
+			err = pbkt.Put(csrfSecret, secret)
 			if err != nil {
 				return err
 			}

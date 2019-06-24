@@ -20,12 +20,16 @@ var (
 	testDB = "testdb"
 	// Account X address.
 	xAddr = "SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc"
+
 	// Account X id.
-	xID = *AccountID(xAddr)
+	xID = ""
+
 	// Account Y address.
 	yAddr = "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
+
 	// Account Y id.
-	yID = *AccountID(yAddr)
+	yID = ""
+
 	// Pool fee address.
 	poolFeeAddrs, _ = dcrutil.DecodeAddress("SsnbEmxCVXskgTHXvf3rEa17NA39qQuGHwQ")
 )
@@ -45,6 +49,16 @@ func setupDB() (*bolt.DB, error) {
 	}
 
 	err = upgradeDB(db)
+	if err != nil {
+		return nil, err
+	}
+
+	xID, err = AccountID(xAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	yID, err = AccountID(yAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +356,7 @@ func TestCalculatePoolTarget(t *testing.T) {
 	}
 
 	for _, test := range set {
-		target, _, err := CalculatePoolTarget(&chaincfg.MainNetParams,
+		target, _, err := calculatePoolTarget(&chaincfg.MainNetParams,
 			test.hashRate, test.targetTime)
 		if err != nil {
 			t.Error(err)

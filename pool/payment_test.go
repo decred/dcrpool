@@ -116,7 +116,7 @@ func TestPayPerShare(t *testing.T) {
 	}
 
 	expectedBundleCount := 3
-	bundles := GeneratePaymentBundles(pmts)
+	bundles := generatePaymentBundles(pmts)
 	if len(bundles) != expectedBundleCount {
 		t.Errorf("Expected %v payment bundles, got %v.",
 			expectedBundleCount, len(bundles))
@@ -250,7 +250,7 @@ func TestPayPerLastShare(t *testing.T) {
 	}
 
 	expectedBundleCount := 3
-	bundles := GeneratePaymentBundles(pmts)
+	bundles := generatePaymentBundles(pmts)
 
 	if len(bundles) != expectedBundleCount {
 		t.Errorf("Expected %v payment bundles, got %v.",
@@ -296,7 +296,7 @@ func TestPayPerLastShare(t *testing.T) {
 
 // CreatePaymentBundle instantiates a payment bundle.
 func CreatePaymentBundle(account string, count uint32, paymentAmount dcrutil.Amount) *PaymentBundle {
-	bundle := NewPaymentBundle(account)
+	bundle := newPaymentBundle(account)
 	for idx := uint32(0); idx < count; idx++ {
 		payment := NewPayment(account, paymentAmount, 0, 0)
 		bundle.Payments = append(bundle.Payments, payment)
@@ -331,7 +331,7 @@ func TestEqualPaymentDetailsGeneration(t *testing.T) {
 	zeroAmt := dcrutil.Amount(0)
 	txFeeReserve := dcrutil.Amount(0)
 
-	details, totalAmt, err := GeneratePaymentDetails(db,
+	details, totalAmt, err := generatePaymentDetails(db,
 		[]dcrutil.Address{poolFeeAddrs}, bundles, zeroAmt, &txFeeReserve)
 	if err != nil {
 		t.Error(err)
@@ -386,7 +386,7 @@ func TestUnequalPaymentDetailsGeneration(t *testing.T) {
 	zeroAmt := dcrutil.Amount(0)
 	txFeeReserve := dcrutil.Amount(0)
 
-	details, totalAmt, err := GeneratePaymentDetails(db,
+	details, totalAmt, err := generatePaymentDetails(db,
 		[]dcrutil.Address{poolFeeAddrs}, bundles, zeroAmt, &txFeeReserve)
 	if err != nil {
 		t.Error(err)
@@ -524,13 +524,19 @@ func TestArchivedPaymentsFiltering(t *testing.T) {
 
 	bx := CreatePaymentBundle(xID, count, amt)
 	bx.UpdateAsPaid(db, 10, "")
-	bx.ArchivePayments(db)
+	err = bx.ArchivePayments(db)
+	if err != nil {
+		t.Error(err)
+	}
 
 	time.Sleep(time.Second * 10)
 
 	bx = CreatePaymentBundle(yID, count, amt)
 	bx.UpdateAsPaid(db, 10, "")
-	bx.ArchivePayments(db)
+	err = bx.ArchivePayments(db)
+	if err != nil {
+		t.Error(err)
+	}
 
 	// Fetch archived payments for account x.
 	pmts, err := fetchArchivedPaymentsForAccount(db, xID, 10)

@@ -22,18 +22,26 @@ type Account struct {
 }
 
 // AccountID generates an id using provided address of the account.
-func AccountID(address string) *string {
+func AccountID(address string) (string, error) {
 	hasher := blake256.New()
-	hasher.Write([]byte(address))
+	_, err := hasher.Write([]byte(address))
+	if err != nil {
+		return "", err
+	}
+
 	id := hex.EncodeToString(hasher.Sum(nil))
-	return &id
+	return id, nil
 }
 
 // NewAccount generates a new account.
 func NewAccount(address string) (*Account, error) {
-	id := AccountID(address)
+	id, err := AccountID(address)
+	if err != nil {
+		return nil, err
+	}
+
 	account := &Account{
-		UUID:      *id,
+		UUID:      id,
 		Address:   address,
 		CreatedOn: uint64(time.Now().Unix()),
 	}

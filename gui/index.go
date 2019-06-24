@@ -85,14 +85,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	// with the users input.
 	data.Address = address
 
-	// Ensure address is correct length
-	if len(address) != 35 {
-		data.Error = fmt.Sprintf("Address should be 35 characters")
-		ui.renderTemplate(w, r, "index", data)
-		return
-	}
-
-	// Ensure address can be decoded
+	// Ensure the provided address is valid.
 	addr, err := dcrutil.DecodeAddress(address)
 	if err != nil {
 		data.Error = fmt.Sprintf("Failed to decode address")
@@ -100,14 +93,20 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure address is on the active pool.
+	// Ensure address is on the active network.
 	if !addr.IsForNet(ui.cfg.ActiveNet) {
 		data.Error = fmt.Sprintf("Invalid %s addresss", ui.cfg.ActiveNet.Name)
 		ui.renderTemplate(w, r, "index", data)
 		return
 	}
 
-	accountID := *pool.AccountID(address)
+	accountID, err := pool.AccountID(address)
+	if err != nil {
+		data.Error = fmt.Sprintf("Unable to generate account ID for address %s", address)
+		ui.renderTemplate(w, r, "index", data)
+		return
+	}
+
 	if !ui.hub.AccountExists(accountID) {
 		data.Error = fmt.Sprintf("Nothing found for address %s", address)
 		ui.renderTemplate(w, r, "index", data)

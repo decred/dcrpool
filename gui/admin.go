@@ -45,7 +45,11 @@ func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
 
 	session, _ := ui.cookieStore.Get(r, "session")
 	session.Values["IsAdmin"] = true
-	session.Save(r, w)
+	err := session.Save(r, w)
+	if err != nil {
+		log.Errorf("unable to save session: %v", err)
+		return
+	}
 
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
@@ -53,7 +57,11 @@ func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
 func (ui *GUI) PostLogout(w http.ResponseWriter, r *http.Request) {
 	session, _ := ui.cookieStore.Get(r, "session")
 	session.Values["IsAdmin"] = nil
-	session.Save(r, w)
+	err := session.Save(r, w)
+	if err != nil {
+		log.Errorf("unable to save session: %v", err)
+		return
+	}
 
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }

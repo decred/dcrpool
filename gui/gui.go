@@ -83,18 +83,24 @@ func hashString(hash *big.Rat) string {
 	return "< 1KH/s"
 }
 
-// percentString formats the provided big.Rat as a percentage,
-// rounded to the nearest decimal place. eg. "10.5%"
-func percentString(rat *big.Rat) string {
-	real, _ := rat.Float64()
-	real = real * 100
-	str := fmt.Sprintf("%.1f", real)
-	return str + "%"
-}
-
 // formatUnixTime formats the provided integer as a UTC time string,
 func formatUnixTime(unix int64) string {
 	return time.Unix(0, unix).Format("2-Jan-2006 15:04:05 MST")
+}
+
+// floatToPercent formats the provided float64 as a percentage,
+// rounded to the nearest decimal place. eg. "10.5%"
+func floatToPercent(rat float64) string {
+	rat = rat * 100
+	str := fmt.Sprintf("%.1f", rat)
+	return str + "%"
+}
+
+// ratToPercent formats the provided big.Rat as a percentage,
+// rounded to the nearest decimal place. eg. "10.5%"
+func ratToPercent(rat *big.Rat) string {
+	real, _ := rat.Float64()
+	return floatToPercent(real)
 }
 
 // Config represents configuration details for the pool user interface.
@@ -128,10 +134,14 @@ type GUI struct {
 }
 
 // generateSecret generates the CSRF secret.
-func (ui *GUI) generateSecret() []byte {
+func (ui *GUI) generateSecret() ([]byte, error) {
 	secret := make([]byte, 32)
-	rand.Read(secret)
-	return secret
+	_, err := rand.Read(secret)
+	if err != nil {
+		return nil, err
+	}
+
+	return secret, nil
 }
 
 // route configures the http router of the user interface.
@@ -165,7 +175,10 @@ func (ui *GUI) renderTemplate(w http.ResponseWriter, r *http.Request, name strin
 		return
 	}
 
-	doc.WriteTo(w)
+	_, err = doc.WriteTo(w)
+	if err != nil {
+		log.Errorf("unable to render template: %v", err)
+	}
 }
 
 // NewGUI creates an instance of the user interface.
@@ -190,7 +203,11 @@ func NewGUI(cfg *Config, hub *pool.Hub, db *bolt.DB) (*GUI, error) {
 	}
 
 	ui.cookieStore = sessions.NewCookieStore(cfg.CSRFSecret)
-	ui.loadTemplates()
+	err = ui.loadTemplates()
+	if err != nil {
+		return nil, err
+	}
+
 	ui.route()
 
 	return ui, nil
