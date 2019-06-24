@@ -50,6 +50,9 @@ const (
 	// ErrDivideByZero indicates a division by zero error.
 	ErrDivideByZero
 
+	// ErrDBUpgrade indicates a database upgrade error.
+	ErrDBUpgrade
+
 	// ErrOther indicates a miscellenious error.
 	ErrOther
 )
@@ -68,7 +71,8 @@ var errorCodeStrings = map[ErrorCode]string{
 	ErrParse:              "ErrParse",
 	ErrDecode:             "ErrDecode",
 	ErrNotSupported:       "ErrNotSupported",
-	ErrDivideByZero:       "ErrdivideByZero",
+	ErrDivideByZero:       "ErrDivideByZero",
+	ErrDBUpgrade:          "ErrDBUpgrade",
 	ErrOther:              "ErrOther",
 }
 
