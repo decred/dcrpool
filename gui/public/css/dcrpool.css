@@ -8089,9 +8089,26 @@ input[type="submit"]:disabled {
   .block__content {
     background-color: #223767;
     padding: 20px 30px; }
-    .block__content p {
+    .block__content p,
+    .block__content li,
+    .block__content td,
+    .block__content th {
       color: #99C1E3;
       line-height: 1.4; }
+    .block__content th {
+      font-weight: bold;
+      padding-right: 15px;
+      text-align: right;
+    }
+    .block__content table td,
+    .block__content table th {
+      vertical-align: top;
+      word-wrap: break-word;
+      white-space: normal; }
+    .block__content table td .config {
+      font-family: "dcrpool-code";
+      background: none;
+      color: #E9F8FE; }
     .block__content span {
       border-radius: 2px;
       background-color: #d4f0fd;
