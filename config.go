@@ -222,14 +222,14 @@ func genCertPair(certFile, keyFile string) error {
 func newConfigParser(cfg *config, so *serviceOptions, options flags.Options) *flags.Parser {
 	parser := flags.NewParser(cfg, options)
 	if runtime.GOOS == "windows" {
-		parser.AddGroup("Service Options", "Service Options", so)
+		_, _ = parser.AddGroup("Service Options", "Service Options", so)
 	}
 	return parser
 }
 
-// CleanAndExpandPath expands environment variables and leading ~ in the
+// cleanAndExpandPath expands environment variables and leading ~ in the
 // passed path, cleans the result, and returns it.
-func CleanAndExpandPath(path string) string {
+func cleanAndExpandPath(path string) string {
 	// Nothing to do when no path is given.
 	if path == "" {
 		return path
@@ -446,8 +446,8 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	cfg.DataDir = CleanAndExpandPath(cfg.DataDir)
-	cfg.LogDir = CleanAndExpandPath(cfg.LogDir)
+	cfg.DataDir = cleanAndExpandPath(cfg.DataDir)
+	cfg.LogDir = cleanAndExpandPath(cfg.LogDir)
 	logRotator = nil
 
 	// Initialize log rotation.  After log rotation has been initialized, the

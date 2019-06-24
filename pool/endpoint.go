@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 )
 
-// Endpoint represents a stratum endpoint.
-type Endpoint struct {
+// endpoint represents a stratum endpoint.
+type endpoint struct {
 	port       uint32
 	diffData   *DifficultyData
 	miner      string
@@ -25,9 +25,9 @@ type Endpoint struct {
 	wg         sync.WaitGroup
 }
 
-// NewEndpoint creates an endpoint instance.
-func NewEndpoint(hub *Hub, port uint32, miner string) (*Endpoint, error) {
-	endpoint := &Endpoint{
+// newEndpoint creates an endpoint instance.
+func newEndpoint(hub *Hub, port uint32, miner string) (*endpoint, error) {
+	endpoint := &endpoint{
 		port:    port,
 		hub:     hub,
 		miner:   miner,
@@ -51,7 +51,7 @@ func NewEndpoint(hub *Hub, port uint32, miner string) (*Endpoint, error) {
 
 // listen sets up a listener for incoming client connections on the endpoint.
 // It must be run as a goroutine.
-func (e *Endpoint) listen() {
+func (e *endpoint) listen() {
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "0.0.0.0", e.port))
 	if err != nil {
 		log.Errorf("unable to listen on tcp address: %v", err)
@@ -76,7 +76,7 @@ func (e *Endpoint) listen() {
 
 // connect creates new pool clients from established connections.
 // It must be run as a goroutine.
-func (e *Endpoint) connect(ctx context.Context) {
+func (e *endpoint) connect(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -91,7 +91,12 @@ func (e *Endpoint) connect(ctx context.Context) {
 			return
 
 		case conn := <-e.connCh:
-			client := NewClient(conn, e, conn.RemoteAddr().String())
+			client, err := NewClient(conn, e, conn.RemoteAddr().String())
+			if err != nil {
+				log.Errorf("unable to create client: %v", err)
+				return
+			}
+
 			e.clientsMtx.Lock()
 			e.clients[client.generateID()] = client
 			e.clientsMtx.Unlock()
@@ -105,7 +110,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 }
 
 // removeClient removes a disconnected pool client from its associated endpoint.
-func (e *Endpoint) removeClient(c *Client) {
+func (e *endpoint) removeClient(c *Client) {
 	e.clientsMtx.Lock()
 	id := c.generateID()
 	delete(e.clients, id)

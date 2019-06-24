@@ -139,9 +139,9 @@ func fileExists(name string) bool {
 	return true
 }
 
-// CleanAndExpandPath expands environment variables and leading ~ in the
+// cleanAndExpandPath expands environment variables and leading ~ in the
 // passed path, cleans the result, and returns it.
-func CleanAndExpandPath(path string) string {
+func cleanAndExpandPath(path string) string {
 	// Nothing to do when no path is given.
 	if path == "" {
 		return path
@@ -197,7 +197,10 @@ func CleanAndExpandPath(path string) string {
 func newConfigParser(cfg *config, so *serviceOptions, options flags.Options) *flags.Parser {
 	parser := flags.NewParser(cfg, options)
 	if runtime.GOOS == "windows" {
-		parser.AddGroup("Service Options", "Service Options", so)
+		_, err := parser.AddGroup("Service Options", "Service Options", so)
+		if err != nil {
+			return nil
+		}
 	}
 	return parser
 }
@@ -346,7 +349,7 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	cfg.LogDir = CleanAndExpandPath(cfg.LogDir)
+	cfg.LogDir = cleanAndExpandPath(cfg.LogDir)
 	logRotator = nil
 
 	// Initialize log rotation.  After log rotation has been initialized, the

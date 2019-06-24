@@ -71,7 +71,7 @@ func reversePrevBlockWords(hashE string) string {
 // Client represents a client connection.
 type Client struct {
 	conn               net.Conn
-	endpoint           *Endpoint
+	endpoint           *endpoint
 	encoder            *json.Encoder
 	reader             *bufio.Reader
 	ctx                context.Context
@@ -94,14 +94,20 @@ type Client struct {
 
 // generateExtraNonce1 generates a random 4-byte extraNonce1 for the
 // client.
-func (c *Client) generateExtraNonce1() {
+func (c *Client) generateExtraNonce1() error {
 	id := make([]byte, 4)
-	rand.Read(id)
+	_, err := rand.Read(id)
+	if err != nil {
+		return err
+	}
+
 	c.extraNonce1 = hex.EncodeToString(id)
+
+	return nil
 }
 
 // NewClient creates client connection instance.
-func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
+func NewClient(conn net.Conn, endpoint *endpoint, ip string) (*Client, error) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	c := &Client{
 		conn:               conn,
@@ -117,9 +123,12 @@ func NewClient(conn net.Conn, endpoint *Endpoint, ip string) *Client {
 		hashRate:           ZeroRat,
 	}
 
-	c.generateExtraNonce1()
+	err := c.generateExtraNonce1()
+	if err != nil {
+		return nil, err
+	}
 
-	return c
+	return c, nil
 }
 
 // generateID creates a unique id of for the pool client.
@@ -250,8 +259,16 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 			return
 		}
 
-		id := AccountID(address)
-		_, err = FetchAccount(c.endpoint.hub.db, []byte(*id))
+		id, err := AccountID(address)
+		if err != nil {
+			log.Errorf("unable to generate account id: %v", err)
+			err := NewStratumError(Unknown, nil)
+			resp := AuthorizeResponse(*req.ID, false, err)
+			c.ch <- resp
+			return
+		}
+
+		_, err = FetchAccount(c.endpoint.hub.db, []byte(id))
 		if err != nil {
 			if !IsError(err, ErrValueNotFound) {
 				log.Errorf("unable to fetch account: %v", err)
@@ -281,7 +298,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 			return
 		}
 
-		c.account = *id
+		c.account = id
 		c.name = name
 	}
 
@@ -535,7 +552,12 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 // processing. This must be run as goroutine.
 func (c *Client) read() {
 	for {
-		c.conn.SetDeadline(time.Now().Add(time.Minute * 4))
+		err := c.conn.SetDeadline(time.Now().Add(time.Minute * 4))
+		if err != nil {
+			log.Errorf("%s: unable to set deadline: %v", c.generateID(), err)
+			c.cancel()
+			return
+		}
 
 		data, err := c.reader.ReadBytes('\n')
 		if err != nil {
@@ -547,9 +569,9 @@ func (c *Client) read() {
 				if nErr.Op == "read" && nErr.Net == "tcp" {
 					switch {
 					case nErr.Timeout():
-						log.Errorf("%v: read timeout: %s", c.generateID(), err)
+						log.Errorf("%s: read timeout: %v", c.generateID(), err)
 					case !nErr.Timeout():
-						log.Errorf("%v: read error: %s", c.generateID(), err)
+						log.Errorf("%s: read error: %v", c.generateID(), err)
 					}
 
 					c.cancel()

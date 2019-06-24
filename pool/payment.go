@@ -143,7 +143,7 @@ type PaymentBundle struct {
 }
 
 // NewPaymentBundle initializes a payment bundle instance.
-func NewPaymentBundle(account string) *PaymentBundle {
+func newPaymentBundle(account string) *PaymentBundle {
 	return &PaymentBundle{
 		Account:  account,
 		Payments: make([]*Payment, 0),
@@ -209,9 +209,9 @@ func (bundle *PaymentBundle) ArchivePayments(db *bolt.DB) error {
 	return err
 }
 
-// GeneratePaymentBundles creates account payment bundles from the provided
+// generatePaymentBundles creates batched payments from the provided
 // set of payments.
-func GeneratePaymentBundles(payments []*Payment) []*PaymentBundle {
+func generatePaymentBundles(payments []*Payment) []*PaymentBundle {
 	bundles := make([]*PaymentBundle, 0)
 	for _, payment := range payments {
 		match := false
@@ -224,7 +224,7 @@ func GeneratePaymentBundles(payments []*Payment) []*PaymentBundle {
 		}
 
 		if !match {
-			bdl := NewPaymentBundle(payment.Account)
+			bdl := newPaymentBundle(payment.Account)
 			bdl.Payments = append(bdl.Payments, payment)
 			bundles = append(bundles, bdl)
 		}
@@ -318,7 +318,7 @@ func FetchEligiblePaymentBundles(db *bolt.DB, height uint32, minPayment dcrutil.
 		return nil, err
 	}
 
-	bundles := GeneratePaymentBundles(maturePayments)
+	bundles := generatePaymentBundles(maturePayments)
 	for idx := 0; idx < len(bundles); idx++ {
 		if bundles[idx].Total() < minPayment {
 			bundles = append(bundles[:idx], bundles[idx+1:]...)
@@ -459,9 +459,9 @@ func PayPerLastNShares(db *bolt.DB, amount dcrutil.Amount, poolFee float64, heig
 	return PruneShares(db, minNano)
 }
 
-// GeneratePaymentDetails generates kv pair of addresses and payment amounts
+// generatePaymentDetails generates kv pair of addresses and payment amounts
 // from the provided eligible payments.
-func GeneratePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address,
+func generatePaymentDetails(db *bolt.DB, poolFeeAddrs []dcrutil.Address,
 	eligiblePmts []*PaymentBundle, maxTxFeeReserve dcrutil.Amount,
 	txFeeReserve *dcrutil.Amount) (map[string]dcrutil.Amount, *dcrutil.Amount, error) {
 	// Generate the address and payment amount kv pairs.
@@ -523,7 +523,11 @@ func fetchArchivedPaymentsForAccount(db *bolt.DB, account string, n uint) ([]*Pa
 			accountE := k[16:]
 			minNanoE := k[:16]
 			minNanoB := make([]byte, hex.DecodedLen(len(minNanoE)))
-			hex.Decode(minNanoB, minNanoE)
+			_, err := hex.Decode(minNanoB, minNanoE)
+			if err != nil {
+				return err
+			}
+
 			if bytes.Equal(accountE, []byte(account)) {
 				var payment Payment
 				err := json.Unmarshal(v, &payment)
