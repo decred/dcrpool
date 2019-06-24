@@ -570,9 +570,14 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 		return "", err
 	}
 
-	log.Tracef("published tx hash is %s", string(pubTxResp.TransactionHash))
+	txid, err := chainhash.NewHash(pubTxResp.TransactionHash)
+	if err != nil {
+		return "", err
+	}
 
-	return txid, nil
+	log.Tracef("published tx hash is %s", txid.String())
+
+	return txid.String(), nil
 }
 
 // handleGetWork periodically fetches available work from the consensus daemon.
