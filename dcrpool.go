@@ -65,7 +65,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		MaxTxFeeReserve:   maxTxFeeReserve,
 		MaxGenTime:        new(big.Int).SetUint64(cfg.MaxGenTime),
 		PaymentMethod:     cfg.PaymentMethod,
-		DBFIle:            cfg.DBFile,
+		DBFile:            cfg.DBFile,
 		LastNPeriod:       cfg.LastNPeriod,
 		WalletPass:        cfg.WalletPass,
 		MinPayment:        minPmt,

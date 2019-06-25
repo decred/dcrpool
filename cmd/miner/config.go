@@ -194,15 +194,15 @@ func cleanAndExpandPath(path string) string {
 }
 
 // newConfigParser returns a new command line flags parser.
-func newConfigParser(cfg *config, so *serviceOptions, options flags.Options) *flags.Parser {
+func newConfigParser(cfg *config, so *serviceOptions, options flags.Options) (*flags.Parser, error) {
 	parser := flags.NewParser(cfg, options)
 	if runtime.GOOS == "windows" {
 		_, err := parser.AddGroup("Service Options", "Service Options", so)
 		if err != nil {
-			return nil
+			return nil, err
 		}
 	}
-	return parser
+	return parser, nil
 }
 
 // loadConfig initializes and parses the config using a config file and command
@@ -237,8 +237,13 @@ func loadConfig() (*config, []string, error) {
 	// help message error can be ignored here since they will be caught by
 	// the final parse below.
 	preCfg := cfg
-	preParser := newConfigParser(&preCfg, &serviceOpts, flags.HelpFlag)
-	_, err := preParser.Parse()
+	preParser, err := newConfigParser(&preCfg, &serviceOpts, flags.HelpFlag)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	_, err = preParser.Parse()
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok && e.Type != flags.ErrHelp {
 			fmt.Fprintln(os.Stderr, err)
@@ -306,7 +311,12 @@ func loadConfig() (*config, []string, error) {
 
 	// Load additional config from file.
 	var configFileError error
-	parser := newConfigParser(&cfg, &serviceOpts, flags.Default)
+	parser, err := newConfigParser(&cfg, &serviceOpts, flags.Default)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return nil, nil, err
+	}
+
 	if preCfg.ConfigFile != defaultConfigFile {
 		err = flags.NewIniParser(parser).ParseFile(preCfg.ConfigFile)
 		if err != nil {
