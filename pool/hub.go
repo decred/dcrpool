@@ -97,7 +97,7 @@ type HubConfig struct {
 	LastNPeriod       uint32
 	WalletPass        string
 	MinPayment        dcrutil.Amount
-	DBFIle            string
+	DBFile            string
 	SoloPool          bool
 	PoolFeeAddrs      []dcrutil.Address
 	BackupPass        string
@@ -151,7 +151,7 @@ func (h *Hub) generateBlake256Pad() {
 
 // initDB handles the creation, upgrading and backup of the pool database.
 func (h *Hub) initDB() error {
-	db, err := openDB(h.cfg.DBFIle)
+	db, err := openDB(h.cfg.DBFile)
 	if err != nil {
 		return MakeError(ErrDBOpen, "unable to open db file", err)
 	}
