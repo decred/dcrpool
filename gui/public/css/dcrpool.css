@@ -8568,7 +8568,7 @@ img + span {
   vertical-align: middle; }
 
 html {
-  overflow-y: overlay;
+  overflow-y: auto;
   position: relative;
   min-height: 100%; }
 
