@@ -105,6 +105,7 @@ paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
 backuppass=${BACKUP_PASS}
 guidir=${GUI_DIR}
+designation=${SESSION}
 EOF
 
 cat > "${NODES_ROOT}/dcrmwctl.conf" <<EOF
@@ -193,6 +194,7 @@ paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
 backuppass=${BACKUP_PASS}
 guidir=${GUI_DIR}
+designation=${SESSION}
 EOF
 fi
 
@@ -283,7 +285,7 @@ tmux send-keys "dcrwallet -C mwallet.conf " C-m # --debuglevel=warn
 # ################################################################################
 # # Setup the pool wallet's dcrctl (wctl).
 # ################################################################################
-sleep 5
+sleep 10
 # The consensus daemon must be synced for account generation to 
 # work as expected.
 echo "Setting up pool wallet accounts"
@@ -347,7 +349,7 @@ tmux send-keys "cd ${NODES_ROOT}/vnode" C-m
 
 # mine some blocks to start the chain if the active network is simnet.
 tmux send-keys "./mine 30" C-m
-sleep 5
+sleep 10
 echo "Mined 30 blocks, at stake enabled height (SEH)"
 
 ################################################################################
