@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"strings"
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/gorilla/csrf"
@@ -23,7 +24,21 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 		Designation: ui.cfg.Designation,
 	}
 
-	session, _ := ui.cookieStore.Get(r, "session")
+	session, err := ui.cookieStore.Get(r, "session")
+	if err != nil {
+		if !strings.Contains(err.Error(), "value is not valid") {
+			log.Errorf("session error: %v", err)
+			return
+		}
+
+		log.Errorf("session error: %v, new session generated", err)
+	}
+
+	if session == nil {
+		ui.renderTemplate(w, r, "login", pageData)
+		return
+	}
+
 	if session.Values["IsAdmin"] != true {
 		ui.renderTemplate(w, r, "login", pageData)
 		return
@@ -43,9 +58,23 @@ func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, _ := ui.cookieStore.Get(r, "session")
+	session, err := ui.cookieStore.Get(r, "session")
+	if err != nil {
+		if !strings.Contains(err.Error(), "value is not valid") {
+			log.Errorf("session error: %v", err)
+			return
+		}
+
+		log.Errorf("session error: %v, new session generated", err)
+	}
+
+	if session == nil {
+		ui.GetAdmin(w, r)
+		return
+	}
+
 	session.Values["IsAdmin"] = true
-	err := session.Save(r, w)
+	err = session.Save(r, w)
 	if err != nil {
 		log.Errorf("unable to save session: %v", err)
 		return
@@ -55,9 +84,23 @@ func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ui *GUI) PostLogout(w http.ResponseWriter, r *http.Request) {
-	session, _ := ui.cookieStore.Get(r, "session")
+	session, err := ui.cookieStore.Get(r, "session")
+	if err != nil {
+		if !strings.Contains(err.Error(), "value is not valid") {
+			log.Errorf("session error: %v", err)
+			return
+		}
+
+		log.Errorf("session error: %v, new session generated", err)
+	}
+
+	if session == nil {
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		return
+	}
+
 	session.Values["IsAdmin"] = nil
-	err := session.Save(r, w)
+	err = session.Save(r, w)
 	if err != nil {
 		log.Errorf("unable to save session: %v", err)
 		return
@@ -67,13 +110,27 @@ func (ui *GUI) PostLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ui *GUI) PostBackup(w http.ResponseWriter, r *http.Request) {
-	session, _ := ui.cookieStore.Get(r, "session")
+	session, err := ui.cookieStore.Get(r, "session")
+	if err != nil {
+		if !strings.Contains(err.Error(), "value is not valid") {
+			log.Errorf("session error: %v", err)
+			return
+		}
+
+		log.Errorf("session error: %v, new session generated", err)
+	}
+
+	if session == nil {
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		return
+	}
+
 	if session.Values["IsAdmin"] != true {
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return
 	}
 
-	err := ui.db.View(func(tx *bolt.Tx) error {
+	err = ui.db.View(func(tx *bolt.Tx) error {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", `attachment; filename="backup.db"`)
 		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))

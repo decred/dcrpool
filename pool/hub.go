@@ -90,7 +90,7 @@ type HubConfig struct {
 	DcrdRPCCfg        *rpcclient.ConnConfig
 	PoolFee           float64
 	MaxTxFeeReserve   dcrutil.Amount
-	MaxGenTime        *big.Int
+	MaxGenTime        uint64
 	WalletRPCCertFile string
 	WalletGRPCHost    string
 	PaymentMethod     string
@@ -102,6 +102,7 @@ type HubConfig struct {
 	PoolFeeAddrs      []dcrutil.Address
 	BackupPass        string
 	Secret            string
+	NonceIterations   float64
 }
 
 // DifficultyData captures the pool target difficulty and pool difficulty
@@ -210,12 +211,12 @@ func (h *Hub) initDB() error {
 
 // generateDifficultyData generates difficulty data for all supported miners.
 func (h *Hub) generateDifficultyData() error {
-	maxGenTime := h.cfg.MaxGenTime
+	maxGenTime := new(big.Int).SetUint64(h.cfg.MaxGenTime)
 	if h.cfg.SoloPool {
 		maxGenTime = soloMaxGenTime
 	}
 
-	log.Tracef("Max valid share generation time is: %v seconds", maxGenTime)
+	log.Infof("Max valid share generation time is: %v seconds", maxGenTime)
 
 	h.poolDiffMtx.Lock()
 	for miner, hashrate := range minerHashes {
@@ -226,7 +227,7 @@ func (h *Hub) generateDifficultyData() error {
 			return MakeError(ErrCalcPoolTarget, desc, err)
 		}
 
-		log.Tracef("difficulty for %s is %v", miner, difficulty)
+		log.Infof("difficulty for %s is %v", miner, difficulty)
 
 		h.poolDiff[miner] = &DifficultyData{
 			target:     target,
