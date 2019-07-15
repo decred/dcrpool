@@ -2,7 +2,6 @@ package gui
 
 import (
 	"fmt"
-	"math/big"
 	"net/http"
 
 	"github.com/decred/dcrd/dcrutil"
@@ -13,7 +12,6 @@ type indexData struct {
 	PoolStats        *pool.Stats
 	PoolDomain       string
 	WorkQuotas       []pool.Quota
-	PoolHashRate     *big.Rat
 	SoloPool         bool
 	PaymentMethod    string
 	AccountStats     *AccountStats
@@ -43,15 +41,6 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientInfo := ui.hub.FetchClientInfo()
-
-	poolHashRate := new(big.Rat).SetInt64(0)
-	for _, clients := range clientInfo {
-		for _, client := range clients {
-			poolHashRate = poolHashRate.Add(poolHashRate, client.HashRate)
-		}
-	}
-
 	workQuotas, err := ui.hub.FetchWorkQuotas()
 	if err != nil {
 		log.Error(err)
@@ -64,7 +53,6 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		WorkQuotas:       workQuotas,
 		PaymentMethod:    ui.cfg.PaymentMethod,
 		PoolStats:        poolStats,
-		PoolHashRate:     poolHashRate,
 		PoolDomain:       ui.cfg.Domain,
 		SoloPool:         ui.cfg.SoloPool,
 		Admin:            false,
@@ -138,7 +126,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	data.AccountStats = &AccountStats{
 		MinedWork: work,
 		Payments:  payments,
-		Clients:   clientInfo[accountID],
+		Clients:   poolStats.Clients[accountID],
 		AccountID: accountID,
 	}
 
