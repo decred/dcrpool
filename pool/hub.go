@@ -1055,6 +1055,8 @@ type Stats struct {
 	LastWorkHeight    uint32
 	LastPaymentHeight uint32
 	MinedWork         []*AcceptedWork
+	PoolHashRate      *big.Rat
+	Clients           map[string][]*ClientInfo
 }
 
 // FetchPoolStats returns last height work was generated for.
@@ -1069,6 +1071,18 @@ func (h *Hub) FetchStats() (*Stats, error) {
 
 	work, err := ListMinedWork(h.db, 10)
 	poolStats.MinedWork = work
+
+	clientInfo := h.FetchClientInfo()
+
+	poolHashRate := new(big.Rat).SetInt64(0)
+	for _, clients := range clientInfo {
+		for _, client := range clients {
+			poolHashRate = poolHashRate.Add(poolHashRate, client.HashRate)
+		}
+	}
+
+	poolStats.PoolHashRate = poolHashRate
+	poolStats.Clients = clientInfo
 
 	return poolStats, err
 }
