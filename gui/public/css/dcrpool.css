@@ -8109,11 +8109,6 @@ input[type="submit"]:disabled {
       font-family: "dcrpool-code";
       background: none;
       color: #E9F8FE; }
-    .block__content span {
-      border-radius: 2px;
-      background-color: #d4f0fd;
-      padding: 0 5px;
-      color: #48566e; }
     .block__content .btn-outline-primary {
       margin-right: 20px; }
   .block__key {
