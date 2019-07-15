@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"math"
 	"math/big"
 	"net/http"
 	"os"
@@ -56,6 +57,10 @@ func newPool(cfg *config) (*miningPool, error) {
 	}
 
 	p.ctx, p.cancel = context.WithCancel(context.Background())
+	powLimit := cfg.net.PowLimit
+	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
+	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
+
 	hcfg := &pool.HubConfig{
 		ActiveNet:         cfg.net,
 		WalletRPCCertFile: cfg.WalletRPCCert,
@@ -63,7 +68,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		DcrdRPCCfg:        dcrdRPCCfg,
 		PoolFee:           cfg.PoolFee,
 		MaxTxFeeReserve:   maxTxFeeReserve,
-		MaxGenTime:        new(big.Int).SetUint64(cfg.MaxGenTime),
+		MaxGenTime:        cfg.MaxGenTime,
 		PaymentMethod:     cfg.PaymentMethod,
 		DBFile:            cfg.DBFile,
 		LastNPeriod:       cfg.LastNPeriod,
@@ -71,6 +76,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		MinPayment:        minPmt,
 		PoolFeeAddrs:      cfg.poolFeeAddrs,
 		SoloPool:          cfg.SoloPool,
+		NonceIterations:   iterations,
 	}
 
 	p.hub, err = pool.NewHub(p.ctx, p.cancel, p.httpc, hcfg, p.limiter)

@@ -17,6 +17,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -30,6 +31,10 @@ const (
 	// MaxMessageSize represents the maximum size of a transmitted message
 	// allowed, in bytes.
 	MaxMessageSize = 250
+
+	// hashCalcThreshold represents the minimum operation time in seconds
+	// before a client's hash rate is calculated.
+	hashCalcThreshold = 300
 )
 
 var (
@@ -70,26 +75,26 @@ func reversePrevBlockWords(hashE string) string {
 
 // Client represents a client connection.
 type Client struct {
-	conn               net.Conn
-	endpoint           *endpoint
-	encoder            *json.Encoder
-	reader             *bufio.Reader
-	ctx                context.Context
-	cancel             context.CancelFunc
-	ip                 string
-	name               string
-	extraNonce1        string
-	ch                 chan Message
-	readCh             chan []byte
-	req                map[uint64]string
-	reqMtx             sync.RWMutex
-	account            string
-	authorized         bool
-	subscribed         bool
-	lastSubmissionTime *big.Int
-	hashRate           *big.Rat
-	hashRateMtx        sync.RWMutex
-	wg                 sync.WaitGroup
+	submissions int64 // update atomically
+	conn        net.Conn
+	endpoint    *endpoint
+	encoder     *json.Encoder
+	reader      *bufio.Reader
+	ctx         context.Context
+	cancel      context.CancelFunc
+	ip          string
+	name        string
+	extraNonce1 string
+	ch          chan Message
+	readCh      chan []byte
+	req         map[uint64]string
+	reqMtx      sync.RWMutex
+	account     string
+	authorized  bool
+	subscribed  bool
+	hashRate    *big.Rat
+	hashRateMtx sync.RWMutex
+	wg          sync.WaitGroup
 }
 
 // generateExtraNonce1 generates a random 4-byte extraNonce1 for the
@@ -110,17 +115,16 @@ func (c *Client) generateExtraNonce1() error {
 func NewClient(conn net.Conn, endpoint *endpoint, ip string) (*Client, error) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	c := &Client{
-		conn:               conn,
-		endpoint:           endpoint,
-		ctx:                ctx,
-		cancel:             cancel,
-		ch:                 make(chan Message),
-		readCh:             make(chan []byte),
-		encoder:            json.NewEncoder(conn),
-		reader:             bufio.NewReaderSize(conn, MaxMessageSize),
-		ip:                 ip,
-		lastSubmissionTime: ZeroInt,
-		hashRate:           ZeroRat,
+		conn:     conn,
+		endpoint: endpoint,
+		ctx:      ctx,
+		cancel:   cancel,
+		ch:       make(chan Message),
+		readCh:   make(chan []byte),
+		encoder:  json.NewEncoder(conn),
+		reader:   bufio.NewReaderSize(conn, MaxMessageSize),
+		ip:       ip,
+		hashRate: ZeroRat,
 	}
 
 	err := c.generateExtraNonce1()
@@ -152,33 +156,6 @@ func (c *Client) shutdown() {
 	c.endpoint.hub.limiter.RemoveLimiter(c.ip)
 	c.endpoint.removeClient(c)
 	log.Tracef("Connection to (%v) terminated.", c.generateID())
-}
-
-// calculateHashRate generates the client hash rate based on work submissions
-// from the miner.
-func (c *Client) calculateHashRate() error {
-	now := new(big.Int).SetInt64(time.Now().Unix())
-	if c.lastSubmissionTime.Cmp(ZeroInt) == 0 {
-		c.lastSubmissionTime = now
-		return nil
-	}
-
-	expectedShareTime := new(big.Int).Add(c.lastSubmissionTime,
-		c.endpoint.hub.cfg.MaxGenTime)
-	diff := new(big.Rat).SetFrac(now, expectedShareTime)
-	hash := minerHashes[c.endpoint.miner]
-	if hash == nil {
-		desc := fmt.Sprintf("miner hash not found for %s", c.endpoint.miner)
-		return MakeError(ErrValueNotFound, desc, nil)
-	}
-
-	c.lastSubmissionTime = now
-
-	c.hashRateMtx.Lock()
-	c.hashRate = new(big.Rat).Mul(diff, new(big.Rat).SetInt(hash))
-	c.hashRateMtx.Unlock()
-
-	return nil
 }
 
 // claimWeightedShare records a weighted share for the pool client. This serves
@@ -426,7 +403,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 
 	log.Tracef("Submitted work from %s is: %v", c.generateID(),
 		spew.Sdump(header))
-	log.Infof("Submited work hash at height #%v is %s", header.Height,
+	log.Tracef("Submited work hash at height #%v is %s", header.Height,
 		header.BlockHash().String())
 
 	poolTarget := c.endpoint.diffData.target
@@ -460,11 +437,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 		return
 	}
 
-	// Calculate the hash rate of the client.
-	err = c.calculateHashRate()
-	if err != nil {
-		log.Errorf("unable to calculate hash rate of %s: %v", c.generateID(), err)
-	}
+	atomic.AddInt64(&c.submissions, 1)
 
 	// Claim a weighted share for work contributed to the pool if not mining
 	// in solo mining mode.
@@ -562,10 +535,18 @@ func (c *Client) read() {
 		data, err := c.reader.ReadBytes('\n')
 		if err != nil {
 			if err == io.EOF {
+				c.cancel()
 				return
 			}
 
-			if nErr := err.(*net.OpError); nErr != nil {
+			nErr, ok := err.(*net.OpError)
+			if !ok {
+				log.Errorf("%s: failed to read bytes: %v", c.generateID(), err)
+				c.cancel()
+				return
+			}
+
+			if nErr != nil {
 				if nErr.Op == "read" && nErr.Net == "tcp" {
 					switch {
 					case nErr.Timeout():
@@ -750,6 +731,47 @@ func (c *Client) handleWhatsminerD1Work(req *Request) {
 	}
 }
 
+// handleCPUWork prepares work for the cpu miner.
+func (c *Client) handleCPUWork(req *Request) {
+	err := c.encoder.Encode(req)
+	if err != nil {
+		log.Errorf("Message encoding error: %v", err)
+		c.cancel()
+		return
+	}
+}
+
+func (c *Client) hashMonitor(ctx context.Context) {
+	ticker := time.NewTicker(time.Second * hashCalcThreshold)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			c.wg.Done()
+			return
+
+		case <-ticker.C:
+			submissions := atomic.LoadInt64(&c.submissions)
+			average := float64(hashCalcThreshold / submissions)
+
+			num := new(big.Rat).Mul(
+				new(big.Rat).SetInt(c.endpoint.diffData.difficulty),
+				new(big.Rat).SetFloat64(c.endpoint.hub.cfg.NonceIterations))
+			denom := new(big.Rat).SetFloat64(average)
+
+			hash := new(big.Rat).Quo(num, denom)
+
+			c.hashRateMtx.Lock()
+			c.hashRate = new(big.Rat).Quo(new(big.Rat).Add(c.hashRate, hash),
+				new(big.Rat).SetInt64(2))
+			c.hashRateMtx.Unlock()
+
+			atomic.StoreInt64(&c.submissions, 0)
+		}
+	}
+}
+
 // Send dispatches messages to a pool client. It must be run as a goroutine.
 func (c *Client) send(ctx context.Context) {
 	for {
@@ -787,13 +809,7 @@ func (c *Client) send(ctx context.Context) {
 
 					switch c.endpoint.miner {
 					case CPU:
-						err := c.encoder.Encode(msg)
-						if err != nil {
-							log.Errorf("Message encoding error: %v", err)
-							c.cancel()
-							continue
-						}
-
+						c.handleCPUWork(req)
 						log.Tracef("%s notified of new work", id)
 
 					case AntminerDR3, AntminerDR5:
@@ -805,7 +821,6 @@ func (c *Client) send(ctx context.Context) {
 						log.Tracef("%s notified of new work", id)
 
 					case WhatsminerD1:
-
 						c.handleWhatsminerD1Work(req)
 						log.Tracef("%s notified of new work", id)
 
@@ -835,9 +850,10 @@ func (c *Client) run(ctx context.Context) {
 	c.endpoint.wg.Add(1)
 	go c.read()
 
-	c.wg.Add(2)
+	c.wg.Add(3)
 	go c.process(ctx)
 	go c.send(ctx)
+	go c.hashMonitor(ctx)
 	c.wg.Wait()
 
 	c.shutdown()

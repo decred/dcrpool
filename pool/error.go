@@ -44,7 +44,7 @@ const (
 	// ErrDecode indicates a decode error.
 	ErrDecode
 
-	// ErrNotSupported indicates not supported functionlity.
+	// ErrNotSupported indicates not supported functionality.
 	ErrNotSupported
 
 	// ErrDivideByZero indicates a division by zero error.
