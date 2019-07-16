@@ -84,6 +84,30 @@ func (ui *GUI) route() {
 	ui.router.HandleFunc("/admin", ui.PostAdmin).Methods("POST")
 	ui.router.HandleFunc("/backup", ui.PostBackup).Methods("POST")
 	ui.router.HandleFunc("/logout", ui.PostLogout).Methods("POST")
+
+	// Websocket endpoint allows the GUI to receive updated values
+	ui.router.HandleFunc("/ws", ui.RegisterWebSocket).Methods("GET")
+
+	socketUpdate := func() {
+		poolStats, err := ui.hub.FetchStats()
+		if err != nil {
+			log.Error(err)
+			return
+		}
+
+		ui.SendUpdatedValues(poolStats)
+	}
+
+	// Use a ticker to push updates through the socket periodically
+	ticker := time.NewTicker(RefreshRate)
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				socketUpdate()
+			}
+		}
+	}()
 }
 
 // renderTemplate executes the provided template.

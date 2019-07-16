@@ -8803,3 +8803,38 @@ input:-webkit-autofill {
 table td {
   white-space: nowrap;
 }
+
+.flash {
+  -moz-animation: flash 0.5s ease-out;
+  -moz-animation-iteration-count: 1;
+
+  -webkit-animation: flash 0.5s ease-out;
+  -webkit-animation-iteration-count: 1;
+
+  -ms-animation: flash 0.5s ease-out;
+  -ms-animation-iteration-count: 1;
+}
+
+@keyframes flash {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(255, 255, 255, 0.5); }
+  100% { background-color: transparent; }
+}
+
+@-webkit-keyframes flash {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(255, 255, 255, 0.5); }
+  100% { background-color: transparent; }
+}
+
+@-moz-keyframes flash {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(255, 255, 255, 0.5); }
+  100% { background-color: transparent; }
+}
+
+@-ms-keyframes flash {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(255, 255, 255, 0.5); }
+  100% { background-color: transparent; }
+}

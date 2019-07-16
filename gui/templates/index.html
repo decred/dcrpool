@@ -1,6 +1,33 @@
 {{define "index"}}
 {{template "header" .}}
 
+<script>
+
+    function updateElement(elementID, value) {
+        el = document.getElementById(elementID);
+        if (el.innerHTML != value) {
+            el.innerHTML = value;
+            flashElement(el)
+        }
+    }
+
+    function flashElement(el) {
+        el.classList.add("flash");
+        setTimeout(function(){ el.classList.remove("flash"); }, 1000);
+    }
+
+    (function() {
+        ws = new WebSocket('wss://' + window.location.host + '/ws');
+        ws.addEventListener('message', function(e) {
+            var msg = JSON.parse(e.data);
+            updateElement("pool-hash-rate", msg.poolhashrate);
+            updateElement("last-work-height", msg.lastworkheight);
+            updateElement("last-payment-height", msg.lastpaymentheight);
+        });
+    })();
+
+</script>
+
 <div class="row justify-content-center">
 
     <div class="row col-12">
@@ -176,13 +203,19 @@
                             <div class="col-6">
                                 <div class="d-lg-flex align-items-start align-items-lg-center">
                                     <img class="info-icon mb-1" src="/images/miningPow.svg" alt="">
-                                    <p class="ml-lg-3 mb-0"><strong>Pool Hash Rate:&nbsp;</strong>{{ hashString .PoolStats.PoolHashRate }}</p>
+                                    <p class="ml-lg-3 mb-0">
+                                        <strong>Pool Hash Rate:&nbsp;</strong>
+                                        <span id="pool-hash-rate">{{ hashString .PoolStats.PoolHashRate }}</span>
+                                    </p>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="d-lg-flex align-items-start align-items-lg-center">
                                     <img class="info-icon mb-1" src="/images/blockHeight.svg" alt="">
-                                    <p class="ml-lg-3 mb-0"><strong>Last Work Height:&nbsp;</strong>{{ .PoolStats.LastWorkHeight }}</p>
+                                    <p class="ml-lg-3 mb-0">
+                                        <strong>Last Work Height:&nbsp;</strong>
+                                        <span id="last-work-height">{{ .PoolStats.LastWorkHeight }}</span>
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -197,7 +230,10 @@
                             <div class="col-6">
                                 <div class="d-lg-flex align-items-start align-items-lg-center">
                                     <img class="info-icon mb-1" src="/images/blockrewardOpen.svg" alt="">
-                                    <p class="ml-lg-3 mb-0"><strong>Last Payment Height:&nbsp;</strong>{{ .PoolStats.LastPaymentHeight }}</p>
+                                    <p class="ml-lg-3 mb-0">
+                                        <strong>Last Payment Height:&nbsp;</strong>
+                                        <span id="last-payment-height">{{ .PoolStats.LastPaymentHeight }}</span>
+                                    </p>
                                 </div>
                             </div>
                         </div>
