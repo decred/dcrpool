@@ -31,6 +31,7 @@ debuglevel=trace
 solopool=true
 activenet=NETWORK
 backuppass=BACKUP_PASS
+guidir=GUI_DIR
 ```
 
 Refer to config descriptions for more detail on the options.
@@ -46,7 +47,8 @@ out the mining reward portions due each participating account when it matures.
 
 In addition to identifying itself to the pool, each connecting miner has to  
 specify the address its portion of the mining reward should be sent to   
-when a block is found. For this reason, the mining client's username is a  combination of the address mining rewards are paid to and its name,  
+when a block is found. For this reason, the mining client's username is a  
+combination of the address mining rewards are paid to and its name,  
 formatted as: `address.name`. This username format for pool mining is  
 required. The pool uses the address provided in the username to create  
 an account, all other connected miners with the same address set will   
@@ -69,6 +71,7 @@ poolfeeaddrs=PFEE_ADDR
 paymentmethod=PAYMENT_METHOD
 lastnperiod=LAST_N_PERIOD
 backuppass=BACKUP_PASS
+guidir=GUI_DIR
 ```
 
 Refer to config descriptions for more detail on the options.
@@ -81,6 +84,10 @@ certificate, served on port `:8080`. In production, particularly for pool
 mining, a certificate from an authority (`CA`) like [letsencrypt](https://letsencrypt.org/) is recommended.  
 The user interface also provides pool administrators database backup  
 functionality when needed.
+
+To deploy the user interface, copy `dcrpool/gui/assets` folder to a reachable 
+location and update the gui directory (`--guidir`) of the 
+configuration.
 
 To install and run dcrpool:  
 

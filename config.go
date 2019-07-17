@@ -50,17 +50,17 @@ const (
 	defaultGUIPort         = 8080
 	defaultGUIDir          = "gui"
 	defaultUseLEHTTPS      = false
-	defaultDesignation     = "MyPool"
 	defaultCPUPort         = 5550
 	defaultD9Port          = 5552
 	defaultDR3Port         = 5553
 	defaultDR5Port         = 5554
 	defaultD1Port          = 5555
+	defaultDesignation     = "YourPoolNameHere"
 )
 
 var (
 	defaultActiveNet     = chaincfg.SimNetParams.Name
-	defaultPaymentMethod = pool.PPS
+	defaultPaymentMethod = pool.PPLNS
 	defaultMinPayment    = 0.2
 	dcrpoolHomeDir       = dcrutil.AppDataDir("dcrpool", false)
 	dcrwalletHomeDir     = dcrutil.AppDataDir("dcrwallet", false)
@@ -98,7 +98,7 @@ type config struct {
 	PoolFeeAddrs    []string `long:"poolfeeaddrs" ini-name:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
 	PoolFee         float64  `long:"poolfee" ini-name:"poolfee" description:"The fee charged for pool participation. eg. 0.01 (1%), 0.05 (5%)."`
 	MaxTxFeeReserve float64  `long:"maxtxfeereserve" ini-name:"maxtxfeereserve" description:"The maximum amount reserved for transaction fees, in DCR."`
-	MaxGenTime      uint64   `long:"maxgentime" ini-name:"maxgentime" description:"The share creation target time for the pool in seconds."`
+	MaxGenTime      uint64   `long:"maxgentime" ini-name:"maxgentime" description:"The share creation target time for the pool in seconds. This currently should be below 30 seconds to increase the likelihood a work submission for clients between new work distributions by the pool."`
 	PaymentMethod   string   `long:"paymentmethod" ini-name:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
 	LastNPeriod     uint32   `long:"lastnperiod" ini-name:"lastnperiod" description:"The period of interest when using the PPLNS payment scheme."`
 	WalletPass      string   `long:"walletpass" ini-name:"walletpass" description:"The wallet passphrase."`
