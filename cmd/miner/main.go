@@ -53,7 +53,6 @@ func main() {
 			miner.cancel()
 
 		case <-ctx.Done():
-			miner.conn.Close()
 			return
 		}
 	}()

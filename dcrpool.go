@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
 	"net/http"
@@ -61,6 +62,49 @@ func newPool(cfg *config) (*miningPool, error) {
 	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
 	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
 
+	addPort := func(ports map[string]uint32, key string, entry uint32) error {
+		var match bool
+		var miner string
+		for m, port := range ports {
+			if port == entry {
+				match = true
+				miner = m
+				break
+			}
+		}
+
+		if match {
+			return fmt.Errorf("%s and %s share port :%d. "+
+				"Miner listening ports must be unique.", key, miner, entry)
+		}
+
+		ports[key] = entry
+		return nil
+	}
+
+	// Ensure provided miner ports are unique.
+	minerPorts := make(map[string]uint32)
+	_ = addPort(minerPorts, pool.CPU, cfg.CPUPort)
+	err = addPort(minerPorts, pool.InnosiliconD9, cfg.D9Port)
+	if err != nil {
+		return nil, err
+	}
+
+	err = addPort(minerPorts, pool.AntminerDR3, cfg.DR3Port)
+	if err != nil {
+		return nil, err
+	}
+
+	err = addPort(minerPorts, pool.AntminerDR5, cfg.DR5Port)
+	if err != nil {
+		return nil, err
+	}
+
+	err = addPort(minerPorts, pool.WhatsminerD1, cfg.D1Port)
+	if err != nil {
+		return nil, err
+	}
+
 	hcfg := &pool.HubConfig{
 		ActiveNet:         cfg.net,
 		WalletRPCCertFile: cfg.WalletRPCCert,
@@ -77,6 +121,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		PoolFeeAddrs:      cfg.poolFeeAddrs,
 		SoloPool:          cfg.SoloPool,
 		NonceIterations:   iterations,
+		MinerPorts:        minerPorts,
 	}
 
 	p.hub, err = pool.NewHub(p.ctx, p.cancel, p.httpc, hcfg, p.limiter)

@@ -61,18 +61,6 @@ var (
 	// pool clients since pool shares are a non factor in solo pool mode.
 	soloMaxGenTime = new(big.Int).SetInt64(28)
 
-	// minerPorts is a map of all supported miners and their coresponding
-	// connection ports.
-	//
-	// Port 5551 has been reserved for the Obelisk DCR1.
-	minerPorts = map[string]uint32{
-		CPU:           5550,
-		InnosiliconD9: 5552,
-		AntminerDR3:   5553,
-		AntminerDR5:   5554,
-		WhatsminerD1:  5555,
-	}
-
 	// minerHashes is a map of all known DCR miners and their coressponding
 	// hashrates.
 	minerHashes = map[string]*big.Int{
@@ -103,6 +91,7 @@ type HubConfig struct {
 	BackupPass        string
 	Secret            string
 	NonceIterations   float64
+	MinerPorts        map[string]uint32
 }
 
 // DifficultyData captures the pool target difficulty and pool difficulty
@@ -398,7 +387,7 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, httpc *http.Client, 
 	}
 
 	// Setup listeners for all supported pool clients.
-	for miner, port := range minerPorts {
+	for miner, port := range h.cfg.MinerPorts {
 		endpoint, err := newEndpoint(h, port, miner)
 		if err != nil {
 			return nil, MakeError(ErrOther, "failed to create listeners", err)
