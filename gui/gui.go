@@ -87,27 +87,6 @@ func (ui *GUI) route() {
 
 	// Websocket endpoint allows the GUI to receive updated values
 	ui.router.HandleFunc("/ws", ui.RegisterWebSocket).Methods("GET")
-
-	socketUpdate := func() {
-		poolStats, err := ui.hub.FetchStats()
-		if err != nil {
-			log.Error(err)
-			return
-		}
-
-		ui.SendUpdatedValues(poolStats)
-	}
-
-	// Use a ticker to push updates through the socket periodically
-	ticker := time.NewTicker(RefreshRate)
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				socketUpdate()
-			}
-		}
-	}()
 }
 
 // renderTemplate executes the provided template.
@@ -200,7 +179,7 @@ func (ui *GUI) loadTemplates() error {
 }
 
 // Run starts the user interface.
-func (ui *GUI) Run() {
+func (ui *GUI) Run(ctx context.Context) {
 	go func() {
 		if !ui.cfg.UseLEHTTPS {
 			ui.server = &http.Server{
@@ -270,4 +249,27 @@ func (ui *GUI) Run() {
 			}
 		}
 	}()
+
+	// Use a ticker to push updates through the socket periodically
+	go func(ctx context.Context) {
+		ticker := time.NewTicker(socketRefreshRate)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				poolStats, err := ui.hub.FetchStats()
+				if err != nil {
+					log.Error(err)
+					return
+				}
+
+				ui.SendUpdatedValues(poolStats)
+
+			case <-ctx.Done():
+				log.Trace("Stopping websocket timer")
+				return
+			}
+		}
+	}(ctx)
 }
