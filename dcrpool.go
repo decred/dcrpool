@@ -146,6 +146,6 @@ func main() {
 		}
 	}()
 
-	p.gui.Run()
+	p.gui.Run(p.ctx)
 	p.hub.Run(p.ctx)
 }

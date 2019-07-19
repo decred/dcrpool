@@ -24,7 +24,7 @@ type Message struct {
 	LastPaymentHeight uint32 `json:"lastpaymentheight"`
 }
 
-const RefreshRate = 5 * time.Second
+const socketRefreshRate = 5 * time.Second
 
 func (ui *GUI) RegisterWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Upgrade GET request to a websocket
