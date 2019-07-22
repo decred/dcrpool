@@ -105,8 +105,11 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.I
 					return false
 
 				case <-ticker.C:
-					m.updateHashes <- hashesCompleted
-					hashesCompleted = 0
+					select {
+					case m.updateHashes <- hashesCompleted:
+						hashesCompleted = 0
+					default:
+					}
 
 				case <-m.miner.chainCh:
 					// Stop current work if the chain updates or a new work

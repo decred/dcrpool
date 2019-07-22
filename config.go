@@ -51,6 +51,11 @@ const (
 	defaultGUIDir          = "gui"
 	defaultUseLEHTTPS      = false
 	defaultDesignation     = "MyPool"
+	defaultCPUPort         = 5550
+	defaultD9Port          = 5552
+	defaultDR3Port         = 5553
+	defaultDR5Port         = 5554
+	defaultD1Port          = 5555
 )
 
 var (
@@ -104,6 +109,11 @@ type config struct {
 	Domain          string   `long:"domain" ini-name:"domain" description:"The domain of the mining pool, required for TLS."`
 	UseLEHTTPS      bool     `long:"uselehttps" ini-name:"uselehttps" description:"This enables HTTPS using a Letsencrypt certificate. By default the pool uses a self-signed certificate for HTTPS."`
 	Designation     string   `long:"designation" ini-name:"designation" description:"The designated codename for this pool. Customises the logo in the top toolbar."`
+	CPUPort         uint32   `long:"cpuport" ini-name:"cpuport" description:"CPU miner connection port."`
+	D9Port          uint32   `long:"d9port" ini-name:"d9port" description:"Innosilicon D9 connection port."`
+	DR3Port         uint32   `long:"dr3port" ini-name:"dr3port" description:"Antminer DR3 connection port."`
+	DR5Port         uint32   `long:"dr5port" ini-name:"dr5port" description:"Antminer DR5 connection port."`
+	D1Port          uint32   `long:"d1port" ini-name:"d1port" description:"Whatsminer D1 connection port."`
 	poolFeeAddrs    []dcrutil.Address
 	dcrdRPCCerts    []byte
 	net             *chaincfg.Params
@@ -325,6 +335,11 @@ func loadConfig() (*config, []string, error) {
 		GUIDir:          defaultGUIDir,
 		UseLEHTTPS:      defaultUseLEHTTPS,
 		Designation:     defaultDesignation,
+		CPUPort:         defaultCPUPort,
+		D9Port:          defaultD9Port,
+		DR3Port:         defaultDR3Port,
+		DR5Port:         defaultDR5Port,
+		D1Port:          defaultD1Port,
 	}
 
 	// Service options which are only added on Windows.
