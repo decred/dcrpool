@@ -1,33 +1,6 @@
 {{define "index"}}
 {{template "header" .}}
 
-<script>
-
-    function updateElement(elementID, value) {
-        el = document.getElementById(elementID);
-        if (el.innerHTML != value) {
-            el.innerHTML = value;
-            flashElement(el)
-        }
-    }
-
-    function flashElement(el) {
-        el.classList.add("flash");
-        setTimeout(function () { el.classList.remove("flash"); }, 1000);
-    }
-
-    (function () {
-        ws = new WebSocket('wss://' + window.location.host + '/ws');
-        ws.addEventListener('message', function (e) {
-            var msg = JSON.parse(e.data);
-            updateElement("pool-hash-rate", msg.poolhashrate);
-            updateElement("last-work-height", msg.lastworkheight);
-            updateElement("last-payment-height", msg.lastpaymentheight);
-        });
-    })();
-
-</script>
-
 <div class="row justify-content-center">
 
     <div class="row col-12">
@@ -268,7 +241,7 @@
                 </section>
             </div>
 
-            {{ with .WorkQuotas}}
+            {{ if not .SoloPool}}
             <div class="row ml-md-1">
                 <section class="block">
                     <div class="col-12 block__title">
@@ -276,17 +249,21 @@
                     </div>
                     <div class="col-12 block__content">
                         <div style="overflow: auto; max-height: 250px;">
-                            <table class="table">
-                                <tr>
-                                    <th>Account</th>
-                                    <th>Reward Percentage</th>
-                                </tr>
-                                {{ range . }}
-                                <tr>
-                                    <td>{{ printf "%.12s" .AccountID}}...</td>
-                                    <td>{{ratToPercent .Percentage}}</td>
-                                </tr>
-                                {{end}}
+                            <table id="work-quota-table" class="table">
+                                <thead>
+                                    <tr>
+                                        <th data-sort-method='none'>Account</th>
+                                        <th data-sort-default>Reward Percentage</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {{ range .WorkQuotas }}
+                                        <tr>
+                                            <td class="quota-accountid">{{ truncateAccountID .AccountID}}</td>
+                                            <td class="quota-percent">{{ratToPercent .Percentage}}</td>
+                                        </tr>
+                                    {{end}}
+                                </tbody>
                             </table>
                         </div>
                     </div>
@@ -312,7 +289,7 @@
                                     <td><a href={{$.BlockExplorerURL}}/block/{{.Height}}
                                             rel="noopener noreferrer">{{.Height}}</a></td>
                                     <td>{{.Miner}}</td>
-                                    <td>{{ printf "%.12s" .MinedBy}}...</td>
+                                    <td>{{ truncateAccountID .MinedBy}}</td>
                                 </tr>
                                 {{else}}
                                 <tr>

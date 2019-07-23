@@ -29,6 +29,10 @@ var (
 	PetaHash = new(big.Rat).SetInt64(1000000000000000)
 )
 
+func truncateAccountID(accountID string) string {
+	return fmt.Sprintf("%.12s", accountID) + "..."
+}
+
 // HashString formats the provided hashrate per the best-fit unit.
 func hashString(hash *big.Rat) string {
 	if hash.Cmp(ZeroRat) == 0 {
