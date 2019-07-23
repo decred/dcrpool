@@ -108,6 +108,8 @@ type config struct {
 	GUIDir          string   `long:"guidir" ini-name:"guidir" description:"The path to the directory containing the pool's user interface assets (templates, css etc.)"`
 	Domain          string   `long:"domain" ini-name:"domain" description:"The domain of the mining pool, required for TLS."`
 	UseLEHTTPS      bool     `long:"uselehttps" ini-name:"uselehttps" description:"This enables HTTPS using a Letsencrypt certificate. By default the pool uses a self-signed certificate for HTTPS."`
+	TLSCert         string   `long:"tlscert" ini-name:"tlscert" description:"Path to the TLS cert file."`
+	TLSKey          string   `long:"tlskey" ini-name:"tlskey" description:"Path to the TLS key file."`
 	Designation     string   `long:"designation" ini-name:"designation" description:"The designated codename for this pool. Customises the logo in the top toolbar."`
 	CPUPort         uint32   `long:"cpuport" ini-name:"cpuport" description:"CPU miner connection port."`
 	D9Port          uint32   `long:"d9port" ini-name:"d9port" description:"Innosilicon D9 connection port."`
@@ -334,6 +336,8 @@ func loadConfig() (*config, []string, error) {
 		GUIPort:         defaultGUIPort,
 		GUIDir:          defaultGUIDir,
 		UseLEHTTPS:      defaultUseLEHTTPS,
+		TLSCert:         defaultTLSCertFile,
+		TLSKey:          defaultTLSKeyFile,
 		Designation:     defaultDesignation,
 		CPUPort:         defaultCPUPort,
 		D9Port:          defaultD9Port,
@@ -410,6 +414,17 @@ func loadConfig() (*config, []string, error) {
 			cfg.DBFile = filepath.Join(cfg.DataDir, defaultDBFilename)
 		} else {
 			cfg.DBFile = preCfg.DBFile
+		}
+		if preCfg.TLSCert == defaultTLSCertFile {
+			cfg.TLSCert = filepath.Join(cfg.HomeDir, defaultTLSCertFilename)
+		} else {
+			cfg.TLSCert = preCfg.TLSCert
+		}
+
+		if preCfg.TLSKey == defaultTLSKeyFile {
+			cfg.TLSKey = filepath.Join(cfg.HomeDir, defaultTLSKeyFilename)
+		} else {
+			cfg.TLSKey = preCfg.TLSKey
 		}
 	}
 
@@ -571,9 +586,8 @@ func loadConfig() (*config, []string, error) {
 	}
 
 	// Generate self-signed TLS cert and key if they do not already exist.
-	if !cfg.UseLEHTTPS && (!fileExists(defaultTLSCertFile) ||
-		!fileExists(defaultTLSKeyFile)) {
-		err := genCertPair(defaultTLSCertFile, defaultTLSKeyFile)
+	if !cfg.UseLEHTTPS && (!fileExists(cfg.TLSCert) || !fileExists(cfg.TLSKey)) {
+		err := genCertPair(cfg.TLSCert, cfg.TLSKey)
 		if err != nil {
 			return nil, nil,
 				fmt.Errorf("failed to generate dcrpool's TLS cert/key: %v", err)
