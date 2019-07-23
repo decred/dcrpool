@@ -19,9 +19,15 @@ var upgrader = websocket.Upgrader{
 }
 
 type Message struct {
-	PoolHashRate      string `json:"poolhashrate"`
-	LastWorkHeight    uint32 `json:"lastworkheight"`
-	LastPaymentHeight uint32 `json:"lastpaymentheight"`
+	PoolHashRate      string      `json:"poolhashrate"`
+	LastWorkHeight    uint32      `json:"lastworkheight"`
+	LastPaymentHeight uint32      `json:"lastpaymentheight"`
+	WorkQuotas        []WorkQuota `json:"workquotas"`
+}
+
+type WorkQuota struct {
+	AccountID string `json:"accountid"`
+	Percent   string `json:"percent"`
 }
 
 const socketRefreshRate = 5 * time.Second
@@ -37,11 +43,18 @@ func (ui *GUI) RegisterWebSocket(w http.ResponseWriter, r *http.Request) {
 	clients[ws] = true
 }
 
-func (ui *GUI) SendUpdatedValues(stats *pool.Stats) {
+func (ui *GUI) SendUpdatedValues(stats *pool.Stats, quotas []pool.Quota) {
 	msg := Message{
 		PoolHashRate:      hashString(stats.PoolHashRate),
 		LastWorkHeight:    stats.LastWorkHeight,
 		LastPaymentHeight: stats.LastPaymentHeight,
+	}
+
+	for _, quota := range quotas {
+		msg.WorkQuotas = append(msg.WorkQuotas, WorkQuota{
+			AccountID: truncateAccountID(quota.AccountID),
+			Percent:   ratToPercent(quota.Percentage),
+		})
 	}
 
 	// Send it out to every client that is currently connected

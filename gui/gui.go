@@ -84,6 +84,10 @@ func (ui *GUI) route() {
 	ui.router.PathPrefix("/images/").Handler(http.StripPrefix("/images/",
 		http.FileServer(imagesDir)))
 
+	jsDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "assets/public/js"))
+	ui.router.PathPrefix("/js/").Handler(http.StripPrefix("/js/",
+		http.FileServer(jsDir)))
+
 	ui.router.HandleFunc("/", ui.GetIndex).Methods("GET")
 	ui.router.HandleFunc("/admin", ui.GetAdmin).Methods("GET")
 	ui.router.HandleFunc("/admin", ui.PostAdmin).Methods("POST")
@@ -164,11 +168,12 @@ func (ui *GUI) loadTemplates() error {
 	}
 
 	httpTemplates := template.New("template").Funcs(template.FuncMap{
-		"hashString":     hashString,
-		"upper":          strings.ToUpper,
-		"ratToPercent":   ratToPercent,
-		"floatToPercent": floatToPercent,
-		"time":           formatUnixTime,
+		"hashString":        hashString,
+		"upper":             strings.ToUpper,
+		"ratToPercent":      ratToPercent,
+		"floatToPercent":    floatToPercent,
+		"time":              formatUnixTime,
+		"truncateAccountID": truncateAccountID,
 	})
 
 	// Since template.Must panics with non-nil error, it is much more
@@ -269,7 +274,13 @@ func (ui *GUI) Run(ctx context.Context) {
 					return
 				}
 
-				ui.SendUpdatedValues(poolStats)
+				workQuotas, err := ui.hub.FetchWorkQuotas()
+				if err != nil {
+					log.Error(err)
+					return
+				}
+
+				ui.SendUpdatedValues(poolStats, workQuotas)
 
 			case <-ctx.Done():
 				log.Trace("Stopping websocket timer")
