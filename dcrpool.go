@@ -143,6 +143,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		PaymentMethod: cfg.PaymentMethod,
 		Designation:   cfg.Designation,
 		PoolFee:       cfg.PoolFee,
+		MinerPorts:    minerPorts,
 	}
 
 	p.gui, err = gui.NewGUI(gcfg, p.hub, p.db)

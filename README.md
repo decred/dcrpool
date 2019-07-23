@@ -3,10 +3,11 @@
 [![Build Status](https://travis-ci.com/decred/dcrpool.svg?branch=master)](https://travis-ci.com/decred/dcrpool)
 
 dcrpool is a stratum decred mining pool. It currently supports:
-* Innosilicon D9 (port: 5552, supported firmware: [D9_20180602_094459.swu](https://drive.google.com/open?id=1wofB_OUDkB2gxz_IS7wM8Br6ogKdYDmY))
-* Antminer DR3 (port: 5553)
-* Antminer DR5 (port: 5554) 
-* Whatsminer D1 (port: 5555)
+
+* Innosilicon D9 (default port: 5552, supported firmware: [D9_20180602_094459.swu](https://drive.google.com/open?id=1wofB_OUDkB2gxz_IS7wM8Br6ogKdYDmY))
+* Antminer DR3 (default port: 5553)
+* Antminer DR5 (default port: 5554)
+* Whatsminer D1 (default port: 5555)
 
 The pool can be configured to mine in solo pool mode or as a publicly available  
 mining pool.  Solo pool mode represents a private mining pool operation where  

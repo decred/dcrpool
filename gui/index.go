@@ -13,6 +13,7 @@ import (
 )
 
 type indexData struct {
+	MinerPorts       map[string]uint32
 	PoolStats        *pool.Stats
 	PoolDomain       string
 	WorkQuotas       []pool.Quota
@@ -64,6 +65,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		Designation:      ui.cfg.Designation,
 		PoolFee:          ui.cfg.PoolFee,
 		Network:          ui.cfg.ActiveNet.Name,
+		MinerPorts:       ui.cfg.MinerPorts,
 	}
 
 	address := r.FormValue("address")

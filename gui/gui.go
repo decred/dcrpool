@@ -46,6 +46,7 @@ type Config struct {
 	BlockExplorerURL string
 	Designation      string
 	PoolFee          float64
+	MinerPorts       map[string]uint32
 }
 
 // GUI represents the the mining pool user interface.
