@@ -52,8 +52,7 @@ mkdir -p "${NODES_ROOT}/gui"
 mkdir -p "${NODES_ROOT}/c1"
 mkdir -p "${NODES_ROOT}/c2"
 
-cp -r gui/public ${GUI_DIR}/public
-cp -r gui/templates ${GUI_DIR}/templates
+cp -r gui/assets ${GUI_DIR}/assets
 
 cat > "${NODES_ROOT}/c1/client.conf" <<EOF
 debuglevel=trace

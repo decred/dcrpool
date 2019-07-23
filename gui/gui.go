@@ -1,3 +1,7 @@
+// Copyright (c) 2019 The Decred developers
+// Use of this source code is governed by an ISC
+// license that can be found in the LICENSE file.
+
 package gui
 
 import (
@@ -71,11 +75,11 @@ func (ui *GUI) route() {
 	ui.router = mux.NewRouter()
 	ui.router.Use(csrf.Protect(ui.cfg.CSRFSecret, csrf.Secure(true)))
 
-	cssDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "public/css"))
+	cssDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "assets/public/css"))
 	ui.router.PathPrefix("/css/").Handler(http.StripPrefix("/css/",
 		http.FileServer(cssDir)))
 
-	imagesDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "public/images"))
+	imagesDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "assets/public/images"))
 	ui.router.PathPrefix("/images/").Handler(http.StripPrefix("/images/",
 		http.FileServer(imagesDir)))
 

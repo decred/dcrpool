@@ -1,0 +1,334 @@
+{{define "index"}}
+{{template "header" .}}
+
+<script>
+
+    function updateElement(elementID, value) {
+        el = document.getElementById(elementID);
+        if (el.innerHTML != value) {
+            el.innerHTML = value;
+            flashElement(el)
+        }
+    }
+
+    function flashElement(el) {
+        el.classList.add("flash");
+        setTimeout(function () { el.classList.remove("flash"); }, 1000);
+    }
+
+    (function () {
+        ws = new WebSocket('wss://' + window.location.host + '/ws');
+        ws.addEventListener('message', function (e) {
+            var msg = JSON.parse(e.data);
+            updateElement("pool-hash-rate", msg.poolhashrate);
+            updateElement("last-work-height", msg.lastworkheight);
+            updateElement("last-payment-height", msg.lastpaymentheight);
+        });
+    })();
+
+</script>
+
+<div class="row justify-content-center">
+
+    <div class="row col-12">
+        <div class="col-md-6 col-12">
+
+            {{ if  .AccountStats }}
+            <div class="row">
+                <section class="block">
+                    <div class="col-12 block__title">
+                        <h1><span>Account Information</span></h1>
+                    </div>
+                    <div class="col-12 block__content">
+
+                        <p>Address: {{.Address}}</p>
+                        <p>Account: {{.AccountStats.AccountID}}</p>
+                        <p>Blocks Mined by this Account</p>
+                        <div style="overflow: auto; max-height: 250px;">
+                            <table class="table">
+                                <tr>
+                                    <th>Height</th>
+                                    <th>Confirmed</th>
+                                    <th>Miner</th>
+                                </tr>
+                                {{ range .AccountStats.MinedWork }}
+                                <tr>
+                                    <td><a href={{$.BlockExplorerURL}}/block/{{.Height}}
+                                            rel="noopener noreferrer">{{.Height}}</a></td>
+                                    <td>{{.Confirmed}}</td>
+                                    <td>{{.Miner}}</td>
+                                </tr>
+                                {{else}}
+                                <tr>
+                                    <td colspan="100%">No mined work</td>
+                                </tr>
+                                {{end}}
+                            </table>
+                        </div>
+
+                        <p>Connected Clients</p>
+                        <div style="overflow: auto; max-height: 250px;">
+                            <table class="table">
+                                <tr>
+                                    <th>Miner</th>
+                                    <th>Hash Rate</th>
+                                </tr>
+                                {{ range .AccountStats.Clients }}
+                                <tr>
+                                    <td>{{.Miner}}</td>
+                                    <td>{{hashString .HashRate}}</td>
+                                </tr>
+                                {{else}}
+                                <tr>
+                                    <td colspan="100%">No connected clients</td>
+                                </tr>
+                                {{end}}
+                            </table>
+                        </div>
+
+                        <p>Payments made to this Account</p>
+                        <div style="overflow: auto; max-height: 250px;">
+                            <table class="table">
+                                <tr>
+                                    <th>Work Height</th>
+                                    <th>Payment Height</th>
+                                    <th>Created On</th>
+                                    <th>Amount</th>
+                                    <th>Tx ID</th>
+                                </tr>
+                                {{ range .AccountStats.Payments }}
+                                <tr>
+                                    <td><a href={{$.BlockExplorerURL}}/block/{{.Height}}
+                                            rel="noopener noreferrer">{{.Height}}</a></td>
+                                    <td><a href={{$.BlockExplorerURL}}/block/{{.PaidOnHeight}}
+                                            rel="noopener noreferrer">{{.PaidOnHeight}}</a></td>
+                                    <td>{{ time .CreatedOn }}</td>
+                                    <td>{{ printf "%.3f" .Amount.ToCoin }}&nbsp;DCR</td>
+                                    <td><a
+                                            href="{{$.BlockExplorerURL}}/tx/{{ .TransactionID }}">{{ printf "%.10s" .TransactionID }}...</a>
+                                    </td>
+                                </tr>
+                                {{else}}
+                                <tr>
+                                    <td colspan="100%">No payments for account</td>
+                                </tr>
+                                {{end}}
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            {{else}}
+
+            <div class="row">
+
+                {{ with .Error }}
+                <div class="snackbar snackbar-error">
+                    <div class="snackbar-message">
+                        <p>{{.}}</p>
+                    </div>
+                </div>
+                {{end}}
+
+                <section class="block">
+                    <div class="col-12 block__title">
+                        <h1><span>Mining Pool Overview</span></h1>
+                    </div>
+                    <div class="col-12 block__content">
+                        <p>To mine, point your miner to the pool and set the username as described below in the miner
+                            configuration section.</p>
+
+                        <p>To search for your mining account details, enter your mining address in the search field
+                            above.</p>
+
+                    </div>
+                </section>
+
+                <section class="block">
+                    <div class="col-12 block__title">
+                        <h1><span>Miner Configuration</span></h1>
+                    </div>
+                    <div class="col-12 block__content">
+
+                        <table>
+                            <tr>
+                                <th>Pool URL:</th>
+                                <td><span
+                                        class="config">{{if .PoolDomain}}{{.PoolDomain}}{{else}}localhost{{end}}</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><br /></td>
+                            </tr>
+                            <tr>
+                                <th>Port:</th>
+                                <td><span class="config">5552</span>&nbsp;(Innosilicon D9)</td>
+                            </tr>
+                            <tr>
+                                <th></th>
+                                <td><span class="config">5553</span>&nbsp;(Antminer DR3)</td>
+                            </tr>
+                            <tr>
+                                <th></th>
+                                <td><span class="config">5554</span>&nbsp;(Antminer DR5)</td>
+                            </tr>
+                            <tr>
+                                <th></th>
+                                <td><span class="config">5555</span>&nbsp;(Whatsminer D1)</td>
+                            </tr>
+                            <tr>
+                                <td><br /></td>
+                            </tr>
+                            <tr>
+                                <th>Username:</th>
+                                <td>
+                                    {{ if .SoloPool }}
+                                    Any unique name identifying the client
+                                    {{else}}
+                                    The payment address for receiving rewards and a unique name identifying the client,
+                                    formatted as <span class="config">address.name</span>
+                                    {{end}}
+                                </td>
+                            </tr>
+                        </table>
+
+                    </div>
+
+                </section>
+            </div>
+
+            {{end}}
+
+        </div>
+        <div class="col-md-6 col-12">
+
+            <div class="row ml-md-1">
+                <section class="block">
+                    <div class="col-12 block__title">
+                        <h1><span>Pool Information</span></h1>
+                    </div>
+                    <div class="col-12 block__content">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <div class="d-lg-flex align-items-start align-items-lg-center">
+                                    <img class="info-icon mb-1" src="/images/miningPow.svg" alt="">
+                                    <p class="ml-lg-3 mb-0">
+                                        <strong>Pool Hash Rate:&nbsp;</strong>
+                                        <span id="pool-hash-rate">{{ hashString .PoolStats.PoolHashRate }}</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="d-lg-flex align-items-start align-items-lg-center">
+                                    <img class="info-icon mb-1" src="/images/blockHeight.svg" alt="">
+                                    <p class="ml-lg-3 mb-0">
+                                        <strong>Last Work Height:&nbsp;</strong>
+                                        <span id="last-work-height">{{ .PoolStats.LastWorkHeight }}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        {{ if not .SoloPool }}
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <div class="d-lg-flex align-items-start align-items-lg-center">
+                                    <img class="info-icon mb-1" src="/images/cryptocurrency.svg" alt="">
+                                    <p class="ml-lg-3 mb-0"><strong>Payment
+                                            Method:&nbsp;</strong>{{ upper .PaymentMethod }}</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="d-lg-flex align-items-start align-items-lg-center">
+                                    <img class="info-icon mb-1" src="/images/blockrewardOpen.svg" alt="">
+                                    <p class="ml-lg-3 mb-0">
+                                        <strong>Last Payment Height:&nbsp;</strong>
+                                        <span id="last-payment-height">{{ .PoolStats.LastPaymentHeight }}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        {{end}}
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <div class="d-lg-flex align-items-start align-items-lg-center">
+                                    <img class="info-icon mb-1" src="/images/server.svg" alt="">
+                                    <p class="ml-lg-3 mb-0"><strong>Network:&nbsp;</strong>{{.Network}}</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="d-lg-flex align-items-start align-items-lg-center">
+                                    <img class="info-icon mb-1" src="/images/charts.svg" alt="">
+                                    <p class="ml-lg-3 mb-0"><strong>Pool Fee:&nbsp;</strong>{{floatToPercent .PoolFee }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            {{ with .WorkQuotas}}
+            <div class="row ml-md-1">
+                <section class="block">
+                    <div class="col-12 block__title">
+                        <h1><span>Next Reward Payment</span></h1>
+                    </div>
+                    <div class="col-12 block__content">
+                        <div style="overflow: auto; max-height: 250px;">
+                            <table class="table">
+                                <tr>
+                                    <th>Account</th>
+                                    <th>Reward Percentage</th>
+                                </tr>
+                                {{ range . }}
+                                <tr>
+                                    <td>{{ printf "%.12s" .AccountID}}...</td>
+                                    <td>{{ratToPercent .Percentage}}</td>
+                                </tr>
+                                {{end}}
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            {{end}}
+
+            <div class="row ml-md-1">
+                <section class="block">
+                    <div class="col-12 block__title">
+                        <h1><span>Blocks Mined by Pool</span></h1>
+                    </div>
+                    <div class="col-12 block__content">
+                        <div style="overflow: auto; max-height: 400px;">
+                            <table class="table">
+                                <tr>
+                                    <th>Height</th>
+                                    <th>Miner</th>
+                                    <th>Mined By</th>
+                                </tr>
+                                {{ range .PoolStats.MinedWork }}
+                                <tr>
+                                    <td><a href={{$.BlockExplorerURL}}/block/{{.Height}}
+                                            rel="noopener noreferrer">{{.Height}}</a></td>
+                                    <td>{{.Miner}}</td>
+                                    <td>{{ printf "%.12s" .MinedBy}}...</td>
+                                </tr>
+                                {{else}}
+                                <tr>
+                                    <td colspan="100%">No mined work</td>
+                                </tr>
+                                {{end}}
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+{{template "footer" .}}
+{{end}}
