@@ -270,9 +270,9 @@
                                 </thead>
                                 <tbody>
                                     {{ range .WorkQuotas }}
-                                        <tr>
-                                            <td class="quota-accountid">{{ truncateAccountID .AccountID}}</td>
-                                            <td class="quota-percent">{{ratToPercent .Percentage}}</td>
+                                        <tr data-row-id="{{ truncateAccountID .AccountID}}">
+                                            <td>{{ truncateAccountID .AccountID}}</td>
+                                            <td>{{ratToPercent .Percentage}}</td>
                                         </tr>
                                     {{end}}
                                 </tbody>

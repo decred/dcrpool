@@ -30,20 +30,25 @@ function flashElement(el) {
     el.classList.add("flash");
     setTimeout(function () { el.classList.remove("flash"); }, 1000);
 }
+function removeElement(el) {
+    el.parentNode.removeChild(el);
+}
 
 function updateWorkQuotas(quotas) {
+    quotasTableBody = document.getElementById('work-quota-table').querySelector('tbody');
+
     // Ensure all received quotas are in the table
     var changeMade = false;
     for (i = 0; i < quotas.length; i++) {
         var exists = false;
-        var rows = document.getElementById('work-quota-table').querySelector('tbody').querySelectorAll('tr');
+        var rows = quotasTableBody.querySelectorAll('tr');
         for (j = 0; j < rows.length; j++) {
-            var accountID = rows[j].querySelector('.quota-accountid');
-            if (quotas[i].accountid == accountID.innerHTML) {
+            var accountID = rows[j].getAttribute('data-row-id');
+            if (quotas[i].accountid == accountID) {
                 // Row already exists for this account ID
                 exists = true;
                 // Update percentage for this account if required
-                var percent = rows[j].querySelector('.quota-percent');
+                var percent = rows[j].cells[1];
                 if (quotas[i].percent != percent.innerHTML) {
                     percent.innerHTML = quotas[i].percent;
                     flashElement(percent);
@@ -54,13 +59,10 @@ function updateWorkQuotas(quotas) {
 
         if (exists == false) {
             // Add a new row for this account
-            var newRow = document.getElementById('work-quota-table').querySelector('tbody').insertRow(0);
-            var cell1 = newRow.insertCell(0);
-            cell1.innerHTML = quotas[i].accountid;
-            cell1.classList.add("quota-accountid");
-            var cell2 = newRow.insertCell(1);
-            cell2.innerHTML = quotas[i].percent;
-            cell2.classList.add("quota-percent");
+            var newRow = quotasTableBody.insertRow(0);
+            newRow.setAttribute("data-row-id", quotas[i].accountid);
+            newRow.insertCell(0).innerHTML = quotas[i].accountid;
+            newRow.insertCell(1).innerHTML = quotas[i].percent;
             flashElement(newRow);
             changeMade = true;
         }
@@ -68,12 +70,11 @@ function updateWorkQuotas(quotas) {
 
     // Find any rows which are no longer included in quotas
     var rowsToRemove = [];
-    var rows = document.getElementById('work-quota-table').querySelector('tbody').querySelectorAll('tr');
+    var rows = quotasTableBody.querySelectorAll('tr');
     for (j = 0; j < rows.length; j++) {
         var exists = false;
         for (i = 0; i < quotas.length; i++) {
-            var accountID = rows[j].querySelector('.quota-accountid');
-            if (accountID.innerHTML == quotas[i].accountid) {
+            if (rows[j].getAttribute('data-row-id') == quotas[i].accountid) {
                 exists = true
                 break
             }
@@ -85,7 +86,7 @@ function updateWorkQuotas(quotas) {
     
     // Remove the unnecessary rows
     for (j = 0; j < rowsToRemove.length; j++) {
-        rowsToRemove[j].parentNode.removeChild(rowsToRemove[j]);
+        removeElement(rowsToRemove[j]);
         changeMade = true;
     }
 
