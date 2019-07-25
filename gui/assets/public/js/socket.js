@@ -77,6 +77,12 @@ function updateMinedBlocks(minedBlocks) {
     if (changeMade) {
         minedBlocksSort.refresh();
     }
+
+    // Remove all but the 10 most recent blocks
+    var rowsToRemove = blocksTableBody.querySelectorAll('tr:nth-child(10) ~ tr');
+    for (j = 0; j < rowsToRemove.length; j++) {
+        removeElement(rowsToRemove[j]);
+    }
 }
 
 function updateWorkQuotas(quotas) {
