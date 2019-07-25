@@ -29,7 +29,7 @@
                                 <tbody>
                                     {{ range .AccountStats.MinedWork }}
                                     <tr>
-                                        <td><a href="{{$.BlockExplorerURL}}/block/{{.Height}}"
+                                        <td><a href="{{ blockURL $.BlockExplorerURL .Height}}"
                                                 rel="noopener noreferrer">{{.Height}}</a></td>
                                         <td>{{.Confirmed}}</td>
                                         <td>{{.Miner}}</td>
@@ -82,14 +82,14 @@
                                 <tbody>
                                     {{ range .AccountStats.Payments }}
                                     <tr>
-                                        <td><a href="{{$.BlockExplorerURL}}/block/{{.Height}}"
+                                        <td><a href="{{ blockURL $.BlockExplorerURL .Height}}"
                                                 rel="noopener noreferrer">{{.Height}}</a></td>
-                                        <td><a href="{{$.BlockExplorerURL}}/block/{{.PaidOnHeight}}"
+                                        <td><a href="{{ blockURL $.BlockExplorerURL .PaidOnHeight}}"
                                                 rel="noopener noreferrer">{{.PaidOnHeight}}</a></td>
                                         <td>{{ time .CreatedOn }}</td>
                                         <td>{{ printf "%.3f" .Amount.ToCoin }}&nbsp;DCR</td>
-                                        <td><a
-                                                href="{{$.BlockExplorerURL}}/tx/{{ .TransactionID }}">{{ printf "%.10s" .TransactionID }}...</a>
+                                        <td><a href="{{ txURL $.BlockExplorerURL .TransactionID}}"
+                                                rel="noopener noreferrer">{{ printf "%.10s" .TransactionID }}...</a>
                                         </td>
                                     </tr>
                                     {{else}}
@@ -290,25 +290,21 @@
                     </div>
                     <div class="col-12 block__content">
                         <div style="overflow: auto; max-height: 400px;">
-                            <table class="table">
+                            <table id="mined-blocks-table" class="table">
                                 <thead>
                                     <tr>
-                                        <th>Height</th>
-                                        <th>Miner</th>
-                                        <th>Mined By</th>
+                                        <th data-sort-default>Height</th>
+                                        <th data-sort-method="none">Miner</th>
+                                        <th data-sort-method="none">Mined By</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {{ range .PoolStats.MinedWork }}
-                                        <tr>
-                                            <td><a href="{{$.BlockExplorerURL}}/block/{{.Height}}"
+                                        <tr data-row-id="{{.Height}}">
+                                            <td><a href="{{ blockURL $.BlockExplorerURL .Height}}"
                                                     rel="noopener noreferrer">{{.Height}}</a></td>
                                             <td>{{.Miner}}</td>
                                             <td>{{ truncateAccountID .MinedBy}}</td>
-                                        </tr>
-                                    {{else}}
-                                        <tr>
-                                            <td colspan="100%">No mined work</td>
                                         </tr>
                                     {{end}}
                                 </tbody>

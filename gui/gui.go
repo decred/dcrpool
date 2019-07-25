@@ -174,6 +174,8 @@ func (ui *GUI) loadTemplates() error {
 		"floatToPercent":    floatToPercent,
 		"time":              formatUnixTime,
 		"truncateAccountID": truncateAccountID,
+		"blockURL":          blockURL,
+		"txURL":             txURL,
 	})
 
 	// Since template.Must panics with non-nil error, it is much more
