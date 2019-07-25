@@ -67,6 +67,14 @@ func hashString(hash *big.Rat) string {
 	return "< 1KH/s"
 }
 
+func blockURL(blockExplorerURL string, blockHeight uint32) string {
+	return blockExplorerURL + "/block/" + fmt.Sprint(blockHeight)
+}
+
+func txURL(blockExplorerURL string, txID string) string {
+	return blockExplorerURL + "/tx/" + txID
+}
+
 // formatUnixTime formats the provided integer as a UTC time string,
 func formatUnixTime(unix int64) string {
 	return time.Unix(0, unix).Format("2-Jan-2006 15:04:05 MST")

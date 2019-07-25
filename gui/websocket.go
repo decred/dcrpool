@@ -24,11 +24,19 @@ type Message struct {
 	LastWorkHeight    uint32      `json:"lastworkheight"`
 	LastPaymentHeight uint32      `json:"lastpaymentheight"`
 	WorkQuotas        []WorkQuota `json:"workquotas"`
+	MinedWork         []MinedWork `json:"minedblocks"`
 }
 
 type WorkQuota struct {
 	AccountID string `json:"accountid"`
 	Percent   string `json:"percent"`
+}
+
+type MinedWork struct {
+	BlockHeight uint32 `json:"blockheight"`
+	BlockURL    string `json:"blockurl"`
+	MinedBy     string `json:"minedby"`
+	Miner       string `json:"miner"`
 }
 
 const socketRefreshRate = 5 * time.Second
@@ -56,6 +64,15 @@ func (ui *GUI) SendUpdatedValues(stats *pool.Stats, quotas []pool.Quota) {
 		msg.WorkQuotas = append(msg.WorkQuotas, WorkQuota{
 			AccountID: truncateAccountID(quota.AccountID),
 			Percent:   ratToPercent(quota.Percentage),
+		})
+	}
+
+	for _, block := range stats.MinedWork {
+		msg.MinedWork = append(msg.MinedWork, MinedWork{
+			BlockHeight: block.Height,
+			BlockURL:    blockURL(ui.cfg.BlockExplorerURL, block.Height),
+			MinedBy:     truncateAccountID(block.MinedBy),
+			Miner:       block.Miner,
 		})
 	}
 

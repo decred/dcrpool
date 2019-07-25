@@ -1,7 +1,12 @@
 var quotaSort;
+var minedBlocksSort;
 
 document.addEventListener("DOMContentLoaded", function () {
     quotaSort = new Tablesort(document.getElementById('work-quota-table'), {
+        descending: true
+    });
+
+    minedBlocksSort = new Tablesort(document.getElementById('mined-blocks-table'), {
         descending: true
     });
 
@@ -15,6 +20,10 @@ document.addEventListener("DOMContentLoaded", function () {
             msg.workquotas = [];
         }
         updateWorkQuotas(msg.workquotas);
+        if (msg.minedblocks == null) {
+            msg.minedblocks = [];
+        }
+        updateMinedBlocks(msg.minedblocks);
     });
 });
 
@@ -32,6 +41,42 @@ function flashElement(el) {
 }
 function removeElement(el) {
     el.parentNode.removeChild(el);
+}
+
+function updateMinedBlocks(minedBlocks) {
+    blocksTableBody = document.getElementById('mined-blocks-table').querySelector('tbody');
+
+    // Ensure all received blocks are in the table
+    var changeMade = false;
+    for (i = 0; i < minedBlocks.length; i++) {
+        var exists = false;
+        var rows = blocksTableBody.querySelectorAll('tr');
+        for (j = 0; j < rows.length; j++) {
+            var blockHeight = rows[j].getAttribute('data-row-id');
+            if (minedBlocks[i].blockheight == blockHeight) {
+                exists = true;
+                break;
+            }
+        }
+
+        if (exists == false) {
+            // Add a new row for this block
+            var newRow = blocksTableBody.insertRow(0);
+            newRow.setAttribute("data-row-id", minedBlocks[i].blockheight);
+            var a = document.createElement('a');
+            a.setAttribute('href', minedBlocks[i].blockurl);
+            a.innerHTML = minedBlocks[i].blockheight;
+            newRow.insertCell(0).appendChild(a);
+            newRow.insertCell(1).innerHTML = minedBlocks[i].miner;
+            newRow.insertCell(2).innerHTML = minedBlocks[i].minedby;
+            flashElement(newRow);
+            changeMade = true;
+        }
+    }
+
+    if (changeMade) {
+        minedBlocksSort.refresh();
+    }
 }
 
 function updateWorkQuotas(quotas) {
@@ -54,6 +99,7 @@ function updateWorkQuotas(quotas) {
                     flashElement(percent);
                     changeMade = true;
                 }
+                break;
             }
         }
 
@@ -75,8 +121,8 @@ function updateWorkQuotas(quotas) {
         var exists = false;
         for (i = 0; i < quotas.length; i++) {
             if (rows[j].getAttribute('data-row-id') == quotas[i].accountid) {
-                exists = true
-                break
+                exists = true;
+                break;
             }
         }
         if (exists == false) {
