@@ -1,9 +1,10 @@
 package gui
 
 import (
-	"github.com/decred/dcrpool/pool"
 	"net/http"
 	"time"
+
+	"github.com/decred/dcrpool/pool"
 
 	"github.com/gorilla/websocket"
 )
@@ -37,6 +38,7 @@ func (ui *GUI) RegisterWebSocket(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Errorf("websocket error: %v", err)
+		return
 	}
 
 	// Register our new client

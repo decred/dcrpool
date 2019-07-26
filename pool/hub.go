@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1177,4 +1178,17 @@ func (h *Hub) CSRFSecret(getCSRF func() ([]byte, error)) ([]byte, error) {
 	}
 
 	return secret, nil
+}
+
+// BackupDB streams a backup of the database over an http response.
+func (h *Hub) BackupDB(w http.ResponseWriter) error {
+	err := h.db.View(func(tx *bolt.Tx) error {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", `attachment; filename="backup.db"`)
+		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
+		_, err := tx.WriteTo(w)
+		return err
+	})
+
+	return err
 }

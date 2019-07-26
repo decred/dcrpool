@@ -20,7 +20,6 @@ import (
 
 	"golang.org/x/crypto/acme/autocert"
 
-	bolt "github.com/coreos/bbolt"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -53,7 +52,6 @@ type Config struct {
 type GUI struct {
 	cfg         *Config
 	hub         *pool.Hub
-	db          *bolt.DB
 	templates   *template.Template
 	cookieStore *sessions.CookieStore
 	router      *mux.Router
@@ -116,11 +114,10 @@ func (ui *GUI) renderTemplate(w http.ResponseWriter, r *http.Request, name strin
 }
 
 // NewGUI creates an instance of the user interface.
-func NewGUI(cfg *Config, hub *pool.Hub, db *bolt.DB) (*GUI, error) {
+func NewGUI(cfg *Config, hub *pool.Hub) (*GUI, error) {
 	ui := &GUI{
 		cfg: cfg,
 		hub: hub,
-		db:  db,
 	}
 
 	switch cfg.ActiveNet.Name {
