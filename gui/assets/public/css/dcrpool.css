@@ -1336,6 +1336,8 @@ pre {
     padding: 0.75rem;
     vertical-align: top; }
   .table thead th {
+    position: sticky;
+    top: 0;
     border: none; }
   .table .table {
     background-color: #fff; }
@@ -8447,7 +8449,7 @@ input[type="submit"]:disabled {
 }
 
 .table th {
-  background-color: rgba(0, 0, 0, 0.1) }
+  background-color: #1B2B54 }
 
 .table .thead-light th {
   background-color: #edeff1;
