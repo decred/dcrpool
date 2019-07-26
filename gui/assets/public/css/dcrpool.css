@@ -8109,7 +8109,8 @@ input[type="submit"]:disabled {
     .block__content table td .config {
       font-family: "dcrpool-code";
       background: none;
-      color: #E9F8FE; }
+      color: #E9F8FE;
+      word-break: break-word; }
     .block__content .btn-outline-primary {
       margin-right: 20px; }
   .block__key {
