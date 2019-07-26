@@ -7,10 +7,8 @@ package gui
 import (
 	"html/template"
 	"net/http"
-	"strconv"
 	"strings"
 
-	bolt "github.com/coreos/bbolt"
 	"github.com/gorilla/csrf"
 
 	"github.com/decred/dcrpool/pool"
@@ -134,13 +132,7 @@ func (ui *GUI) PostBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = ui.db.View(func(tx *bolt.Tx) error {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", `attachment; filename="backup.db"`)
-		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
-		_, err := tx.WriteTo(w)
-		return err
-	})
+	err = ui.hub.BackupDB(w)
 
 	if err != nil {
 		log.Errorf("Error backing up database: %v", err)

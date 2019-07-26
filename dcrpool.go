@@ -14,7 +14,6 @@ import (
 	"os/signal"
 	"runtime"
 
-	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/rpcclient"
 
@@ -25,7 +24,6 @@ import (
 // miningPool represents a decred Proof-of-Work mining pool.
 type miningPool struct {
 	cfg     *config
-	db      *bolt.DB
 	httpc   *http.Client
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -146,7 +144,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		MinerPorts:    minerPorts,
 	}
 
-	p.gui, err = gui.NewGUI(gcfg, p.hub, p.db)
+	p.gui, err = gui.NewGUI(gcfg, p.hub)
 	if err != nil {
 		return nil, err
 	}
