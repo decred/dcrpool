@@ -126,6 +126,8 @@ func NewGUI(cfg *Config, hub *pool.Hub, db *bolt.DB) (*GUI, error) {
 	switch cfg.ActiveNet.Name {
 	case chaincfg.TestNet3Params.Name:
 		ui.cfg.BlockExplorerURL = "https://testnet.dcrdata.org"
+	case chaincfg.SimNetParams.Name:
+		ui.cfg.BlockExplorerURL = "..."
 	default:
 		ui.cfg.BlockExplorerURL = "https://explorer.dcrdata.org"
 	}
