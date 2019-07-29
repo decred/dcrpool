@@ -36,18 +36,17 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("session error: %v, new session generated", err)
 	}
 
-	if session == nil {
-		ui.renderTemplate(w, r, "login", pageData)
-		return
-	}
-
 	if session.Values["IsAdmin"] != true {
 		ui.renderTemplate(w, r, "login", pageData)
 		return
 	}
 
-	pageData.Connections = ui.hub.FetchClientInfo()
+	if !ui.limiter.WithinLimit(session.ID, pool.APIClient) {
+		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
+		return
+	}
 
+	pageData.Connections = ui.hub.FetchClientInfo()
 	ui.renderTemplate(w, r, "admin", pageData)
 }
 
@@ -68,11 +67,6 @@ func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Errorf("session error: %v, new session generated", err)
-	}
-
-	if session == nil {
-		ui.GetAdmin(w, r)
-		return
 	}
 
 	session.Values["IsAdmin"] = true
@@ -96,11 +90,6 @@ func (ui *GUI) PostLogout(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("session error: %v, new session generated", err)
 	}
 
-	if session == nil {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
-		return
-	}
-
 	session.Values["IsAdmin"] = nil
 	err = session.Save(r, w)
 	if err != nil {
@@ -122,13 +111,13 @@ func (ui *GUI) PostBackup(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("session error: %v, new session generated", err)
 	}
 
-	if session == nil {
+	if session.Values["IsAdmin"] != true {
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return
 	}
 
-	if session.Values["IsAdmin"] != true {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	if !ui.limiter.WithinLimit(session.ID, pool.APIClient) {
+		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
 		return
 	}
 
@@ -136,7 +125,8 @@ func (ui *GUI) PostBackup(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Errorf("Error backing up database: %v", err)
-		http.Error(w, "Error backing up database: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Error backing up database: "+err.Error(),
+			http.StatusInternalServerError)
 		return
 	}
 }

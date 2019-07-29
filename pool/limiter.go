@@ -25,11 +25,11 @@ const (
 
 	// apiTokenRate is the token refill rate for the api request bucket,
 	// per second.
-	apiTokenRate = 1
+	apiTokenRate = 3
 
 	// apiBurst is the maximum token usage allowed per second,
 	// for api clients.
-	apiBurst = 1
+	apiBurst = 3
 
 	// apiClient represents an api client.
 	APIClient = "api"

@@ -54,6 +54,7 @@ type Config struct {
 type GUI struct {
 	cfg         *Config
 	hub         *pool.Hub
+	limiter     *pool.RateLimiter
 	templates   *template.Template
 	cookieStore *sessions.CookieStore
 	router      *mux.Router
@@ -124,10 +125,11 @@ func (ui *GUI) renderTemplate(w http.ResponseWriter, r *http.Request, name strin
 }
 
 // NewGUI creates an instance of the user interface.
-func NewGUI(cfg *Config, hub *pool.Hub) (*GUI, error) {
+func NewGUI(cfg *Config, hub *pool.Hub, limiter *pool.RateLimiter) (*GUI, error) {
 	ui := &GUI{
 		cfg:        cfg,
 		hub:        hub,
+		limiter:    limiter,
 		workQuotas: make([]*pool.Quota, 0),
 		minedWork:  make([]*pool.AcceptedWork, 0),
 		poolHash:   ZeroRat,

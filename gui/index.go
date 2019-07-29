@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"strings"
 
 	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrpool/pool"
@@ -43,6 +44,21 @@ type AccountStats struct {
 }
 
 func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
+	session, err := ui.cookieStore.Get(r, "session")
+	if err != nil {
+		if !strings.Contains(err.Error(), "value is not valid") {
+			log.Errorf("session error: %v", err)
+			return
+		}
+
+		log.Errorf("session error: %v, new session generated", err)
+	}
+
+	if !ui.limiter.WithinLimit(session.ID, pool.APIClient) {
+		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
+		return
+	}
+
 	ui.minedWorkMtx.Lock()
 	minedWork := ui.minedWork
 	ui.minedWorkMtx.Unlock()
