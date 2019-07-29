@@ -2,81 +2,83 @@ package gui
 
 import (
 	"net/http"
-	"time"
-
-	"github.com/decred/dcrpool/pool"
 
 	"github.com/gorilla/websocket"
 )
 
-var clients = make(map[*websocket.Conn]bool) // connected clients
-var broadcast = make(chan Message)           // broadcast channel
+var clients = make(map[*websocket.Conn]bool)
+var upgrader = websocket.Upgrader{}
 
-// Configure the upgrader
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
-
-type Message struct {
+// payload represents a websocket update message.
+type payload struct {
 	PoolHashRate      string      `json:"poolhashrate"`
 	LastWorkHeight    uint32      `json:"lastworkheight"`
 	LastPaymentHeight uint32      `json:"lastpaymentheight"`
-	WorkQuotas        []WorkQuota `json:"workquotas"`
-	MinedWork         []MinedWork `json:"minedblocks"`
+	WorkQuotas        []workQuota `json:"workquotas"`
+	MinedWork         []minedWork `json:"minedblocks"`
 }
 
-type WorkQuota struct {
+// workQuota represents dividend garnered by pool accounts through work
+// contributed.
+type workQuota struct {
 	AccountID string `json:"accountid"`
 	Percent   string `json:"percent"`
 }
 
-type MinedWork struct {
+// minedWork represents a block mined by the pool.
+type minedWork struct {
 	BlockHeight uint32 `json:"blockheight"`
 	BlockURL    string `json:"blockurl"`
 	MinedBy     string `json:"minedby"`
 	Miner       string `json:"miner"`
 }
 
-const socketRefreshRate = 5 * time.Second
-
 func (ui *GUI) RegisterWebSocket(w http.ResponseWriter, r *http.Request) {
-	// Upgrade GET request to a websocket
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Errorf("websocket error: %v", err)
 		return
 	}
 
-	// Register our new client
 	clients[ws] = true
 }
 
-func (ui *GUI) SendUpdatedValues(stats *pool.Stats, quotas []pool.Quota) {
-	msg := Message{
-		PoolHashRate:      hashString(stats.PoolHashRate),
-		LastWorkHeight:    stats.LastWorkHeight,
-		LastPaymentHeight: stats.LastPaymentHeight,
-	}
-
-	for _, quota := range quotas {
-		msg.WorkQuotas = append(msg.WorkQuotas, WorkQuota{
-			AccountID: truncateAccountID(quota.AccountID),
-			Percent:   ratToPercent(quota.Percentage),
-		})
-	}
-
-	for _, block := range stats.MinedWork {
-		msg.MinedWork = append(msg.MinedWork, MinedWork{
+// updateWS sends updates to all connected websocket clients.
+func (ui *GUI) updateWS() {
+	workData := make([]minedWork, 0)
+	ui.minedWorkMtx.Lock()
+	for _, block := range ui.minedWork {
+		workData = append(workData, minedWork{
 			BlockHeight: block.Height,
 			BlockURL:    blockURL(ui.cfg.BlockExplorerURL, block.Height),
 			MinedBy:     truncateAccountID(block.MinedBy),
 			Miner:       block.Miner,
 		})
 	}
+	ui.minedWorkMtx.Unlock()
 
-	// Send it out to every client that is currently connected
+	quotaData := make([]workQuota, 0)
+	ui.workQuotasMtx.Lock()
+	for _, quota := range ui.workQuotas {
+		quotaData = append(quotaData, workQuota{
+			AccountID: truncateAccountID(quota.AccountID),
+			Percent:   ratToPercent(quota.Percentage),
+		})
+	}
+	ui.workQuotasMtx.Unlock()
+
+	ui.poolHashMtx.Lock()
+	poolHash := hashString(ui.poolHash)
+	ui.poolHashMtx.Unlock()
+
+	msg := payload{
+		LastWorkHeight:    ui.hub.FetchLastWorkHeight(),
+		LastPaymentHeight: ui.hub.FetchLastPaymentHeight(),
+		PoolHashRate:      poolHash,
+		WorkQuotas:        quotaData,
+		MinedWork:         workData,
+	}
+
 	for client := range clients {
 		err := client.WriteJSON(msg)
 		if err != nil {

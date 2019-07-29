@@ -6,6 +6,7 @@ package gui
 
 import (
 	"fmt"
+	"math/big"
 	"net/http"
 
 	"github.com/decred/dcrd/dcrutil"
@@ -13,20 +14,23 @@ import (
 )
 
 type indexData struct {
-	MinerPorts       map[string]uint32
-	PoolStats        *pool.Stats
-	PoolDomain       string
-	WorkQuotas       []pool.Quota
-	SoloPool         bool
-	PaymentMethod    string
-	AccountStats     *AccountStats
-	Address          string
-	Admin            bool
-	Error            string
-	BlockExplorerURL string
-	Network          string
-	Designation      string
-	PoolFee          float64
+	MinerPorts        map[string]uint32
+	LastWorkHeight    uint32
+	LastPaymentHeight uint32
+	MinedWork         []*pool.AcceptedWork
+	PoolHashRate      *big.Rat
+	PoolDomain        string
+	WorkQuotas        []*pool.Quota
+	SoloPool          bool
+	PaymentMethod     string
+	AccountStats      *AccountStats
+	Address           string
+	Admin             bool
+	Error             string
+	BlockExplorerURL  string
+	Network           string
+	Designation       string
+	PoolFee           float64
 }
 
 // AccountStats is a snapshot of an accounts contribution to the pool. This
@@ -39,33 +43,33 @@ type AccountStats struct {
 }
 
 func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
-	poolStats, err := ui.hub.FetchStats()
-	if err != nil {
-		log.Error(err)
-		http.Error(w, "FetchPoolStats error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	ui.minedWorkMtx.Lock()
+	minedWork := ui.minedWork
+	ui.minedWorkMtx.Unlock()
 
-	workQuotas, err := ui.hub.FetchWorkQuotas()
-	if err != nil {
-		log.Error(err)
-		http.Error(w, "FetchWorkQuotas error: "+err.Error(),
-			http.StatusInternalServerError)
-		return
-	}
+	ui.workQuotasMtx.Lock()
+	workQuotas := ui.workQuotas
+	ui.workQuotasMtx.Unlock()
+
+	ui.poolHashMtx.Lock()
+	poolHash := ui.poolHash
+	ui.poolHashMtx.Unlock()
 
 	data := indexData{
-		WorkQuotas:       workQuotas,
-		PaymentMethod:    ui.cfg.PaymentMethod,
-		PoolStats:        poolStats,
-		PoolDomain:       ui.cfg.Domain,
-		SoloPool:         ui.cfg.SoloPool,
-		Admin:            false,
-		BlockExplorerURL: ui.cfg.BlockExplorerURL,
-		Designation:      ui.cfg.Designation,
-		PoolFee:          ui.cfg.PoolFee,
-		Network:          ui.cfg.ActiveNet.Name,
-		MinerPorts:       ui.cfg.MinerPorts,
+		WorkQuotas:        workQuotas,
+		PaymentMethod:     ui.cfg.PaymentMethod,
+		LastWorkHeight:    ui.hub.FetchLastWorkHeight(),
+		LastPaymentHeight: ui.hub.FetchLastPaymentHeight(),
+		MinedWork:         minedWork,
+		PoolHashRate:      poolHash,
+		PoolDomain:        ui.cfg.Domain,
+		SoloPool:          ui.cfg.SoloPool,
+		Admin:             false,
+		BlockExplorerURL:  ui.cfg.BlockExplorerURL,
+		Designation:       ui.cfg.Designation,
+		PoolFee:           ui.cfg.PoolFee,
+		Network:           ui.cfg.ActiveNet.Name,
+		MinerPorts:        ui.cfg.MinerPorts,
 	}
 
 	address := r.FormValue("address")
@@ -132,7 +136,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	data.AccountStats = &AccountStats{
 		MinedWork: work,
 		Payments:  payments,
-		Clients:   poolStats.Clients[accountID],
+		Clients:   ui.hub.FetchAccountClientInfo(accountID),
 		AccountID: accountID,
 	}
 
