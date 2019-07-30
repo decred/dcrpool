@@ -51,14 +51,6 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
-	pass := r.FormValue("password")
-
-	if ui.cfg.BackupPass != pass {
-		log.Warn("Unauthorized access")
-		ui.GetAdmin(w, r)
-		return
-	}
-
 	session, err := ui.cookieStore.Get(r, "session")
 	if err != nil {
 		if !strings.Contains(err.Error(), "value is not valid") {
@@ -67,6 +59,19 @@ func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Errorf("session error: %v, new session generated", err)
+	}
+
+	if !ui.limiter.WithinLimit(session.ID, pool.APIClient) {
+		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
+		return
+	}
+
+	pass := r.FormValue("password")
+
+	if ui.cfg.BackupPass != pass {
+		log.Warn("Unauthorized access")
+		ui.GetAdmin(w, r)
+		return
 	}
 
 	session.Values["IsAdmin"] = true
@@ -90,7 +95,7 @@ func (ui *GUI) PostLogout(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("session error: %v, new session generated", err)
 	}
 
-	session.Values["IsAdmin"] = nil
+	session.Values["IsAdmin"] = false
 	err = session.Save(r, w)
 	if err != nil {
 		log.Errorf("unable to save session: %v", err)

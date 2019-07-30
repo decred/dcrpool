@@ -1018,7 +1018,7 @@ type ClientInfo struct {
 	HashRate *big.Rat
 }
 
-// FetchClientInfo returns connection detials about all pool clients.
+// FetchClientInfo returns connection details about all pool clients.
 func (h *Hub) FetchClientInfo() map[string][]*ClientInfo {
 	clientInfo := make(map[string][]*ClientInfo)
 
