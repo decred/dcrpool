@@ -36,13 +36,13 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("session error: %v, new session generated", err)
 	}
 
-	if session.Values["IsAdmin"] != true {
-		ui.renderTemplate(w, r, "login", pageData)
+	if !ui.limiter.WithinLimit(session.ID, pool.APIClient) {
+		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
 		return
 	}
 
-	if !ui.limiter.WithinLimit(session.ID, pool.APIClient) {
-		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
+	if session.Values["IsAdmin"] != true {
+		ui.renderTemplate(w, r, "login", pageData)
 		return
 	}
 
@@ -116,13 +116,13 @@ func (ui *GUI) PostBackup(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("session error: %v, new session generated", err)
 	}
 
-	if session.Values["IsAdmin"] != true {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	if !ui.limiter.WithinLimit(session.ID, pool.APIClient) {
+		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
 		return
 	}
 
-	if !ui.limiter.WithinLimit(session.ID, pool.APIClient) {
-		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
+	if session.Values["IsAdmin"] != true {
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return
 	}
 
