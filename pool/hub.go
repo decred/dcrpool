@@ -1018,11 +1018,11 @@ type ClientInfo struct {
 	HashRate *big.Rat
 }
 
-// FetchClientInfo returns information about all connected clients
+// FetchClientInfo returns connection details about all pool clients.
 func (h *Hub) FetchClientInfo() map[string][]*ClientInfo {
 	clientInfo := make(map[string][]*ClientInfo)
 
-	// Iterate through all connected miners
+	// Iterate through all connected miners.
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
@@ -1040,41 +1040,62 @@ func (h *Hub) FetchClientInfo() map[string][]*ClientInfo {
 	return clientInfo
 }
 
-// Stats details the pool's work and payment statistics.
-type Stats struct {
-	LastWorkHeight    uint32
-	LastPaymentHeight uint32
-	MinedWork         []*AcceptedWork
-	PoolHashRate      *big.Rat
-	Clients           map[string][]*ClientInfo
+// FetchAccountClientInfo returns all clients belonging to the provided
+// account id.
+func (h *Hub) FetchAccountClientInfo(accountID string) []*ClientInfo {
+	info := make([]*ClientInfo, 0)
+
+	// Filter through through all connected miners.
+	for _, endpoint := range h.endpoints {
+		endpoint.clientsMtx.Lock()
+		for _, client := range endpoint.clients {
+			if client.account == accountID {
+				client.hashRateMtx.RLock()
+				hash := client.hashRate
+				client.hashRateMtx.RUnlock()
+
+				info = append(info, &ClientInfo{
+					Miner:    endpoint.miner,
+					IP:       client.ip,
+					HashRate: hash,
+				})
+			}
+		}
+		endpoint.clientsMtx.Unlock()
+	}
+	return info
 }
 
-// FetchPoolStats returns last height work was generated for.
-func (h *Hub) FetchStats() (*Stats, error) {
-	poolStats := &Stats{
-		LastWorkHeight: atomic.LoadUint32(&h.lastWorkHeight),
-	}
+// FetchLastWorkHeight returns  the last height work was generated for.
+func (h *Hub) FetchLastWorkHeight() uint32 {
+	return atomic.LoadUint32(&h.lastWorkHeight)
+}
 
+// FetchLastPaymentHeight returns the last height payments were made at.
+func (h *Hub) FetchLastPaymentHeight() uint32 {
 	if !h.cfg.SoloPool {
-		poolStats.LastPaymentHeight = atomic.LoadUint32(&h.lastPaymentHeight)
+		return atomic.LoadUint32(&h.lastPaymentHeight)
 	}
 
-	work, err := ListMinedWork(h.db, 10)
-	poolStats.MinedWork = work
+	return 0
+}
 
+// FetchMinedWork returns the last ten mined blocks by the pool.
+func (h *Hub) FetchMinedWork() ([]*AcceptedWork, error) {
+	return ListMinedWork(h.db, 10)
+}
+
+// FetchPoolHashRate returns the hash rate of the pool.
+func (h *Hub) FetchPoolHashRate() (*big.Rat, map[string][]*ClientInfo) {
 	clientInfo := h.FetchClientInfo()
-
 	poolHashRate := new(big.Rat).SetInt64(0)
 	for _, clients := range clientInfo {
-		for _, client := range clients {
-			poolHashRate = poolHashRate.Add(poolHashRate, client.HashRate)
+		for _, miner := range clients {
+			poolHashRate = poolHashRate.Add(poolHashRate, miner.HashRate)
 		}
 	}
 
-	poolStats.PoolHashRate = poolHashRate
-	poolStats.Clients = clientInfo
-
-	return poolStats, err
+	return poolHashRate, clientInfo
 }
 
 // Quota details the portion of mining rewrds due an account for work
@@ -1086,7 +1107,7 @@ type Quota struct {
 
 // FetchWorkQuotas returns the reward distribution to pool accounts
 // based on work contributed per the peyment scheme used by the pool.
-func (h *Hub) FetchWorkQuotas() ([]Quota, error) {
+func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 	if h.cfg.SoloPool {
 		return nil, nil
 	}
@@ -1109,9 +1130,9 @@ func (h *Hub) FetchWorkQuotas() ([]Quota, error) {
 		return nil, err
 	}
 
-	quotas := make([]Quota, 0)
+	quotas := make([]*Quota, 0)
 	for key, value := range percentages {
-		quotas = append(quotas, Quota{
+		quotas = append(quotas, &Quota{
 			AccountID:  key,
 			Percentage: value,
 		})

@@ -144,7 +144,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		MinerPorts:    minerPorts,
 	}
 
-	p.gui, err = gui.NewGUI(gcfg, p.hub)
+	p.gui, err = gui.NewGUI(gcfg, p.hub, p.limiter)
 	if err != nil {
 		return nil, err
 	}

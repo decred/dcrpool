@@ -11,11 +11,13 @@ import (
 	"crypto/tls"
 	"fmt"
 	"html/template"
+	"math/big"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/acme/autocert"
@@ -52,10 +54,19 @@ type Config struct {
 type GUI struct {
 	cfg         *Config
 	hub         *pool.Hub
+	limiter     *pool.RateLimiter
 	templates   *template.Template
 	cookieStore *sessions.CookieStore
 	router      *mux.Router
 	server      *http.Server
+
+	// The following fields cache pool data.
+	workQuotas    []*pool.Quota
+	workQuotasMtx sync.Mutex
+	minedWork     []*pool.AcceptedWork
+	minedWorkMtx  sync.Mutex
+	poolHash      *big.Rat
+	poolHashMtx   sync.Mutex
 }
 
 // generateSecret generates the CSRF secret.
@@ -114,10 +125,14 @@ func (ui *GUI) renderTemplate(w http.ResponseWriter, r *http.Request, name strin
 }
 
 // NewGUI creates an instance of the user interface.
-func NewGUI(cfg *Config, hub *pool.Hub) (*GUI, error) {
+func NewGUI(cfg *Config, hub *pool.Hub, limiter *pool.RateLimiter) (*GUI, error) {
 	ui := &GUI{
-		cfg: cfg,
-		hub: hub,
+		cfg:        cfg,
+		hub:        hub,
+		limiter:    limiter,
+		workQuotas: make([]*pool.Quota, 0),
+		minedWork:  make([]*pool.AcceptedWork, 0),
+		poolHash:   ZeroRat,
 	}
 
 	switch cfg.ActiveNet.Name {
@@ -263,28 +278,48 @@ func (ui *GUI) Run(ctx context.Context) {
 
 	// Use a ticker to push updates through the socket periodically
 	go func(ctx context.Context) {
-		ticker := time.NewTicker(socketRefreshRate)
+		var ticks uint32
+		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ticker.C:
-				poolStats, err := ui.hub.FetchStats()
-				if err != nil {
-					log.Error(err)
-					return
+				ticks++
+
+				// After three ticks (15 seconds) update cached pool data.
+				if ticks == 3 {
+					var err error
+					work, err := ui.hub.FetchMinedWork()
+					if err != nil {
+						log.Error(err)
+						continue
+					}
+
+					ui.minedWorkMtx.Lock()
+					ui.minedWork = work
+					ui.minedWorkMtx.Unlock()
+
+					quotas, err := ui.hub.FetchWorkQuotas()
+					if err != nil {
+						log.Error(err)
+						continue
+					}
+
+					ui.workQuotasMtx.Lock()
+					ui.workQuotas = quotas
+					ui.workQuotasMtx.Unlock()
+
+					ui.poolHashMtx.Lock()
+					ui.poolHash, _ = ui.hub.FetchPoolHashRate()
+					ui.poolHashMtx.Unlock()
+
+					ticks = 0
 				}
 
-				workQuotas, err := ui.hub.FetchWorkQuotas()
-				if err != nil {
-					log.Error(err)
-					return
-				}
-
-				ui.SendUpdatedValues(poolStats, workQuotas)
+				ui.updateWS()
 
 			case <-ctx.Done():
-				log.Trace("Stopping websocket timer")
 				return
 			}
 		}

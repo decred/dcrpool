@@ -36,8 +36,8 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("session error: %v, new session generated", err)
 	}
 
-	if session == nil {
-		ui.renderTemplate(w, r, "login", pageData)
+	if !ui.limiter.WithinLimit(session.ID, pool.APIClient) {
+		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
 		return
 	}
 
@@ -47,19 +47,10 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pageData.Connections = ui.hub.FetchClientInfo()
-
 	ui.renderTemplate(w, r, "admin", pageData)
 }
 
 func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
-	pass := r.FormValue("password")
-
-	if ui.cfg.BackupPass != pass {
-		log.Warn("Unauthorized access")
-		ui.GetAdmin(w, r)
-		return
-	}
-
 	session, err := ui.cookieStore.Get(r, "session")
 	if err != nil {
 		if !strings.Contains(err.Error(), "value is not valid") {
@@ -70,7 +61,15 @@ func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("session error: %v, new session generated", err)
 	}
 
-	if session == nil {
+	if !ui.limiter.WithinLimit(session.ID, pool.APIClient) {
+		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
+		return
+	}
+
+	pass := r.FormValue("password")
+
+	if ui.cfg.BackupPass != pass {
+		log.Warn("Unauthorized access")
 		ui.GetAdmin(w, r)
 		return
 	}
@@ -96,12 +95,7 @@ func (ui *GUI) PostLogout(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("session error: %v, new session generated", err)
 	}
 
-	if session == nil {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
-		return
-	}
-
-	session.Values["IsAdmin"] = nil
+	session.Values["IsAdmin"] = false
 	err = session.Save(r, w)
 	if err != nil {
 		log.Errorf("unable to save session: %v", err)
@@ -122,8 +116,8 @@ func (ui *GUI) PostBackup(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("session error: %v, new session generated", err)
 	}
 
-	if session == nil {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	if !ui.limiter.WithinLimit(session.ID, pool.APIClient) {
+		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
 		return
 	}
 
@@ -136,7 +130,8 @@ func (ui *GUI) PostBackup(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Errorf("Error backing up database: %v", err)
-		http.Error(w, "Error backing up database: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Error backing up database: "+err.Error(),
+			http.StatusInternalServerError)
 		return
 	}
 }
