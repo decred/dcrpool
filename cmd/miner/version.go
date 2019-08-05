@@ -24,8 +24,8 @@ const (
 // These constants define the application version and follow the semantic
 // versioning 2.0.0 spec (http://semver.org/).
 const (
-	appMajor uint = 0
-	appMinor uint = 1
+	appMajor uint = 1
+	appMinor uint = 0
 	appPatch uint = 0
 )
 
