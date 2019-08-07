@@ -2,11 +2,13 @@ package gui
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
 var clients = make(map[*websocket.Conn]bool)
+var clientsMtx sync.Mutex
 var upgrader = websocket.Upgrader{}
 
 // payload represents a websocket update message.
@@ -40,7 +42,9 @@ func (ui *GUI) RegisterWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	clientsMtx.Lock()
 	clients[ws] = true
+	clientsMtx.Unlock()
 }
 
 // updateWS sends updates to all connected websocket clients.
@@ -79,6 +83,7 @@ func (ui *GUI) updateWS() {
 		MinedWork:         workData,
 	}
 
+	clientsMtx.Lock()
 	for client := range clients {
 		err := client.WriteJSON(msg)
 		if err != nil {
@@ -87,4 +92,5 @@ func (ui *GUI) updateWS() {
 			delete(clients, client)
 		}
 	}
+	clientsMtx.Unlock()
 }
