@@ -5,9 +5,7 @@
 package pool
 
 import (
-	"net/http"
 	"sync"
-	"time"
 
 	"golang.org/x/time/rate"
 )
@@ -38,61 +36,47 @@ const (
 	PoolClient = "pool"
 )
 
-// RequestLimiter represents a rate limiter for a connecting client. This identifies
-// clients by their IP addresses.
-type RequestLimiter struct {
-	ip                 string
-	limiter            *rate.Limiter
-	lastAllowedRequest uint32
-}
-
-// RateLimiter represents the rate limiting module of the mining pool. It
-// identifies clients by their IP address and throttles incoming request if
-// necessary when the allocated quota has been exceeded.
+// RateLimiter keeps connected clients within their allocated request rates.
 type RateLimiter struct {
 	mutex    sync.RWMutex
-	limiters map[string]*RequestLimiter
+	limiters map[string]*rate.Limiter
 }
 
 // NewRateLimiter initializes a rate limiter.
 func NewRateLimiter() *RateLimiter {
-	RateLimiter := &RateLimiter{
-		limiters: make(map[string]*RequestLimiter),
+	limiters := &RateLimiter{
+		limiters: make(map[string]*rate.Limiter),
 	}
-	return RateLimiter
+	return limiters
 }
 
 // AddRequestLimiter adds a new client request limiter to the limiter set.
-func (r *RateLimiter) AddRequestLimiter(ip string, clientType string) *RequestLimiter {
-	var limiter *RequestLimiter
-	if clientType == APIClient {
-		limiter = &RequestLimiter{
-			ip:                 ip,
-			limiter:            rate.NewLimiter(apiTokenRate, apiBurst),
-			lastAllowedRequest: 0,
-		}
-	}
-
-	if clientType == PoolClient {
-		limiter = &RequestLimiter{
-			ip:                 ip,
-			limiter:            rate.NewLimiter(clientTokenRate, clientBurst),
-			lastAllowedRequest: 0,
-		}
+func (r *RateLimiter) AddRequestLimiter(ip string, clientType string) *rate.Limiter {
+	var limiter *rate.Limiter
+	switch clientType {
+	case APIClient:
+		limiter = rate.NewLimiter(apiTokenRate, apiBurst)
+	case PoolClient:
+		limiter = rate.NewLimiter(clientTokenRate, clientBurst)
+	default:
+		log.Errorf("unknown client type provided: %s", clientType)
+		return nil
 	}
 
 	r.mutex.Lock()
 	r.limiters[ip] = limiter
 	r.mutex.Unlock()
+
 	return limiter
 }
 
 // GetLimiter fetches the request limiter referenced by the provided
 // IP address.
-func (r *RateLimiter) GetLimiter(ip string) *RequestLimiter {
+func (r *RateLimiter) GetLimiter(ip string) *rate.Limiter {
 	r.mutex.RLock()
 	limiter := r.limiters[ip]
 	r.mutex.RUnlock()
+
 	return limiter
 }
 
@@ -115,21 +99,5 @@ func (r *RateLimiter) WithinLimit(ip string, clientType string) bool {
 		reqLimiter = r.AddRequestLimiter(ip, clientType)
 	}
 
-	allow := reqLimiter.limiter.Allow()
-	if allow {
-		// update the last accessed time of the limiter if the incoming request
-		// is allowed.
-		reqLimiter.lastAllowedRequest = uint32(time.Now().Unix())
-	}
-	return allow
-}
-
-// LimiterMiddleware wraps the the request limit logic as request middleware.
-func (r *RateLimiter) LimiterMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		accepted := r.WithinLimit(req.RemoteAddr, APIClient)
-		if accepted {
-			next.ServeHTTP(w, req)
-		}
-	})
+	return reqLimiter.Allow()
 }

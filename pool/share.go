@@ -332,7 +332,8 @@ func PPSSharePercentages(db *bolt.DB, poolFee float64, height uint32) (map[strin
 		}
 
 		v := pbkt.Get(lastPaymentCreatedOn)
-		lastPaymentTimeNano = v
+		lastPaymentTimeNano = make([]byte, len(v))
+		copy(lastPaymentTimeNano, v)
 
 		return nil
 	})

@@ -1168,7 +1168,7 @@ func (h *Hub) AccountExists(accountID string) bool {
 
 // CSRFSecret fetches a persisted secret or generates a new one.
 func (h *Hub) CSRFSecret(getCSRF func() ([]byte, error)) ([]byte, error) {
-	secret := make([]byte, 0)
+	var secret []byte
 	err := h.db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
@@ -1176,20 +1176,24 @@ func (h *Hub) CSRFSecret(getCSRF func() ([]byte, error)) ([]byte, error) {
 			return MakeError(ErrBucketNotFound, desc, nil)
 		}
 
-		secret = pbkt.Get(csrfSecret)
-		if secret == nil {
-			log.Info("CSRF secret value not found in db, initializing.")
+		v := pbkt.Get(csrfSecret)
+		if v != nil {
+			secret = make([]byte, len(v))
+			copy(secret, v)
+			return nil
+		}
 
-			var err error
-			secret, err = getCSRF()
-			if err != nil {
-				return err
-			}
+		log.Info("CSRF secret value not found in db, initializing.")
 
-			err = pbkt.Put(csrfSecret, secret)
-			if err != nil {
-				return err
-			}
+		var err error
+		secret, err = getCSRF()
+		if err != nil {
+			return err
+		}
+
+		err = pbkt.Put(csrfSecret, secret)
+		if err != nil {
+			return err
 		}
 
 		return nil

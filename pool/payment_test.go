@@ -95,7 +95,10 @@ func TestPayPerShare(t *testing.T) {
 			return MakeError(ErrBucketNotFound, desc, nil)
 		}
 
-		lastPmtCreatedOn = pbkt.Get(lastPaymentCreatedOn)
+		v := pbkt.Get(lastPaymentCreatedOn)
+		lastPmtCreatedOn = make([]byte, len(v))
+		copy(lastPmtCreatedOn, v)
+
 		return nil
 	})
 
@@ -104,7 +107,8 @@ func TestPayPerShare(t *testing.T) {
 	}
 
 	if bytes.Compare(lastPmtCreatedOn, nowBytes) < 0 {
-		t.Error("The last payment created on time is less than " +
+
+		t.Errorf("The last payment created on time is less than " +
 			"the current time")
 	}
 
@@ -229,7 +233,10 @@ func TestPayPerLastShare(t *testing.T) {
 			return MakeError(ErrBucketNotFound, desc, nil)
 		}
 
-		lastPmtCreatedOn = pbkt.Get(lastPaymentCreatedOn)
+		v := pbkt.Get(lastPaymentCreatedOn)
+		lastPmtCreatedOn = make([]byte, len(v))
+		copy(lastPmtCreatedOn, v)
+
 		return nil
 	})
 
