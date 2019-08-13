@@ -151,8 +151,6 @@ func (c *Client) fetchStratumMethod(id uint64) string {
 // shutdown terminates all client processes and established connections.
 func (c *Client) shutdown() {
 	c.conn.Close()
-	close(c.ch)
-	close(c.readCh)
 	c.endpoint.hub.limiter.RemoveLimiter(c.ip)
 	c.endpoint.removeClient(c)
 	log.Tracef("Connection to (%v) terminated.", c.generateID())

@@ -2,9 +2,9 @@
 {{template "header" .}}
 
 <div class="col">
-    
+
     <div class="row justify-content-around align-items-center">
-        
+
         <div class="row">
             <section class="block">
                 <div class="col-12 block__content">
@@ -28,7 +28,7 @@
                 </div>
             </section>
         </div>
-    
+
     </div>
 
     <div class="row justify-content-center">
@@ -48,27 +48,25 @@
                                 <th>Hash Rate</th>
                             </tr>
                             {{range $accountID, $clients := .Connections}}
-                                {{range $client := $clients}}
-                                    <tr>
-                                        <td>{{$accountID}}</td>
-                                        <td>{{$client.IP}}</td>	                                
-                                        <td>{{$client.Miner}}</td>
-                                        <td>{{hashString $client.HashRate}}</td>
-                                    </tr>
-                                {{end}}
+                            {{range $client := $clients}}
+                            <tr>
+                                <td>{{$accountID}}</td>
+                                <td>{{$client.IP}}</td>
+                                <td>{{$client.Miner}}</td>
+                                <td>{{hashString $client.HashRate}}</td>
+                            </tr>
+                            {{end}}
                             {{else}}
-                                <tr>
-                                    <td colspan="100%">No miners connected</td>
-                                </tr>
+                            <tr>
+                                <td colspan="100%">No miners connected</td>
+                            </tr>
                             {{end}}
                         </table>
                     </div>
                 </div>
             </section>
         </div>
-
     </div>
-
 </div>
 
 {{template "footer" .}}

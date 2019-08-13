@@ -132,7 +132,6 @@
                                 </td>
                             </tr>
                         </table>
-
                     </div>
                 </section>
             </div>
@@ -140,7 +139,6 @@
             {{else}}
 
             <div class="row">
-
                 {{ with .Error }}
                 <div class="snackbar snackbar-error">
                     <div class="snackbar-message">
@@ -159,7 +157,6 @@
 
                         <p>To search for your mining account details, enter your mining address in the search field
                             above.</p>
-
                     </div>
                 </section>
 
@@ -168,7 +165,6 @@
                         <h1><span>Miner Configuration</span></h1>
                     </div>
                     <div class="col-12 block__content">
-
                         <table>
                             <tr>
                                 <th>Pool URL:</th>
@@ -210,9 +206,7 @@
                                 </td>
                             </tr>
                         </table>
-
                     </div>
-
                 </section>
             </div>
 
@@ -220,7 +214,6 @@
 
         </div>
         <div class="col-md-6 col-12">
-
             <div class="row ml-md-1">
                 <section class="block">
                     <div class="col-12 block__title">
@@ -233,7 +226,7 @@
                                     <img class="info-icon mb-1" src="/images/miningPow.svg" alt="">
                                     <p class="ml-lg-3 mb-0">
                                         <strong>Pool Hash Rate:&nbsp;</strong>
-                                        <span id="pool-hash-rate">{{ hashString .PoolHashRate }}</span>
+                                        <span id="pool-hash-rate">{{ .PoolHashRate }}</span>
                                     </p>
                                 </div>
                             </div>
@@ -303,9 +296,9 @@
                                 </thead>
                                 <tbody>
                                     {{ range .WorkQuotas }}
-                                    <tr data-row-id="{{ truncateAccountID .AccountID}}">
-                                        <td>{{ truncateAccountID .AccountID}}</td>
-                                        <td>{{ratToPercent .Percentage}}</td>
+                                    <tr data-row-id="{{ .AccountID }}">
+                                        <td>{{ .AccountID }}</td>
+                                        <td>{{ .Percent }}</td>
                                     </tr>
                                     {{end}}
                                 </tbody>
@@ -333,11 +326,11 @@
                                 </thead>
                                 <tbody>
                                     {{ range .MinedWork }}
-                                    <tr data-row-id="{{.Height}}">
-                                        <td><a href="{{ blockURL $.BlockExplorerURL .Height}}"
-                                                rel="noopener noreferrer">{{.Height}}</a></td>
-                                        <td>{{.Miner}}</td>
-                                        <td>{{ truncateAccountID .MinedBy}}</td>
+                                    <tr data-row-id="{{ .BlockHeight }}">
+                                        <td><a href="{{ .BlockURL }}" rel="noopener noreferrer">{{ .BlockHeight }}</a>
+                                        </td>
+                                        <td>{{ .Miner }}</td>
+                                        <td>{{ .MinedBy }}</td>
                                     </tr>
                                     {{end}}
                                 </tbody>
@@ -346,10 +339,8 @@
                     </div>
                 </section>
             </div>
-
         </div>
     </div>
-
 </div>
 
 {{template "footer" .}}

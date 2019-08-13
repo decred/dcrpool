@@ -49,38 +49,24 @@ func (ui *GUI) RegisterWebSocket(w http.ResponseWriter, r *http.Request) {
 
 // updateWS sends updates to all connected websocket clients.
 func (ui *GUI) updateWS() {
-	workData := make([]minedWork, 0)
-	ui.minedWorkMtx.Lock()
-	for _, block := range ui.minedWork {
-		workData = append(workData, minedWork{
-			BlockHeight: block.Height,
-			BlockURL:    blockURL(ui.cfg.BlockExplorerURL, block.Height),
-			MinedBy:     truncateAccountID(block.MinedBy),
-			Miner:       block.Miner,
-		})
-	}
-	ui.minedWorkMtx.Unlock()
+	ui.poolHashMtx.RLock()
+	poolHash := ui.poolHash
+	ui.poolHashMtx.RUnlock()
 
-	quotaData := make([]workQuota, 0)
-	ui.workQuotasMtx.Lock()
-	for _, quota := range ui.workQuotas {
-		quotaData = append(quotaData, workQuota{
-			AccountID: truncateAccountID(quota.AccountID),
-			Percent:   ratToPercent(quota.Percentage),
-		})
-	}
-	ui.workQuotasMtx.Unlock()
+	ui.minedWorkMtx.RLock()
+	minedWork := append(ui.minedWork[:0:0], ui.minedWork...)
+	ui.minedWorkMtx.RUnlock()
 
-	ui.poolHashMtx.Lock()
-	poolHash := hashString(ui.poolHash)
-	ui.poolHashMtx.Unlock()
+	ui.workQuotasMtx.RLock()
+	workQuotas := append(ui.workQuotas[:0:0], ui.workQuotas...)
+	ui.workQuotasMtx.RUnlock()
 
 	msg := payload{
 		LastWorkHeight:    ui.hub.FetchLastWorkHeight(),
 		LastPaymentHeight: ui.hub.FetchLastPaymentHeight(),
 		PoolHashRate:      poolHash,
-		WorkQuotas:        quotaData,
-		MinedWork:         workData,
+		WorkQuotas:        workQuotas,
+		MinedWork:         minedWork,
 	}
 
 	clientsMtx.Lock()

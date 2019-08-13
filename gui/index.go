@@ -6,7 +6,6 @@ package gui
 
 import (
 	"fmt"
-	"math/big"
 	"net/http"
 	"strings"
 
@@ -18,10 +17,10 @@ type indexData struct {
 	MinerPorts        map[string]uint32
 	LastWorkHeight    uint32
 	LastPaymentHeight uint32
-	MinedWork         []*pool.AcceptedWork
-	PoolHashRate      *big.Rat
+	MinedWork         []minedWork
+	PoolHashRate      string
 	PoolDomain        string
-	WorkQuotas        []*pool.Quota
+	WorkQuotas        []workQuota
 	SoloPool          bool
 	PaymentMethod     string
 	AccountStats      *AccountStats
@@ -59,24 +58,24 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ui.minedWorkMtx.Lock()
-	minedWork := ui.minedWork
-	ui.minedWorkMtx.Unlock()
+	ui.minedWorkMtx.RLock()
+	mWork := append(ui.minedWork[:0:0], ui.minedWork...)
+	ui.minedWorkMtx.RUnlock()
 
-	ui.workQuotasMtx.Lock()
-	workQuotas := ui.workQuotas
-	ui.workQuotasMtx.Unlock()
+	ui.workQuotasMtx.RLock()
+	wQuotas := append(ui.workQuotas[:0:0], ui.workQuotas...)
+	ui.workQuotasMtx.RUnlock()
 
-	ui.poolHashMtx.Lock()
+	ui.poolHashMtx.RLock()
 	poolHash := ui.poolHash
-	ui.poolHashMtx.Unlock()
+	ui.poolHashMtx.RUnlock()
 
 	data := indexData{
-		WorkQuotas:        workQuotas,
+		WorkQuotas:        wQuotas,
 		PaymentMethod:     ui.cfg.PaymentMethod,
 		LastWorkHeight:    ui.hub.FetchLastWorkHeight(),
 		LastPaymentHeight: ui.hub.FetchLastPaymentHeight(),
-		MinedWork:         minedWork,
+		MinedWork:         mWork,
 		PoolHashRate:      poolHash,
 		PoolDomain:        ui.cfg.Domain,
 		SoloPool:          ui.cfg.SoloPool,
@@ -89,7 +88,6 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	address := r.FormValue("address")
-
 	if address == "" {
 		ui.renderTemplate(w, r, "index", data)
 		return

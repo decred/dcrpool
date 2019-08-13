@@ -11,7 +11,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"html/template"
-	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -61,12 +60,12 @@ type GUI struct {
 	server      *http.Server
 
 	// The following fields cache pool data.
-	workQuotas    []*pool.Quota
-	workQuotasMtx sync.Mutex
-	minedWork     []*pool.AcceptedWork
-	minedWorkMtx  sync.Mutex
-	poolHash      *big.Rat
-	poolHashMtx   sync.Mutex
+	minedWork     []minedWork
+	minedWorkMtx  sync.RWMutex
+	workQuotas    []workQuota
+	workQuotasMtx sync.RWMutex
+	poolHash      string
+	poolHashMtx   sync.RWMutex
 }
 
 // generateSecret generates the CSRF secret.
@@ -130,9 +129,8 @@ func NewGUI(cfg *Config, hub *pool.Hub, limiter *pool.RateLimiter) (*GUI, error)
 		cfg:        cfg,
 		hub:        hub,
 		limiter:    limiter,
-		workQuotas: make([]*pool.Quota, 0),
-		minedWork:  make([]*pool.AcceptedWork, 0),
-		poolHash:   ZeroRat,
+		minedWork:  make([]minedWork, 0),
+		workQuotas: make([]workQuota, 0),
 	}
 
 	switch cfg.ActiveNet.Name {
@@ -299,8 +297,20 @@ func (ui *GUI) Run(ctx context.Context) {
 						continue
 					}
 
+					// Parse and format mined work by the pool.
+					workData := make([]minedWork, 0)
+					for _, work := range work {
+						workData = append(workData, minedWork{
+							BlockHeight: work.Height,
+							BlockURL:    blockURL(ui.cfg.BlockExplorerURL, work.Height),
+							MinedBy:     truncateAccountID(work.MinedBy),
+							Miner:       work.Miner,
+						})
+					}
+
+					// Update mined work cache.
 					ui.minedWorkMtx.Lock()
-					ui.minedWork = work
+					ui.minedWork = workData
 					ui.minedWorkMtx.Unlock()
 
 					quotas, err := ui.hub.FetchWorkQuotas()
@@ -309,12 +319,25 @@ func (ui *GUI) Run(ctx context.Context) {
 						continue
 					}
 
+					// Parse and format work quotas of the pool.
+					quotaData := make([]workQuota, 0)
+					for _, quota := range quotas {
+						quotaData = append(quotaData, workQuota{
+							AccountID: truncateAccountID(quota.AccountID),
+							Percent:   ratToPercent(quota.Percentage),
+						})
+					}
+
+					// Update work quotas cache.
 					ui.workQuotasMtx.Lock()
-					ui.workQuotas = quotas
+					ui.workQuotas = quotaData
 					ui.workQuotasMtx.Unlock()
 
+					poolHash, _ := ui.hub.FetchPoolHashRate()
+
+					// Update pool hash cache.
 					ui.poolHashMtx.Lock()
-					ui.poolHash, _ = ui.hub.FetchPoolHashRate()
+					ui.poolHash = hashString(poolHash)
 					ui.poolHashMtx.Unlock()
 
 					ticks = 0
