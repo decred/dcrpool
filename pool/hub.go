@@ -75,24 +75,25 @@ var (
 
 // HubConfig represents configuration details for the hub.
 type HubConfig struct {
-	ActiveNet         *chaincfg.Params
-	DcrdRPCCfg        *rpcclient.ConnConfig
-	PoolFee           float64
-	MaxTxFeeReserve   dcrutil.Amount
-	MaxGenTime        uint64
-	WalletRPCCertFile string
-	WalletGRPCHost    string
-	PaymentMethod     string
-	LastNPeriod       uint32
-	WalletPass        string
-	MinPayment        dcrutil.Amount
-	DBFile            string
-	SoloPool          bool
-	PoolFeeAddrs      []dcrutil.Address
-	BackupPass        string
-	Secret            string
-	NonceIterations   float64
-	MinerPorts        map[string]uint32
+	ActiveNet             *chaincfg.Params
+	DcrdRPCCfg            *rpcclient.ConnConfig
+	PoolFee               float64
+	MaxTxFeeReserve       dcrutil.Amount
+	MaxGenTime            uint64
+	WalletRPCCertFile     string
+	WalletGRPCHost        string
+	PaymentMethod         string
+	LastNPeriod           uint32
+	WalletPass            string
+	MinPayment            dcrutil.Amount
+	DBFile                string
+	SoloPool              bool
+	PoolFeeAddrs          []dcrutil.Address
+	BackupPass            string
+	Secret                string
+	NonceIterations       float64
+	MinerPorts            map[string]uint32
+	MaxConnectionsPerHost uint32
 }
 
 // DifficultyData captures the pool target difficulty and pool difficulty
@@ -109,25 +110,27 @@ type Hub struct {
 	lastPaymentHeight uint32 // update atomically
 	clients           int32  // update atomically
 
-	db           *bolt.DB
-	httpc        *http.Client
-	cfg          *HubConfig
-	limiter      *RateLimiter
-	rpcc         *rpcclient.Client
-	rpccMtx      sync.Mutex
-	gConn        *grpc.ClientConn
-	grpc         walletrpc.WalletServiceClient
-	grpcMtx      sync.Mutex
-	poolDiff     map[string]*DifficultyData
-	poolDiffMtx  sync.RWMutex
-	connCh       chan []byte
-	discCh       chan []byte
-	ctx          context.Context
-	cancel       context.CancelFunc
-	txFeeReserve dcrutil.Amount
-	endpoints    []*endpoint
-	blake256Pad  []byte
-	wg           sync.WaitGroup
+	db             *bolt.DB
+	httpc          *http.Client
+	cfg            *HubConfig
+	limiter        *RateLimiter
+	rpcc           *rpcclient.Client
+	rpccMtx        sync.Mutex
+	gConn          *grpc.ClientConn
+	grpc           walletrpc.WalletServiceClient
+	grpcMtx        sync.Mutex
+	poolDiff       map[string]*DifficultyData
+	poolDiffMtx    sync.RWMutex
+	connCh         chan []byte
+	discCh         chan []byte
+	ctx            context.Context
+	cancel         context.CancelFunc
+	txFeeReserve   dcrutil.Amount
+	endpoints      []*endpoint
+	blake256Pad    []byte
+	connections    map[string]uint32
+	connectionsMtx sync.RWMutex
+	wg             sync.WaitGroup
 }
 
 // GenerateBlake256Pad generates the extra padding needed for work submission
@@ -286,15 +289,16 @@ func (h *Hub) processWork(headerE string, target string) {
 // NewHub initializes a websocket hub.
 func NewHub(ctx context.Context, cancel context.CancelFunc, httpc *http.Client, hcfg *HubConfig, limiter *RateLimiter) (*Hub, error) {
 	h := &Hub{
-		httpc:    httpc,
-		limiter:  limiter,
-		cfg:      hcfg,
-		poolDiff: make(map[string]*DifficultyData),
-		clients:  0,
-		connCh:   make(chan []byte),
-		discCh:   make(chan []byte),
-		ctx:      ctx,
-		cancel:   cancel,
+		httpc:       httpc,
+		limiter:     limiter,
+		cfg:         hcfg,
+		poolDiff:    make(map[string]*DifficultyData),
+		clients:     0,
+		connCh:      make(chan []byte),
+		discCh:      make(chan []byte),
+		connections: make(map[string]uint32),
+		ctx:         ctx,
+		cancel:      cancel,
 	}
 
 	err := h.initDB()
@@ -303,6 +307,8 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, httpc *http.Client, 
 	}
 
 	h.generateBlake256Pad()
+
+	log.Infof("Maximum connections per host is %d.", hcfg.MaxConnectionsPerHost)
 
 	if !h.cfg.SoloPool {
 		log.Infof("Payment method is %s.", hcfg.PaymentMethod)
@@ -1030,7 +1036,7 @@ func (h *Hub) FetchClientInfo() map[string][]*ClientInfo {
 			clientInfo[client.account] = append(clientInfo[client.account],
 				&ClientInfo{
 					Miner:    endpoint.miner,
-					IP:       client.ip,
+					IP:       client.addr.String(),
 					HashRate: client.hashRate,
 				})
 			client.hashRateMtx.RUnlock()
@@ -1056,7 +1062,7 @@ func (h *Hub) FetchAccountClientInfo(accountID string) []*ClientInfo {
 
 				info = append(info, &ClientInfo{
 					Miner:    endpoint.miner,
-					IP:       client.ip,
+					IP:       client.addr.String(),
 					HashRate: hash,
 				})
 			}
