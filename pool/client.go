@@ -82,7 +82,7 @@ type Client struct {
 	reader      *bufio.Reader
 	ctx         context.Context
 	cancel      context.CancelFunc
-	ip          string
+	addr        *net.TCPAddr
 	name        string
 	extraNonce1 string
 	ch          chan Message
@@ -112,7 +112,7 @@ func (c *Client) generateExtraNonce1() error {
 }
 
 // NewClient creates client connection instance.
-func NewClient(conn net.Conn, endpoint *endpoint, ip string) (*Client, error) {
+func NewClient(conn net.Conn, endpoint *endpoint, addr *net.TCPAddr) (*Client, error) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	c := &Client{
 		conn:     conn,
@@ -123,7 +123,7 @@ func NewClient(conn net.Conn, endpoint *endpoint, ip string) (*Client, error) {
 		readCh:   make(chan []byte),
 		encoder:  json.NewEncoder(conn),
 		reader:   bufio.NewReaderSize(conn, MaxMessageSize),
-		ip:       ip,
+		addr:     addr,
 		hashRate: ZeroRat,
 	}
 
@@ -150,8 +150,13 @@ func (c *Client) fetchStratumMethod(id uint64) string {
 
 // shutdown terminates all client processes and established connections.
 func (c *Client) shutdown() {
+	addr := c.addr
+	c.endpoint.hub.connectionsMtx.Lock()
+	c.endpoint.hub.connections[addr.IP.String()]--
+	c.endpoint.hub.connectionsMtx.Unlock()
+
 	c.conn.Close()
-	c.endpoint.hub.limiter.RemoveLimiter(c.ip)
+	c.endpoint.hub.limiter.RemoveLimiter(addr.String())
 	c.endpoint.removeClient(c)
 	log.Tracef("Connection to (%v) terminated.", c.generateID())
 }
@@ -573,6 +578,8 @@ func (c *Client) read() {
 // process  handles incoming messages from the connected pool client.
 // It must be run as a goroutine.
 func (c *Client) process(ctx context.Context) {
+	ip := c.addr.String()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -588,7 +595,7 @@ func (c *Client) process(ctx context.Context) {
 			}
 
 			// Ensure the requesting client is within their request limits.
-			allowed := c.endpoint.hub.limiter.WithinLimit(c.ip, PoolClient)
+			allowed := c.endpoint.hub.limiter.WithinLimit(ip, PoolClient)
 
 			switch reqType {
 			case RequestType:

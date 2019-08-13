@@ -91,21 +91,44 @@ func (e *endpoint) connect(ctx context.Context) {
 			return
 
 		case conn := <-e.connCh:
-			client, err := NewClient(conn, e, conn.RemoteAddr().String())
+			addr := conn.RemoteAddr()
+			tcpAddr, err := net.ResolveTCPAddr(addr.Network(), addr.String())
+			if err != nil {
+				log.Errorf("unable to parse tcp addresss: %v", err)
+				continue
+			}
+
+			host := tcpAddr.IP.String()
+
+			e.hub.connectionsMtx.RLock()
+			connections := e.hub.connections[host]
+			e.hub.connectionsMtx.RUnlock()
+
+			if connections >= e.hub.cfg.MaxConnectionsPerHost {
+				log.Tracef("exceeded maximum connections "+
+					"allowed per host (%d) for %s",
+					e.hub.cfg.MaxConnectionsPerHost, host)
+				continue
+			}
+
+			client, err := NewClient(conn, e, tcpAddr)
 			if err != nil {
 				log.Errorf("unable to create client: %v", err)
-				return
+				continue
 			}
 
 			e.clientsMtx.Lock()
 			e.clients[client.generateID()] = client
 			e.clientsMtx.Unlock()
 
+			e.hub.connectionsMtx.Lock()
+			e.hub.connections[host]++
+			e.hub.connectionsMtx.Unlock()
+
 			atomic.AddInt32(&e.hub.clients, 1)
 
 			go client.run(client.ctx)
 		}
-
 	}
 }
 
