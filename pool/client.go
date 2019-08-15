@@ -45,6 +45,13 @@ var (
 	ZeroRat = new(big.Rat).SetInt64(0)
 )
 
+// readPayload is a convenience type that wraps a message and its
+// associated type.
+type readPayload struct {
+	msg     Message
+	reqType string
+}
+
 // hexReversed reverses a hex string.
 func hexReversed(in string) (string, error) {
 	if len(in)%2 != 0 {
@@ -86,7 +93,7 @@ type Client struct {
 	name        string
 	extraNonce1 string
 	ch          chan Message
-	readCh      chan []byte
+	readCh      chan readPayload
 	req         map[uint64]string
 	reqMtx      sync.RWMutex
 	account     string
@@ -120,7 +127,7 @@ func NewClient(conn net.Conn, endpoint *endpoint, addr *net.TCPAddr) (*Client, e
 		ctx:      ctx,
 		cancel:   cancel,
 		ch:       make(chan Message),
-		readCh:   make(chan []byte),
+		readCh:   make(chan readPayload),
 		encoder:  json.NewEncoder(conn),
 		reader:   bufio.NewReaderSize(conn, MaxMessageSize),
 		addr:     addr,
@@ -155,7 +162,6 @@ func (c *Client) shutdown() {
 	c.endpoint.hub.connections[addr.IP.String()]--
 	c.endpoint.hub.connectionsMtx.Unlock()
 
-	c.conn.Close()
 	c.endpoint.hub.limiter.RemoveLimiter(addr.String())
 	c.endpoint.removeClient(c)
 	log.Tracef("Connection to (%v) terminated.", c.generateID())
@@ -568,10 +574,18 @@ func (c *Client) read() {
 			return
 		}
 
+		msg, reqType, err := IdentifyMessage(data)
+		if err != nil {
+			log.Errorf("unable to identify message: %v", err)
+			c.conn.Close()
+			c.cancel()
+			return
+		}
+
 		log.Tracef("Message received from %s is: %v", c.generateID(),
 			spew.Sdump(data))
 
-		c.readCh <- data
+		c.readCh <- readPayload{msg, reqType}
 	}
 }
 
@@ -586,13 +600,9 @@ func (c *Client) process(ctx context.Context) {
 			c.wg.Done()
 			return
 
-		case data := <-c.readCh:
-			msg, reqType, err := IdentifyMessage(data)
-			if err != nil {
-				log.Errorf("unable to identify message: %v", err)
-				c.cancel()
-				continue
-			}
+		case payLoad := <-c.readCh:
+			msg := payLoad.msg
+			reqType := payLoad.reqType
 
 			// Ensure the requesting client is within their request limits.
 			allowed := c.endpoint.hub.limiter.WithinLimit(ip, PoolClient)
@@ -613,6 +623,9 @@ func (c *Client) process(ctx context.Context) {
 
 				default:
 					log.Errorf("unknown request method for request: %s", req.Method)
+					c.conn.Close()
+					c.cancel()
+					continue
 				}
 
 			case ResponseType:
@@ -621,14 +634,21 @@ func (c *Client) process(ctx context.Context) {
 				if method == "" {
 					log.Errorf("no request found for response with id: %d",
 						resp.ID, spew.Sdump(resp))
+					c.conn.Close()
 					c.cancel()
 					continue
 				}
 
 				log.Errorf("unknown request method for response: %s", method)
+				c.conn.Close()
+				c.cancel()
+				continue
 
 			default:
 				log.Errorf("unknown message type received: %s", reqType)
+				c.conn.Close()
+				c.cancel()
+				continue
 			}
 		}
 	}

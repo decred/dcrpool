@@ -150,6 +150,10 @@ func IdentifyMessage(data []byte) (Message, string, error) {
 		return nil, "", err
 	}
 
+	if resp.ID == 0 {
+		return nil, "", fmt.Errorf("unable to parse message")
+	}
+
 	return &resp, ResponseType, nil
 }
 
