@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	// maxUInt32 is the maximum value a uint32 can be, this is also the maximum
-	// value a nonce and an extraNonce2 can be in a block header.
-	maxUint32 = ^uint32(0) // 2^32 - 1
+	// maxNonce is the maximum value the nonce and extraNonce2 can be in a
+	// block header.
+	maxNonce = ^uint32(0) // 2^32 - 1
 
 	// hpsUpdateSecs is the number of seconds to wait in between each
 	// update to the hash rate monitor.
@@ -56,13 +56,11 @@ func (m *CPUMiner) hashRateMonitor(ctx context.Context) {
 	var totalHashes uint64
 	ticker := time.NewTicker(time.Second * hpsUpdateSecs)
 	defer ticker.Stop()
-	log.Trace("Miner hash rate monitor started.")
 
 	for {
 		select {
 		case <-ctx.Done():
 			close(m.updateHashes)
-			log.Trace("Miner hash rate monitor done.")
 			m.miner.wg.Done()
 			return
 
@@ -97,9 +95,18 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.I
 
 		// Search through the entire nonce and extraNonce2 range for a
 		// solution while periodically checking for early quit and stale
-		// block conditions along with updates to the speed monitor.
-		for extraNonce2 := uint32(0); extraNonce2 < maxUint32; extraNonce2++ {
-			for nonce := uint32(0); nonce < maxUint32; nonce++ {
+		// block conditions along with updates to the speed monitor. The break
+		// condition has been intentionally omitted such that the loop will
+		// continue forever until a solution is found.
+		for extraNonce2 := uint32(0); ; extraNonce2++ {
+			// This loop differs from the outer one in that it does not run
+			// forever, thus allowing the extraNonce field to be updated
+			// between each successive iteration of the regular nonce
+			// space.  Note that this is achieved by placing the break
+			// condition at the end of the code block, as this prevents the
+			// infinite loop that would otherwise occur if we let the for
+			// statement overflow the nonce value back to 0.
+			for nonce := uint32(0); ; nonce++ {
 				select {
 				case <-ctx.Done():
 					return false
@@ -154,6 +161,10 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.I
 						header.Height, header.BlockHash().String())
 					return true
 				}
+
+				if nonce == maxNonce {
+					break
+				}
 			}
 		}
 	}
@@ -173,6 +184,7 @@ func (m *CPUMiner) solve(ctx context.Context) {
 		if m.miner.work.target == nil || m.miner.work.jobID == "" ||
 			m.miner.work.header == nil {
 			m.miner.workMtx.RUnlock()
+			time.Sleep(time.Second)
 			continue
 		}
 
@@ -192,7 +204,7 @@ func (m *CPUMiner) solve(ctx context.Context) {
 			m.workCh <- req
 
 			// Stall to prevent mining too quickly.
-			time.Sleep(time.Millisecond * 500)
+			time.Sleep(time.Second)
 		}
 	}
 }
@@ -200,12 +212,9 @@ func (m *CPUMiner) solve(ctx context.Context) {
 // generateBlocks handles sending solved block submissions to the mining pool.
 // It must be run as a goroutine.
 func (m *CPUMiner) generateBlocks(ctx context.Context) {
-	log.Trace("Miner generate blocks started.")
-
 	for {
 		select {
 		case <-ctx.Done():
-			log.Trace("Miner generate blocks done.")
 			m.miner.wg.Done()
 			return
 
