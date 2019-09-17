@@ -9,7 +9,7 @@ MASTER_WALLET_SEED="b280922d2cffda44648346412c5ec97f429938105003730414f10b01e140
 VOTING_WALLET_SEED="aabbcaabbcaabbcaabbcaabbcaabbcaabbcaabbcaabbcaabbcaabbcaabbcaabbc"
 WALLET_PASS=123
 BACKUP_PASS=b@ckUp
-NETWORK="simnet" # testnet3
+NETWORK="simnet" # "testnet3"
 SOLO_POOL=0
 MAX_GEN_TIME=20
 MINER_MAX_PROCS=1
@@ -224,6 +224,7 @@ fi
 
 if [ "${NETWORK}" = "simnet" ]; then
 tmux send-keys "dcrd -C ${DCRD_CONF} \
+--appdata=${NODES_ROOT}/master \
 --rpccert=${DCRD_RPC_CERT} --rpckey=${DCRD_RPC_KEY} \
 --rpcuser=${RPC_USER} --rpcpass=${RPC_PASS} \
 --miningaddr=${POOL_MINING_ADDR} \

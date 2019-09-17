@@ -62,10 +62,10 @@ var (
 	// pool clients since pool shares are a non factor in solo pool mode.
 	soloMaxGenTime = new(big.Int).SetInt64(28)
 
-	// minerHashes is a map of all known DCR miners and their coressponding
+	// minerHashes is a map of all known DCR miners and their corresponding
 	// hashrates.
 	minerHashes = map[string]*big.Int{
-		CPU:           new(big.Int).SetInt64(70E3),
+		CPU:           new(big.Int).SetInt64(50E3),
 		InnosiliconD9: new(big.Int).SetInt64(2.4E12),
 		AntminerDR3:   new(big.Int).SetInt64(7.8E12),
 		AntminerDR5:   new(big.Int).SetInt64(35E12),

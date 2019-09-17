@@ -44,7 +44,6 @@ type Miner struct {
 	reqMtx          sync.RWMutex
 	chainCh         chan struct{}
 	readCh          chan []byte
-	connCh          chan bool
 	authorized      bool
 	subscribed      bool
 	connected       bool
@@ -108,14 +107,11 @@ func (m *Miner) subscribe() error {
 // keepAlive checks the state of the connection to the pool and reconnects
 // if needed. This should be run as a goroutine.
 func (m *Miner) keepAlive() {
-	sleep := func() {
-		time.Sleep(time.Second * 5)
-	}
-
 	for {
 		m.connectedMtx.RLock()
 		if m.connected {
 			m.connectedMtx.RUnlock()
+			time.Sleep(time.Second)
 			continue
 		}
 		m.connectedMtx.RUnlock()
@@ -124,7 +120,7 @@ func (m *Miner) keepAlive() {
 		conn, err := net.Dial("tcp", poolAddr)
 		if err != nil {
 			log.Errorf("unable connect to %s, %v", poolAddr, err)
-			sleep()
+			time.Sleep(time.Second * 5)
 			continue
 		}
 
@@ -135,41 +131,22 @@ func (m *Miner) keepAlive() {
 		err = m.subscribe()
 		if err != nil {
 			log.Errorf("unable to subscribe miner: %v", err)
-			sleep()
+			time.Sleep(time.Second * 5)
 			continue
 		}
 
 		err = m.authenticate()
 		if err != nil {
 			log.Errorf("unable to authenticate miner: %v", err)
-			sleep()
+			time.Sleep(time.Second * 5)
 			continue
 		}
 
-		m.connCh <- true
-		sleep()
-	}
-}
+		m.connectedMtx.Lock()
+		m.connected = true
+		m.connectedMtx.Unlock()
 
-// connect maintains a connection to the pool by periodically retrying to
-// connect when the established connection drops.
-func (m *Miner) connect(ctx context.Context) {
-	log.Tracef("Started connection handler.")
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Tracef("Connection handler done.")
-			m.wg.Done()
-			return
-
-		case connected := <-m.connCh:
-			if connected {
-				m.connectedMtx.Lock()
-				m.connected = true
-				m.connectedMtx.Unlock()
-			}
-		}
+		time.Sleep(time.Second * 5)
 	}
 }
 
@@ -181,6 +158,7 @@ func (m *Miner) read() {
 		m.connectedMtx.RLock()
 		if !m.connected {
 			m.connectedMtx.RUnlock()
+			time.Sleep(time.Second)
 			continue
 		}
 		m.connectedMtx.RUnlock()
@@ -218,13 +196,11 @@ func (m *Miner) read() {
 // listen reads and processes incoming messages from the pool client. It must
 // be run as a goroutine.
 func (m *Miner) process(ctx context.Context) {
-	log.Tracef("Miner listener started.")
 
 	for {
 		select {
 		case <-ctx.Done():
-			m.shutdown()
-			log.Trace("Miner listener done.")
+			m.conn.Close()
 			m.wg.Done()
 			return
 
@@ -393,22 +369,13 @@ func (m *Miner) process(ctx context.Context) {
 	}
 }
 
-// shutdown tears down the miner and releases resources used.
-func (m *Miner) shutdown() {
-	m.conn.Close()
-	close(m.readCh)
-	close(m.chainCh)
-	close(m.connCh)
-}
-
 // run handles the process life cycles of the miner.
 func (m *Miner) run(ctx context.Context) {
 	go m.read()
 	go m.keepAlive()
 	go m.core.solve(ctx)
 
-	m.wg.Add(4)
-	go m.connect(ctx)
+	m.wg.Add(3)
 	go m.process(ctx)
 	go m.core.hashRateMonitor(ctx)
 	go m.core.generateBlocks(ctx)
@@ -423,7 +390,6 @@ func NewMiner(cfg *config, cancel context.CancelFunc) (*Miner, error) {
 		cancel:  cancel,
 		chainCh: make(chan struct{}),
 		readCh:  make(chan []byte),
-		connCh:  make(chan bool),
 		req:     make(map[uint64]string),
 		started: time.Now().Unix(),
 	}
