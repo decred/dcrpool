@@ -1,6 +1,6 @@
 # dcrpool 
 
-[![Build Status](https://travis-ci.com/decred/dcrpool.svg?branch=master)](https://travis-ci.com/decred/dcrpool)
+[![Build Status](https://github.com/decred/dcrpool/workflows/Build%20and%20Test/badge.svg)](https://github.com/decred/dcrpool/actions)
 
 dcrpool is a stratum decred mining pool. It currently supports:
 
