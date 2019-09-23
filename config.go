@@ -66,13 +66,9 @@ var (
 	defaultPaymentMethod = pool.PPLNS
 	defaultMinPayment    = 0.2
 	dcrpoolHomeDir       = dcrutil.AppDataDir("dcrpool", false)
-	dcrwalletHomeDir     = dcrutil.AppDataDir("dcrwallet", false)
-	dcrdHomeDir          = dcrutil.AppDataDir("dcrd", false)
 	defaultConfigFile    = filepath.Join(dcrpoolHomeDir, defaultConfigFilename)
 	defaultDataDir       = filepath.Join(dcrpoolHomeDir, defaultDataDirname)
 	defaultDBFile        = filepath.Join(defaultDataDir, defaultDBFilename)
-	dcrdRPCCertFile      = filepath.Join(dcrdHomeDir, defaultRPCCertFilename)
-	walletRPCCertFile    = filepath.Join(dcrwalletHomeDir, defaultRPCCertFilename)
 	defaultLogDir        = filepath.Join(dcrpoolHomeDir, defaultLogDirname)
 	defaultTLSCertFile   = filepath.Join(dcrpoolHomeDir, defaultTLSCertFilename)
 	defaultTLSKeyFile    = filepath.Join(dcrpoolHomeDir, defaultTLSKeyFilename)
@@ -325,8 +321,6 @@ func loadConfig() (*config, []string, error) {
 		RPCUser:               defaultRPCUser,
 		RPCPass:               defaultRPCPass,
 		DcrdRPCHost:           defaultDcrdRPCHost,
-		DcrdRPCCert:           dcrdRPCCertFile,
-		WalletRPCCert:         walletRPCCertFile,
 		WalletGRPCHost:        defaultWalletGRPCHost,
 		PoolFeeAddrs:          []string{defaultPoolFeeAddr},
 		PoolFee:               defaultPoolFee,
@@ -600,20 +594,21 @@ func loadConfig() (*config, []string, error) {
 		}
 	}
 
-	// Load Dcrd RPC Certificate.
+	// Load dcrd RPC certificate.
 	if !fileExists(cfg.DcrdRPCCert) {
 		return nil, nil,
 			fmt.Errorf("dcrd RPC certificate (%v) not found", cfg.DcrdRPCCert)
 	}
 
-	cfg.dcrdRPCCerts, err = ioutil.ReadFile(dcrdRPCCertFile)
+	cfg.dcrdRPCCerts, err = ioutil.ReadFile(cfg.DcrdRPCCert)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Validate format of profile, can be an address:port, or just a port.
 	if cfg.Profile != "" {
-		// If profile is just a number, then add a default host of "127.0.0.1" such that Profile is a valid tcp address.
+		// If profile is just a number, then add a default host of "127.0.0.1"
+		// such that Profile is a valid tcp address.
 		if _, err := strconv.Atoi(cfg.Profile); err == nil {
 			cfg.Profile = net.JoinHostPort("127.0.0.1", cfg.Profile)
 		}
