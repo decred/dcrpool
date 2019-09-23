@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/big"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
@@ -175,6 +176,23 @@ func main() {
 	if err != nil {
 		mpLog.Error(err)
 		return
+	}
+
+	if cfg.Profile != "" {
+		// Start the profiler.
+		go func() {
+			listenAddr := cfg.Profile
+			mpLog.Infof("Creating profiling server listening "+
+				"on %s", listenAddr)
+			profileRedirect := http.RedirectHandler("/debug/pprof",
+				http.StatusSeeOther)
+			http.Handle("/", profileRedirect)
+			err := http.ListenAndServe(listenAddr, nil)
+			if err != nil {
+				mpLog.Criticalf(err.Error())
+				p.cancel()
+			}
+		}()
 	}
 
 	mpLog.Infof("Version: %s", version())
