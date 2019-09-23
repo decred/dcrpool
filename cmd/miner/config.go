@@ -396,7 +396,8 @@ func loadConfig() (*config, []string, error) {
 
 	// Validate format of profile, can be an address:port, or just a port.
 	if cfg.Profile != "" {
-		// If profile is just a number, then add a default host of "127.0.0.1" such that Profile is a valid tcp address.
+		// If profile is just a number, then add a default host of "127.0.0.1"
+		// such that Profile is a valid tcp address.
 		if _, err := strconv.Atoi(cfg.Profile); err == nil {
 			cfg.Profile = net.JoinHostPort("127.0.0.1", cfg.Profile)
 		}
