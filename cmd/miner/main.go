@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
@@ -45,6 +46,23 @@ func main() {
 	if err != nil {
 		log.Errorf("Failed to create miner: %v", err)
 		return
+	}
+
+	if cfg.Profile != "" {
+		// Start the profiler.
+		go func() {
+			listenAddr := cfg.Profile
+			log.Infof("Creating profiling server listening "+
+				"on %s", listenAddr)
+			profileRedirect := http.RedirectHandler("/debug/pprof",
+				http.StatusSeeOther)
+			http.Handle("/", profileRedirect)
+			err := http.ListenAndServe(listenAddr, nil)
+			if err != nil {
+				log.Criticalf(err.Error())
+				miner.cancel()
+			}
+		}()
 	}
 
 	go func() {

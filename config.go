@@ -8,11 +8,13 @@ import (
 	"crypto/elliptic"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/user"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -113,6 +115,7 @@ type config struct {
 	TLSKey                string   `long:"tlskey" ini-name:"tlskey" description:"Path to the TLS key file."`
 	Designation           string   `long:"designation" ini-name:"designation" description:"The designated codename for this pool. Customises the logo in the top toolbar."`
 	MaxConnectionsPerHost uint32   `long:"maxconnperhost" init-name:"maxconnperhost" description:"The maximum number of connections allowed per host."`
+	Profile               string   `long:"profile" init-name:"Enable HTTP profiling on given [addr:]port -- NOTE port must be between 1024 and 65536"`
 	CPUPort               uint32   `long:"cpuport" ini-name:"cpuport" description:"CPU miner connection port."`
 	D9Port                uint32   `long:"d9port" ini-name:"d9port" description:"Innosilicon D9 connection port."`
 	DR3Port               uint32   `long:"dr3port" ini-name:"dr3port" description:"Antminer DR3 connection port."`
@@ -606,6 +609,33 @@ func loadConfig() (*config, []string, error) {
 	cfg.dcrdRPCCerts, err = ioutil.ReadFile(dcrdRPCCertFile)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// Validate format of profile, can be an address:port, or just a port.
+	if cfg.Profile != "" {
+		// If profile is just a number, then add a default host of "127.0.0.1" such that Profile is a valid tcp address.
+		if _, err := strconv.Atoi(cfg.Profile); err == nil {
+			cfg.Profile = net.JoinHostPort("127.0.0.1", cfg.Profile)
+		}
+
+		// Check the Profile is a valid address
+		_, portStr, err := net.SplitHostPort(cfg.Profile)
+		if err != nil {
+			str := "%s: profile: %s"
+			err := fmt.Errorf(str, funcName, err)
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
+			return nil, nil, err
+		}
+
+		// Finally, check the port is in range.
+		if port, _ := strconv.Atoi(portStr); port < 1024 || port > 65535 {
+			str := "%s: profile: address %s: port must be between 1024 and 65535"
+			err := fmt.Errorf(str, funcName, cfg.Profile)
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
+			return nil, nil, err
+		}
 	}
 
 	if !cfg.SoloPool {

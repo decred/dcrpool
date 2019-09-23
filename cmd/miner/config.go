@@ -6,11 +6,14 @@ package main
 
 import (
 	"fmt"
+	"net"
+	_ "net/http/pprof"
 	"os"
 	"os/user"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/decred/dcrd/chaincfg"
@@ -48,6 +51,7 @@ type config struct {
 	DebugLevel string `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir     string `long:"logdir" description:"The log output directory."`
 	MaxProcs   int    `long:"maxprocs" description:"Number of CPU cores to use. Default is all cores."`
+	Profile    string `long:"profile" init-name:"Enable HTTP profiling on given [addr:]port -- NOTE port must be between 1024 and 65536"`
 
 	net *chaincfg.Params
 }
@@ -388,6 +392,33 @@ func loadConfig() (*config, []string, error) {
 		cfg.net = &chaincfg.TestNet3Params
 	case chaincfg.MainNetParams.Name:
 		cfg.net = &chaincfg.MainNetParams
+	}
+
+	// Validate format of profile, can be an address:port, or just a port.
+	if cfg.Profile != "" {
+		// If profile is just a number, then add a default host of "127.0.0.1" such that Profile is a valid tcp address.
+		if _, err := strconv.Atoi(cfg.Profile); err == nil {
+			cfg.Profile = net.JoinHostPort("127.0.0.1", cfg.Profile)
+		}
+
+		// Check the Profile is a valid address
+		_, portStr, err := net.SplitHostPort(cfg.Profile)
+		if err != nil {
+			str := "%s: profile: %s"
+			err := fmt.Errorf(str, funcName, err)
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
+			return nil, nil, err
+		}
+
+		// Finally, check the port is in range.
+		if port, _ := strconv.Atoi(portStr); port < 1024 || port > 65535 {
+			str := "%s: profile: address %s: port must be between 1024 and 65535"
+			err := fmt.Errorf(str, funcName, cfg.Profile)
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
+			return nil, nil, err
+		}
 	}
 
 	availableCPUs := runtime.NumCPU()
