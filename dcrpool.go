@@ -73,8 +73,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		}
 
 		if match {
-			return fmt.Errorf("%s and %s share port :%d. "+
-				"Miner listening ports must be unique.", key, miner, entry)
+			return fmt.Errorf("%s and %s share port %d", key, miner, entry)
 		}
 
 		ports[key] = entry

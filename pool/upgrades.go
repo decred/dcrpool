@@ -106,7 +106,6 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			return err
 		}
-
 	}
 
 	abkt := pbkt.Bucket(paymentArchiveBkt)

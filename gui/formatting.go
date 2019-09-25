@@ -83,7 +83,7 @@ func formatUnixTime(unix int64) string {
 // floatToPercent formats the provided float64 as a percentage,
 // rounded to the nearest decimal place. eg. "10.5%"
 func floatToPercent(rat float64) string {
-	rat = rat * 100
+	rat *= 100
 	str := fmt.Sprintf("%.1f", rat)
 	return str + "%"
 }

@@ -312,7 +312,6 @@ func TestCalculateDividend(t *testing.T) {
 				if ok {
 					errCode = e.ErrorCode
 				}
-
 			}
 
 			if test.err != nil {

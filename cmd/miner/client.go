@@ -196,7 +196,6 @@ func (m *Miner) read() {
 // listen reads and processes incoming messages from the pool client. It must
 // be run as a goroutine.
 func (m *Miner) process(ctx context.Context) {
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -383,7 +382,7 @@ func (m *Miner) run(ctx context.Context) {
 }
 
 // NewMiner creates a stratum mining client.
-func NewMiner(cfg *config, cancel context.CancelFunc) (*Miner, error) {
+func NewMiner(cfg *config, cancel context.CancelFunc) *Miner {
 	m := &Miner{
 		config:  cfg,
 		work:    new(Work),
@@ -395,5 +394,5 @@ func NewMiner(cfg *config, cancel context.CancelFunc) (*Miner, error) {
 	}
 
 	m.core = NewCPUMiner(m)
-	return m, nil
+	return m
 }
