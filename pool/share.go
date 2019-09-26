@@ -41,7 +41,7 @@ var ShareWeights = map[string]*big.Rat{
 
 // calculatePoolDifficulty determines the difficulty at which the provided
 // hashrate can generate a pool share by the provided target time.
-func calculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) (*big.Int, error) {
+func calculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) *big.Int {
 	hashesPerTargetTime := new(big.Int).Mul(hashRate, targetTimeSecs)
 	powLimit := net.PowLimit
 	powLimitFloat, _ := new(big.Float).SetInt(powLimit).Float64()
@@ -64,7 +64,7 @@ func calculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTime
 		diff = new(big.Int).SetInt64(1)
 	}
 
-	return diff, nil
+	return diff
 }
 
 // DifficultyToTarget converts the provided difficulty to a target based on the
@@ -89,12 +89,9 @@ func DifficultyToTarget(net *chaincfg.Params, difficulty *big.Int) (*big.Int, er
 // calculatePoolTarget determines the target difficulty at which the provided
 // hashrate can generate a pool share by the provided target time.
 func calculatePoolTarget(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) (*big.Int, *big.Int, error) {
-	difficulty, err := calculatePoolDifficulty(net, hashRate, targetTimeSecs)
-	if err != nil {
-		return nil, nil, err
-	}
-
+	difficulty := calculatePoolDifficulty(net, hashRate, targetTimeSecs)
 	target, err := DifficultyToTarget(net, difficulty)
+
 	return target, difficulty, err
 }
 

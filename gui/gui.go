@@ -107,7 +107,7 @@ func (ui *GUI) route() {
 }
 
 // renderTemplate executes the provided template.
-func (ui *GUI) renderTemplate(w http.ResponseWriter, r *http.Request, name string, data interface{}) {
+func (ui *GUI) renderTemplate(w http.ResponseWriter, _ *http.Request, name string, data interface{}) {
 	var doc bytes.Buffer
 	err := ui.templates.ExecuteTemplate(&doc, name, data)
 	if err != nil {

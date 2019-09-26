@@ -14,7 +14,6 @@ import (
 )
 
 func main() {
-
 	// Listen for interrupt signals.
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
@@ -42,11 +41,7 @@ func main() {
 
 	// Initialize and run the client.
 	ctx, cancel := context.WithCancel(context.Background())
-	miner, err := NewMiner(cfg, cancel)
-	if err != nil {
-		log.Errorf("Failed to create miner: %v", err)
-		return
-	}
+	miner := NewMiner(cfg, cancel)
 
 	if cfg.Profile != "" {
 		// Start the profiler.

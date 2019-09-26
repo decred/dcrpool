@@ -107,7 +107,6 @@ func TestPayPerShare(t *testing.T) {
 	}
 
 	if bytes.Compare(lastPmtCreatedOn, nowBytes) < 0 {
-
 		t.Errorf("The last payment created on time is less than " +
 			"the current time")
 	}
