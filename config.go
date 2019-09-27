@@ -37,7 +37,6 @@ const (
 	defaultDBFilename            = "dcrpool.kv"
 	defaultTLSCertFilename       = "dcrpool.cert"
 	defaultTLSKeyFilename        = "dcrpool.key"
-	defaultRPCCertFilename       = "rpc.cert"
 	defaultRPCUser               = "dcrp"
 	defaultRPCPass               = "dcrppass"
 	defaultDcrdRPCHost           = "127.0.0.1:19109"
