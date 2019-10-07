@@ -127,7 +127,7 @@ Refer to [config descriptions](config.go) for more detail.
 
 In mining pool mode the ideal wallet setup is to have two wallet accounts, 
 the pool account and the fee account, for the mining pool. This account structure 
-seperates revenue earned from pool operations from mining rewards gotten on 
+separates revenue earned from pool operations from mining rewards gotten on 
 behalf of participating clients. The pool account's purpose is to receive 
 mining rewards of the pool. The address generated from it should be the mining 
 address (`--miningaddress`) of the mining node. The fee account's purpose is to 
@@ -152,7 +152,7 @@ cd ../..
 
 Dcrpool is ideal for miners running medium-to-large mining operations. The 
 revenue generated from mining blocks as well as not paying pool fees to a 
-publicly avialable mining pool in the process should be enough to offset 
+publicly available mining pool in the process should be enough to offset 
 the cost of running a pool. It will most likely not be cost effective to run dcrpool for a small mining operation, the better option here would be using  
 a public mining pool instead. 
 
