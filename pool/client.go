@@ -49,7 +49,7 @@ var (
 // associated type.
 type readPayload struct {
 	msg     Message
-	reqType string
+	msgType int
 }
 
 // hexReversed reverses a hex string.
@@ -167,9 +167,8 @@ func (c *Client) shutdown() {
 	log.Tracef("Connection to (%v) terminated.", c.generateID())
 }
 
-// claimWeightedShare records a weighted share for the pool client. This serves
-// as proof of verifiable work contributed to the mining pool. This also
-// updates the hash rate of the miner based on the last submitted share time.
+// claimWeightedShare records a weighted share for the pool client. This
+// serves as proof of verifiable work contributed to the mining pool.
 func (c *Client) claimWeightedShare() error {
 	if c.endpoint.hub.cfg.ActiveNet.Name == chaincfg.MainNetParams.Name &&
 		c.endpoint.miner == CPU {
@@ -363,7 +362,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 
 // setDifficulty sends the pool client's difficulty ratio.
 func (c *Client) setDifficulty() {
-	log.Tracef("Difficulty is %v", c.endpoint.diffData.difficulty)
+	log.Tracef("Difficulty is %v", c.endpoint.diffData.difficulty.FloatString(4))
 	diffNotif := SetDifficultyNotification(c.endpoint.diffData.difficulty)
 	c.ch <- diffNotif
 }
@@ -415,8 +414,9 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	log.Tracef("Submited work hash at height #%v is %s", header.Height,
 		header.BlockHash().String())
 
-	poolTarget := c.endpoint.diffData.target
-	target := blockchain.CompactToBig(header.Bits)
+	diffData := c.endpoint.diffData
+	poolTarget := diffData.target
+	target := new(big.Rat).SetInt(blockchain.CompactToBig(header.Bits))
 
 	// The target difficulty must be larger than zero.
 	if target.Sign() <= 0 {
@@ -429,15 +429,18 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	}
 
 	hash := header.BlockHash()
-	hashNum := blockchain.HashToBig(&hash)
+	hashTarget := new(big.Rat).SetInt(blockchain.HashToBig(&hash))
 
-	log.Tracef("target is: %v", target)
-	log.Tracef("pool target is: %v", poolTarget)
-	log.Tracef("hash target is: %v", hashNum)
+	netDiff := new(big.Rat).Quo(diffData.powLimit, poolTarget)
+	hashDiff := new(big.Rat).Quo(diffData.powLimit, hashTarget)
+
+	log.Tracef("network difficulty is: %s", netDiff.FloatString(4))
+	log.Tracef("pool difficulty is: %s", diffData.difficulty.FloatString(4))
+	log.Tracef("hash difficulty is: %s", hashDiff.FloatString(4))
 
 	// Only submit work to the network if the submitted blockhash is
 	// less than the pool target for the client.
-	if hashNum.Cmp(poolTarget) > 0 {
+	if hashTarget.Cmp(poolTarget) > 0 {
 		log.Errorf("submitted work from %s is not less than its "+
 			"corresponding pool target", c.generateID())
 		err := NewStratumError(LowDifficultyShare, nil)
@@ -464,7 +467,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 
 	// Only submit work to the network if the submitted blockhash is
 	// less than the network target difficulty.
-	if hashNum.Cmp(target) > 0 {
+	if hashTarget.Cmp(target) > 0 {
 		log.Tracef("submitted work from %s is not less than the "+
 			"network target difficulty", c.generateID())
 		resp := SubmitWorkResponse(*req.ID, true, nil)
@@ -602,13 +605,13 @@ func (c *Client) process(ctx context.Context) {
 
 		case payLoad := <-c.readCh:
 			msg := payLoad.msg
-			reqType := payLoad.reqType
+			msgType := payLoad.msgType
 
 			// Ensure the requesting client is within their request limits.
 			allowed := c.endpoint.hub.limiter.WithinLimit(ip, PoolClient)
 
-			switch reqType {
-			case RequestType:
+			switch msgType {
+			case RequestMessage:
 				req := msg.(*Request)
 				switch req.Method {
 				case Authorize:
@@ -628,7 +631,7 @@ func (c *Client) process(ctx context.Context) {
 					continue
 				}
 
-			case ResponseType:
+			case ResponseMessage:
 				resp := msg.(*Response)
 				method := c.fetchStratumMethod(resp.ID)
 				if method == "" {
@@ -645,7 +648,7 @@ func (c *Client) process(ctx context.Context) {
 				continue
 
 			default:
-				log.Errorf("unknown message type received: %s", reqType)
+				log.Errorf("unknown message type received: %s", msgType)
 				c.conn.Close()
 				c.cancel()
 				continue
@@ -780,8 +783,7 @@ func (c *Client) hashMonitor(ctx context.Context) {
 			submissions := atomic.LoadInt64(&c.submissions)
 			average := float64(hashCalcThreshold / submissions)
 
-			num := new(big.Rat).Mul(
-				new(big.Rat).SetInt(c.endpoint.diffData.difficulty),
+			num := new(big.Rat).Mul(c.endpoint.diffData.difficulty,
 				new(big.Rat).SetFloat64(c.endpoint.hub.cfg.NonceIterations))
 			denom := new(big.Rat).SetFloat64(average)
 
@@ -813,7 +815,7 @@ func (c *Client) send(ctx context.Context) {
 			log.Tracef("Message sent to %s is: %v", c.generateID(),
 				spew.Sdump(msg))
 
-			if msg.MessageType() == ResponseType {
+			if msg.MessageType() == ResponseMessage {
 				err := c.encoder.Encode(msg)
 				if err != nil {
 					log.Errorf("Message encoding error: %v", err)
@@ -822,7 +824,7 @@ func (c *Client) send(ctx context.Context) {
 				}
 			}
 
-			if msg.MessageType() == RequestType {
+			if msg.MessageType() == RequestMessage {
 				req := msg.(*Request)
 				if req.Method == Notify {
 					id := c.generateID()

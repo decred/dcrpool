@@ -99,8 +99,9 @@ type HubConfig struct {
 // DifficultyData captures the pool target difficulty and pool difficulty
 // ratio of a mining client.
 type DifficultyData struct {
-	target     *big.Int
-	difficulty *big.Int
+	target     *big.Rat
+	difficulty *big.Rat
+	powLimit   *big.Rat
 }
 
 // Hub maintains the set of active clients and facilitates message broadcasting
@@ -204,6 +205,7 @@ func (h *Hub) initDB() error {
 
 // generateDifficultyData generates difficulty data for all supported miners.
 func (h *Hub) generateDifficultyData() error {
+	powLimit := new(big.Rat).SetInt(h.cfg.ActiveNet.PowLimit)
 	maxGenTime := new(big.Int).SetUint64(h.cfg.MaxGenTime)
 	if h.cfg.SoloPool {
 		maxGenTime = soloMaxGenTime
@@ -225,6 +227,7 @@ func (h *Hub) generateDifficultyData() error {
 		h.poolDiff[miner] = &DifficultyData{
 			target:     target,
 			difficulty: difficulty,
+			powLimit:   powLimit,
 		}
 	}
 	h.poolDiffMtx.Unlock()

@@ -21,7 +21,7 @@ type Account struct {
 	CreatedOn uint64 `json:"createdon"`
 }
 
-// AccountID generates an id using provided address of the account.
+// AccountID generates a unique id using provided address of the account.
 func AccountID(address string) (string, error) {
 	hasher := blake256.New()
 	_, err := hasher.Write([]byte(address))
@@ -33,8 +33,10 @@ func AccountID(address string) (string, error) {
 	return id, nil
 }
 
-// NewAccount generates a new account.
+// NewAccount creates a new account.
 func NewAccount(address string) (*Account, error) {
+	// Since an account's id is derived from the address an account
+	// can be shared by multiple pool clients.
 	id, err := AccountID(address)
 	if err != nil {
 		return nil, err

@@ -89,7 +89,7 @@ func (m *CPUMiner) hashRateMonitor(ctx context.Context) {
 // This function will return early with false when conditions that trigger a
 // stale block such as a new block showing up or periodically when there are
 // new transactions and enough time has elapsed without finding a solution.
-func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.Int, ticker *time.Ticker) bool {
+func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.Rat, ticker *time.Ticker) bool {
 	for {
 		hashesCompleted := uint64(0)
 
@@ -144,7 +144,7 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.I
 				// A valid submission is generated when the block hash is less
 				// than the pool target of the client.
 				hash := header.BlockHash()
-				hashNum := blockchain.HashToBig(&hash)
+				hashNum := new(big.Rat).SetInt(blockchain.HashToBig(&hash))
 				hashesCompleted++
 
 				if hashNum.Cmp(target) < 0 {

@@ -17,9 +17,10 @@ import (
 
 // Message types.
 const (
-	RequestType      = "request"
-	ResponseType     = "response"
-	NotificationType = "notification"
+	UnknownMessage = iota
+	RequestMessage
+	ResponseMessage
+	NotificationMessage
 )
 
 // Handler types.
@@ -83,7 +84,7 @@ func NewStratumError(code uint32, traceback *string) *StratumError {
 
 // Message defines a message interface.
 type Message interface {
-	MessageType() string
+	MessageType() int
 }
 
 // Request defines a request message.
@@ -94,8 +95,8 @@ type Request struct {
 }
 
 // MessageType returns the request message type.
-func (req *Request) MessageType() string {
-	return RequestType
+func (req *Request) MessageType() int {
+	return RequestMessage
 }
 
 // NewRequest creates a request instance.
@@ -115,8 +116,8 @@ type Response struct {
 }
 
 // MessageType returns the response message type.
-func (req *Response) MessageType() string {
-	return ResponseType
+func (req *Response) MessageType() int {
+	return ResponseMessage
 }
 
 // NewResponse creates a response instance.
@@ -130,31 +131,31 @@ func NewResponse(id uint64, result interface{}, err *StratumError) *Response {
 
 // IdentifyMessage determines the received message type. It returns the message
 // cast to the appropriate message type, the message type and an error type.
-func IdentifyMessage(data []byte) (Message, string, error) {
+func IdentifyMessage(data []byte) (Message, int, error) {
 	var req Request
 	err := json.Unmarshal(data, &req)
 	if err != nil {
-		return nil, "", err
+		return nil, UnknownMessage, err
 	}
 
 	if req.Method != "" {
 		if req.ID == nil {
-			return &req, NotificationType, nil
+			return &req, NotificationMessage, nil
 		}
-		return &req, RequestType, nil
+		return &req, RequestMessage, nil
 	}
 
 	var resp Response
 	err = json.Unmarshal(data, &resp)
 	if err != nil {
-		return nil, "", err
+		return nil, UnknownMessage, err
 	}
 
 	if resp.ID == 0 {
-		return nil, "", fmt.Errorf("unable to parse message")
+		return nil, UnknownMessage, fmt.Errorf("unable to parse message")
 	}
 
-	return &resp, ResponseType, nil
+	return &resp, ResponseMessage, nil
 }
 
 // AuthorizeRequest creates an authorize request message.
@@ -341,10 +342,11 @@ func ParseSubscribeResponse(resp *Response) (string, string, string, uint64, err
 }
 
 // SetDifficultyNotification creates a set difficulty notification message.
-func SetDifficultyNotification(difficulty *big.Int) *Request {
+func SetDifficultyNotification(difficulty *big.Rat) *Request {
+	diff, _ := difficulty.Float64()
 	return &Request{
 		Method: SetDifficulty,
-		Params: []uint64{difficulty.Uint64()},
+		Params: []uint64{uint64(diff)},
 	}
 }
 

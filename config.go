@@ -110,7 +110,7 @@ type config struct {
 	TLSKey                string   `long:"tlskey" ini-name:"tlskey" description:"Path to the TLS key file."`
 	Designation           string   `long:"designation" ini-name:"designation" description:"The designated codename for this pool. Customises the logo in the top toolbar."`
 	MaxConnectionsPerHost uint32   `long:"maxconnperhost" init-name:"maxconnperhost" description:"The maximum number of connections allowed per host."`
-	Profile               string   `long:"profile" init-name:"Enable HTTP profiling on given [addr:]port -- NOTE port must be between 1024 and 65536"`
+	Profile               string   `long:"profile" init-name:"profile" description:"Enable HTTP profiling on given [addr:]port -- NOTE port must be between 1024 and 65536"`
 	CPUPort               uint32   `long:"cpuport" ini-name:"cpuport" description:"CPU miner connection port."`
 	D9Port                uint32   `long:"d9port" ini-name:"d9port" description:"Innosilicon D9 connection port."`
 	DR3Port               uint32   `long:"dr3port" ini-name:"dr3port" description:"Antminer DR3 connection port."`
@@ -525,14 +525,10 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	// Set the mining active network. Testnet proof of work
-	// parameters are modified here to mirror that of mainnet in order to
-	// generate reasonable difficulties for asics. Simnet is currently reserved
-	// for cpu miner tests only.
+	// Set the mining active network.
 	switch cfg.ActiveNet {
 	case chaincfg.TestNet3Params.Name:
 		cfg.net = &chaincfg.TestNet3Params
-		cfg.net.PowLimit = chaincfg.MainNetParams.PowLimit
 	case chaincfg.MainNetParams.Name:
 		cfg.net = &chaincfg.MainNetParams
 	case chaincfg.SimNetParams.Name:
