@@ -11,8 +11,8 @@ import (
 	"time"
 
 	bolt "github.com/coreos/bbolt"
-	"github.com/decred/dcrd/chaincfg"
-	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/dcrutil/v2"
 )
 
 var (
@@ -31,7 +31,7 @@ var (
 	yID = ""
 
 	// Pool fee address.
-	poolFeeAddrs, _ = dcrutil.DecodeAddress("SsnbEmxCVXskgTHXvf3rEa17NA39qQuGHwQ")
+	poolFeeAddrs, _ = dcrutil.DecodeAddress("SsnbEmxCVXskgTHXvf3rEa17NA39qQuGHwQ", chaincfg.SimNetParams())
 )
 
 // setupDB initializes the pool database.
@@ -343,19 +343,19 @@ func TestCalculatePoolTarget(t *testing.T) {
 		expected   string
 	}{
 		{
-			new(big.Int).SetInt64(1.2E12),
+			new(big.Int).SetInt64(1.2e12),
 			new(big.Int).SetInt64(15),
 			"942318434548471642444425333729556541774658078333663444331523307356028928/146484375",
 		},
 		{
-			new(big.Int).SetInt64(1.2E12),
+			new(big.Int).SetInt64(1.2e12),
 			new(big.Int).SetInt64(10),
 			"471159217274235821222212666864778270887329039166831722165761653678014464/48828125",
 		},
 	}
 
 	for _, test := range set {
-		target, _, err := calculatePoolTarget(&chaincfg.MainNetParams,
+		target, _, err := calculatePoolTarget(chaincfg.MainNetParams(),
 			test.hashRate, test.targetTime)
 		if err != nil {
 			t.Error(err)

@@ -16,8 +16,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/decred/dcrd/chaincfg"
-	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
 )
@@ -30,7 +30,7 @@ const (
 )
 
 var (
-	defaultActiveNet  = chaincfg.SimNetParams.Name
+	defaultActiveNet  = chaincfg.SimNetParams().Name
 	defaultHomeDir    = dcrutil.AppDataDir("miner", false)
 	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFilename)
 	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogDirname)
@@ -386,12 +386,12 @@ func loadConfig() (*config, []string, error) {
 
 	// Set the active network.
 	switch cfg.ActiveNet {
-	case chaincfg.SimNetParams.Name:
-		cfg.net = &chaincfg.SimNetParams
-	case chaincfg.TestNet3Params.Name:
-		cfg.net = &chaincfg.TestNet3Params
-	case chaincfg.MainNetParams.Name:
-		cfg.net = &chaincfg.MainNetParams
+	case chaincfg.SimNetParams().Name:
+		cfg.net = chaincfg.SimNetParams()
+	case chaincfg.TestNet3Params().Name:
+		cfg.net = chaincfg.TestNet3Params()
+	case chaincfg.MainNetParams().Name:
+		cfg.net = chaincfg.MainNetParams()
 	}
 
 	// Validate format of profile, can be an address:port, or just a port.

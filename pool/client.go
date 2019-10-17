@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/decred/dcrd/blockchain"
-	"github.com/decred/dcrd/chaincfg"
-	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/blockchain/standalone"
+	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/wire"
 )
 
@@ -171,7 +171,7 @@ func (c *Client) shutdown() {
 // claimWeightedShare records a weighted share for the pool client. This
 // serves as proof of verifiable work contributed to the mining pool.
 func (c *Client) claimWeightedShare() error {
-	if c.endpoint.hub.cfg.ActiveNet.Name == chaincfg.MainNetParams.Name &&
+	if c.endpoint.hub.cfg.ActiveNet.Name == chaincfg.MainNetParams().Name &&
 		c.endpoint.miner == CPU {
 		log.Error("CPU miners are reserved for only simnet testing purposes")
 		return nil
@@ -227,18 +227,9 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 
 		// Ensure the provided address is valid and associated with the active
 		// network.
-		addr, err := dcrutil.DecodeAddress(address)
+		_, err := dcrutil.DecodeAddress(address, c.endpoint.hub.cfg.ActiveNet)
 		if err != nil {
 			log.Errorf("unable to decode address: %v", err)
-			err := NewStratumError(Unknown, nil)
-			resp := AuthorizeResponse(*req.ID, false, err)
-			c.ch <- resp
-			return
-		}
-
-		if !addr.IsForNet(c.endpoint.hub.cfg.ActiveNet) {
-			log.Errorf("Address %s is not associated with the active "+
-				"network %s", address, c.endpoint.hub.cfg.ActiveNet.Name)
 			err := NewStratumError(Unknown, nil)
 			resp := AuthorizeResponse(*req.ID, false, err)
 			c.ch <- resp
@@ -417,7 +408,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 
 	diffData := c.endpoint.diffData
 	poolTarget := diffData.target
-	target := new(big.Rat).SetInt(blockchain.CompactToBig(header.Bits))
+	target := new(big.Rat).SetInt(standalone.CompactToBig(header.Bits))
 
 	// The target difficulty must be larger than zero.
 	if target.Sign() <= 0 {
@@ -430,7 +421,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	}
 
 	hash := header.BlockHash()
-	hashTarget := new(big.Rat).SetInt(blockchain.HashToBig(&hash))
+	hashTarget := new(big.Rat).SetInt(standalone.HashToBig(&hash))
 
 	netDiff := new(big.Rat).Quo(diffData.powLimit, poolTarget)
 	hashDiff := new(big.Rat).Quo(diffData.powLimit, hashTarget)

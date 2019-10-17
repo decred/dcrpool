@@ -11,7 +11,7 @@ import (
 	"time"
 
 	bolt "github.com/coreos/bbolt"
-	"github.com/dchest/blake256"
+	"github.com/decred/dcrd/crypto/blake256"
 )
 
 // Account represents a mining pool account.

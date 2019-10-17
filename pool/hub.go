@@ -18,9 +18,9 @@ import (
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/rpcclient/v5"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/rpc/walletrpc"
@@ -69,11 +69,11 @@ var (
 	// minerHashes is a map of all known DCR miners and their corresponding
 	// hashrates.
 	minerHashes = map[string]*big.Int{
-		CPU:           new(big.Int).SetInt64(50E3),
-		InnosiliconD9: new(big.Int).SetInt64(2.4E12),
-		AntminerDR3:   new(big.Int).SetInt64(7.8E12),
-		AntminerDR5:   new(big.Int).SetInt64(35E12),
-		WhatsminerD1:  new(big.Int).SetInt64(48E12),
+		CPU:           new(big.Int).SetInt64(50e3),
+		InnosiliconD9: new(big.Int).SetInt64(2.4e12),
+		AntminerDR3:   new(big.Int).SetInt64(7.8e12),
+		AntminerDR5:   new(big.Int).SetInt64(35e12),
+		WhatsminerD1:  new(big.Int).SetInt64(48e12),
 	}
 )
 
@@ -876,7 +876,7 @@ func (h *Hub) processPayments(height uint32) error {
 	// details.
 	pmts := make(map[dcrutil.Address]dcrutil.Amount, len(details))
 	for addrStr, amt := range details {
-		addr, err := dcrutil.DecodeAddress(addrStr)
+		addr, err := dcrutil.DecodeAddress(addrStr, h.cfg.ActiveNet)
 		if err != nil {
 			return err
 		}

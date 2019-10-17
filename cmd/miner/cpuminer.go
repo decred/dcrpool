@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/decred/dcrd/blockchain"
+	"github.com/decred/dcrd/blockchain/standalone"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrpool/pool"
 )
@@ -144,7 +144,7 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 				// A valid submission is generated when the block hash is less
 				// than the pool target of the client.
 				hash := header.BlockHash()
-				hashNum := new(big.Rat).SetInt(blockchain.HashToBig(&hash))
+				hashNum := new(big.Rat).SetInt(standalone.HashToBig(&hash))
 				hashesCompleted++
 
 				if hashNum.Cmp(target) < 0 {

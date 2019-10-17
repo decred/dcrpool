@@ -25,7 +25,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 
-	"github.com/decred/dcrd/chaincfg"
+	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrpool/pool"
 )
 
@@ -134,12 +134,12 @@ func NewGUI(cfg *Config, hub *pool.Hub, limiter *pool.RateLimiter) (*GUI, error)
 	}
 
 	switch cfg.ActiveNet.Name {
-	case chaincfg.TestNet3Params.Name:
+	case chaincfg.TestNet3Params().Name:
 		ui.cfg.BlockExplorerURL = "https://testnet.dcrdata.org"
-	case chaincfg.SimNetParams.Name:
+	case chaincfg.SimNetParams().Name:
 		ui.cfg.BlockExplorerURL = "..."
 	default:
-		ui.cfg.BlockExplorerURL = "https://explorer.dcrdata.org"
+		ui.cfg.BlockExplorerURL = "https://dcrdata.decred.org"
 	}
 
 	var err error
