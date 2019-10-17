@@ -21,11 +21,10 @@ import (
 	flags "github.com/jessevdk/go-flags"
 
 	"github.com/decred/dcrd/certgen"
-	"github.com/decred/dcrd/chaincfg"
-	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/slog"
-
+	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrpool/pool"
+	"github.com/decred/slog"
 )
 
 const (
@@ -61,7 +60,7 @@ const (
 )
 
 var (
-	defaultActiveNet     = chaincfg.SimNetParams.Name
+	defaultActiveNet     = chaincfg.SimNetParams().Name
 	defaultPaymentMethod = pool.PPLNS
 	defaultMinPayment    = 0.2
 	dcrpoolHomeDir       = dcrutil.AppDataDir("dcrpool", false)
@@ -527,12 +526,12 @@ func loadConfig() (*config, []string, error) {
 
 	// Set the mining active network.
 	switch cfg.ActiveNet {
-	case chaincfg.TestNet3Params.Name:
-		cfg.net = &chaincfg.TestNet3Params
-	case chaincfg.MainNetParams.Name:
-		cfg.net = &chaincfg.MainNetParams
-	case chaincfg.SimNetParams.Name:
-		cfg.net = &chaincfg.SimNetParams
+	case chaincfg.TestNet3Params().Name:
+		cfg.net = chaincfg.TestNet3Params()
+	case chaincfg.MainNetParams().Name:
+		cfg.net = chaincfg.MainNetParams()
+	case chaincfg.SimNetParams().Name:
+		cfg.net = chaincfg.SimNetParams()
 	default:
 		return nil, nil, fmt.Errorf("unknown network provided %v",
 			cfg.ActiveNet)
@@ -547,20 +546,13 @@ func loadConfig() (*config, []string, error) {
 		}
 
 		for _, pAddr := range cfg.PoolFeeAddrs {
-			addr, err := dcrutil.DecodeAddress(pAddr)
+			addr, err := dcrutil.DecodeAddress(pAddr, cfg.net)
 			if err != nil {
 				str := "%s: pool fee address '%v' failed to decode: %v"
 				err := fmt.Errorf(str, funcName, pAddr, err)
 				fmt.Fprintln(os.Stderr, err)
 				fmt.Fprintln(os.Stderr, usageMessage)
 				return nil, nil, err
-			}
-
-			// Ensure pool fee address is valid and on the active pool.
-			if !addr.IsForNet(cfg.net) {
-				return nil, nil,
-					fmt.Errorf("pool fee address (%v) not on the active network "+
-						"(%s)", addr, cfg.ActiveNet)
 			}
 
 			cfg.poolFeeAddrs = append(cfg.poolFeeAddrs, addr)

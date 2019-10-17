@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrpool/pool"
 )
 
@@ -98,16 +98,9 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	data.Address = address
 
 	// Ensure the provided address is valid.
-	addr, err := dcrutil.DecodeAddress(address)
+	_, err = dcrutil.DecodeAddress(address, ui.cfg.ActiveNet)
 	if err != nil {
 		data.Error = fmt.Sprintf("Failed to decode address")
-		ui.renderTemplate(w, r, "index", data)
-		return
-	}
-
-	// Ensure address is on the active network.
-	if !addr.IsForNet(ui.cfg.ActiveNet) {
-		data.Error = fmt.Sprintf("Invalid %s addresss", ui.cfg.ActiveNet.Name)
 		ui.renderTemplate(w, r, "index", data)
 		return
 	}

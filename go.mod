@@ -5,12 +5,12 @@ go 1.12
 require (
 	github.com/coreos/bbolt v1.3.3
 	github.com/davecgh/go-spew v1.1.1
-	github.com/dchest/blake256 v1.0.0
-	github.com/decred/dcrd/blockchain v1.1.1
+	github.com/decred/dcrd/blockchain/standalone v1.1.0
 	github.com/decred/dcrd/certgen v1.1.0
-	github.com/decred/dcrd/chaincfg v1.5.1
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.2
-	github.com/decred/dcrd/dcrutil v1.3.0
+	github.com/decred/dcrd/chaincfg/v2 v2.3.0
+	github.com/decred/dcrd/crypto/blake256 v1.0.0
+	github.com/decred/dcrd/dcrutil/v2 v2.0.1
 	github.com/decred/dcrd/rpcclient/v5 v5.0.0
 	github.com/decred/dcrd/wire v1.3.0
 	github.com/decred/dcrwallet/rpc/walletrpc v0.2.0
@@ -22,7 +22,7 @@ require (
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/jrick/logrotate v1.0.0
 	go.etcd.io/bbolt v1.3.3 // indirect
-	golang.org/x/crypto v0.0.0-20190618222545-ea8f1a30c443
-	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
-	google.golang.org/grpc v1.21.1
+	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
+	golang.org/x/time v0.0.0-20190921001708-c4c64cad1fd0
+	google.golang.org/grpc v1.24.0
 )

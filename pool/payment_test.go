@@ -12,8 +12,8 @@ import (
 	"time"
 
 	bolt "github.com/coreos/bbolt"
-	"github.com/decred/dcrd/chaincfg"
-	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/dcrutil/v2"
 )
 
 // createPersistedAccount creates a pool account with the provided parameters
@@ -81,7 +81,7 @@ func TestPayPerShare(t *testing.T) {
 
 	feePercent := 0.1
 	err = PayPerShare(db, amt, feePercent, height,
-		chaincfg.SimNetParams.CoinbaseMaturity)
+		chaincfg.SimNetParams().CoinbaseMaturity)
 	if err != nil {
 		t.Error(err)
 	}
@@ -218,7 +218,7 @@ func TestPayPerLastShare(t *testing.T) {
 	feePercent := 0.1
 	periodSecs := uint32(50) // 50 seconds.
 	err = PayPerLastNShares(db, amt, feePercent, height,
-		chaincfg.SimNetParams.CoinbaseMaturity, periodSecs)
+		chaincfg.SimNetParams().CoinbaseMaturity, periodSecs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -466,7 +466,7 @@ func TestPaymentsMaturity(t *testing.T) {
 
 	// Create immature payments for acount Y.
 	err = PayPerShare(db, amt, feePercent, height,
-		chaincfg.SimNetParams.CoinbaseMaturity)
+		chaincfg.SimNetParams().CoinbaseMaturity)
 	if err != nil {
 		t.Error(err)
 	}
