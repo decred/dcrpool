@@ -10,6 +10,12 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// Client types.
+const (
+	APIClient = iota
+	PoolClient
+)
+
 const (
 	// clientTokenRate is the token refill rate for the client request bucket,
 	// per second. A maximum of 5 requests per second for a pool client that
@@ -28,12 +34,6 @@ const (
 	// apiBurst is the maximum token usage allowed per second,
 	// for api clients.
 	apiBurst = 3
-
-	// apiClient represents an api client.
-	APIClient = "api"
-
-	// poolClient represents a pool client.
-	PoolClient = "pool"
 )
 
 // RateLimiter keeps connected clients within their allocated request rates.
@@ -51,7 +51,7 @@ func NewRateLimiter() *RateLimiter {
 }
 
 // AddRequestLimiter adds a new client request limiter to the limiter set.
-func (r *RateLimiter) AddRequestLimiter(ip string, clientType string) *rate.Limiter {
+func (r *RateLimiter) AddRequestLimiter(ip string, clientType int) *rate.Limiter {
 	var limiter *rate.Limiter
 	switch clientType {
 	case APIClient:
@@ -91,7 +91,7 @@ func (r *RateLimiter) RemoveLimiter(ip string) {
 // address is within the limits of the rate limiter, therefore can make
 // further requests. If no request limiter is found for the provided IP
 // address a new one is created.
-func (r *RateLimiter) WithinLimit(ip string, clientType string) bool {
+func (r *RateLimiter) WithinLimit(ip string, clientType int) bool {
 	reqLimiter := r.GetLimiter(ip)
 
 	// create a new limiter if the incoming request is from a new client.

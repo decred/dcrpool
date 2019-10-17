@@ -44,18 +44,17 @@ func bigEndianBytesToHeight(b []byte) uint32 {
 	return binary.BigEndian.Uint32(b[0:4])
 }
 
-// AcceptedWorkID generates a unique id for the work accepted by the network.
+// AcceptedWorkID generates a unique id for work accepted by the network.
 func AcceptedWorkID(blockHash string, blockHeight uint32) []byte {
 	heightE := hex.EncodeToString(heightToBigEndianBytes(blockHeight))
 	id := fmt.Sprintf("%v%v", heightE, blockHash)
 	return []byte(id)
 }
 
-// NewAcceptedWork creates an accepted work instance.
+// NewAcceptedWork creates an accepted work.
 func NewAcceptedWork(blockHash string, prevHash string, height uint32, minedBy string, miner string) *AcceptedWork {
-	id := AcceptedWorkID(blockHash, height)
 	return &AcceptedWork{
-		UUID:      string(id),
+		UUID:      string(AcceptedWorkID(blockHash, height)),
 		BlockHash: blockHash,
 		PrevHash:  prevHash,
 		Height:    height,

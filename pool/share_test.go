@@ -345,12 +345,12 @@ func TestCalculatePoolTarget(t *testing.T) {
 		{
 			new(big.Int).SetInt64(1.2E12),
 			new(big.Int).SetInt64(15),
-			"6434354813162443865075659925303014480581657380081282215060527505",
+			"942318434548471642444425333729556541774658078333663444331523307356028928/146484375",
 		},
 		{
 			new(big.Int).SetInt64(1.2E12),
 			new(big.Int).SetInt64(10),
-			"9652684091353612529418909805592420577743338497150222871859509577",
+			"471159217274235821222212666864778270887329039166831722165761653678014464/48828125",
 		},
 	}
 
@@ -361,7 +361,7 @@ func TestCalculatePoolTarget(t *testing.T) {
 			t.Error(err)
 		}
 
-		expected, success := new(big.Int).SetString(test.expected, 10)
+		expected, success := new(big.Rat).SetString(test.expected)
 		if !success {
 			t.Errorf("failed to parse %v as a big.Int", test.expected)
 		}

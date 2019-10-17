@@ -41,7 +41,7 @@ var ShareWeights = map[string]*big.Rat{
 
 // calculatePoolDifficulty determines the difficulty at which the provided
 // hashrate can generate a pool share by the provided target time.
-func calculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) *big.Int {
+func calculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) *big.Rat {
 	hashesPerTargetTime := new(big.Int).Mul(hashRate, targetTimeSecs)
 	powLimit := net.PowLimit
 	powLimitFloat, _ := new(big.Float).SetInt(powLimit).Float64()
@@ -57,27 +57,26 @@ func calculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTime
 	//    difficulty = (hashes_per_sec * target_in_seconds) / iterations
 	difficulty := new(big.Rat).Quo(new(big.Rat).SetInt(hashesPerTargetTime),
 		new(big.Rat).SetFloat64(iterations))
-	diff := new(big.Int).Quo(difficulty.Num(), difficulty.Denom())
 
 	// Clamp the difficulty to 1 if needed.
-	if diff.Cmp(ZeroInt) == 0 {
-		diff = new(big.Int).SetInt64(1)
+	if difficulty.Cmp(ZeroRat) == 0 || difficulty.Cmp(ZeroRat) < 0 {
+		difficulty = new(big.Rat).SetInt64(1)
 	}
 
-	return diff
+	return difficulty
 }
 
 // DifficultyToTarget converts the provided difficulty to a target based on the
 // active network.
-func DifficultyToTarget(net *chaincfg.Params, difficulty *big.Int) (*big.Int, error) {
-	powLimit := net.PowLimit
+func DifficultyToTarget(net *chaincfg.Params, difficulty *big.Rat) (*big.Rat, error) {
+	powLimit := new(big.Rat).SetInt(net.PowLimit)
 
 	// The corresponding target is calculated as:
 	//
 	//    target = pow_limit / difficulty
 	//
 	// The result is clamped to the pow limit if it exceeds it.
-	target := new(big.Int).Div(powLimit, difficulty)
+	target := new(big.Rat).Quo(powLimit, difficulty)
 
 	if target.Cmp(powLimit) > 0 {
 		target = powLimit
@@ -88,7 +87,7 @@ func DifficultyToTarget(net *chaincfg.Params, difficulty *big.Int) (*big.Int, er
 
 // calculatePoolTarget determines the target difficulty at which the provided
 // hashrate can generate a pool share by the provided target time.
-func calculatePoolTarget(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) (*big.Int, *big.Int, error) {
+func calculatePoolTarget(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) (*big.Rat, *big.Rat, error) {
 	difficulty := calculatePoolDifficulty(net, hashRate, targetTimeSecs)
 	target, err := DifficultyToTarget(net, difficulty)
 
