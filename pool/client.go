@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -592,6 +593,70 @@ func (c *Client) read() {
 	}
 }
 
+// updateWork updates a client with a timestamp-rolled current work.
+// This should be called after a client completes a work submission or
+// afterr client authentication.
+func (c *Client) updateWork(allowed bool) {
+	if !allowed {
+		return
+	}
+
+	currWorkE := c.endpoint.hub.getCurrentWork()
+	if currWorkE == "" {
+		return
+	}
+
+	now := uint32(time.Now().Unix())
+
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, now)
+	timestampE := hex.EncodeToString(b)
+
+	buf := bytes.NewBufferString("")
+	buf.WriteString(currWorkE[:272])
+	buf.WriteString(timestampE)
+	buf.WriteString(currWorkE[280:])
+
+	updatedWorkE := buf.String()
+
+	blockVersion := updatedWorkE[:8]
+	prevBlock := updatedWorkE[8:72]
+	genTx1 := updatedWorkE[72:288]
+	nBits := updatedWorkE[232:240]
+	nTime := updatedWorkE[272:280]
+	genTx2 := updatedWorkE[352:360]
+
+	heightD, err := hex.DecodeString(updatedWorkE[256:264])
+	if err != nil {
+		log.Errorf("failed to decode block height %s: %v", string(heightD), err)
+	}
+
+	height := binary.LittleEndian.Uint32(heightD)
+
+	// Create a job for the timestamp-rolled current work.
+	job, err := NewJob(updatedWorkE, height)
+	if err != nil {
+		log.Errorf("failed to create job: %v", err)
+		return
+	}
+
+	err = job.Create(c.endpoint.hub.db)
+	if err != nil {
+		log.Errorf("failed to persist job: %v", err)
+		return
+	}
+
+	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
+		blockVersion, nBits, nTime, true)
+
+	select {
+	case c.ch <- workNotif:
+		log.Tracef("Sent a timestamp-rolled current work at "+
+			"height #%v to %v: %v", height, c.generateID(), updatedWorkE)
+	default:
+	}
+}
+
 // process  handles incoming messages from the connected pool client.
 // It must be run as a goroutine.
 func (c *Client) process(ctx context.Context) {
@@ -617,12 +682,15 @@ func (c *Client) process(ctx context.Context) {
 				case Authorize:
 					c.handleAuthorizeRequest(req, allowed)
 					c.setDifficulty()
+					time.Sleep(time.Second * 2)
+					c.updateWork(allowed)
 
 				case Subscribe:
 					c.handleSubscribeRequest(req, allowed)
 
 				case Submit:
 					c.handleSubmitWorkRequest(req, allowed)
+					c.updateWork(allowed)
 
 				default:
 					log.Errorf("unknown request method for request: %s", req.Method)
@@ -781,6 +849,10 @@ func (c *Client) hashMonitor(ctx context.Context) {
 
 		case <-ticker.C:
 			submissions := atomic.LoadInt64(&c.submissions)
+			if submissions == 0 {
+				continue
+			}
+
 			average := float64(hashCalcThreshold / submissions)
 
 			num := new(big.Rat).Mul(c.endpoint.diffData.difficulty,

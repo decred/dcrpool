@@ -9,16 +9,16 @@ require (
 	github.com/decred/dcrd/blockchain v1.1.1
 	github.com/decred/dcrd/certgen v1.1.0
 	github.com/decred/dcrd/chaincfg v1.5.1
-	github.com/decred/dcrd/chaincfg/chainhash v1.0.1
+	github.com/decred/dcrd/chaincfg/chainhash v1.0.2
 	github.com/decred/dcrd/dcrutil v1.3.0
-	github.com/decred/dcrd/rpcclient v1.1.0
-	github.com/decred/dcrd/wire v1.2.0
+	github.com/decred/dcrd/rpcclient/v5 v5.0.0
+	github.com/decred/dcrd/wire v1.3.0
 	github.com/decred/dcrwallet/rpc/walletrpc v0.2.0
 	github.com/decred/slog v1.0.0
 	github.com/gorilla/csrf v1.5.1
 	github.com/gorilla/mux v1.7.2
 	github.com/gorilla/sessions v1.1.3
-	github.com/gorilla/websocket v1.2.0
+	github.com/gorilla/websocket v1.4.1
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/jrick/logrotate v1.0.0
 	go.etcd.io/bbolt v1.3.3 // indirect

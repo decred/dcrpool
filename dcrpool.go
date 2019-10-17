@@ -16,7 +16,7 @@ import (
 	"runtime"
 
 	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrd/rpcclient"
+	"github.com/decred/dcrd/rpcclient/v5"
 
 	"github.com/decred/dcrpool/gui"
 	"github.com/decred/dcrpool/pool"

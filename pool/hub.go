@@ -21,7 +21,7 @@ import (
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil"
-	"github.com/decred/dcrd/rpcclient"
+	"github.com/decred/dcrd/rpcclient/v5"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/rpc/walletrpc"
 	"google.golang.org/grpc"
@@ -53,6 +53,10 @@ const (
 	AntminerDR3   = "antminerdr3"
 	AntminerDR5   = "antminerdr5"
 	WhatsminerD1  = "whatsminerd1"
+
+	NewParent = "newparent"
+	NewVotes  = "newvotes"
+	NewTxns   = "newtxns"
 )
 
 var (
@@ -131,6 +135,8 @@ type Hub struct {
 	blake256Pad    []byte
 	connections    map[string]uint32
 	connectionsMtx sync.RWMutex
+	currentWork    string
+	currentWorkMtx sync.RWMutex
 	wg             sync.WaitGroup
 }
 
@@ -234,9 +240,25 @@ func (h *Hub) generateDifficultyData() error {
 	return nil
 }
 
+// setCurrentWork updates the pool's current template.
+func (h *Hub) setCurrentWork(headerE string) {
+	h.currentWorkMtx.Lock()
+	h.currentWork = headerE
+	h.currentWorkMtx.Unlock()
+}
+
+// getCurrentWork fetches the pool's current template.
+func (h *Hub) getCurrentWork() string {
+	h.currentWorkMtx.RLock()
+	work := h.currentWork
+	h.currentWorkMtx.RUnlock()
+
+	return work
+}
+
 // processWork parses work received and dispatches a work notification to all
 // connected pool clients.
-func (h *Hub) processWork(headerE string, target string) {
+func (h *Hub) processWork(headerE string) {
 	heightD, err := hex.DecodeString(headerE[256:264])
 	if err != nil {
 		log.Errorf("failed to decode block height %s: %v", string(heightD), err)
@@ -416,10 +438,18 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, httpc *http.Client, 
 			h.discCh <- headerB
 		},
 
-		// TODO: Switch to OnWork notifications when dcrd PR #1410 is merged.
-		// OnWork: func(headerE string, target string) {
-		// 	h.processWork(headerE, target)
-		// },
+		OnWork: func(headerB []byte, target []byte, reason string) {
+			currWork := hex.EncodeToString(headerB)
+
+			switch reason {
+			case NewTxns:
+				h.setCurrentWork(currWork)
+
+			case NewParent, NewVotes:
+				h.setCurrentWork(currWork)
+				h.processWork(currWork)
+			}
+		},
 	}
 
 	// Establish RPC connection with dcrd.
@@ -431,14 +461,12 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, httpc *http.Client, 
 	h.rpcc = rpcc
 
 	// Subscribe for chain notifications.
-
-	// TODO: Subscribe for OnWork notifications when dcrd PR #1410 is merged.
-	// if err := h.rpcc.NotifyWork(); err != nil {
-	// 	h.rpccMtx.Lock()
-	// 	h.rpcc.Shutdown()
-	// 	h.rpccMtx.Unlock()
-	// 	return nil, fmt.Errorf("notify work rpc error (dcrd): %v", err)
-	// }
+	if err := h.rpcc.NotifyWork(); err != nil {
+		h.rpccMtx.Lock()
+		h.rpcc.Shutdown()
+		h.rpccMtx.Unlock()
+		return nil, fmt.Errorf("notify work rpc error (dcrd): %v", err)
+	}
 
 	if err := h.rpcc.NotifyBlocks(); err != nil {
 		h.rpccMtx.Lock()
@@ -481,8 +509,16 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, httpc *http.Client, 
 			return nil, MakeError(ErrOther, "dcrwallet grpc request error", err)
 		}
 
-		log.Infof("grpc connection established with dcrwallet.")
+		log.Info("grpc connection established with dcrwallet.")
 	}
+
+	log.Info("fetching initial work")
+	work, _, err := h.GetWork()
+	if err != nil {
+		return nil, MakeError(ErrOther, "unable to fetch current work", err)
+	}
+
+	h.setCurrentWork(work)
 
 	return h, nil
 }
@@ -578,126 +614,6 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 	log.Tracef("published tx hash is %s", txid.String())
 
 	return txid.String(), nil
-}
-
-// handleGetWork periodically fetches available work from the consensus daemon.
-// It must be run as a goroutine.
-func (h *Hub) handleGetWork(ctx context.Context) {
-	var currHeaderE string
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	h.wg.Add(1)
-
-	for {
-		select {
-		case <-ctx.Done():
-			h.wg.Done()
-			return
-		case <-ticker.C:
-			headerE, target, err := h.GetWork()
-			if err != nil {
-				log.Errorf("failed to fetch work: %v", err)
-				continue
-			}
-
-			// Process incoming work if there is no current work.
-			if currHeaderE == "" {
-				log.Tracef("updated work based on no current work being" +
-					" available")
-				currHeaderE = headerE
-				h.processWork(currHeaderE, target)
-				continue
-			}
-
-			// Process incoming work if it has a higher height than the
-			// current work.
-			currHeaderHeightD, err := hex.DecodeString(currHeaderE[256:264])
-			if err != nil {
-				log.Errorf("failed to decode current header block height: %v",
-					err)
-				h.cancel()
-				continue
-			}
-
-			currHeaderHeight := binary.LittleEndian.Uint32(currHeaderHeightD)
-
-			newHeaderHeightD, err := hex.DecodeString(headerE[256:264])
-			if err != nil {
-				log.Errorf("failed to decode new header block height: %v",
-					err)
-				h.cancel()
-				continue
-			}
-
-			newHeaderHeight := binary.LittleEndian.Uint32(newHeaderHeightD)
-			if newHeaderHeight > currHeaderHeight {
-				log.Tracef("updated work based on new work having a higher"+
-					" height than the current work: %d > %d",
-					newHeaderHeight, currHeaderHeight)
-				currHeaderE = headerE
-				h.processWork(currHeaderE, target)
-				continue
-			}
-
-			// Process incoming work if it has more votes than the current work.
-			currHeaderVotersD, err := hex.DecodeString(currHeaderE[216:220])
-			if err != nil {
-				log.Errorf("Failed to decode current header block voters: %v",
-					err)
-				h.cancel()
-				continue
-			}
-
-			currHeaderVoters := binary.LittleEndian.Uint16(currHeaderVotersD)
-
-			newHeaderVotersD, err := hex.DecodeString(headerE[216:220])
-			if err != nil {
-				log.Errorf("failed to decode new header blockvoters: %v", err)
-				h.cancel()
-				continue
-			}
-
-			newHeaderVoters :=
-				binary.LittleEndian.Uint16(newHeaderVotersD)
-			if newHeaderVoters > currHeaderVoters {
-				log.Tracef("updated work based on new work having more voters"+
-					" than the current work, %v > %v", newHeaderVoters,
-					currHeaderVoters)
-				currHeaderE = headerE
-				h.processWork(currHeaderE, target)
-				continue
-			}
-
-			// Process incoming work if it is at least 30 seconds older than
-			// the current work.
-			currNTimeD, err := hex.DecodeString(currHeaderE[272:280])
-			if err != nil {
-				log.Errorf("failed to decode current header block time: %v", err)
-				return
-			}
-
-			currNTime :=
-				time.Unix(int64(binary.LittleEndian.Uint32(currNTimeD)), 0)
-
-			newNTimeD, err := hex.DecodeString(headerE[272:280])
-			if err != nil {
-				log.Errorf("failed to decode new header block time: %v", err)
-				return
-			}
-
-			newNTime :=
-				time.Unix(int64(binary.LittleEndian.Uint32(newNTimeD)), 0)
-			timeDiff := newNTime.Sub(currNTime)
-			if timeDiff >= time.Second*30 {
-				log.Tracef("updated work based on new work being 30 "+
-					"or more seconds younger than the current work, "+
-					"%v second exactly", timeDiff)
-				currHeaderE = headerE
-				h.processWork(currHeaderE, target)
-				continue
-			}
-		}
-	}
 }
 
 // handleChainUpdates processes connected and disconnected block notifications
@@ -912,7 +828,6 @@ func (h *Hub) Run(ctx context.Context) {
 		go e.connect(h.ctx)
 	}
 
-	go h.handleGetWork(h.ctx)
 	go h.handleChainUpdates(h.ctx)
 	h.wg.Wait()
 
