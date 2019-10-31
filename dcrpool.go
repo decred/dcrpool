@@ -122,13 +122,12 @@ func newPool(cfg *config) (*miningPool, error) {
 		MaxConnectionsPerHost: cfg.MaxConnectionsPerHost,
 	}
 
-	p.hub, err = pool.NewHub(p.ctx, p.cancel, p.httpc, hcfg, p.limiter)
+	p.hub, err = pool.NewHub(p.cancel, p.httpc, hcfg, p.limiter)
 	if err != nil {
 		return nil, err
 	}
 
 	gcfg := &gui.Config{
-		Ctx:           p.ctx,
 		SoloPool:      cfg.SoloPool,
 		GUIDir:        cfg.GUIDir,
 		BackupPass:    cfg.BackupPass,

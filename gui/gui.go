@@ -31,7 +31,6 @@ import (
 
 // Config represents configuration details for the pool user interface.
 type Config struct {
-	Ctx              context.Context
 	SoloPool         bool
 	PaymentMethod    string
 	GUIDir           string
