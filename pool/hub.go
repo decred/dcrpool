@@ -69,7 +69,7 @@ var (
 	// minerHashes is a map of all known DCR miners and their corresponding
 	// hashrates.
 	minerHashes = map[string]*big.Int{
-		CPU:           new(big.Int).SetInt64(50e3),
+		CPU:           new(big.Int).SetInt64(5e3),
 		InnosiliconD9: new(big.Int).SetInt64(2.4e12),
 		AntminerDR3:   new(big.Int).SetInt64(7.8e12),
 		AntminerDR5:   new(big.Int).SetInt64(35e12),
@@ -128,7 +128,6 @@ type Hub struct {
 	poolDiffMtx    sync.RWMutex
 	connCh         chan []byte
 	discCh         chan []byte
-	ctx            context.Context
 	cancel         context.CancelFunc
 	txFeeReserve   dcrutil.Amount
 	endpoints      []*endpoint
@@ -312,7 +311,7 @@ func (h *Hub) processWork(headerE string) {
 }
 
 // NewHub initializes a websocket hub.
-func NewHub(ctx context.Context, cancel context.CancelFunc, httpc *http.Client, hcfg *HubConfig, limiter *RateLimiter) (*Hub, error) {
+func NewHub(cancel context.CancelFunc, httpc *http.Client, hcfg *HubConfig, limiter *RateLimiter) (*Hub, error) {
 	h := &Hub{
 		httpc:       httpc,
 		limiter:     limiter,
@@ -322,7 +321,6 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, httpc *http.Client, 
 		connCh:      make(chan []byte),
 		discCh:      make(chan []byte),
 		connections: make(map[string]uint32),
-		ctx:         ctx,
 		cancel:      cancel,
 	}
 
@@ -825,10 +823,10 @@ func (h *Hub) Run(ctx context.Context) {
 	h.wg.Add(len(h.endpoints))
 	for _, e := range h.endpoints {
 		go e.listen()
-		go e.connect(h.ctx)
+		go e.connect(ctx)
 	}
 
-	go h.handleChainUpdates(h.ctx)
+	go h.handleChainUpdates(ctx)
 	h.wg.Wait()
 
 	h.shutdown()
