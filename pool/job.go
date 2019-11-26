@@ -110,9 +110,10 @@ func (job *Job) Create(db *bolt.DB) error {
 	return err
 }
 
-// Update persists the updated accepted work to the database.
+// Update is not supported for jobs.
 func (job *Job) Update(db *bolt.DB) error {
-	return job.Create(db)
+	desc := "job update not supported"
+	return MakeError(ErrNotSupported, desc, nil)
 }
 
 // Delete removes the associated job from the database.
