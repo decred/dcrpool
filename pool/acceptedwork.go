@@ -25,7 +25,7 @@ type AcceptedWork struct {
 	Miner     string `json:"miner"`
 	CreatedOn int64  `json:"createdon"`
 
-	// An accepted work becomes mined work once it is confirmed by an incoming
+	// An accepted work becomes mined work once it is confirmed by incoming
 	// work as the parent block it was built on.
 	Confirmed bool `json:"confirmed"`
 }
@@ -52,7 +52,8 @@ func AcceptedWorkID(blockHash string, blockHeight uint32) []byte {
 }
 
 // NewAcceptedWork creates an accepted work.
-func NewAcceptedWork(blockHash string, prevHash string, height uint32, minedBy string, miner string) *AcceptedWork {
+func NewAcceptedWork(blockHash string, prevHash string, height uint32,
+	minedBy string, miner string) *AcceptedWork {
 	return &AcceptedWork{
 		UUID:      string(AcceptedWorkID(blockHash, height)),
 		BlockHash: blockHash,
@@ -76,7 +77,6 @@ func fetchWorkBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 		desc := fmt.Sprintf("bucket %s not found", string(workBkt))
 		return nil, MakeError(ErrBucketNotFound, desc, nil)
 	}
-
 	return bkt, nil
 }
 
