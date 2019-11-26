@@ -145,11 +145,9 @@ func createBuckets(db *bolt.DB) error {
 }
 
 // backup saves a copy of the db to file.
-func backup(db *bolt.DB) error {
+func backup(db *bolt.DB, file string) error {
 	// Backup the db file
 	err := db.View(func(tx *bolt.Tx) error {
-		now := time.Now().Format(time.RFC3339)
-		file := fmt.Sprintf("dcrpool_backup@%v.kv", now)
 		err := tx.CopyFile(file, 0600)
 		return err
 	})
@@ -246,6 +244,33 @@ func deleteEntry(db *bolt.DB, bucket, key []byte) error {
 		}
 		b := pbkt.Bucket(bucket)
 		return b.Delete(key)
+	})
+	return err
+}
+
+// emptyBucket deletes all k/v pairs in the provided bucket.
+func emptyBucket(db *bolt.DB, bucket []byte) error {
+	err := db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(poolBkt)
+		if pbkt == nil {
+			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+			return MakeError(ErrBucketNotFound, desc, nil)
+		}
+		b := pbkt.Bucket(bucket)
+		toDelete := [][]byte{}
+		c := b.Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			toDelete = append(toDelete, k)
+		}
+
+		for _, k := range toDelete {
+			err := b.Delete(k)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
 	})
 	return err
 }
