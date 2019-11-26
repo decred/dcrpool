@@ -19,8 +19,8 @@ func testDatabase(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
-	// Empty the accounts bucket.
-	err = emptyBucket(db, accountBkt)
+	// delete the created account.
+	err = deleteEntry(db, accountBkt, []byte(accountA.UUID))
 	if err != nil {
 		t.Fatalf("emptyBucket error: %v", err)
 	}
