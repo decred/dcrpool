@@ -130,6 +130,8 @@ type Hub struct {
 	discCh         chan []byte
 	cancel         context.CancelFunc
 	txFeeReserve   dcrutil.Amount
+	paymentReqs    map[string]struct{}
+	paymentReqsMtx sync.RWMutex
 	endpoints      []*endpoint
 	blake256Pad    []byte
 	connections    map[string]uint32
@@ -137,6 +139,22 @@ type Hub struct {
 	currentWork    string
 	currentWorkMtx sync.RWMutex
 	wg             sync.WaitGroup
+}
+
+// IsPaymentRequested asserts if a payment request exists for the
+// provided account.
+func (h *Hub) IsPaymentRequested(accountID string) bool {
+	h.paymentReqsMtx.RLock()
+	defer h.paymentReqsMtx.RUnlock()
+	_, ok := h.paymentReqs[accountID]
+	return ok
+}
+
+// AddPaymentRequest creates a payment request from the provided account.
+func (h *Hub) AddPaymentRequest(accountID string) {
+	h.paymentReqsMtx.Lock()
+	h.paymentReqs[accountID] = struct{}{}
+	h.paymentReqsMtx.Unlock()
 }
 
 // GenerateBlake256Pad generates the extra padding needed for work submission
@@ -848,11 +866,19 @@ func (h *Hub) processPayments(height uint32) error {
 	}
 
 	// Fetch all eligible payments.
+	h.paymentReqsMtx.Lock()
 	eligiblePmts, err := FetchEligiblePaymentBundles(h.db, height,
-		h.cfg.MinPayment)
+		h.cfg.MinPayment, h.paymentReqs)
 	if err != nil {
+		h.paymentReqsMtx.Unlock()
 		return err
 	}
+
+	// Delete the processed payment requests.
+	for accountID := range h.paymentReqs {
+		delete(h.paymentReqs, accountID)
+	}
+	h.paymentReqsMtx.Unlock()
 
 	if len(eligiblePmts) == 0 {
 		log.Tracef("no eligible payments to process")

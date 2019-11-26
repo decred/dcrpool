@@ -476,7 +476,9 @@ func TestPaymentsMaturity(t *testing.T) {
 		t.Error(err)
 	}
 
-	pmts, err := FetchEligiblePaymentBundles(db, height, minPayment)
+	paymentReqs := make(map[string]struct{})
+
+	pmts, err := FetchEligiblePaymentBundles(db, height, minPayment, paymentReqs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -507,6 +509,133 @@ func TestPaymentsMaturity(t *testing.T) {
 	if feeBundle.Total() != expectedFeeAmt {
 		t.Errorf("Expected pool fee's bundle to have %v, got %v",
 			expectedFeeAmt, feeBundle.Total())
+	}
+}
+
+func TestMinimumPayment(t *testing.T) {
+	db, err := setupDB()
+	if err != nil {
+		t.Error(err)
+	}
+
+	td := func() {
+		err = teardownDB(db)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	defer td()
+
+	weight := new(big.Rat).SetFloat64(1.0)
+	xShareCount := 10
+	yShareCount := 5
+	height := uint32(20)
+	feePercent := 0.1
+	amt, err := dcrutil.NewAmount(100)
+	if err != nil {
+		t.Error(err)
+	}
+
+	xNano := time.Now().UnixNano()
+	err = createMultiplePersistedShares(db, xID, weight, xNano, xShareCount)
+	if err != nil {
+		t.Error(err)
+	}
+
+	yNano := time.Now().UnixNano()
+	err = createMultiplePersistedShares(db, yID, weight, yNano, yShareCount)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Create readily available payments.
+	err = PayPerShare(db, amt, feePercent, height, 0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Make minimum payment greater than account Y's payment.
+	ratio := (float64(yShareCount) / float64(xShareCount+yShareCount))
+	minPayment := amt.MulF64(ratio)
+	if err != nil {
+		t.Error(err)
+	}
+
+	paymentReqs := make(map[string]struct{})
+	pmts, err := FetchEligiblePaymentBundles(db, height, minPayment, paymentReqs)
+	if err != nil {
+		t.Error(err)
+	}
+
+	expectedBundleCount := 1
+	if len(pmts) != expectedBundleCount {
+		t.Errorf("Expected %v payment bundles, got %v", expectedBundleCount, len(pmts))
+	}
+}
+
+func TestPaymentRequest(t *testing.T) {
+	db, err := setupDB()
+	if err != nil {
+		t.Error(err)
+	}
+
+	td := func() {
+		err = teardownDB(db)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	defer td()
+
+	weight := new(big.Rat).SetFloat64(1.0)
+	xShareCount := 10
+	yShareCount := 5
+	height := uint32(20)
+	feePercent := 0.1
+	amt, err := dcrutil.NewAmount(100)
+	if err != nil {
+		t.Error(err)
+	}
+
+	xNano := time.Now().UnixNano()
+	err = createMultiplePersistedShares(db, xID, weight, xNano, xShareCount)
+	if err != nil {
+		t.Error(err)
+	}
+
+	yNano := time.Now().UnixNano()
+	err = createMultiplePersistedShares(db, yID, weight, yNano, yShareCount)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Create readily available payments.
+	err = PayPerShare(db, amt, feePercent, height, 0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Make minimum payment greater than account Y's payment.
+	ratio := (float64(yShareCount) / float64(xShareCount+yShareCount))
+	minPayment := amt.MulF64(ratio)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// create a payment request for account Y.
+	paymentReqs := make(map[string]struct{})
+	paymentReqs[yID] = struct{}{}
+
+	pmts, err := FetchEligiblePaymentBundles(db, height, minPayment, paymentReqs)
+	if err != nil {
+		t.Error(err)
+	}
+
+	expectedBundleCount := 2
+	if len(pmts) != expectedBundleCount {
+		t.Errorf("Expected %v payment bundles, got %v", expectedBundleCount, len(pmts))
 	}
 }
 

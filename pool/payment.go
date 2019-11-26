@@ -15,6 +15,8 @@ import (
 	bolt "github.com/coreos/bbolt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/mempool/v3"
+	txrules "github.com/decred/dcrwallet/wallet/v3/txrules"
 )
 
 // Payment represents an outstanding payment for a pool account.
@@ -312,16 +314,32 @@ func FetchPendingPaymentsAtHeight(db *bolt.DB, height uint32) ([]*Payment, error
 
 // FetchEligiblePaymentBundles fetches payment bundles greater than the
 // configured minimum payment.
-func FetchEligiblePaymentBundles(db *bolt.DB, height uint32, minPayment dcrutil.Amount) ([]*PaymentBundle, error) {
+func FetchEligiblePaymentBundles(db *bolt.DB, height uint32, minPayment dcrutil.Amount, paymentReqs map[string]struct{}) ([]*PaymentBundle, error) {
 	maturePayments, err := FetchMaturePendingPayments(db, height)
 	if err != nil {
 		return nil, err
 	}
 
 	bundles := generatePaymentBundles(maturePayments)
-	for idx := 0; idx < len(bundles); idx++ {
+
+	// Iterating the bundles backwards implicitly handles decrementing the
+	// slice index when a bundle entry in the slice is removed.
+	for idx := len(bundles) - 1; idx >= 0; idx-- {
 		if bundles[idx].Total() < minPayment {
-			bundles = append(bundles[:idx], bundles[idx+1:]...)
+			// Remove payments below the minimum payment if they have not been
+			// requested for by the user.
+			_, ok := paymentReqs[bundles[idx].Account]
+			if !ok {
+				bundles = append(bundles[:idx], bundles[idx+1:]...)
+				continue
+			}
+
+			if txrules.IsDustAmount(
+				bundles[idx].Total(),
+				25, // P2PKHScriptSize
+				mempool.DefaultMinRelayTxFee) {
+				bundles = append(bundles[:idx], bundles[idx+1:]...)
+			}
 		}
 	}
 

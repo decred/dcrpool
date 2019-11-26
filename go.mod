@@ -11,9 +11,12 @@ require (
 	github.com/decred/dcrd/chaincfg/v2 v2.3.0
 	github.com/decred/dcrd/crypto/blake256 v1.0.0
 	github.com/decred/dcrd/dcrutil/v2 v2.0.1
+	github.com/decred/dcrd/mempool/v3 v3.1.0
 	github.com/decred/dcrd/rpcclient/v5 v5.0.0
 	github.com/decred/dcrd/wire v1.3.0
 	github.com/decred/dcrwallet/rpc/walletrpc v0.2.0
+	github.com/decred/dcrwallet/wallet v1.3.0
+	github.com/decred/dcrwallet/wallet/v3 v3.0.0
 	github.com/decred/slog v1.0.0
 	github.com/gorilla/csrf v1.5.1
 	github.com/gorilla/mux v1.7.2
@@ -21,7 +24,6 @@ require (
 	github.com/gorilla/websocket v1.4.1
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/jrick/logrotate v1.0.0
-	go.etcd.io/bbolt v1.3.3 // indirect
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	golang.org/x/time v0.0.0-20190921001708-c4c64cad1fd0
 	google.golang.org/grpc v1.24.0
