@@ -212,7 +212,9 @@ func (h *Hub) initDB() error {
 	// database.
 	if switchMode {
 		log.Info("Pool mode changed, backing up database before purge.")
-		err := backup(h.db)
+		now := time.Now().Format(time.RFC3339)
+		file := fmt.Sprintf("dcrpool@%v.kv", now)
+		err := backup(h.db, file)
 		if err != nil {
 			return err
 		}
