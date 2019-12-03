@@ -539,13 +539,6 @@ func fetchArchivedPaymentsForAccount(db *bolt.DB, account string, n uint) ([]*Pa
 		c := abkt.Cursor()
 		for k, v := c.Last(); k != nil; k, v = c.Prev() {
 			accountE := k[16:]
-			minNanoE := k[:16]
-			minNanoB := make([]byte, hex.DecodedLen(len(minNanoE)))
-			_, err := hex.Decode(minNanoB, minNanoE)
-			if err != nil {
-				return err
-			}
-
 			if bytes.Equal(accountE, []byte(account)) {
 				var payment Payment
 				err := json.Unmarshal(v, &payment)
