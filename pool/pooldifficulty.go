@@ -1,0 +1,81 @@
+package pool
+
+import (
+	"fmt"
+	"math/big"
+	"sync"
+
+	"github.com/decred/dcrd/chaincfg/v2"
+)
+
+const (
+	// Supported mining clients
+	CPU           = "cpu"
+	InnosiliconD9 = "innosilicond9"
+	AntminerDR3   = "antminerdr3"
+	AntminerDR5   = "antminerdr5"
+	WhatsminerD1  = "whatsminerd1"
+)
+
+var (
+	// minerHashes is a map of all known DCR miners and their corresponding
+	// hashrates.
+	minerHashes = map[string]*big.Int{
+		CPU:           new(big.Int).SetInt64(5e3),
+		InnosiliconD9: new(big.Int).SetInt64(2.4e12),
+		AntminerDR3:   new(big.Int).SetInt64(7.8e12),
+		AntminerDR5:   new(big.Int).SetInt64(35e12),
+		WhatsminerD1:  new(big.Int).SetInt64(48e12),
+	}
+)
+
+// DifficultyInfo represents the difficulty related info for a mining client.
+type DifficultyInfo struct {
+	target     *big.Rat
+	difficulty *big.Rat
+	powLimit   *big.Rat
+}
+
+// PoolDifficulty represents generated pool difficulties for supported miners.
+type PoolDifficulty struct {
+	diffs map[string]*DifficultyInfo
+	mtx   sync.Mutex
+}
+
+// NewPoolDifficulty generates difficulty data for all supported mining clients.
+func NewPoolDifficulty(net *chaincfg.Params, powLimit *big.Rat, maxGenTime *big.Int) (*PoolDifficulty, error) {
+	pDiff := &PoolDifficulty{
+		diffs: make(map[string]*DifficultyInfo),
+	}
+
+	for miner, hashrate := range minerHashes {
+		target, difficulty, err := calculatePoolTarget(net, hashrate, maxGenTime)
+		if err != nil {
+			desc := fmt.Sprintf("failed to calculate pool target for %s", miner)
+			return nil, MakeError(ErrCalcPoolTarget, desc, err)
+		}
+
+		pDiff.diffs[miner] = &DifficultyInfo{
+			target:     target,
+			difficulty: difficulty,
+			powLimit:   powLimit,
+		}
+	}
+
+	return pDiff, nil
+}
+
+// fetchMinerDifficulty returns the difficulty data of the provided miner,
+// if it exists.
+func (pd *PoolDifficulty) fetchMinerDifficulty(miner string) (*DifficultyInfo, error) {
+	pd.mtx.Lock()
+	diffData, ok := pd.diffs[miner]
+	pd.mtx.Unlock()
+
+	if !ok {
+		desc := fmt.Sprintf("no difficulty data found for miner %s", miner)
+		return nil, MakeError(ErrValueNotFound, desc, nil)
+	}
+
+	return diffData, nil
+}
