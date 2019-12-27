@@ -22,15 +22,12 @@ const (
 	// will be mostly submitting work to the pool at a controlled rate is
 	// adequate.
 	clientTokenRate = 5
-
 	// clientBurst is the maximum token usage allowed per second,
 	// for pool clients.
 	clientBurst = 5
-
 	// apiTokenRate is the token refill rate for the api request bucket,
 	// per second.
 	apiTokenRate = 3
-
 	// apiBurst is the maximum token usage allowed per second,
 	// for api clients.
 	apiBurst = 3
@@ -50,8 +47,8 @@ func NewRateLimiter() *RateLimiter {
 	return limiters
 }
 
-// AddRequestLimiter adds a new client request limiter to the limiter set.
-func (r *RateLimiter) AddRequestLimiter(ip string, clientType int) *rate.Limiter {
+// addRequestLimiter adds a new client request limiter to the limiter set.
+func (r *RateLimiter) addRequestLimiter(ip string, clientType int) *rate.Limiter {
 	var limiter *rate.Limiter
 	switch clientType {
 	case APIClient:
@@ -62,42 +59,37 @@ func (r *RateLimiter) AddRequestLimiter(ip string, clientType int) *rate.Limiter
 		log.Errorf("unknown client type provided: %s", clientType)
 		return nil
 	}
-
 	r.mutex.Lock()
 	r.limiters[ip] = limiter
 	r.mutex.Unlock()
-
 	return limiter
 }
 
-// GetLimiter fetches the request limiter referenced by the provided
+// fetchLimiter fetches the request limiter referenced by the provided
 // IP address.
-func (r *RateLimiter) GetLimiter(ip string) *rate.Limiter {
+func (r *RateLimiter) fetchLimiter(ip string) *rate.Limiter {
 	r.mutex.RLock()
 	limiter := r.limiters[ip]
 	r.mutex.RUnlock()
-
 	return limiter
 }
 
 // RemoveLimiter deletes the request limiter associated with the provided ip.
-func (r *RateLimiter) RemoveLimiter(ip string) {
+func (r *RateLimiter) removeLimiter(ip string) {
 	r.mutex.Lock()
 	delete(r.limiters, ip)
 	r.mutex.Unlock()
 }
 
-// WithinLimit asserts that the client referenced by the provided IP
+// withinLimit asserts that the client referenced by the provided IP
 // address is within the limits of the rate limiter, therefore can make
 // further requests. If no request limiter is found for the provided IP
 // address a new one is created.
-func (r *RateLimiter) WithinLimit(ip string, clientType int) bool {
-	reqLimiter := r.GetLimiter(ip)
-
-	// create a new limiter if the incoming request is from a new client.
+func (r *RateLimiter) withinLimit(ip string, clientType int) bool {
+	reqLimiter := r.fetchLimiter(ip)
 	if reqLimiter == nil {
-		reqLimiter = r.AddRequestLimiter(ip, clientType)
+		// create a new limiter if the incoming request is from a new client.
+		reqLimiter = r.addRequestLimiter(ip, clientType)
 	}
-
 	return reqLimiter.Allow()
 }

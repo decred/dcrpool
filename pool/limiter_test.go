@@ -7,17 +7,17 @@ func testLimiter(t *testing.T) {
 	apiLimiterIP := "127.0.0.1"
 
 	// Ensure the api limiter is within range.
-	if !limiter.WithinLimit(apiLimiterIP, APIClient) {
+	if !limiter.withinLimit(apiLimiterIP, APIClient) {
 		t.Fatal("expected limiter to be within limit")
 	}
 
 	// Exhaust the api limiter range.
-	for limiter.WithinLimit(apiLimiterIP, APIClient) {
+	for limiter.withinLimit(apiLimiterIP, APIClient) {
 		continue
 	}
 
 	// Fetch the api limiter
-	lmt := limiter.GetLimiter(apiLimiterIP)
+	lmt := limiter.fetchLimiter(apiLimiterIP)
 	if lmt == nil {
 		t.Fatalf("expected a non-nil limiter")
 	}
@@ -25,27 +25,27 @@ func testLimiter(t *testing.T) {
 	poolLimiterIP := "0.0.0.0"
 
 	// Ensure the api limiter is within range.
-	if !limiter.WithinLimit(poolLimiterIP, PoolClient) {
+	if !limiter.withinLimit(poolLimiterIP, PoolClient) {
 		t.Fatal("expected limiter to be within limit")
 	}
 
 	// Exhaust the pool limiter range.
-	for limiter.WithinLimit(poolLimiterIP, PoolClient) {
+	for limiter.withinLimit(poolLimiterIP, PoolClient) {
 		continue
 	}
 
 	// Fetch the pool limiter.
-	lmt = limiter.GetLimiter(apiLimiterIP)
+	lmt = limiter.fetchLimiter(apiLimiterIP)
 	if lmt == nil {
 		t.Fatalf("expected a non-nil limiter")
 	}
 
 	// Remove limiters.
-	limiter.RemoveLimiter(apiLimiterIP)
-	limiter.RemoveLimiter(poolLimiterIP)
+	limiter.removeLimiter(apiLimiterIP)
+	limiter.removeLimiter(poolLimiterIP)
 
 	// Ensure the limiters have been removed.
-	lmt = limiter.GetLimiter(apiLimiterIP)
+	lmt = limiter.fetchLimiter(apiLimiterIP)
 	if lmt != nil {
 		t.Fatalf("expected a nil limiter")
 	}
