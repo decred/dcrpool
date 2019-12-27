@@ -8,86 +8,120 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
-	"sync/atomic"
+
+	bolt "github.com/coreos/bbolt"
+	"github.com/decred/dcrd/chaincfg/v2"
 )
 
-// endpoint represents a stratum endpoint.
-type endpoint struct {
-	port       uint32
-	diffData   *DifficultyData
+type EndpointConfig struct {
+	// ActiveNet represents the active network being mined on.
+	ActiveNet *chaincfg.Params
+	// DB represents the pool database.
+	DB *bolt.DB
+	// SoloPool represents the solo pool mining mode.
+	SoloPool bool
+	// Blake256Pad represents the extra padding needed for work
+	// submissions over the getwork RPC.
+	Blake256Pad []byte
+	// NonceIterations returns the possible header nonce iterations.
+	NonceIterations float64
+	// MaxConnectionsPerHost represents the maximum number of connections
+	// allowed per host.
+	MaxConnectionsPerHost uint32
+	// HubWg represents the hub's waitgroup.
+	HubWg *sync.WaitGroup
+	// SubmitWork sends solved block data to the consensus daemon.
+	SubmitWork func(*string) (bool, error)
+	// FetchCurrentWork returns the current work of the pool.
+	FetchCurrentWork func() string
+	// WithinLimit returns if a client is within its request limits.
+	WithinLimit func(string, int) bool
+	// AddConnection records a new client connection.
+	AddConnection func(string)
+	// RemoveConnection removes a client connection.
+	RemoveConnection func(string)
+	// FetchHostConnections returns the host connection for the provided host.
+	FetchHostConnections func(string) uint32
+}
+
+// Endpoint represents a stratum endpoint.
+type Endpoint struct {
 	miner      string
+	port       uint32
+	diffInfo   *DifficultyInfo
+	connCh     chan net.Conn
 	listener   net.Listener
-	hub        *Hub
+	cfg        *EndpointConfig
 	clients    map[string]*Client
 	clientsMtx sync.Mutex
-	connCh     chan net.Conn
 	wg         sync.WaitGroup
 }
 
-// newEndpoint creates an endpoint instance.
-func newEndpoint(hub *Hub, port uint32, miner string) (*endpoint, error) {
-	endpoint := &endpoint{
-		port:    port,
-		hub:     hub,
-		miner:   miner,
-		clients: make(map[string]*Client),
-		connCh:  make(chan net.Conn),
+// NewEndpoint creates an new miner endpoint.
+func NewEndpoint(eCfg *EndpointConfig, diffInfo *DifficultyInfo, port uint32, miner string) (*Endpoint, error) {
+	endpoint := &Endpoint{
+		port:     port,
+		miner:    miner,
+		diffInfo: diffInfo,
+		cfg:      eCfg,
+		clients:  make(map[string]*Client),
+		connCh:   make(chan net.Conn),
 	}
-
-	hub.poolDiffMtx.Lock()
-	diffData := hub.poolDiff[miner]
-	hub.poolDiffMtx.Unlock()
-	if diffData == nil {
-		desc := fmt.Sprintf("pool difficulty data not found for "+
-			"%s miner", miner)
-		return nil, MakeError(ErrDifficultyNotFound, desc, nil)
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "0.0.0.0", endpoint.port))
+	if err != nil {
+		return nil, err
 	}
-
-	endpoint.diffData = diffData
-
+	endpoint.listener = listener
 	return endpoint, nil
 }
 
-// listen sets up a listener for incoming client connections on the endpoint.
+// removeClient removes a disconnected pool client from its associated endpoint.
+func (e *Endpoint) removeClient(c *Client) {
+	e.clientsMtx.Lock()
+	delete(e.clients, c.id)
+	e.clientsMtx.Unlock()
+	e.cfg.RemoveConnection(c.addr.IP.String())
+}
+
+// listen accepts incoming client connections on the endpoint.
 // It must be run as a goroutine.
-func (e *endpoint) listen() {
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "0.0.0.0", e.port))
-	if err != nil {
-		log.Errorf("unable to listen on tcp address: %v", err)
-		return
-	}
-
-	e.listener = listener
-	defer e.listener.Close()
-	log.Tracef("Listening on %v for %v", e.port, e.miner)
-
+func (e *Endpoint) listen() {
+	log.Infof("%s listening on :%d", e.miner, e.port)
 	for {
 		conn, err := e.listener.Accept()
 		if err != nil {
-			log.Tracef("unable to accept client connection for "+
+			if opErr, ok := err.(*net.OpError); ok {
+				if opErr.Op == "accept" {
+					if strings.Contains(opErr.Err.Error(),
+						"use of closed network connection") {
+						return
+					}
+				}
+			}
+			log.Errorf("unable to accept client connection for "+
 				"%s endpoint: %v", e.miner, err)
 			return
 		}
-
 		e.connCh <- conn
 	}
 }
 
 // connect creates new pool clients from established connections.
 // It must be run as a goroutine.
-func (e *endpoint) connect(ctx context.Context) {
+func (e *Endpoint) connect(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			e.listener.Close()
+			e.wg.Done()
 			e.clientsMtx.Lock()
 			for _, client := range e.clients {
 				client.cancel()
 			}
 			e.clientsMtx.Unlock()
-			e.wg.Wait()
-
-			e.hub.wg.Done()
+			e.cfg.HubWg.Done()
 			return
 
 		case conn := <-e.connCh:
@@ -97,47 +131,48 @@ func (e *endpoint) connect(ctx context.Context) {
 				log.Errorf("unable to parse tcp addresss: %v", err)
 				continue
 			}
-
 			host := tcpAddr.IP.String()
-
-			e.hub.connectionsMtx.RLock()
-			connections := e.hub.connections[host]
-			e.hub.connectionsMtx.RUnlock()
-
-			if connections >= e.hub.cfg.MaxConnectionsPerHost {
-				log.Tracef("exceeded maximum connections "+
-					"allowed per host (%d) for %s",
-					e.hub.cfg.MaxConnectionsPerHost, host)
+			connCount := e.cfg.FetchHostConnections(host)
+			if connCount >= e.cfg.MaxConnectionsPerHost {
+				log.Errorf("exceeded maximum connections allowed per"+
+					" host %d for %s", e.cfg.MaxConnectionsPerHost, host)
+				conn.Close()
 				continue
 			}
-
-			client, err := NewClient(conn, e, tcpAddr)
+			cCfg := &ClientConfig{
+				ActiveNet:       e.cfg.ActiveNet,
+				DB:              e.cfg.DB,
+				Blake256Pad:     e.cfg.Blake256Pad,
+				NonceIterations: e.cfg.NonceIterations,
+				FetchMiner: func() string {
+					return e.miner
+				},
+				DifficultyInfo:   e.diffInfo,
+				EndpointWg:       &e.wg,
+				RemoveClient:     e.removeClient,
+				SubmitWork:       e.cfg.SubmitWork,
+				FetchCurrentWork: e.cfg.FetchCurrentWork,
+				WithinLimit:      e.cfg.WithinLimit,
+			}
+			client, err := NewClient(conn, tcpAddr, cCfg)
 			if err != nil {
 				log.Errorf("unable to create client: %v", err)
 				continue
 			}
-
 			e.clientsMtx.Lock()
-			e.clients[client.generateID()] = client
+			e.clients[client.id] = client
 			e.clientsMtx.Unlock()
-
-			e.hub.connectionsMtx.Lock()
-			e.hub.connections[host]++
-			e.hub.connectionsMtx.Unlock()
-
-			atomic.AddInt32(&e.hub.clients, 1)
-
+			e.cfg.AddConnection(host)
 			go client.run(client.ctx)
 		}
 	}
 }
 
-// removeClient removes a disconnected pool client from its associated endpoint.
-func (e *endpoint) removeClient(c *Client) {
-	e.clientsMtx.Lock()
-	id := c.generateID()
-	delete(e.clients, id)
-	atomic.AddInt32(&e.hub.clients, -1)
-	log.Tracef("Client (%s) removed.", id)
-	e.clientsMtx.Unlock()
+// run handles the lifecycle of all endpoint related processes.
+// This should be run as a goroutine.
+func (e *Endpoint) run(ctx context.Context) {
+	e.wg.Add(1)
+	go e.listen()
+	go e.connect(ctx)
+	e.wg.Wait()
 }
