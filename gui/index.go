@@ -53,7 +53,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("session error: %v, new session generated", err)
 	}
 
-	if !ui.limiter.WithinLimit(session.ID, pool.APIClient) {
+	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
 		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
 		return
 	}
@@ -73,8 +73,8 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	data := indexData{
 		WorkQuotas:        wQuotas,
 		PaymentMethod:     ui.cfg.PaymentMethod,
-		LastWorkHeight:    ui.hub.FetchLastWorkHeight(),
-		LastPaymentHeight: ui.hub.FetchLastPaymentHeight(),
+		LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
+		LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
 		MinedWork:         mWork,
 		PoolHashRate:      poolHash,
 		PoolDomain:        ui.cfg.Domain,
@@ -118,7 +118,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	work, err := ui.hub.FetchMinedWorkByAddress(accountID)
+	work, err := ui.hub.FetchMinedWorkByAccount(accountID)
 	if err != nil {
 		log.Error(err)
 		http.Error(w, "FetchMinedWorkByAddress error: "+err.Error(),
@@ -126,7 +126,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payments, err := ui.hub.FetchPaymentsForAddress(accountID)
+	payments, err := ui.hub.FetchPaymentsForAccount(accountID)
 	if err != nil {
 		log.Error(err)
 		http.Error(w, "FetchPaymentsForAddress error: "+err.Error(),

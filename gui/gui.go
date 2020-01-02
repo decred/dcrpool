@@ -7,7 +7,6 @@ package gui
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/tls"
 	"fmt"
 	"html/template"
@@ -29,23 +28,43 @@ import (
 	"github.com/decred/dcrpool/pool"
 )
 
-// Config represents configuration details for the pool user interface.
 type Config struct {
-	SoloPool         bool
-	PaymentMethod    string
-	GUIDir           string
-	CSRFSecret       []byte
-	BackupPass       string
-	GUIPort          uint32
-	TLSCertFile      string
-	TLSKeyFile       string
-	UseLEHTTPS       bool
-	Domain           string
-	ActiveNet        *chaincfg.Params
+	// SoloPool represents the solo pool mining mode.
+	SoloPool bool
+	// PatymentMethod represents the pool payment method.
+	PaymentMethod string
+	// GUIDir represents the GUI directory.
+	GUIDir string
+	// CSRFSecret represents the frontend's CSRF secret.
+	CSRFSecret []byte
+	// BackupPass represents the database backup password.
+	BackupPass string
+	// GUIPort represents the port the frontend is served on.
+	GUIPort uint32
+	// TLSCertFile represents the TLS certificate file path.
+	TLSCertFile string
+	// TLSKeyFile represents the TLS key file path.
+	TLSKeyFile string
+	// UseLEHTTPS represents Letsencrypt HTTPS mode.
+	UseLEHTTPS bool
+	// Domain represents the domain name of the pool.
+	Domain string
+	// ActiveNet represents the active network being mined on.
+	ActiveNet *chaincfg.Params
+	// BlockExplorerURL represents the active network block explorer.
 	BlockExplorerURL string
-	Designation      string
-	PoolFee          float64
-	MinerPorts       map[string]uint32
+	// Designation represents the codename of the pool.
+	Designation string
+	// PoolFee represents the fee charged to participating accounts of the pool.
+	PoolFee float64
+	// MinerPorts represents the configured ports for supported miners.
+	MinerPorts map[string]uint32
+	// WithinLimit returns if a client is within its request limits.
+	WithinLimit func(string, int) bool
+	// FetchLastWorkHeight returns the last work height of the pool.
+	FetchLastWorkHeight func() uint32
+	// FetchLastPaymentheight returns the last payment height of the pool.
+	FetchLastPaymentHeight func() uint32
 }
 
 // GUI represents the the mining pool user interface.
@@ -65,17 +84,6 @@ type GUI struct {
 	workQuotasMtx sync.RWMutex
 	poolHash      string
 	poolHashMtx   sync.RWMutex
-}
-
-// generateSecret generates the CSRF secret.
-func (ui *GUI) generateSecret() ([]byte, error) {
-	secret := make([]byte, 32)
-	_, err := rand.Read(secret)
-	if err != nil {
-		return nil, err
-	}
-
-	return secret, nil
 }
 
 // route configures the http router of the user interface.
@@ -102,7 +110,7 @@ func (ui *GUI) route() {
 	ui.router.HandleFunc("/logout", ui.PostLogout).Methods("POST")
 
 	// Websocket endpoint allows the GUI to receive updated values
-	ui.router.HandleFunc("/ws", ui.RegisterWebSocket).Methods("GET")
+	ui.router.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")
 }
 
 // renderTemplate executes the provided template.
@@ -115,7 +123,6 @@ func (ui *GUI) renderTemplate(w http.ResponseWriter, _ *http.Request, name strin
 			http.StatusInternalServerError)
 		return
 	}
-
 	_, err = doc.WriteTo(w)
 	if err != nil {
 		log.Errorf("unable to render template: %v", err)
@@ -123,11 +130,11 @@ func (ui *GUI) renderTemplate(w http.ResponseWriter, _ *http.Request, name strin
 }
 
 // NewGUI creates an instance of the user interface.
-func NewGUI(cfg *Config, hub *pool.Hub, limiter *pool.RateLimiter) (*GUI, error) {
+func NewGUI(cfg *Config, hub *pool.Hub) (*GUI, error) {
 	ui := &GUI{
 		cfg:        cfg,
 		hub:        hub,
-		limiter:    limiter,
+		limiter:    pool.NewRateLimiter(),
 		minedWork:  make([]minedWork, 0),
 		workQuotas: make([]workQuota, 0),
 	}
@@ -142,7 +149,7 @@ func NewGUI(cfg *Config, hub *pool.Hub, limiter *pool.RateLimiter) (*GUI, error)
 	}
 
 	var err error
-	ui.cfg.CSRFSecret, err = ui.hub.CSRFSecret(ui.generateSecret)
+	ui.cfg.CSRFSecret, err = ui.hub.CSRFSecret()
 	if err != nil {
 		return nil, err
 	}
