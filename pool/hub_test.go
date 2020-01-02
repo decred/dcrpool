@@ -124,7 +124,7 @@ func testHub(t *testing.T, db *bolt.DB) {
 	}
 
 	sum := new(big.Rat).Add(yQuota.Percentage, xQuota.Percentage)
-	if sum.Cmp(new(big.Rat).SetUint64(1)) != 0 {
+	if sum.Cmp(new(big.Rat).SetInt(new(big.Int).SetInt64(1))) != 0 {
 		t.Fatalf("expected the sum of share percentages to be 1, got %v", sum)
 	}
 
