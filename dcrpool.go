@@ -34,7 +34,6 @@ type miningPool struct {
 func newPool(cfg *config) (*miningPool, error) {
 	p := new(miningPool)
 	p.cfg = cfg
-	p.limiter = pool.NewRateLimiter()
 	dcrdRPCCfg := &rpcclient.ConnConfig{
 		Host:         cfg.DcrdRPCHost,
 		Endpoint:     "ws",
@@ -42,12 +41,10 @@ func newPool(cfg *config) (*miningPool, error) {
 		Pass:         cfg.RPCPass,
 		Certificates: cfg.dcrdRPCCerts,
 	}
-
 	minPmt, err := dcrutil.NewAmount(cfg.MinPayment)
 	if err != nil {
 		return nil, err
 	}
-
 	maxTxFeeReserve, err := dcrutil.NewAmount(cfg.MaxTxFeeReserve)
 	if err != nil {
 		return nil, err
@@ -57,7 +54,6 @@ func newPool(cfg *config) (*miningPool, error) {
 	powLimit := cfg.net.PowLimit
 	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
 	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
-
 	addPort := func(ports map[string]uint32, key string, entry uint32) error {
 		var match bool
 		var miner string
@@ -68,11 +64,9 @@ func newPool(cfg *config) (*miningPool, error) {
 				break
 			}
 		}
-
 		if match {
 			return fmt.Errorf("%s and %s share port %d", key, miner, entry)
 		}
-
 		ports[key] = entry
 		return nil
 	}
@@ -84,17 +78,14 @@ func newPool(cfg *config) (*miningPool, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	err = addPort(minerPorts, pool.AntminerDR3, cfg.DR3Port)
 	if err != nil {
 		return nil, err
 	}
-
 	err = addPort(minerPorts, pool.AntminerDR5, cfg.DR5Port)
 	if err != nil {
 		return nil, err
 	}
-
 	err = addPort(minerPorts, pool.WhatsminerD1, cfg.D1Port)
 	if err != nil {
 		return nil, err
@@ -115,7 +106,6 @@ func newPool(cfg *config) (*miningPool, error) {
 		MaxTxFeeReserve:       maxTxFeeReserve,
 		MaxGenTime:            cfg.MaxGenTime,
 		PaymentMethod:         cfg.PaymentMethod,
-		DBFile:                cfg.DBFile,
 		LastNPeriod:           cfg.LastNPeriod,
 		WalletPass:            cfg.WalletPass,
 		MinPayment:            minPmt,
@@ -125,8 +115,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		MinerPorts:            minerPorts,
 		MaxConnectionsPerHost: cfg.MaxConnectionsPerHost,
 	}
-
-	p.hub, err = pool.NewHub(p.cancel, p.httpc, hcfg, p.limiter)
+	p.hub, err = pool.NewHub(p.cancel, hcfg)
 	if err != nil {
 		return nil, err
 	}
@@ -140,26 +129,27 @@ func newPool(cfg *config) (*miningPool, error) {
 	}
 
 	gcfg := &gui.Config{
-		SoloPool:      cfg.SoloPool,
-		GUIDir:        cfg.GUIDir,
-		BackupPass:    cfg.BackupPass,
-		GUIPort:       cfg.GUIPort,
-		UseLEHTTPS:    cfg.UseLEHTTPS,
-		Domain:        cfg.Domain,
-		TLSCertFile:   cfg.TLSCert,
-		TLSKeyFile:    cfg.TLSKey,
-		ActiveNet:     cfg.net,
-		PaymentMethod: cfg.PaymentMethod,
-		Designation:   cfg.Designation,
-		PoolFee:       cfg.PoolFee,
-		MinerPorts:    minerPorts,
+		SoloPool:               cfg.SoloPool,
+		GUIDir:                 cfg.GUIDir,
+		BackupPass:             cfg.BackupPass,
+		GUIPort:                cfg.GUIPort,
+		UseLEHTTPS:             cfg.UseLEHTTPS,
+		Domain:                 cfg.Domain,
+		TLSCertFile:            cfg.TLSCert,
+		TLSKeyFile:             cfg.TLSKey,
+		ActiveNet:              cfg.net,
+		PaymentMethod:          cfg.PaymentMethod,
+		Designation:            cfg.Designation,
+		PoolFee:                cfg.PoolFee,
+		MinerPorts:             minerPorts,
+		WithinLimit:            p.hub.WithinLimit,
+		FetchLastWorkHeight:    p.hub.FetchLastWorkHeight,
+		FetchLastPaymentHeight: p.hub.FetchLastPaymentHeight,
 	}
-
-	p.gui, err = gui.NewGUI(gcfg, p.hub, p.limiter)
+	p.gui, err = gui.NewGUI(gcfg, p.hub)
 	if err != nil {
 		return nil, err
 	}
-
 	return p, nil
 }
 
@@ -213,11 +203,11 @@ func main() {
 		select {
 		case <-p.ctx.Done():
 			return
+
 		case <-interrupt:
 			p.cancel()
 		}
 	}()
-
 	p.gui.Run(p.ctx)
 	p.hub.Run(p.ctx)
 }
