@@ -106,4 +106,5 @@ func TestPool(t *testing.T) {
 	testClient(t, db)
 	testPaymentMgr(t, db)
 	testChainState(t, db)
+	testHub(t, db)
 }
