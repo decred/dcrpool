@@ -23,13 +23,11 @@ import (
 
 // miningPool represents a decred Proof-of-Work mining pool.
 type miningPool struct {
-	cfg     *config
-	httpc   *http.Client
-	ctx     context.Context
-	cancel  context.CancelFunc
-	hub     *pool.Hub
-	gui     *gui.GUI
-	limiter *pool.RateLimiter
+	cfg    *config
+	ctx    context.Context
+	cancel context.CancelFunc
+	hub    *pool.Hub
+	gui    *gui.GUI
 }
 
 // newPool initializes the mining pool.
@@ -102,7 +100,13 @@ func newPool(cfg *config) (*miningPool, error) {
 		return nil, err
 	}
 
+	db, err := pool.InitDB(cfg.DBFile, cfg.SoloPool)
+	if err != nil {
+		return nil, err
+	}
+
 	hcfg := &pool.HubConfig{
+		DB:                    db,
 		ActiveNet:             cfg.net,
 		WalletRPCCertFile:     cfg.WalletRPCCert,
 		WalletGRPCHost:        cfg.WalletGRPCHost,
@@ -123,6 +127,14 @@ func newPool(cfg *config) (*miningPool, error) {
 	}
 
 	p.hub, err = pool.NewHub(p.cancel, p.httpc, hcfg, p.limiter)
+	if err != nil {
+		return nil, err
+	}
+	err = p.hub.Listen()
+	if err != nil {
+		return nil, err
+	}
+	err = p.hub.Connect()
 	if err != nil {
 		return nil, err
 	}

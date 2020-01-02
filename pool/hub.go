@@ -6,18 +6,18 @@ package pool
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	bolt "github.com/coreos/bbolt"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/dcrutil/v2"
@@ -48,12 +48,6 @@ const (
 	getworkDataLen = (1 + ((wire.MaxBlockHeaderPayload*8 + 65) /
 		(chainhash.HashBlockSize * 8))) * chainhash.HashBlockSize
 
-	CPU           = "cpu"
-	InnosiliconD9 = "innosilicond9"
-	AntminerDR3   = "antminerdr3"
-	AntminerDR5   = "antminerdr5"
-	WhatsminerD1  = "whatsminerd1"
-
 	NewParent = "newparent"
 	NewVotes  = "newvotes"
 	NewTxns   = "newtxns"
@@ -65,21 +59,12 @@ var (
 	// high value to reduce the number of round trips to the pool by connected
 	// pool clients since pool shares are a non factor in solo pool mode.
 	soloMaxGenTime = new(big.Int).SetInt64(28)
-
-	// minerHashes is a map of all known DCR miners and their corresponding
-	// hashrates.
-	minerHashes = map[string]*big.Int{
-		CPU:           new(big.Int).SetInt64(5e3),
-		InnosiliconD9: new(big.Int).SetInt64(2.4e12),
-		AntminerDR3:   new(big.Int).SetInt64(7.8e12),
-		AntminerDR5:   new(big.Int).SetInt64(35e12),
-		WhatsminerD1:  new(big.Int).SetInt64(48e12),
-	}
 )
 
 // HubConfig represents configuration details for the hub.
 type HubConfig struct {
 	ActiveNet             *chaincfg.Params
+	DB                    *bolt.DB
 	DcrdRPCCfg            *rpcclient.ConnConfig
 	PoolFee               float64
 	MaxTxFeeReserve       dcrutil.Amount
@@ -90,7 +75,6 @@ type HubConfig struct {
 	LastNPeriod           uint32
 	WalletPass            string
 	MinPayment            dcrutil.Amount
-	DBFile                string
 	SoloPool              bool
 	PoolFeeAddrs          []dcrutil.Address
 	BackupPass            string
@@ -100,179 +84,182 @@ type HubConfig struct {
 	MaxConnectionsPerHost uint32
 }
 
-// DifficultyData captures the pool target difficulty and pool difficulty
-// ratio of a mining client.
-type DifficultyData struct {
-	target     *big.Rat
-	difficulty *big.Rat
-	powLimit   *big.Rat
-}
-
 // Hub maintains the set of active clients and facilitates message broadcasting
 // to all active clients.
 type Hub struct {
-	lastWorkHeight    uint32 // update atomically
-	lastPaymentHeight uint32 // update atomically
-	clients           int32  // update atomically
+	clients int32 // update atomically.
 
 	db             *bolt.DB
-	httpc          *http.Client
 	cfg            *HubConfig
 	limiter        *RateLimiter
 	rpcc           *rpcclient.Client
-	rpccMtx        sync.Mutex
 	gConn          *grpc.ClientConn
 	grpc           walletrpc.WalletServiceClient
 	grpcMtx        sync.Mutex
-	poolDiff       map[string]*DifficultyData
-	poolDiffMtx    sync.RWMutex
-	connCh         chan []byte
-	discCh         chan []byte
-	cancel         context.CancelFunc
-	txFeeReserve   dcrutil.Amount
-	paymentReqs    map[string]struct{}
-	paymentReqsMtx sync.RWMutex
-	endpoints      []*endpoint
-	blake256Pad    []byte
+	poolDiffs      *DifficultySet
+	paymentMgr     *PaymentMgr
+	chainState     *ChainState
 	connections    map[string]uint32
 	connectionsMtx sync.RWMutex
-	currentWork    string
-	currentWorkMtx sync.RWMutex
-	wg             sync.WaitGroup
+	cancel         context.CancelFunc
+	endpoints      []*Endpoint
+	blake256Pad    []byte
+	wg             *sync.WaitGroup
 }
 
-// IsPaymentRequested asserts if a payment request exists for the
-// provided account.
-func (h *Hub) IsPaymentRequested(accountID string) bool {
-	h.paymentReqsMtx.RLock()
-	defer h.paymentReqsMtx.RUnlock()
-	_, ok := h.paymentReqs[accountID]
-	return ok
+// persistPoolMode saves the pool mode to the db.
+func (h *Hub) persistPoolMode(tx *bolt.Tx, mode uint32) error {
+	pbkt := tx.Bucket(poolBkt)
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, mode)
+	return pbkt.Put(soloPool, b)
 }
 
-// AddPaymentRequest creates a payment request from the provided account.
-func (h *Hub) AddPaymentRequest(accountID string) {
-	h.paymentReqsMtx.Lock()
-	h.paymentReqs[accountID] = struct{}{}
-	h.paymentReqsMtx.Unlock()
-}
-
-// GenerateBlake256Pad generates the extra padding needed for work submission
-// over the getwork RPC.
-func (h *Hub) generateBlake256Pad() {
-	h.blake256Pad = make([]byte, getworkDataLen-wire.MaxBlockHeaderPayload)
-	h.blake256Pad[0] = 0x80
-	h.blake256Pad[len(h.blake256Pad)-9] |= 0x01
-	binary.BigEndian.PutUint64(h.blake256Pad[len(h.blake256Pad)-8:],
+// generateBlake256Pad creates the extra padding needed for work
+// submissions over the getwork RPC.
+func generateBlake256Pad() []byte {
+	blake256Pad := make([]byte, getworkDataLen-wire.MaxBlockHeaderPayload)
+	blake256Pad[0] = 0x80
+	blake256Pad[len(blake256Pad)-9] |= 0x01
+	binary.BigEndian.PutUint64(blake256Pad[len(blake256Pad)-8:],
 		wire.MaxBlockHeaderPayload*8)
+	return blake256Pad
 }
 
-// initDB handles the creation, upgrading and backup of the pool database.
-func (h *Hub) initDB() error {
-	db, err := openDB(h.cfg.DBFile)
-	if err != nil {
-		return MakeError(ErrDBOpen, "unable to open db file", err)
+// NewHub initializes the mining pool hub.
+func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
+	h := &Hub{
+		cfg:         hcfg,
+		db:          hcfg.DB,
+		limiter:     NewRateLimiter(),
+		wg:          new(sync.WaitGroup),
+		connections: make(map[string]uint32),
+		cancel:      cancel,
 	}
-
-	h.db = db
-	err = createBuckets(h.db)
-	if err != nil {
-		return err
-	}
-
-	err = upgradeDB(h.db)
-	if err != nil {
-		return err
-	}
-
-	var switchMode bool
-	err = db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		if pbkt == nil {
-			return err
-		}
-
-		v := pbkt.Get(soloPool)
-		if v == nil {
-			return nil
-		}
-
-		spMode := binary.LittleEndian.Uint32(v) == 1
-		if h.cfg.SoloPool != spMode {
-			switchMode = true
-		}
-
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	// If the pool mode changed, backup the current database and purge the
-	// database.
-	if switchMode {
-		log.Info("Pool mode changed, backing up database before purge.")
-		now := time.Now().Format(time.RFC3339)
-		file := fmt.Sprintf("dcrpool@%v.kv", now)
-		err := backup(h.db, file)
-		if err != nil {
-			return err
-		}
-
-		err = purge(h.db)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// generateDifficultyData generates difficulty data for all supported miners.
-func (h *Hub) generateDifficultyData() error {
+	h.blake256Pad = generateBlake256Pad()
 	powLimit := new(big.Rat).SetInt(h.cfg.ActiveNet.PowLimit)
 	maxGenTime := new(big.Int).SetUint64(h.cfg.MaxGenTime)
 	if h.cfg.SoloPool {
 		maxGenTime = soloMaxGenTime
 	}
 
-	log.Infof("Max valid share generation time is: %v seconds", maxGenTime)
-
-	h.poolDiffMtx.Lock()
-	for miner, hashrate := range minerHashes {
-		target, difficulty, err := calculatePoolTarget(h.cfg.ActiveNet,
-			hashrate, maxGenTime)
-		if err != nil {
-			desc := fmt.Sprintf("failed to calculate pool target for %s", miner)
-			return MakeError(ErrCalcPoolTarget, desc, err)
-		}
-
-		log.Infof("difficulty for %s is %v", miner, difficulty)
-
-		h.poolDiff[miner] = &DifficultyData{
-			target:     target,
-			difficulty: difficulty,
-			powLimit:   powLimit,
-		}
+	var err error
+	h.poolDiffs, err = NewDifficultySet(h.cfg.ActiveNet, powLimit, maxGenTime)
+	if err != nil {
+		return nil, err
 	}
-	h.poolDiffMtx.Unlock()
-	return nil
+
+	pCfg := &PaymentMgrConfig{
+		DB:                 h.db,
+		ActiveNet:          h.cfg.ActiveNet,
+		PoolFee:            h.cfg.PoolFee,
+		LastNPeriod:        h.cfg.LastNPeriod,
+		SoloPool:           h.cfg.SoloPool,
+		PaymentMethod:      h.cfg.PaymentMethod,
+		MinPayment:         h.cfg.MinPayment,
+		PoolFeeAddrs:       h.cfg.PoolFeeAddrs,
+		MaxTxFeeReserve:    h.cfg.MaxTxFeeReserve,
+		PublishTransaction: h.PublishTransaction,
+	}
+	h.paymentMgr, err = NewPaymentMgr(pCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	sCfg := &ChainStateConfig{
+		DB:               h.db,
+		SoloPool:         h.cfg.SoloPool,
+		PayDividends:     h.paymentMgr.payDividends,
+		GeneratePayments: h.paymentMgr.generatePayments,
+		GetBlock:         h.getBlock,
+		Cancel:           h.cancel,
+		HubWg:            h.wg,
+	}
+	h.chainState = NewChainState(sCfg)
+
+	if !h.cfg.SoloPool {
+		log.Infof("Payment method is %s.", strings.ToUpper(hcfg.PaymentMethod))
+	} else {
+		log.Infof("Solo pool mode active.")
+	}
+
+	err = h.db.Update(func(tx *bolt.Tx) error {
+		mode := uint32(0)
+		if h.cfg.SoloPool {
+			mode = 1
+		}
+		return h.persistPoolMode(tx, mode)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return h, nil
 }
 
-// setCurrentWork updates the pool's current template.
-func (h *Hub) setCurrentWork(headerE string) {
-	h.currentWorkMtx.Lock()
-	h.currentWork = headerE
-	h.currentWorkMtx.Unlock()
+// submitWork sends solved block data to the consensus daemon for evaluation.
+func (h *Hub) submitWork(data *string) (bool, error) {
+	status, err := h.rpcc.GetWorkSubmit(*data)
+	if err != nil {
+		return false, err
+	}
+	return status, err
 }
 
-// getCurrentWork fetches the pool's current template.
-func (h *Hub) getCurrentWork() string {
-	h.currentWorkMtx.RLock()
-	work := h.currentWork
-	h.currentWorkMtx.RUnlock()
+// getWork fetches available work from the consensus daemon.
+func (h *Hub) getWork() (string, string, error) {
+	work, err := h.rpcc.GetWork()
+	if err != nil {
+		return "", "", err
+	}
+	return work.Data, work.Target, err
+}
 
-	return work
+// WithinLimit returns if a client is within its request limits.
+func (h *Hub) WithinLimit(ip string, clientType int) bool {
+	return h.limiter.withinLimit(ip, clientType)
+}
+
+// FetchLastWorkHeight returns the last work height of the pool.
+func (h *Hub) FetchLastWorkHeight() uint32 {
+	return h.chainState.fetchLastWorkHeight()
+}
+
+// FetchLastPaymentheight returns the last payment height of the pool.
+func (h *Hub) FetchLastPaymentHeight() uint32 {
+	return h.paymentMgr.fetchLastPaymentHeight()
+}
+
+// getBlock fetches the blocks associated with the provided block hash.
+func (h *Hub) getBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
+	block, err := h.rpcc.GetBlock(blockHash)
+	if err != nil {
+		return nil, err
+	}
+	return block, err
+}
+
+// fetchHostConnections returns the client connection count for the
+// provided host.
+func (h *Hub) fetchHostConnections(host string) uint32 {
+	h.connectionsMtx.RLock()
+	defer h.connectionsMtx.RUnlock()
+	return h.connections[host]
+}
+
+// addConnection records a new client connection for the provided host.
+func (h *Hub) addConnection(host string) {
+	h.connectionsMtx.Lock()
+	h.connections[host]++
+	h.connectionsMtx.Unlock()
+	atomic.AddInt32(&h.clients, 1)
+}
+
+// removeConnection removes a client connection for the provided host.
+func (h *Hub) removeConnection(host string) {
+	h.connectionsMtx.Lock()
+	h.connections[host]--
+	h.connectionsMtx.Unlock()
+	atomic.AddInt32(&h.clients, -1)
 }
 
 // processWork parses work received and dispatches a work notification to all
@@ -283,13 +270,9 @@ func (h *Hub) processWork(headerE string) {
 		log.Errorf("failed to decode block height %s: %v", string(heightD), err)
 		return
 	}
-
 	height := binary.LittleEndian.Uint32(heightD)
-	atomic.StoreUint32(&h.lastWorkHeight, height)
-
 	log.Tracef("New work at height #%d received: %s", height, headerE)
-
-	// Do not process work data if there are no connected pool clients.
+	h.chainState.setLastWorkHeight(height)
 	if !h.HasClients() {
 		return
 	}
@@ -300,24 +283,18 @@ func (h *Hub) processWork(headerE string) {
 	nBits := headerE[232:240]
 	nTime := headerE[272:280]
 	genTx2 := headerE[352:360]
-
-	// Create a job for the received work.
 	job, err := NewJob(headerE, height)
 	if err != nil {
 		log.Errorf("failed to create job: %v", err)
 		return
 	}
-
 	err = job.Create(h.db)
 	if err != nil {
 		log.Errorf("failed to persist job: %v", err)
 		return
 	}
-
 	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
 		blockVersion, nBits, nTime, true)
-
-	// Broadcast the work notification to connected pool clients.
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
@@ -330,244 +307,128 @@ func (h *Hub) processWork(headerE string) {
 	}
 }
 
-// NewHub initializes a websocket hub.
-func NewHub(cancel context.CancelFunc, httpc *http.Client, hcfg *HubConfig, limiter *RateLimiter) (*Hub, error) {
-	h := &Hub{
-		httpc:       httpc,
-		limiter:     limiter,
-		cfg:         hcfg,
-		poolDiff:    make(map[string]*DifficultyData),
-		clients:     0,
-		connCh:      make(chan []byte),
-		discCh:      make(chan []byte),
-		connections: make(map[string]uint32),
-		cancel:      cancel,
-	}
-
-	err := h.initDB()
-	if err != nil {
-		return nil, err
-	}
-
-	h.generateBlake256Pad()
-
-	log.Infof("Maximum connections per host is %d.", hcfg.MaxConnectionsPerHost)
-
-	if !h.cfg.SoloPool {
-		log.Infof("Payment method is %s.", hcfg.PaymentMethod)
-	} else {
-		log.Infof("Solo pool enabled")
-	}
-
-	// Persist the pool mode.
-	sp := uint32(0)
-	if h.cfg.SoloPool {
-		sp = 1
-	}
-
-	err = h.db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		vbytes := make([]byte, 4)
-		binary.LittleEndian.PutUint32(vbytes, sp)
-		err := pbkt.Put(soloPool, vbytes)
+// Listen creates listeners for all supported pool clients.
+func (h *Hub) Listen() error {
+	for miner, port := range h.cfg.MinerPorts {
+		diffInfo, err := h.poolDiffs.fetchMinerDifficulty(miner)
 		if err != nil {
 			return err
 		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Load the tx fee reserve, last payment height and mined blocks count.
-	var lastPmtHeight uint32
-	err = h.db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-
-		txFeeReserveB := pbkt.Get(txFeeReserve)
-		if txFeeReserveB == nil {
-			log.Info("Tx fee reserve value not found in db, initializing.")
-			h.txFeeReserve = dcrutil.Amount(0)
-			tbytes := make([]byte, 4)
-			binary.LittleEndian.PutUint32(tbytes, uint32(h.txFeeReserve))
-			err := pbkt.Put(txFeeReserve, tbytes)
-			if err != nil {
-				return err
-			}
+		eCfg := &EndpointConfig{
+			ActiveNet:             h.cfg.ActiveNet,
+			DB:                    h.db,
+			SoloPool:              h.cfg.SoloPool,
+			Blake256Pad:           h.blake256Pad,
+			NonceIterations:       h.cfg.NonceIterations,
+			MaxConnectionsPerHost: h.cfg.MaxConnectionsPerHost,
+			HubWg:                 h.wg,
+			SubmitWork:            h.submitWork,
+			FetchCurrentWork:      h.chainState.fetchCurrentWork,
+			WithinLimit:           h.limiter.withinLimit,
+			AddConnection:         h.addConnection,
+			RemoveConnection:      h.removeConnection,
+			FetchHostConnections:  h.fetchHostConnections,
 		}
-
-		if txFeeReserveB != nil {
-			feeReserve := binary.LittleEndian.Uint32(txFeeReserveB)
-			h.txFeeReserve = dcrutil.Amount(feeReserve)
-		}
-
-		lastPaymentHeightB := pbkt.Get(lastPaymentHeight)
-		if lastPaymentHeightB == nil {
-			log.Info("Last payment height value not found in db, initializing.")
-			atomic.StoreUint32(&h.lastPaymentHeight, 0)
-			lbytes := make([]byte, 4)
-			binary.LittleEndian.PutUint32(lbytes, 0)
-			err := pbkt.Put(lastPaymentHeight, lbytes)
-			if err != nil {
-				return err
-			}
-		}
-
-		if lastPaymentHeightB != nil {
-			lastPmtHeight = binary.LittleEndian.Uint32(lastPaymentHeightB)
-			atomic.StoreUint32(&h.lastPaymentHeight, lastPmtHeight)
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if !h.cfg.SoloPool {
-		log.Tracef("Tx fee reserve is currently %v, with a max of %v",
-			h.txFeeReserve, h.cfg.MaxTxFeeReserve)
-	}
-
-	log.Tracef("Last payment height is currently: %d", lastPmtHeight)
-
-	err = h.generateDifficultyData()
-	if err != nil {
-		return nil, err
-	}
-
-	// Setup listeners for all supported pool clients.
-	for miner, port := range h.cfg.MinerPorts {
-		endpoint, err := newEndpoint(h, port, miner)
+		endpoint, err := NewEndpoint(eCfg, diffInfo, port, miner)
 		if err != nil {
-			return nil, MakeError(ErrOther, "failed to create listeners", err)
+			desc := fmt.Sprintf("unable to create %s listener", miner)
+			return MakeError(ErrOther, desc, err)
 		}
-
 		h.endpoints = append(h.endpoints, endpoint)
 	}
+	return nil
+}
 
+// Connect establishes connections with the consensus daemon and the wallet.
+func (h *Hub) Connect() error {
 	// Create handlers for chain notifications being subscribed for.
 	ntfnHandlers := &rpcclient.NotificationHandlers{
 		OnBlockConnected: func(headerB []byte, transactions [][]byte) {
-			h.connCh <- headerB
+			h.chainState.connCh <- &blockNotification{
+				Header: headerB,
+				Done:   make(chan bool),
+			}
 		},
-
 		OnBlockDisconnected: func(headerB []byte) {
-			h.discCh <- headerB
+			h.chainState.discCh <- &blockNotification{
+				Header: headerB,
+				Done:   make(chan bool),
+			}
 		},
-
 		OnWork: func(headerB []byte, target []byte, reason string) {
 			currWork := hex.EncodeToString(headerB)
-
 			switch reason {
 			case NewTxns:
-				h.setCurrentWork(currWork)
+				h.chainState.setCurrentWork(currWork)
 
 			case NewParent, NewVotes:
-				h.setCurrentWork(currWork)
+				h.chainState.setCurrentWork(currWork)
 				h.processWork(currWork)
 			}
 		},
 	}
 
 	// Establish RPC connection with dcrd.
-	rpcc, err := rpcclient.New(hcfg.DcrdRPCCfg, ntfnHandlers)
+	rpcc, err := rpcclient.New(h.cfg.DcrdRPCCfg, ntfnHandlers)
 	if err != nil {
-		return nil, MakeError(ErrOther, "dcrd rpc error", err)
+		desc := "dcrd rpc error"
+		return MakeError(ErrOther, desc, err)
 	}
 
 	h.rpcc = rpcc
-
-	// Subscribe for chain notifications.
 	if err := h.rpcc.NotifyWork(); err != nil {
-		h.rpccMtx.Lock()
 		h.rpcc.Shutdown()
-		h.rpccMtx.Unlock()
-		return nil, fmt.Errorf("notify work rpc error (dcrd): %v", err)
+		desc := "notify work rpc error (dcrd)"
+		return MakeError(ErrOther, desc, err)
 	}
-
 	if err := h.rpcc.NotifyBlocks(); err != nil {
-		h.rpccMtx.Lock()
 		h.rpcc.Shutdown()
-		h.rpccMtx.Unlock()
-		return nil, MakeError(ErrOther, "dcrd notify blocks error", err)
+		desc := "notify blocks error (dcrd)"
+		return MakeError(ErrOther, desc, err)
 	}
-
-	log.Tracef("rpc connection established with dcrd.")
 
 	// Establish GRPC connection with the wallet if not in solo pool mode.
 	if !h.cfg.SoloPool {
-		creds, err := credentials.NewClientTLSFromFile(hcfg.WalletRPCCertFile,
+		creds, err := credentials.NewClientTLSFromFile(h.cfg.WalletRPCCertFile,
 			"localhost")
 		if err != nil {
-			return nil, MakeError(ErrOther, "dcrwallet grpc tls error", err)
+			desc := "grpc tls error (dcrwallet)"
+			return MakeError(ErrOther, desc, err)
 		}
-
-		h.gConn, err = grpc.Dial(hcfg.WalletGRPCHost,
+		h.gConn, err = grpc.Dial(h.cfg.WalletGRPCHost,
 			grpc.WithTransportCredentials(creds))
 		if err != nil {
-			return nil, MakeError(ErrOther, "dcrwallet grpc dial error", err)
+			desc := "grpc dial error (dcrwallet)"
+			return MakeError(ErrOther, desc, err)
 		}
-
 		if h.gConn == nil {
-			desc := "failed to establish grpc with dcrwallet"
-			return nil, MakeError(ErrOther, desc, nil)
+			desc := "unable to establish grpc with dcrwallet"
+			return MakeError(ErrOther, desc, nil)
 		}
-
 		h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
-
 		req := &walletrpc.BalanceRequest{
 			RequiredConfirmations: 1,
 		}
-
 		h.grpcMtx.Lock()
 		_, err = h.grpc.Balance(context.TODO(), req)
 		h.grpcMtx.Unlock()
 		if err != nil {
-			return nil, MakeError(ErrOther, "dcrwallet grpc request error", err)
+			desc := "grpc request error (dcrwallet)"
+			return MakeError(ErrOther, desc, err)
 		}
-
-		log.Info("grpc connection established with dcrwallet.")
 	}
-
-	log.Info("fetching initial work")
-	work, _, err := h.GetWork()
+	work, _, err := h.getWork()
 	if err != nil {
-		return nil, MakeError(ErrOther, "unable to fetch current work", err)
+		desc := "unable to fetch current work"
+		return MakeError(ErrOther, desc, err)
 	}
-
-	h.setCurrentWork(work)
-
-	return h, nil
+	h.chainState.setCurrentWork(work)
+	return nil
 }
 
 // HasClients asserts the mining pool has clients.
 func (h *Hub) HasClients() bool {
 	return atomic.LoadInt32(&h.clients) > 0
-}
-
-// SubmitWork sends solved block data to the consensus daemon for evaluation.
-func (h *Hub) SubmitWork(data *string) (bool, error) {
-	h.rpccMtx.Lock()
-	status, err := h.rpcc.GetWorkSubmit(*data)
-	h.rpccMtx.Unlock()
-	if err != nil {
-		return false, err
-	}
-
-	return status, err
-}
-
-// GetWork fetches available work from the consensus daemon.
-func (h *Hub) GetWork() (string, string, error) {
-	h.rpccMtx.Lock()
-	work, err := h.rpcc.GetWork()
-	h.rpccMtx.Unlock()
-	if err != nil {
-		return "", "", err
-	}
-
-	return work.Data, work.Target, err
 }
 
 // PublishTransaction creates a transaction paying pool accounts for work done.
@@ -580,388 +441,70 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 			},
 			Amount: int64(amt),
 		}
-
 		outs = append(outs, out)
 	}
 
-	// Construct the transaction.
 	constructTxReq := &walletrpc.ConstructTransactionRequest{
 		SourceAccount:            0,
 		RequiredConfirmations:    1,
 		OutputSelectionAlgorithm: walletrpc.ConstructTransactionRequest_ALL,
 		NonChangeOutputs:         outs,
 	}
-
 	h.grpcMtx.Lock()
 	constructTxResp, err := h.grpc.ConstructTransaction(context.TODO(), constructTxReq)
 	h.grpcMtx.Unlock()
 	if err != nil {
 		return "", err
 	}
-
-	// Sign the transaction.
 	signTxReq := &walletrpc.SignTransactionRequest{
 		SerializedTransaction: constructTxResp.UnsignedTransaction,
 		Passphrase:            []byte(h.cfg.WalletPass),
 	}
-
 	h.grpcMtx.Lock()
 	signedTxResp, err := h.grpc.SignTransaction(context.TODO(), signTxReq)
 	h.grpcMtx.Unlock()
 	if err != nil {
 		return "", err
 	}
-
-	// Publish the transaction.
 	pubTxReq := &walletrpc.PublishTransactionRequest{
 		SignedTransaction: signedTxResp.Transaction,
 	}
-
 	h.grpcMtx.Lock()
 	pubTxResp, err := h.grpc.PublishTransaction(context.TODO(), pubTxReq)
 	h.grpcMtx.Unlock()
 	if err != nil {
 		return "", err
 	}
-
 	txid, err := chainhash.NewHash(pubTxResp.TransactionHash)
 	if err != nil {
 		return "", err
 	}
-
-	log.Tracef("published tx hash is %s", txid.String())
-
 	return txid.String(), nil
-}
-
-// handleChainUpdates processes connected and disconnected block notifications
-// from the consensus daemon.
-func (h *Hub) handleChainUpdates(ctx context.Context) {
-	h.wg.Add(1)
-
-	for {
-		select {
-		case <-ctx.Done():
-			h.wg.Done()
-			return
-
-		case headerB := <-h.connCh:
-			var header wire.BlockHeader
-			err := header.FromBytes(headerB)
-			if err != nil {
-				log.Errorf("unable to create header from bytes: %v", err)
-				h.cancel()
-				continue
-			}
-			log.Tracef("Block connected at height #%d", header.Height)
-
-			// Process mature payments.
-			err = h.processPayments(header.Height)
-			if err != nil {
-				log.Errorf("unable to process payments: %v", err)
-			}
-
-			if header.Height > MaxReorgLimit {
-				pruneLimit := header.Height - MaxReorgLimit
-				err := PruneJobs(h.db, pruneLimit)
-				if err != nil {
-					log.Errorf("unable to prune jobs to height %d: %v",
-						pruneLimit, err)
-					h.cancel()
-					continue
-				}
-
-				log.Tracef("Pruned jobs below height #%d", pruneLimit)
-			}
-
-			// If the parent of the connected block is an accepted work of the
-			// pool, confirm it as mined. The parent of a connected block
-			// at this point is guaranteed to have its corresponding accepted
-			// work persisted if it was mined by the pool.
-			parentID := AcceptedWorkID(header.PrevBlock.String(), header.Height-1)
-			work, err := FetchAcceptedWork(h.db, parentID)
-			if err != nil {
-				log.Errorf("unable to fetch accepted work for block #%d's "+
-					"parent %s : %v", header.Height,
-					header.PrevBlock.String(), err)
-				continue
-			}
-
-			if work == nil {
-				log.Tracef("No mined work found for block #%v's parent %s",
-					header.Height, header.PrevBlock.String())
-				continue
-			}
-
-			// Update accepted work as confirmed mined.
-			work.Confirmed = true
-			err = work.Update(h.db)
-			if err != nil {
-				log.Errorf("unable to confirm accepted work for block "+
-					"%s: %v", header.PrevBlock.String(), err)
-				h.cancel()
-				continue
-			}
-
-			// Prune accepted work that is below the estimated reorg limit.
-			if header.Height > MaxReorgLimit {
-				pruneLimit := header.Height - MaxReorgLimit
-				err = PruneAcceptedWork(h.db, pruneLimit)
-				if err != nil {
-					log.Errorf("unable to prune accepted work below "+
-						"height #%d: %v", pruneLimit, err)
-					h.cancel()
-					continue
-				}
-
-				log.Tracef("Pruned accepted work below height #%d", pruneLimit)
-			}
-
-			log.Tracef("Found mined parent %s for connected block %s",
-				header.PrevBlock.String(), header.BlockHash().String())
-
-			// Fetch the coinbase of the the confirmed accepted work
-			// (the parent of the connected block) and process payments
-			//  when not mining in solo pool mode.
-			if !h.cfg.SoloPool {
-				h.rpccMtx.Lock()
-				block, err := h.rpcc.GetBlock(&header.PrevBlock)
-				h.rpccMtx.Unlock()
-				if err != nil {
-					log.Errorf("unable to fetch block %s: %v",
-						header.PrevBlock.String(), err)
-					h.cancel()
-					continue
-				}
-
-				coinbase :=
-					dcrutil.Amount(block.Transactions[0].TxOut[2].Value)
-
-				log.Tracef("Accepted work %s at height #%d has coinbase"+
-					" of %v", header.PrevBlock.String(), header.Height-1,
-					coinbase)
-
-				// Pay dividends per the configured payment scheme and process
-				// mature payments.
-				switch h.cfg.PaymentMethod {
-				case PPS:
-					err := PayPerShare(h.db, coinbase, h.cfg.PoolFee,
-						header.Height, h.cfg.ActiveNet.CoinbaseMaturity)
-					if err != nil {
-						log.Error("unable to generate PPS shares: %v", err)
-						h.cancel()
-						continue
-					}
-
-				case PPLNS:
-					err := PayPerLastNShares(h.db, coinbase,
-						h.cfg.PoolFee, header.Height,
-						h.cfg.ActiveNet.CoinbaseMaturity, h.cfg.LastNPeriod)
-					if err != nil {
-						log.Errorf("unable to generate PPLNS shares: %v", err)
-						h.cancel()
-						continue
-					}
-				}
-			}
-
-		case headerB := <-h.discCh:
-			var header wire.BlockHeader
-			err := header.FromBytes(headerB)
-			if err != nil {
-				log.Errorf("unable to create header from bytes: %v", err)
-				h.cancel()
-				continue
-			}
-
-			log.Tracef("Block disconnected at height #%s", header.Height)
-
-			// Delete mined work if it is disconnected from the chain. At this
-			// point a mined confirmed block will have its corresponding
-			// accepted block record persisted.
-			id := AcceptedWorkID(header.BlockHash().String(), header.Height)
-			work, err := FetchAcceptedWork(h.db, id)
-			if err != nil {
-				log.Errorf("unable to fetch mined work: %v", err)
-				continue
-			}
-
-			err = work.Delete(h.db)
-			if err != nil {
-				log.Errorf("unable to delete mined work: %v", err)
-				h.cancel()
-				continue
-			}
-
-			// Only remove invalidated payments if not mining in solo pool mode.
-			if !h.cfg.SoloPool {
-				// If the disconnected block is an accepted work from the pool,
-				// delete all associated payments.
-				payments, err := FetchPendingPaymentsAtHeight(h.db,
-					header.Height)
-				if err != nil {
-					log.Errorf("failed to fetch pending payments "+
-						"at height #%d: %v", header.Height, err)
-					h.cancel()
-					continue
-				}
-
-				for _, pmt := range payments {
-					err = pmt.Delete(h.db)
-					if err != nil {
-						log.Errorf("unable to delete pending payment", err)
-						h.cancel()
-						break
-					}
-				}
-			}
-		}
-	}
 }
 
 // shutdown tears down the hub and releases resources used.
 func (h *Hub) shutdown() {
-	// Close the wallet grpc connection if in pooled mining mode.
 	if !h.cfg.SoloPool {
 		h.gConn.Close()
 	}
-
-	// Shutdown the daemon rpc connection.
-	h.rpccMtx.Lock()
 	h.rpcc.Shutdown()
-	h.rpccMtx.Unlock()
-
-	// Close the connection and disconnection channels.
-	close(h.discCh)
-	close(h.connCh)
-
 	h.db.Close()
 }
 
 // run handles the process lifecycles of the pool hub.
 func (h *Hub) Run(ctx context.Context) {
-	h.wg.Add(len(h.endpoints))
 	for _, e := range h.endpoints {
-		go e.listen()
-		go e.connect(ctx)
+		go e.run(ctx)
+		h.wg.Add(1)
 	}
+	go h.chainState.handleChainUpdates(ctx)
+	h.wg.Add(1)
 
-	go h.handleChainUpdates(ctx)
 	h.wg.Wait()
-
 	h.shutdown()
 }
 
-// processPayments fetches all eligible payments and publishes a
-// transaction to the network paying dividends to participating accounts.
-func (h *Hub) processPayments(height uint32) error {
-	// Waiting two blocks after a successful payment before proceeding with
-	// another one because the reserved amount for transaction fees becomes
-	// change after a successful transaction. Change matures after the next
-	// block is processed. The second block is as a result of trying to
-	// maximize the transaction fee usage by processing mature payments
-	// after the transaction fees reserve has matured and ready for another
-	// transaction.
-	lastPmtHeight := atomic.LoadUint32(&h.lastPaymentHeight)
-	if lastPmtHeight != 0 && (height-lastPmtHeight) < 3 {
-		return nil
-	}
-
-	// Fetch all eligible payments.
-	h.paymentReqsMtx.Lock()
-	eligiblePmts, err := FetchEligiblePaymentBundles(h.db, height,
-		h.cfg.MinPayment, h.paymentReqs)
-	if err != nil {
-		h.paymentReqsMtx.Unlock()
-		return err
-	}
-
-	// Delete the processed payment requests.
-	for accountID := range h.paymentReqs {
-		delete(h.paymentReqs, accountID)
-	}
-	h.paymentReqsMtx.Unlock()
-
-	if len(eligiblePmts) == 0 {
-		log.Tracef("no eligible payments to process")
-		return nil
-	}
-
-	log.Tracef("eligible payments are: %v", spew.Sdump(eligiblePmts))
-
-	// Generate the payment details from the eligible payments fetched.
-	details, targetAmt, err := generatePaymentDetails(h.db,
-		h.cfg.PoolFeeAddrs, eligiblePmts, h.cfg.MaxTxFeeReserve, &h.txFeeReserve)
-	if err != nil {
-		return err
-	}
-
-	log.Tracef("mature rewards at height #%d is: %v", height, targetAmt)
-
-	// Create address-amount kv pairs for the transaction, using the payment
-	// details.
-	pmts := make(map[dcrutil.Address]dcrutil.Amount, len(details))
-	for addrStr, amt := range details {
-		addr, err := dcrutil.DecodeAddress(addrStr, h.cfg.ActiveNet)
-		if err != nil {
-			return err
-		}
-
-		pmts[addr] = amt
-	}
-
-	// Publish the transaction.
-	txid, err := h.PublishTransaction(pmts, *targetAmt)
-	if err != nil {
-		return err
-	}
-
-	// Update all payments published by the tx as paid and archive them.
-	for _, bundle := range eligiblePmts {
-		bundle.UpdateAsPaid(h.db, height, txid)
-		err = bundle.ArchivePayments(h.db)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Update the last payment paid on time, the last payment height and the
-	// tx fee reserve.
-	nowNano := time.Now().UnixNano()
-	err = h.db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		if pbkt == nil {
-			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return MakeError(ErrBucketNotFound, desc, nil)
-		}
-
-		err := pbkt.Put(lastPaymentPaidOn, nanoToBigEndianBytes(nowNano))
-		if err != nil {
-			return err
-		}
-
-		// Update and persist the last payment height.
-		atomic.StoreUint32(&h.lastPaymentHeight, height)
-		hbytes := make([]byte, 4)
-		binary.LittleEndian.PutUint32(hbytes, height)
-		err = pbkt.Put(lastPaymentHeight, hbytes)
-		if err != nil {
-			return err
-		}
-
-		// Persist the tx fee reserve.
-		tbytes := make([]byte, 4)
-		binary.LittleEndian.PutUint32(tbytes, uint32(h.txFeeReserve))
-		err = pbkt.Put(txFeeReserve, tbytes)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-	return err
-}
-
+// ClientInfo represents client miner information.
 type ClientInfo struct {
 	Miner    string
 	IP       string
@@ -971,8 +514,6 @@ type ClientInfo struct {
 // FetchClientInfo returns connection details about all pool clients.
 func (h *Hub) FetchClientInfo() map[string][]*ClientInfo {
 	clientInfo := make(map[string][]*ClientInfo)
-
-	// Iterate through all connected miners.
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
@@ -994,8 +535,6 @@ func (h *Hub) FetchClientInfo() map[string][]*ClientInfo {
 // account id.
 func (h *Hub) FetchAccountClientInfo(accountID string) []*ClientInfo {
 	info := make([]*ClientInfo, 0)
-
-	// Filter through through all connected miners.
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
@@ -1003,7 +542,6 @@ func (h *Hub) FetchAccountClientInfo(accountID string) []*ClientInfo {
 				client.hashRateMtx.RLock()
 				hash := client.hashRate
 				client.hashRateMtx.RUnlock()
-
 				info = append(info, &ClientInfo{
 					Miner:    endpoint.miner,
 					IP:       client.addr.String(),
@@ -1014,20 +552,6 @@ func (h *Hub) FetchAccountClientInfo(accountID string) []*ClientInfo {
 		endpoint.clientsMtx.Unlock()
 	}
 	return info
-}
-
-// FetchLastWorkHeight returns  the last height work was generated for.
-func (h *Hub) FetchLastWorkHeight() uint32 {
-	return atomic.LoadUint32(&h.lastWorkHeight)
-}
-
-// FetchLastPaymentHeight returns the last height payments were made at.
-func (h *Hub) FetchLastPaymentHeight() uint32 {
-	if !h.cfg.SoloPool {
-		return atomic.LoadUint32(&h.lastPaymentHeight)
-	}
-
-	return 0
 }
 
 // FetchMinedWork returns the last ten mined blocks by the pool.
@@ -1044,7 +568,6 @@ func (h *Hub) FetchPoolHashRate() (*big.Rat, map[string][]*ClientInfo) {
 			poolHashRate = poolHashRate.Add(poolHashRate, miner.HashRate)
 		}
 	}
-
 	return poolHashRate, clientInfo
 }
 
@@ -1061,21 +584,14 @@ func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 	if h.cfg.SoloPool {
 		return nil, nil
 	}
-
-	height := atomic.LoadUint32(&h.lastWorkHeight)
-
 	var percentages map[string]*big.Rat
 	var err error
 	if h.cfg.PaymentMethod == PPS {
-		percentages, err =
-			PPSSharePercentages(h.db, h.cfg.PoolFee, height)
+		percentages, err = h.paymentMgr.PPSSharePercentages()
 	}
-
 	if h.cfg.PaymentMethod == PPLNS {
-		percentages, err =
-			PPLNSSharePercentages(h.db, h.cfg.PoolFee, height, h.cfg.LastNPeriod)
+		percentages, err = h.paymentMgr.PPLNSSharePercentages()
 	}
-
 	if err != nil {
 		return nil, err
 	}
@@ -1087,7 +603,6 @@ func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 			Percentage: value,
 		})
 	}
-
 	return quotas, nil
 }
 
@@ -1112,12 +627,11 @@ func (h *Hub) AccountExists(accountID string) bool {
 		log.Tracef("Unable to fetch account for id: %s", accountID)
 		return false
 	}
-
 	return true
 }
 
 // CSRFSecret fetches a persisted secret or generates a new one.
-func (h *Hub) CSRFSecret(getCSRF func() ([]byte, error)) ([]byte, error) {
+func (h *Hub) CSRFSecret() ([]byte, error) {
 	var secret []byte
 	err := h.db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
@@ -1125,7 +639,6 @@ func (h *Hub) CSRFSecret(getCSRF func() ([]byte, error)) ([]byte, error) {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
 			return MakeError(ErrBucketNotFound, desc, nil)
 		}
-
 		v := pbkt.Get(csrfSecret)
 		if v != nil {
 			secret = make([]byte, len(v))
@@ -1133,25 +646,21 @@ func (h *Hub) CSRFSecret(getCSRF func() ([]byte, error)) ([]byte, error) {
 			return nil
 		}
 
-		log.Info("CSRF secret value not found in db, initializing.")
-
 		var err error
-		secret, err = getCSRF()
+		secret = make([]byte, 32)
+		_, err = rand.Read(secret)
 		if err != nil {
 			return err
 		}
-
 		err = pbkt.Put(csrfSecret, secret)
 		if err != nil {
 			return err
 		}
-
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-
 	return secret, nil
 }
 
@@ -1164,6 +673,5 @@ func (h *Hub) BackupDB(w http.ResponseWriter) error {
 		_, err := tx.WriteTo(w)
 		return err
 	})
-
 	return err
 }

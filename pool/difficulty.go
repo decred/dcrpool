@@ -36,46 +36,42 @@ type DifficultyInfo struct {
 	powLimit   *big.Rat
 }
 
-// PoolDifficulty represents generated pool difficulties for supported miners.
-type PoolDifficulty struct {
+// DifficultySet represents generated pool difficulties for supported miners.
+type DifficultySet struct {
 	diffs map[string]*DifficultyInfo
 	mtx   sync.Mutex
 }
 
-// NewPoolDifficulty generates difficulty data for all supported mining clients.
-func NewPoolDifficulty(net *chaincfg.Params, powLimit *big.Rat, maxGenTime *big.Int) (*PoolDifficulty, error) {
-	pDiff := &PoolDifficulty{
+// NewDifficultySet generates difficulty data for all supported mining clients.
+func NewDifficultySet(net *chaincfg.Params, powLimit *big.Rat, maxGenTime *big.Int) (*DifficultySet, error) {
+	set := &DifficultySet{
 		diffs: make(map[string]*DifficultyInfo),
 	}
-
 	for miner, hashrate := range minerHashes {
 		target, difficulty, err := calculatePoolTarget(net, hashrate, maxGenTime)
 		if err != nil {
 			desc := fmt.Sprintf("failed to calculate pool target for %s", miner)
 			return nil, MakeError(ErrCalcPoolTarget, desc, err)
 		}
-
-		pDiff.diffs[miner] = &DifficultyInfo{
+		set.diffs[miner] = &DifficultyInfo{
 			target:     target,
 			difficulty: difficulty,
 			powLimit:   powLimit,
 		}
 	}
 
-	return pDiff, nil
+	return set, nil
 }
 
 // fetchMinerDifficulty returns the difficulty data of the provided miner,
 // if it exists.
-func (pd *PoolDifficulty) fetchMinerDifficulty(miner string) (*DifficultyInfo, error) {
-	pd.mtx.Lock()
-	diffData, ok := pd.diffs[miner]
-	pd.mtx.Unlock()
-
+func (d *DifficultySet) fetchMinerDifficulty(miner string) (*DifficultyInfo, error) {
+	d.mtx.Lock()
+	diffData, ok := d.diffs[miner]
+	d.mtx.Unlock()
 	if !ok {
 		desc := fmt.Sprintf("no difficulty data found for miner %s", miner)
 		return nil, MakeError(ErrValueNotFound, desc, nil)
 	}
-
 	return diffData, nil
 }
