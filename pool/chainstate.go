@@ -109,6 +109,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			if err != nil {
 				log.Errorf("unable to process payments: %v", err)
 				close(msg.Done)
+				continue
 			}
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit

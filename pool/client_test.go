@@ -77,7 +77,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
 	blake256Pad := generateBlake256Pad()
 	maxGenTime := new(big.Int).SetUint64(20)
-	poolDiffs, err := NewPoolDifficulty(chaincfg.SimNetParams(),
+	poolDiffs, err := NewDifficultySet(chaincfg.SimNetParams(),
 		new(big.Rat).SetInt(powLimit), maxGenTime)
 	if err != nil {
 		t.Fatalf("[NewPoolDifficulty] unexpected error: %v", err)
