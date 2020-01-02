@@ -485,9 +485,13 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 // shutdown tears down the hub and releases resources used.
 func (h *Hub) shutdown() {
 	if !h.cfg.SoloPool {
-		h.gConn.Close()
+		if h.gConn != nil {
+			h.gConn.Close()
+		}
 	}
-	h.rpcc.Shutdown()
+	if h.rpcc != nil {
+		h.rpcc.Shutdown()
+	}
 	h.db.Close()
 }
 
@@ -606,16 +610,16 @@ func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 	return quotas, nil
 }
 
-// FetchMinedWorkByAddress returns a list of mined work by the provided address.
+// FetchMinedWorkByAccount returns a list of mined work by the provided address.
 // List is ordered, most recent comes first.
-func (h *Hub) FetchMinedWorkByAddress(id string) ([]*AcceptedWork, error) {
+func (h *Hub) FetchMinedWorkByAccount(id string) ([]*AcceptedWork, error) {
 	work, err := listMinedWorkByAccount(h.db, id, 10)
 	return work, err
 }
 
-// FetchPaymentsForAddress returns a list or payments made to the provided address.
+// FetchPaymentsForAccount returns a list or payments made to the provided address.
 // List is ordered, most recent comes first.
-func (h *Hub) FetchPaymentsForAddress(id string) ([]*Payment, error) {
+func (h *Hub) FetchPaymentsForAccount(id string) ([]*Payment, error) {
 	payments, err := fetchArchivedPaymentsForAccount(h.db, id, 10)
 	return payments, err
 }
