@@ -521,14 +521,13 @@ func (h *Hub) FetchClientInfo() map[string][]*ClientInfo {
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
-			client.hashRateMtx.RLock()
+			hash := client.fetchHashRate()
 			clientInfo[client.account] = append(clientInfo[client.account],
 				&ClientInfo{
 					Miner:    endpoint.miner,
 					IP:       client.addr.String(),
-					HashRate: client.hashRate,
+					HashRate: hash,
 				})
-			client.hashRateMtx.RUnlock()
 		}
 		endpoint.clientsMtx.Unlock()
 	}

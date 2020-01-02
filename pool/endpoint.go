@@ -147,12 +147,13 @@ func (e *Endpoint) connect(ctx context.Context) {
 				FetchMiner: func() string {
 					return e.miner
 				},
-				DifficultyInfo:   e.diffInfo,
-				EndpointWg:       &e.wg,
-				RemoveClient:     e.removeClient,
-				SubmitWork:       e.cfg.SubmitWork,
-				FetchCurrentWork: e.cfg.FetchCurrentWork,
-				WithinLimit:      e.cfg.WithinLimit,
+				DifficultyInfo:    e.diffInfo,
+				EndpointWg:        &e.wg,
+				RemoveClient:      e.removeClient,
+				SubmitWork:        e.cfg.SubmitWork,
+				FetchCurrentWork:  e.cfg.FetchCurrentWork,
+				WithinLimit:       e.cfg.WithinLimit,
+				HashCalcThreshold: hashCalcThreshold,
 			}
 			client, err := NewClient(conn, tcpAddr, cCfg)
 			if err != nil {
