@@ -34,9 +34,9 @@ const (
 	// allowed, in bytes.
 	MaxMessageSize = 250
 
-	// hashCalcThreshold represents the minimum operation time in seconds
+	// hashCalcThreshold represents the minimum operating time in seconds
 	// before a client's hash rate is calculated.
-	hashCalcThreshold = 30
+	hashCalcThreshold = 20
 )
 
 var (
@@ -80,6 +80,9 @@ type ClientConfig struct {
 	FetchCurrentWork func() string
 	// WithinLimit returns if the client is still within its request limits.
 	WithinLimit func(string, int) bool
+	// HashCalcThreshold represents the minimum operating time in seconds
+	// before a client's hash rate is calculated.
+	HashCalcThreshold uint32
 }
 
 // Client represents a client connection.
@@ -789,8 +792,23 @@ func (c *Client) handleCPUWork(req *Request) {
 	}
 }
 
+// setHashRate updates the client's hash rate.
+func (c *Client) setHashRate(hash *big.Rat) {
+	c.hashRateMtx.Lock()
+	c.hashRate = new(big.Rat).Quo(new(big.Rat).Add(c.hashRate, hash),
+		new(big.Rat).SetInt64(2))
+	c.hashRateMtx.Unlock()
+}
+
+// fetchHashRate gets the client's hash rate.
+func (c *Client) fetchHashRate() *big.Rat {
+	c.hashRateMtx.Lock()
+	defer c.hashRateMtx.Unlock()
+	return c.hashRate
+}
+
 func (c *Client) hashMonitor(ctx context.Context) {
-	ticker := time.NewTicker(time.Second * hashCalcThreshold)
+	ticker := time.NewTicker(time.Second * time.Duration(c.cfg.HashCalcThreshold))
 	defer ticker.Stop()
 	for {
 		select {
@@ -803,16 +821,13 @@ func (c *Client) hashMonitor(ctx context.Context) {
 			if submissions == 0 {
 				continue
 			}
-			average := float64(hashCalcThreshold / submissions)
+			average := float64(hashCalcThreshold) / float64(submissions)
 			diffInfo := c.cfg.DifficultyInfo
 			num := new(big.Rat).Mul(diffInfo.difficulty,
 				new(big.Rat).SetFloat64(c.cfg.NonceIterations))
 			denom := new(big.Rat).SetFloat64(average)
 			hash := new(big.Rat).Quo(num, denom)
-			c.hashRateMtx.Lock()
-			c.hashRate = new(big.Rat).Quo(new(big.Rat).Add(c.hashRate, hash),
-				new(big.Rat).SetInt64(2))
-			c.hashRateMtx.Unlock()
+			c.setHashRate(hash)
 			atomic.StoreInt64(&c.submissions, 0)
 		}
 	}

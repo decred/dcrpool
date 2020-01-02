@@ -12,6 +12,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -104,6 +105,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 			defer minerMtx.RUnlock()
 			return miner
 		},
+		SoloPool:       false,
 		DifficultyInfo: diffInfo,
 		EndpointWg:     new(sync.WaitGroup),
 		RemoveClient:   func(c *Client) {},
@@ -118,6 +120,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 		WithinLimit: func(ip string, clientType int) bool {
 			return true
 		},
+		HashCalcThreshold: 1,
 	}
 	client, err := NewClient(c, tcpAddr, cCfg)
 	if err != nil {
@@ -225,7 +228,8 @@ func testClient(t *testing.T, db *bolt.DB) {
 	}
 
 	// Send a subscribe request.
-	id = uint64(2)
+	setMiner(WhatsminerD1)
+	id++
 	r = SubscribeRequest(&id, "mcpu", "1.0.1", "mn001")
 	err = sE.Encode(r)
 	if err != nil {
@@ -233,6 +237,44 @@ func testClient(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure an subscribe response was sent back.
+	data = <-recvCh
+	_, mType, err = IdentifyMessage(data)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+
+	if mType != ResponseMessage {
+		t.Fatalf("expected a subscribe response message, got %v", mType)
+	}
+
+	setMiner(AntminerDR3)
+	id++
+	r.ID = &id
+	err = sE.Encode(r)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+
+	// Ensure an subscribe response was sent back.
+	data = <-recvCh
+	_, mType, err = IdentifyMessage(data)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+
+	if mType != ResponseMessage {
+		t.Fatalf("expected a subscribe response message, got %v", mType)
+	}
+
+	// Ensure an subscribe response was sent back.
+	setMiner(CPU)
+	id++
+	r.ID = &id
+	err = sE.Encode(r)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+
 	data = <-recvCh
 	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
@@ -245,11 +287,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 
 	resp, ok = msg.(*Response)
 	if !ok {
-		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+		t.Fatalf("expected subsriberesponse with id %d, got %d", *r.ID, resp.ID)
 	}
 
 	if resp.ID != *r.ID {
-		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+		t.Fatalf("expected suscribe response with id %d, got %d", *r.ID, resp.ID)
 	}
 
 	// Ensure the client is authorized and subscribed for work updates.
@@ -555,6 +597,15 @@ func testClient(t *testing.T, db *bolt.DB) {
 
 	if req.Method != Notify {
 		t.Fatalf("expected %s message method, got %s", Notify, req.Method)
+	}
+
+	// Fake a bunch of submissions and calculate the hash rate.
+	setMiner(CPU)
+	atomic.StoreInt64(&client.submissions, 50)
+	time.Sleep(time.Second * 2)
+	hash := client.fetchHashRate()
+	if hash == ZeroRat {
+		t.Fatal("expected a non-nil client hash rate")
 	}
 
 	// Empty the job bucket.

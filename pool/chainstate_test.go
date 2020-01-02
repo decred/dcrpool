@@ -14,9 +14,11 @@ import (
 
 func testChainState(t *testing.T, db *bolt.DB) {
 	ctx, cancel := context.WithCancel(context.Background())
+	var minedHeader wire.BlockHeader
+	var confHeader wire.BlockHeader
 	cCfg := &ChainStateConfig{
 		DB:       db,
-		SoloPool: true,
+		SoloPool: false,
 		PayDividends: func(uint32) error {
 			return nil
 		},
@@ -24,7 +26,18 @@ func testChainState(t *testing.T, db *bolt.DB) {
 			return nil
 		},
 		GetBlock: func(*chainhash.Hash) (*wire.MsgBlock, error) {
-			return nil, nil
+			// Return a fake block.
+			coinbase := wire.NewMsgTx()
+			coinbase.AddTxOut(wire.NewTxOut(0, []byte{}))
+			coinbase.AddTxOut(wire.NewTxOut(1, []byte{}))
+			coinbase.AddTxOut(wire.NewTxOut(100, []byte{}))
+			txs := make([]*wire.MsgTx, 1)
+			txs[0] = coinbase
+			block := &wire.MsgBlock{
+				Header:       minedHeader,
+				Transactions: txs,
+			}
+			return block, nil
 		},
 		Cancel: cancel,
 		HubWg:  new(sync.WaitGroup),
@@ -74,7 +87,6 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("unexpected encoding error %v", err)
 	}
-	var minedHeader wire.BlockHeader
 	err = minedHeader.FromBytes(headerB)
 	if err != nil {
 		t.Fatalf("unexpected deserialization error: %v", err)
@@ -96,7 +108,6 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("unexpected encoding error %v", err)
 	}
-	var confHeader wire.BlockHeader
 	err = confHeader.FromBytes(headerB)
 	if err != nil {
 		t.Fatalf("unexpected deserialization error: %v", err)
@@ -147,6 +158,28 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	if err == nil {
 		t.Fatalf("expected a value not found error")
 	}
+
+	// Ensure the last work height can be updated.
+	initialLastWorkHeight := cs.fetchLastWorkHeight()
+	updatedLastWorkHeight := uint32(100)
+	cs.setLastWorkHeight(updatedLastWorkHeight)
+	lastWorkHeight := cs.fetchLastWorkHeight()
+	if lastWorkHeight == initialLastWorkHeight {
+		t.Fatalf("expected last work height to be %d, got %d",
+			updatedLastWorkHeight, lastWorkHeight)
+	}
+
+	// Enwsure the current work can be updated.
+	initialCurrentWork := cs.fetchCurrentWork()
+	updatedCurrentWork := headerE
+	cs.setCurrentWork(updatedCurrentWork)
+	currentWork := cs.fetchCurrentWork()
+	if currentWork == initialCurrentWork {
+		t.Fatalf("expected current work height to be %s, got %s",
+			updatedCurrentWork, currentWork)
+	}
+
+	// Switch the
 
 	cancel()
 	cs.cfg.HubWg.Wait()
