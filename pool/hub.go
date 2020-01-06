@@ -339,6 +339,14 @@ func (h *Hub) Listen() error {
 	return nil
 }
 
+// CloseListeners terminates listeners created by endpoints of the hub. This
+// should only be used in the pool's shutdown process the hub is not running.
+func (h *Hub) CloseListeners() {
+	for _, e := range h.endpoints {
+		e.listener.Close()
+	}
+}
+
 // Connect establishes connections with the consensus daemon and the wallet.
 func (h *Hub) Connect() error {
 	// Create handlers for chain notifications being subscribed for.

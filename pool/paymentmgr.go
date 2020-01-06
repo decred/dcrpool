@@ -63,6 +63,7 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 		txFeeReserve: dcrutil.Amount(0),
 		paymentReqs:  make(map[string]struct{}),
 	}
+	rand.Seed(time.Now().UnixNano())
 	err := pm.cfg.DB.Update(func(tx *bolt.Tx) error {
 		err := pm.loadLastPaymentHeight(tx)
 		if err != nil {
@@ -324,15 +325,7 @@ func (pm *PaymentMgr) payPerShare(coinbase dcrutil.Amount, height uint32) error 
 	if err != nil {
 		return err
 	}
-	coinbaseMaturity := pm.cfg.ActiveNet.CoinbaseMaturity
-	var estMaturity uint32
-	if coinbaseMaturity == 0 {
-		// Allow immediately mature payments for testing purposes.
-		estMaturity = height
-	}
-	if coinbaseMaturity > 0 {
-		estMaturity = height + uint32(coinbaseMaturity)
-	}
+	estMaturity := height + uint32(pm.cfg.ActiveNet.CoinbaseMaturity)
 	payments, err := CalculatePayments(percentages, coinbase, pm.cfg.PoolFee, height, estMaturity)
 	if err != nil {
 		return err
@@ -413,7 +406,7 @@ func (pm *PaymentMgr) generatePayments(height uint32, coinbase dcrutil.Amount) e
 	}
 }
 
-// isPaymentRequested asserts if a payment request exists for the
+// isPaymentRequested checks if a payment request exists for the
 // provided account.
 func (pm *PaymentMgr) isPaymentRequested(accountID string) bool {
 	pm.paymentReqsMtx.RLock()
@@ -486,7 +479,6 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 		return nil
 	}
 
-	rand.Seed(time.Now().UnixNano())
 	addr := pm.cfg.PoolFeeAddrs[rand.Intn(len(pm.cfg.PoolFeeAddrs))]
 	pmtDetails, targetAmt, err := generatePaymentDetails(pm.cfg.DB, addr, eligiblePmts)
 	if err != nil {

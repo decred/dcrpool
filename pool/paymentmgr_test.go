@@ -21,7 +21,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("[NewAmount] unexpected error: %v", err)
 	}
 	activeNet := chaincfg.SimNetParams()
-	activeNet.CoinbaseMaturity = 0 // allow immediately mature coinbases, for testing.
 	pCfg := &PaymentMgrConfig{
 		DB:              db,
 		ActiveNet:       activeNet,
@@ -231,6 +230,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	shareCount := 10
 	coinbaseValue := 80
 	height := uint32(20)
+	paymentMaturity := height + uint32(activeNet.CoinbaseMaturity)
 
 	// Create shares for account x and y.
 	for i := 0; i < shareCount; i++ {
@@ -499,7 +499,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		}
 	}
 
-	// Generate readily available payments.
+	// Generate payments.
 	err = mgr.generatePayments(height, coinbase)
 	if err != nil {
 		t.Fatalf("unable to generate payments: %v", err)
@@ -511,7 +511,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[MulF64] unexpected error: %v", err)
 	}
-	bundles, err = mgr.fetchEligiblePaymentBundles(height)
+	bundles, err = mgr.fetchEligiblePaymentBundles(paymentMaturity)
 	if err != nil {
 		t.Fatalf("[fetchEligiblePaymentBundles] unexpected error: %v", err)
 	}
@@ -591,7 +591,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mgr.addPaymentRequest(yID)
 
 	// Ensure the requested payment for account Y is returned as eligible.
-	bundles, err = mgr.fetchEligiblePaymentBundles(height)
+	bundles, err = mgr.fetchEligiblePaymentBundles(paymentMaturity)
 	if err != nil {
 		t.Fatalf("[fetchEligiblePaymentBundles] unexpected error: %v", err)
 	}
@@ -664,7 +664,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure only bundles for account x and fees were created.
-	bundles, err = mgr.fetchEligiblePaymentBundles(height)
+	bundles, err = mgr.fetchEligiblePaymentBundles(paymentMaturity)
 	if err != nil {
 		t.Fatalf("[fetchEligiblePaymentBundles] unexpected error: %v", err)
 	}
@@ -708,7 +708,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure dividend payments work as expected.
 	lastPaymentHeight = mgr.fetchLastPaymentHeight()
-	err = mgr.payDividends(height)
+	err = mgr.payDividends(paymentMaturity)
 	if err != nil {
 		t.Fatalf("[payDividends] unexpected error: %v", err)
 	}

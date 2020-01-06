@@ -31,18 +31,18 @@ func testDifficulty(t *testing.T) {
 		powLimit := new(big.Rat).SetInt(net.PowLimit)
 		set, err := NewDifficultySet(net, powLimit, soloMaxGenTime)
 		if err != nil {
-			t.Fatalf("[NewPoolDiffiiculty] #%d, unexpected error %v", idx+1, err)
+			t.Fatalf("[NewDifficultySet] #%d, unexpected error %v", idx+1, err)
 		}
 
 		diffInfo, err := set.fetchMinerDifficulty(tc.miner)
 		if (err != nil) != tc.wantErr {
-			t.Fatalf("[FetchMinerDifficulty] #%d: error: %v, wantErr: %v",
+			t.Fatalf("[fetchMinerDifficulty] #%d: error: %v, wantErr: %v",
 				idx+1, err, tc.wantErr)
 		}
 
 		if !tc.wantErr {
 			if diffInfo == nil {
-				t.Fatalf("[FetchMinerDifficulty] #%d: expected valid "+
+				t.Fatalf("[fetchMinerDifficulty] #%d: expected valid "+
 					"difficulty info for %s", idx+1, tc.miner)
 			}
 		}

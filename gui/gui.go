@@ -31,7 +31,7 @@ import (
 type Config struct {
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
-	// PatymentMethod represents the pool payment method.
+	// PaymentMethod represents the pool payment method.
 	PaymentMethod string
 	// GUIDir represents the GUI directory.
 	GUIDir string
