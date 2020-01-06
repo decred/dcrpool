@@ -119,15 +119,14 @@ func newPool(cfg *config) (*miningPool, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = p.hub.Listen()
-	if err != nil {
-		return nil, err
-	}
 	err = p.hub.Connect()
 	if err != nil {
 		return nil, err
 	}
-
+	err = p.hub.Listen()
+	if err != nil {
+		return nil, err
+	}
 	gcfg := &gui.Config{
 		SoloPool:               cfg.SoloPool,
 		GUIDir:                 cfg.GUIDir,
@@ -148,6 +147,7 @@ func newPool(cfg *config) (*miningPool, error) {
 	}
 	p.gui, err = gui.NewGUI(gcfg, p.hub)
 	if err != nil {
+		p.hub.CloseListeners()
 		return nil, err
 	}
 	return p, nil

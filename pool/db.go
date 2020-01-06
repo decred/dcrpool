@@ -225,17 +225,18 @@ func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 
 	if switchMode {
 		// Backup the current database and wipe it.
-		log.Info("Pool mode changed, backing up database.")
 		now := time.Now().Format(time.RFC3339)
 		file := fmt.Sprintf("dcrpool@%v.kv", now)
 		err := backup(db, file)
 		if err != nil {
 			return nil, err
 		}
+		log.Infof("Pool mode changed, database backup %s created.", file)
 		err = purge(db)
 		if err != nil {
 			return nil, err
 		}
+		log.Infof("Database wiped.")
 	}
 	return db, nil
 }
