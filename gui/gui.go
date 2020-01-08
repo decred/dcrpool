@@ -65,6 +65,9 @@ type Config struct {
 	FetchLastWorkHeight func() uint32
 	// FetchLastPaymentheight returns the last payment height of the pool.
 	FetchLastPaymentHeight func() uint32
+	// AddPaymentRequest creates a payment request from the provided account
+	// if not already requested.
+	AddPaymentRequest func(addr string) error
 }
 
 // GUI represents the the mining pool user interface.
