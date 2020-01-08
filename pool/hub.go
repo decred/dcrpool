@@ -229,6 +229,11 @@ func (h *Hub) FetchLastPaymentHeight() uint32 {
 	return h.paymentMgr.fetchLastPaymentHeight()
 }
 
+// AddPaymentRequest creates a payment request for the provided address.
+func (h *Hub) AddPaymentRequest(addr string) error {
+	return h.paymentMgr.addPaymentRequest(addr)
+}
+
 // getBlock fetches the blocks associated with the provided block hash.
 func (h *Hub) getBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
 	block, err := h.rpcc.GetBlock(blockHash)

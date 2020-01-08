@@ -415,11 +415,25 @@ func (pm *PaymentMgr) isPaymentRequested(accountID string) bool {
 	return ok
 }
 
-// addPaymentRequest creates a payment request from the provided account.
-func (pm *PaymentMgr) addPaymentRequest(accountID string) {
+// addPaymentRequest creates a payment request from the provided account
+// if not already requested.
+func (pm *PaymentMgr) addPaymentRequest(addr string) error {
+	_, err := dcrutil.DecodeAddress(addr, pm.cfg.ActiveNet)
+	if err != nil {
+		return err
+	}
+	id, err := AccountID(addr)
+	if err != nil {
+		return err
+	}
+	if pm.isPaymentRequested(id) {
+		return fmt.Errorf("payment already requested for account"+
+			" with id %s", id)
+	}
 	pm.paymentReqsMtx.Lock()
-	pm.paymentReqs[accountID] = struct{}{}
+	pm.paymentReqs[id] = struct{}{}
 	pm.paymentReqsMtx.Unlock()
+	return nil
 }
 
 // fetchEligiblePaymentBundles fetches payment bundles greater than the

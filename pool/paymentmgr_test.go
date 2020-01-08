@@ -587,8 +587,11 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("[MulF64] unexpected error: %v", err)
 	}
 
-	// Create a payment request for account y.
-	mgr.addPaymentRequest(yID)
+	// Create a payment request for account Y.
+	err = mgr.addPaymentRequest(yAddr)
+	if err != nil {
+		t.Fatalf("[AddPaymentRequest] unexpected error: %v", err)
+	}
 
 	// Ensure the requested payment for account Y is returned as eligible.
 	bundles, err = mgr.fetchEligiblePaymentBundles(paymentMaturity)

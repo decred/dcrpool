@@ -144,6 +144,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		WithinLimit:            p.hub.WithinLimit,
 		FetchLastWorkHeight:    p.hub.FetchLastWorkHeight,
 		FetchLastPaymentHeight: p.hub.FetchLastPaymentHeight,
+		AddPaymentRequest:      p.hub.AddPaymentRequest,
 	}
 	p.gui, err = gui.NewGUI(gcfg, p.hub)
 	if err != nil {
