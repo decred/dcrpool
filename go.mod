@@ -5,6 +5,7 @@ go 1.12
 require (
 	github.com/coreos/bbolt v1.3.3
 	github.com/davecgh/go-spew v1.1.1
+	github.com/decred/base58 v1.0.2 // indirect
 	github.com/decred/dcrd/blockchain/standalone v1.1.0
 	github.com/decred/dcrd/certgen v1.1.0
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.2
