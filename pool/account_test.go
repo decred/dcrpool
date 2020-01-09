@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	bolt "github.com/coreos/bbolt"
+	"github.com/decred/dcrd/chaincfg/v2"
 )
 
-func persistAccount(db *bolt.DB, address string) (*Account, error) {
-	acc, err := NewAccount(address)
+func persistAccount(db *bolt.DB, address string, activeNet *chaincfg.Params) (*Account, error) {
+	acc, err := NewAccount(address, activeNet)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create account: %v", err)
 	}
@@ -20,12 +21,14 @@ func persistAccount(db *bolt.DB, address string) (*Account, error) {
 }
 
 func testAccount(t *testing.T, db *bolt.DB) {
-	accountA, err := persistAccount(db, "DsmQrsCimQ8QBXndN5xLYTRZpWdZpGJNpsh")
+	accountA, err := persistAccount(db, "Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru",
+		chaincfg.SimNetParams())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	accountB, err := persistAccount(db, "DsornJn4i4cbgQJF3sCQjNUGDi7HZrYcVcc")
+	accountB, err := persistAccount(db, "SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy",
+		chaincfg.SimNetParams())
 	if err != nil {
 		t.Fatal(err)
 	}

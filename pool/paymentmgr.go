@@ -418,11 +418,7 @@ func (pm *PaymentMgr) isPaymentRequested(accountID string) bool {
 // addPaymentRequest creates a payment request from the provided account
 // if not already requested.
 func (pm *PaymentMgr) addPaymentRequest(addr string) error {
-	_, err := dcrutil.DecodeAddress(addr, pm.cfg.ActiveNet)
-	if err != nil {
-		return err
-	}
-	id, err := AccountID(addr)
+	id, err := AccountID(addr, pm.cfg.ActiveNet)
 	if err != nil {
 		return err
 	}

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrpool/pool"
 )
 
@@ -97,15 +96,8 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	// with the users input.
 	data.Address = address
 
-	// Ensure the provided address is valid.
-	_, err = dcrutil.DecodeAddress(address, ui.cfg.ActiveNet)
-	if err != nil {
-		data.Error = fmt.Sprintf("Failed to decode address")
-		ui.renderTemplate(w, r, "index", data)
-		return
-	}
-
-	accountID, err := pool.AccountID(address)
+	// Generate the account id of the provided address.
+	accountID, err := pool.AccountID(address, ui.cfg.ActiveNet)
 	if err != nil {
 		data.Error = fmt.Sprintf("Unable to generate account ID for address %s", address)
 		ui.renderTemplate(w, r, "index", data)

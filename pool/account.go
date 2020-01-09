@@ -11,7 +11,9 @@ import (
 	"time"
 
 	bolt "github.com/coreos/bbolt"
+	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/crypto/blake256"
+	"github.com/decred/dcrd/dcrutil/v2"
 )
 
 // Account represents a mining pool account.
@@ -22,9 +24,14 @@ type Account struct {
 }
 
 // AccountID generates a unique id using provided address of the account.
-func AccountID(address string) (string, error) {
+func AccountID(address string, activeNet *chaincfg.Params) (string, error) {
+	_, err := dcrutil.DecodeAddress(address, activeNet)
+	if err != nil {
+		return "", err
+	}
+
 	hasher := blake256.New()
-	_, err := hasher.Write([]byte(address))
+	_, err = hasher.Write([]byte(address))
 	if err != nil {
 		return "", err
 	}
@@ -34,10 +41,10 @@ func AccountID(address string) (string, error) {
 }
 
 // NewAccount creates a new account.
-func NewAccount(address string) (*Account, error) {
+func NewAccount(address string, activeNet *chaincfg.Params) (*Account, error) {
 	// Since an account's id is derived from the address an account
 	// can be shared by multiple pool clients.
-	id, err := AccountID(address)
+	id, err := AccountID(address, activeNet)
 	if err != nil {
 		return nil, err
 	}

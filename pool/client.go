@@ -25,7 +25,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/blockchain/standalone"
 	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/wire"
 )
 
@@ -211,17 +210,8 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 		name := strings.TrimSpace(parts[1])
 		address := strings.TrimSpace(parts[0])
 
-		// Ensure the provided address is valid and associated with the active
-		// network.
-		_, err := dcrutil.DecodeAddress(address, c.cfg.ActiveNet)
-		if err != nil {
-			log.Errorf("unable to decode address: %v", err)
-			err := NewStratumError(Unknown, nil)
-			resp := AuthorizeResponse(*req.ID, false, err)
-			c.ch <- resp
-			return
-		}
-		id, err := AccountID(address)
+		// Fetch the account of the address provided.
+		id, err := AccountID(address, c.cfg.ActiveNet)
 		if err != nil {
 			log.Errorf("unable to generate account id: %v", err)
 			err := NewStratumError(Unknown, nil)
@@ -241,7 +231,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 		}
 
 		// Create the account if it does not already exist.
-		account, err := NewAccount(address)
+		account, err := NewAccount(address, c.cfg.ActiveNet)
 		if err != nil {
 			log.Errorf("unable to create account: %v", err)
 			err := NewStratumError(Unknown, nil)
