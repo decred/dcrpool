@@ -72,7 +72,7 @@ type Config struct {
 	// FetchMinedWork returns the last ten mined blocks by the pool.
 	FetchMinedWork func() ([]*pool.AcceptedWork, error)
 	// FetchWorkQuotas returns the reward distribution to pool accounts
-	// based on work contributed per the peyment scheme used by the pool.
+	// based on work contributed per the payment scheme used by the pool.
 	FetchWorkQuotas func() ([]*pool.Quota, error)
 	// FetchPoolHashRate returns the hash rate of the pool.
 	FetchPoolHashRate func() (*big.Rat, map[string][]*pool.ClientInfo)

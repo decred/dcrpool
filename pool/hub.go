@@ -595,7 +595,7 @@ type Quota struct {
 }
 
 // FetchWorkQuotas returns the reward distribution to pool accounts
-// based on work contributed per the peyment scheme used by the pool.
+// based on work contributed per the payment scheme used by the pool.
 func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 	if h.cfg.SoloPool {
 		return nil, nil
