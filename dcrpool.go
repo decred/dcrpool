@@ -127,6 +127,12 @@ func newPool(cfg *config) (*miningPool, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	csrfSecret, err := p.hub.CSRFSecret()
+	if err != nil {
+		return nil, err
+	}
+
 	gcfg := &gui.Config{
 		SoloPool:               cfg.SoloPool,
 		GUIDir:                 cfg.GUIDir,
@@ -145,6 +151,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		FetchLastWorkHeight:    p.hub.FetchLastWorkHeight,
 		FetchLastPaymentHeight: p.hub.FetchLastPaymentHeight,
 		AddPaymentRequest:      p.hub.AddPaymentRequest,
+		CSRFSecret:             csrfSecret,
 	}
 	p.gui, err = gui.NewGUI(gcfg, p.hub)
 	if err != nil {

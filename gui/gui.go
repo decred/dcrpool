@@ -74,6 +74,7 @@ type Config struct {
 type GUI struct {
 	cfg         *Config
 	hub         *pool.Hub
+	csrfSecret  []byte
 	limiter     *pool.RateLimiter
 	templates   *template.Template
 	cookieStore *sessions.CookieStore
@@ -151,14 +152,9 @@ func NewGUI(cfg *Config, hub *pool.Hub) (*GUI, error) {
 		ui.cfg.BlockExplorerURL = "https://dcrdata.decred.org"
 	}
 
-	var err error
-	ui.cfg.CSRFSecret, err = ui.hub.CSRFSecret()
-	if err != nil {
-		return nil, err
-	}
-
 	ui.cookieStore = sessions.NewCookieStore(cfg.CSRFSecret)
-	err = ui.loadTemplates()
+
+	err := ui.loadTemplates()
 	if err != nil {
 		return nil, err
 	}
