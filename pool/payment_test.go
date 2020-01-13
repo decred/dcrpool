@@ -158,8 +158,6 @@ func testAccountPayments(t *testing.T, db *bolt.DB) {
 		}
 	}
 
-	time.Sleep(time.Millisecond * 10)
-
 	// Create archived payments for account X.
 	abx := makePaymentBundle(xID, count, amt)
 	abx.UpdateAsPaid(db, 10, "")

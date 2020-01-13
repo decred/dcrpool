@@ -46,7 +46,7 @@ type EndpointConfig struct {
 	FetchHostConnections func(string) uint32
 }
 
-// connection wraps a client connection a done channel.
+// connection wraps a client connection and a done channel.
 type connection struct {
 	Conn net.Conn
 	Done chan bool
