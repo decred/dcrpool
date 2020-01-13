@@ -167,12 +167,18 @@ func testHub(t *testing.T, db *bolt.DB) {
 	}
 
 	// Send the cpu endpoint a client-side connection.
-	connA, _, err := makeConn(ln, serverCh)
+	connA, srvA, err := makeConn(ln, serverCh)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	cpuEndpoint.connCh <- connA
-	time.Sleep(time.Millisecond * 100)
+	defer connA.Close()
+	defer srvA.Close()
+	msgA := &connection{
+		Conn: connA,
+		Done: make(chan bool),
+	}
+	cpuEndpoint.connCh <- msgA
+	<-msgA.Done
 	if !hub.HasClients() {
 		t.Fatal("expected hub to have clients")
 	}

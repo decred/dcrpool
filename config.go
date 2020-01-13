@@ -97,7 +97,7 @@ type config struct {
 	MaxTxFeeReserve       float64  `long:"maxtxfeereserve" ini-name:"maxtxfeereserve" description:"The maximum amount reserved for transaction fees, in DCR."`
 	MaxGenTime            uint64   `long:"maxgentime" ini-name:"maxgentime" description:"The share creation target time for the pool in seconds. This currently should be below 30 seconds to increase the likelihood a work submission for clients between new work distributions by the pool."`
 	PaymentMethod         string   `long:"paymentmethod" ini-name:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
-	LastNPeriod           uint32   `long:"lastnperiod" ini-name:"lastnperiod" description:"The time period of interest, when using PPLNS payment scheme."`
+	LastNPeriod           uint32   `long:"lastnperiod" ini-name:"lastnperiod" description:"The time period of interest, in seconds, when using PPLNS payment scheme."`
 	WalletPass            string   `long:"walletpass" ini-name:"walletpass" description:"The wallet passphrase."`
 	MinPayment            float64  `long:"minpayment" ini-name:"minpayment" description:"The minimum payment to process for an account."`
 	SoloPool              bool     `long:"solopool" ini-name:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
