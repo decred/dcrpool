@@ -23,8 +23,8 @@ type PaymentMgrConfig struct {
 	ActiveNet *chaincfg.Params
 	// PoolFee represents the fee charged to participating accounts of the pool.
 	PoolFee float64
-	// LastNPeriod represents the period to source shares from with the
-	// PPLNS payment scheme.
+	// LastNPeriod represents the period, in seconds, to source shares from
+	// with the PPLNS payment scheme.
 	LastNPeriod uint32
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool

@@ -101,6 +101,7 @@ func TestPool(t *testing.T) {
 	testCalculatePoolTarget(t)
 	testGeneratePaymentDetails(t, db)
 	testArchivedPaymentsFiltering(t, db)
+	testAccountPayments(t, db)
 	testDifficulty(t)
 	testEndpoint(t, db)
 	testClient(t, db)

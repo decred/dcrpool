@@ -144,3 +144,63 @@ func testArchivedPaymentsFiltering(t *testing.T, db *bolt.DB) {
 		t.Fatalf("emptyBucket error: %v", err)
 	}
 }
+
+func testAccountPayments(t *testing.T, db *bolt.DB) {
+	count := uint32(2)
+	amt, _ := dcrutil.NewAmount(5)
+
+	// Create pending payments for account X.
+	pbx := makePaymentBundle(xID, count, amt)
+	for _, pmt := range pbx.Payments {
+		err := pmt.Create(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	time.Sleep(time.Millisecond * 10)
+
+	// Create archived payments for account X.
+	abx := makePaymentBundle(xID, count, amt)
+	abx.UpdateAsPaid(db, 10, "")
+	err := abx.ArchivePayments(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pmts, err := fetchPaymentsForAccount(db, xID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure payments for account returns both pending and archived
+	// payments for an account.
+	var pending, paid int
+	for _, p := range pmts {
+		if p.PaidOnHeight == 0 {
+			pending++
+		} else {
+			paid++
+		}
+	}
+
+	if pending != 2 {
+		t.Fatalf("expected pending payments to be %v, got %v", 2, pending)
+	}
+
+	if paid != 2 {
+		t.Fatalf("expected archived payments to be %v, got %v", 2, paid)
+	}
+
+	// Empty the payment bucket.
+	err = emptyBucket(db, paymentBkt)
+	if err != nil {
+		t.Fatalf("emptyBucket error: %v", err)
+	}
+
+	// Empty the payment archive bucket.
+	err = emptyBucket(db, paymentArchiveBkt)
+	if err != nil {
+		t.Fatalf("emptyBucket error: %v", err)
+	}
+}

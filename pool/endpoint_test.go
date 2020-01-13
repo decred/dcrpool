@@ -115,13 +115,18 @@ func testEndpoint(t *testing.T, db *bolt.DB) {
 	}()
 
 	// Send the endpoint a client-side connection.
-	connA, _, err := makeConn(ln, serverCh)
+	connA, srvA, err := makeConn(ln, serverCh)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	defer connA.Close()
-	endpoint.connCh <- connA
-	time.Sleep(time.Millisecond * 100)
+	defer srvA.Close()
+	msgA := &connection{
+		Conn: connA,
+		Done: make(chan bool),
+	}
+	endpoint.connCh <- msgA
+	<-msgA.Done
 	addr := connA.RemoteAddr()
 	tcpAddr, err := net.ResolveTCPAddr(addr.Network(), addr.String())
 	if err != nil {
@@ -137,18 +142,30 @@ func testEndpoint(t *testing.T, db *bolt.DB) {
 	}
 
 	// Add two more clients.
-	connB, _, err := makeConn(ln, serverCh)
+	connB, srvB, err := makeConn(ln, serverCh)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	endpoint.connCh <- connB
-	time.Sleep(time.Millisecond * 100)
-	connC, _, err := makeConn(ln, serverCh)
+	defer connB.Close()
+	defer srvB.Close()
+	msgB := &connection{
+		Conn: connB,
+		Done: make(chan bool),
+	}
+	endpoint.connCh <- msgB
+	<-msgB.Done
+	connC, srvC, err := makeConn(ln, serverCh)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	endpoint.connCh <- connC
-	time.Sleep(time.Millisecond * 100)
+	defer connC.Close()
+	defer srvC.Close()
+	msgC := &connection{
+		Conn: connC,
+		Done: make(chan bool),
+	}
+	endpoint.connCh <- msgC
+	<-msgC.Done
 
 	// Ensure the connected clients to the host got incremented to 3.
 	hostConnections = endpoint.cfg.FetchHostConnections(host)
@@ -158,12 +175,18 @@ func testEndpoint(t *testing.T, db *bolt.DB) {
 	}
 
 	// Add another client.
-	connD, _, err := makeConn(ln, serverCh)
+	connD, srvD, err := makeConn(ln, serverCh)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	endpoint.connCh <- connD
-	time.Sleep(time.Millisecond * 100)
+	defer connD.Close()
+	defer srvD.Close()
+	msgD := &connection{
+		Conn: connD,
+		Done: make(chan bool),
+	}
+	endpoint.connCh <- msgD
+	<-msgD.Done
 
 	// Ensure the connected clients count to the host stayed at 3 because
 	// the recent connection got rejected due to MaxConnectionCountPerHost

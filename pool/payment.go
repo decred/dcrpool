@@ -308,7 +308,7 @@ func generatePaymentDetails(db *bolt.DB, poolFeeAddr dcrutil.Address,
 // fetchArchivedPaymentsForAccount fetches the N most recent archived payments
 // for the provided account.
 // List is ordered, most recent comes first.
-func fetchArchivedPaymentsForAccount(db *bolt.DB, account string, n uint) ([]*Payment, error) {
+func fetchArchivedPaymentsForAccount(db *bolt.DB, id string, n uint) ([]*Payment, error) {
 	pmts := make([]*Payment, 0)
 	if n == 0 {
 		return pmts, nil
@@ -321,7 +321,7 @@ func fetchArchivedPaymentsForAccount(db *bolt.DB, account string, n uint) ([]*Pa
 		c := abkt.Cursor()
 		for k, v := c.Last(); k != nil; k, v = c.Prev() {
 			accountE := k[16:]
-			if bytes.Equal(accountE, []byte(account)) {
+			if bytes.Equal(accountE, []byte(id)) {
 				var payment Payment
 				err := json.Unmarshal(v, &payment)
 				if err != nil {
@@ -337,6 +337,64 @@ func fetchArchivedPaymentsForAccount(db *bolt.DB, account string, n uint) ([]*Pa
 	})
 	if err != nil {
 		return nil, err
+	}
+	return pmts, nil
+}
+
+// fetchPendingPaymentsForAccount fetches the N most recent pending payments for
+// the provided account.
+// List is ordered, most recent comes first.
+func fetchPendingPaymentsForAccount(db *bolt.DB, id string, n uint) ([]*Payment, error) {
+	pmts := make([]*Payment, 0)
+	if n == 0 {
+		return pmts, nil
+	}
+	err := db.View(func(tx *bolt.Tx) error {
+		abkt, err := fetchPaymentBucket(tx)
+		if err != nil {
+			return err
+		}
+		c := abkt.Cursor()
+		for k, v := c.Last(); k != nil; k, v = c.Prev() {
+			accountE := k[16:]
+			if bytes.Equal(accountE, []byte(id)) {
+				var payment Payment
+				err := json.Unmarshal(v, &payment)
+				if err != nil {
+					return err
+				}
+				if payment.PaidOnHeight == 0 {
+					pmts = append(pmts, &payment)
+					if len(pmts) == int(n) {
+						return nil
+					}
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return pmts, nil
+}
+
+// fetchPaymentsForAccount fetches the N most recent payments (archived or pending)
+// for the provided account.
+// List is ordered, pending payments first, archived payments after.
+func fetchPaymentsForAccount(db *bolt.DB, id string, n uint) ([]*Payment, error) {
+	pmts, err := fetchPendingPaymentsForAccount(db, id, n)
+	if err != nil {
+		return nil, err
+	}
+	size := len(pmts)
+	if uint(size) < n {
+		remainder := n - uint(size)
+		apmts, err := fetchArchivedPaymentsForAccount(db, id, remainder)
+		if err != nil {
+			return nil, err
+		}
+		pmts = append(pmts, apmts...)
 	}
 	return pmts, nil
 }

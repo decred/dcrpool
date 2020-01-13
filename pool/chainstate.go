@@ -13,7 +13,7 @@ import (
 
 var (
 	// bufferSize represents the block notification buffer size.
-	bufferSize = 10
+	bufferSize = 128
 )
 
 type ChainStateConfig struct {
@@ -34,7 +34,7 @@ type ChainStateConfig struct {
 	HubWg *sync.WaitGroup
 }
 
-// blockNotification wraps a block header notification with a done channel.
+// blockNotification wraps a block header notification and a done channel.
 type blockNotification struct {
 	Header []byte
 	Done   chan bool

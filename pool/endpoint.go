@@ -46,12 +46,18 @@ type EndpointConfig struct {
 	FetchHostConnections func(string) uint32
 }
 
+// connection wraps a client connection a done channel.
+type connection struct {
+	Conn net.Conn
+	Done chan bool
+}
+
 // Endpoint represents a stratum endpoint.
 type Endpoint struct {
 	miner      string
 	port       uint32
 	diffInfo   *DifficultyInfo
-	connCh     chan net.Conn
+	connCh     chan *connection
 	listener   net.Listener
 	cfg        *EndpointConfig
 	clients    map[string]*Client
@@ -67,7 +73,7 @@ func NewEndpoint(eCfg *EndpointConfig, diffInfo *DifficultyInfo, port uint32, mi
 		diffInfo: diffInfo,
 		cfg:      eCfg,
 		clients:  make(map[string]*Client),
-		connCh:   make(chan net.Conn),
+		connCh:   make(chan *connection, bufferSize),
 	}
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "0.0.0.0", endpoint.port))
 	if err != nil {
@@ -104,7 +110,10 @@ func (e *Endpoint) listen() {
 				"%s endpoint: %v", e.miner, err)
 			return
 		}
-		e.connCh <- conn
+		e.connCh <- &connection{
+			Conn: conn,
+			Done: make(chan bool),
+		}
 	}
 }
 
@@ -124,8 +133,8 @@ func (e *Endpoint) connect(ctx context.Context) {
 			e.cfg.HubWg.Done()
 			return
 
-		case conn := <-e.connCh:
-			addr := conn.RemoteAddr()
+		case msg := <-e.connCh:
+			addr := msg.Conn.RemoteAddr()
 			tcpAddr, err := net.ResolveTCPAddr(addr.Network(), addr.String())
 			if err != nil {
 				log.Errorf("unable to parse tcp addresss: %v", err)
@@ -136,7 +145,8 @@ func (e *Endpoint) connect(ctx context.Context) {
 			if connCount >= e.cfg.MaxConnectionsPerHost {
 				log.Errorf("exceeded maximum connections allowed per"+
 					" host %d for %s", e.cfg.MaxConnectionsPerHost, host)
-				conn.Close()
+				msg.Conn.Close()
+				close(msg.Done)
 				continue
 			}
 			cCfg := &ClientConfig{
@@ -155,9 +165,11 @@ func (e *Endpoint) connect(ctx context.Context) {
 				WithinLimit:       e.cfg.WithinLimit,
 				HashCalcThreshold: hashCalcThreshold,
 			}
-			client, err := NewClient(conn, tcpAddr, cCfg)
+			client, err := NewClient(msg.Conn, tcpAddr, cCfg)
 			if err != nil {
 				log.Errorf("unable to create client: %v", err)
+				msg.Conn.Close()
+				close(msg.Done)
 				continue
 			}
 			e.clientsMtx.Lock()
@@ -165,6 +177,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 			e.clientsMtx.Unlock()
 			e.cfg.AddConnection(host)
 			go client.run(client.ctx)
+			close(msg.Done)
 		}
 	}
 }

@@ -632,7 +632,7 @@ func (h *Hub) FetchMinedWorkByAccount(id string) ([]*AcceptedWork, error) {
 // FetchPaymentsForAccount returns a list or payments made to the provided address.
 // List is ordered, most recent comes first.
 func (h *Hub) FetchPaymentsForAccount(id string) ([]*Payment, error) {
-	payments, err := fetchArchivedPaymentsForAccount(h.db, id, 10)
+	payments, err := fetchPaymentsForAccount(h.db, id, 10)
 	return payments, err
 }
 
