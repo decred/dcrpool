@@ -6,3 +6,4 @@ dcrpool
 logs
 *.log
 *.conf
+/pool/testdb

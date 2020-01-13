@@ -595,7 +595,7 @@ type Quota struct {
 }
 
 // FetchWorkQuotas returns the reward distribution to pool accounts
-// based on work contributed per the peyment scheme used by the pool.
+// based on work contributed per the payment scheme used by the pool.
 func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 	if h.cfg.SoloPool {
 		return nil, nil
@@ -636,7 +636,7 @@ func (h *Hub) FetchPaymentsForAccount(id string) ([]*Payment, error) {
 	return payments, err
 }
 
-// AccountExists asserts if the provided account id references a pool account.
+// AccountExists checks if the provided account id references a pool account.
 func (h *Hub) AccountExists(accountID string) bool {
 	_, err := FetchAccount(h.db, []byte(accountID))
 	if err != nil {

@@ -127,26 +127,42 @@ func newPool(cfg *config) (*miningPool, error) {
 	if err != nil {
 		return nil, err
 	}
-	gcfg := &gui.Config{
-		SoloPool:               cfg.SoloPool,
-		GUIDir:                 cfg.GUIDir,
-		BackupPass:             cfg.BackupPass,
-		GUIPort:                cfg.GUIPort,
-		UseLEHTTPS:             cfg.UseLEHTTPS,
-		Domain:                 cfg.Domain,
-		TLSCertFile:            cfg.TLSCert,
-		TLSKeyFile:             cfg.TLSKey,
-		ActiveNet:              cfg.net,
-		PaymentMethod:          cfg.PaymentMethod,
-		Designation:            cfg.Designation,
-		PoolFee:                cfg.PoolFee,
-		MinerPorts:             minerPorts,
-		WithinLimit:            p.hub.WithinLimit,
-		FetchLastWorkHeight:    p.hub.FetchLastWorkHeight,
-		FetchLastPaymentHeight: p.hub.FetchLastPaymentHeight,
-		AddPaymentRequest:      p.hub.AddPaymentRequest,
+
+	csrfSecret, err := p.hub.CSRFSecret()
+	if err != nil {
+		return nil, err
 	}
-	p.gui, err = gui.NewGUI(gcfg, p.hub)
+
+	gcfg := &gui.Config{
+		SoloPool:                cfg.SoloPool,
+		GUIDir:                  cfg.GUIDir,
+		BackupPass:              cfg.BackupPass,
+		GUIPort:                 cfg.GUIPort,
+		UseLEHTTPS:              cfg.UseLEHTTPS,
+		Domain:                  cfg.Domain,
+		TLSCertFile:             cfg.TLSCert,
+		TLSKeyFile:              cfg.TLSKey,
+		ActiveNet:               cfg.net,
+		PaymentMethod:           cfg.PaymentMethod,
+		Designation:             cfg.Designation,
+		PoolFee:                 cfg.PoolFee,
+		CSRFSecret:              csrfSecret,
+		MinerPorts:              minerPorts,
+		WithinLimit:             p.hub.WithinLimit,
+		FetchLastWorkHeight:     p.hub.FetchLastWorkHeight,
+		FetchLastPaymentHeight:  p.hub.FetchLastPaymentHeight,
+		AddPaymentRequest:       p.hub.AddPaymentRequest,
+		FetchMinedWork:          p.hub.FetchMinedWork,
+		FetchWorkQuotas:         p.hub.FetchWorkQuotas,
+		FetchPoolHashRate:       p.hub.FetchPoolHashRate,
+		BackupDB:                p.hub.BackupDB,
+		FetchClientInfo:         p.hub.FetchClientInfo,
+		AccountExists:           p.hub.AccountExists,
+		FetchMinedWorkByAccount: p.hub.FetchMinedWorkByAccount,
+		FetchPaymentsForAccount: p.hub.FetchPaymentsForAccount,
+		FetchAccountClientInfo:  p.hub.FetchAccountClientInfo,
+	}
+	p.gui, err = gui.NewGUI(gcfg)
 	if err != nil {
 		p.hub.CloseListeners()
 		return nil, err

@@ -46,7 +46,7 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pageData.Connections = ui.hub.FetchClientInfo()
+	pageData.Connections = ui.cfg.FetchClientInfo()
 	ui.renderTemplate(w, r, "admin", pageData)
 }
 
@@ -126,7 +126,7 @@ func (ui *GUI) PostBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = ui.hub.BackupDB(w)
+	err = ui.cfg.BackupDB(w)
 
 	if err != nil {
 		log.Errorf("Error backing up database: %v", err)
