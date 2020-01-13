@@ -104,13 +104,13 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !ui.hub.AccountExists(accountID) {
+	if !ui.cfg.AccountExists(accountID) {
 		data.Error = fmt.Sprintf("Nothing found for address %s", address)
 		ui.renderTemplate(w, r, "index", data)
 		return
 	}
 
-	work, err := ui.hub.FetchMinedWorkByAccount(accountID)
+	work, err := ui.cfg.FetchMinedWorkByAccount(accountID)
 	if err != nil {
 		log.Error(err)
 		http.Error(w, "FetchMinedWorkByAddress error: "+err.Error(),
@@ -118,7 +118,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payments, err := ui.hub.FetchPaymentsForAccount(accountID)
+	payments, err := ui.cfg.FetchPaymentsForAccount(accountID)
 	if err != nil {
 		log.Error(err)
 		http.Error(w, "FetchPaymentsForAddress error: "+err.Error(),
@@ -135,7 +135,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	data.AccountStats = &AccountStats{
 		MinedWork: work,
 		Payments:  payments,
-		Clients:   ui.hub.FetchAccountClientInfo(accountID),
+		Clients:   ui.cfg.FetchAccountClientInfo(accountID),
 		AccountID: accountID,
 	}
 

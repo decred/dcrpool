@@ -636,7 +636,7 @@ func (h *Hub) FetchPaymentsForAccount(id string) ([]*Payment, error) {
 	return payments, err
 }
 
-// AccountExists asserts if the provided account id references a pool account.
+// AccountExists checks if the provided account id references a pool account.
 func (h *Hub) AccountExists(accountID string) bool {
 	_, err := FetchAccount(h.db, []byte(accountID))
 	if err != nil {
