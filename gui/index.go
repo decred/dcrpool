@@ -139,5 +139,5 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		AccountID: accountID,
 	}
 
-	ui.renderTemplate(w, r, "index", data)
+	ui.renderTemplate(w, r, "account", data)
 }

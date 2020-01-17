@@ -68,7 +68,10 @@ function updateMinedBlocks(minedBlocks) {
             a.innerHTML = minedBlocks[i].blockheight;
             newRow.insertCell(0).appendChild(a);
             newRow.insertCell(1).innerHTML = minedBlocks[i].miner;
-            newRow.insertCell(2).innerHTML = minedBlocks[i].minedby;
+            var span = document.createElement('span');
+            span.innerHTML = minedBlocks[i].minedby;
+            span.className = "dcr-label";
+            newRow.insertCell(2).appendChild(span); 
             flashElement(newRow);
             changeMade = true;
         }
@@ -99,7 +102,7 @@ function updateWorkQuotas(quotas) {
                 // Row already exists for this account ID
                 exists = true;
                 // Update percentage for this account if required
-                var percent = rows[j].cells[1];
+                var percent = rows[j].cells[0];
                 if (quotas[i].percent != percent.innerHTML) {
                     percent.innerHTML = quotas[i].percent;
                     flashElement(percent);
@@ -113,8 +116,11 @@ function updateWorkQuotas(quotas) {
             // Add a new row for this account
             var newRow = quotasTableBody.insertRow(0);
             newRow.setAttribute("data-row-id", quotas[i].accountid);
-            newRow.insertCell(0).innerHTML = quotas[i].accountid;
-            newRow.insertCell(1).innerHTML = quotas[i].percent;
+            newRow.insertCell(0).innerHTML = quotas[i].percent;
+            var span = document.createElement('span');
+            span.innerHTML = quotas[i].accountid;
+            span.className = "dcr-label";
+            newRow.insertCell(1).append(span);
             flashElement(newRow);
             changeMade = true;
         }

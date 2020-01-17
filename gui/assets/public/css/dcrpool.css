@@ -1336,7 +1336,6 @@ pre {
     padding: 0.75rem;
     vertical-align: top; }
   .table thead th {
-    position: sticky;
     top: 0;
     border: none; }
   .table .table {
@@ -7347,7 +7346,7 @@ h2 {
   line-height: 1.26;
   letter-spacing: normal;
   color: #091440;
-  font-weight: normal; }
+  font-weight: bold; }
   @media screen and (min-width: 576px) {
     h2 {
       font-size: calc(17px + 2 * (100vw - 576px) / 864); } }
@@ -7371,7 +7370,7 @@ h2 {
   color: #fd704a; }
 
 .site-header {
-  background-color: #152042; }
+  background-color: #F9FAFA; }
   .site-header a, .site-header p {
     font-size: 15px;
     line-height: 1.13;
@@ -7393,12 +7392,12 @@ h2 {
     visibility: hidden; }
   .site-header .logo--logo {
     padding-right: 5px;
-    border-right: 0.3px solid #E9F8FE; }
+    border-right: 0.3px solid #091440; }
   .site-header .logo--text {
     padding: 0 5px;
     font-size: 13px;
     line-height: 1;
-    color: #E9F8FE; }
+    color: #091440; }
   .site-header .wrapper {
     position: absolute;
     top: 0;
@@ -7581,6 +7580,7 @@ input[type="submit"]:disabled {
       background-color: #1A59F7; }
 
 .main-carousel {
+  font-size: 16px;
   width: 100%;
   margin-bottom: 20px;
   /* position dots in carousel */
@@ -7595,23 +7595,22 @@ input[type="submit"]:disabled {
       .main-carousel__image-container {
         min-height: 320px; } }
     .main-carousel__image-container img {
-      width: 100%;
-      height: 100%;
       -o-object-fit: cover;
          object-fit: cover; }
   .main-carousel .carousel-cell {
     width: 100%;
-    height: 350px;
+    height: 275px;
     margin-right: 20px; }
     @media (max-width: 991.98px) {
       .main-carousel .carousel-cell {
-        height: 491px;
+        height: 510px;
         background-color: #fff;
         padding-left: 15px;
         padding-right: 15px; } }
     @media (max-width: 767.98px) {
       .main-carousel .carousel-cell {
-        height: 560px; } }
+        height: 520px;
+      font-size: 15px; } }
   .main-carousel .flickity-page-dots {
     left: 22%;
     bottom: 15px;
@@ -8088,16 +8087,16 @@ input[type="submit"]:disabled {
       background-color: #fff;
       margin-bottom: 20px; }
   .block__content {
-    background-color: #223767;
+    background-color: #ffffff;
     padding: 20px 30px; }
     .block__content p,
     .block__content li,
     .block__content td,
     .block__content th {
-      color: #99C1E3;
+      color: #3D5873;
       line-height: 1.4; }
     .block__content th {
-      font-weight: bold;
+      font-weight: normal;
       padding-right: 15px;
       text-align: right;
     }
@@ -8106,10 +8105,11 @@ input[type="submit"]:disabled {
       vertical-align: top;
       word-wrap: break-word;
       white-space: normal; }
-    .block__content table td .config {
+    .config {
       font-family: "dcrpool-code";
       background: none;
-      color: #E9F8FE;
+      color: #091440;
+      font-size: 14px;
       word-break: break-word; }
     .block__content .btn-outline-primary {
       margin-right: 20px; }
@@ -8442,15 +8442,19 @@ input[type="submit"]:disabled {
 .table td {
   padding: 0.45rem;
   border-top: none;
-  color: #E9F8FE;
+  font-size: 16px;
   text-align: center; }
   
-.table td a{
-  color: #2DD8A3;
+.table th {
+  color: #596D81;
+}
+.table td {
+  color: #091440;
 }
 
-.table th {
-  background-color: #1B2B54 }
+.table td a{
+  color: #2970FF;
+}
 
 .table .thead-light th {
   background-color: #edeff1;
@@ -8459,7 +8463,7 @@ input[type="submit"]:disabled {
 
 
 .table td {
-  border-top: 1px solid rgba(0, 0, 0, 0.1); }
+  border-top: 1px solid #F3F5F6; }
 
 .table-scroll-y .table {
   margin-bottom: 0; }
@@ -8548,8 +8552,7 @@ body {
   font-weight: normal;
   font-style: normal;
   font-stretch: normal;
-  background-color: #1B2B54;
-  min-height: 100vh;
+  background-color: #F3F5F6;
   display: -webkit-box;
   display: -ms-flexbox;
   display: flex;
@@ -8698,9 +8701,9 @@ https://flickity.metafizzy.co
   opacity: 1; }
 
 .snackbar {
-  color: #fff;
+  color: #596D81;
   position: relative;
-  margin: auto;
+  margin: 10px auto;
   border-radius: 5px;
   line-height: 17px;
   box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px;
@@ -8713,7 +8716,7 @@ https://flickity.metafizzy.co
   background-size: 30px;
   background-repeat: no-repeat;
   margin-bottom: 20px;
-  background-color: #223767;
+  background-color: #ffffff;
   align-self: middle;
 }
 .snackbar-message {
@@ -8745,7 +8748,7 @@ https://flickity.metafizzy.co
 }
 .search-form {
   border: 2px solid transparent;
-  border-color: transparent transparent #527cc9;
+  border-color: transparent transparent #8997A5;
   position: relative;
   max-width: 375px;
   margin-left: auto;
@@ -8761,7 +8764,7 @@ https://flickity.metafizzy.co
   bottom: 0;
   border: 1px transparent;
   border-left-style: solid;
-  background-color: #152042;
+  background-color: #ffffff;
   width: 35px;
   cursor: pointer;
   transition: all .2s;
@@ -8769,13 +8772,13 @@ https://flickity.metafizzy.co
 }
 
 .top-search {
-    color: #99c1e3;
+    color: #3D5873;
     border: none;
     line-height: 15px;
     width: 100%;
     padding: 4px 10px;
     font-size: 15px;
-    background-color: #152042;
+    background-color: #ffffff;
     outline:none;
 }
 
@@ -8783,23 +8786,23 @@ https://flickity.metafizzy.co
 .top-search:-webkit-autofill:hover, 
 .top-search:-webkit-autofill:focus, 
 .top-search:-webkit-autofill:active  {
-    -webkit-box-shadow: 0 0 0 30px #152042 inset !important;
+    -webkit-box-shadow: 0 0 0 30px #ffffff inset !important;
 }
 
 input:-webkit-autofill {
-    -webkit-text-fill-color: #99c1e3 !important;
+    -webkit-text-fill-color: #3D5873 !important;
 }
 
 .top-search::placeholder { /* Firefox, Chrome, Opera */ 
-    color: #99c1e3; 
+    color: #8997A5; 
 } 
   
 .top-search:-ms-input-placeholder { /* Internet Explorer 10-11 */ 
-    color: #99c1e3; 
+    color: #8997A5; 
 } 
   
 .top-search::-ms-input-placeholder { /* Microsoft Edge */ 
-    color: #99c1e3; 
+    color: #8997A5; 
 }
 
 table td {
@@ -8819,24 +8822,69 @@ table td {
 
 @keyframes flash {
   0% { background-color: transparent; }
-  50% { background-color: rgba(255, 255, 255, 0.5); }
+  50% { background-color: rgba(100, 100, 255, 0.5); }
   100% { background-color: transparent; }
 }
 
 @-webkit-keyframes flash {
   0% { background-color: transparent; }
-  50% { background-color: rgba(255, 255, 255, 0.5); }
+  50% { background-color: rgba(100, 100, 255, 0.5); }
   100% { background-color: transparent; }
 }
 
 @-moz-keyframes flash {
   0% { background-color: transparent; }
-  50% { background-color: rgba(255, 255, 255, 0.5); }
+  50% { background-color: rgba(100, 100, 255, 0.5); }
   100% { background-color: transparent; }
 }
 
 @-ms-keyframes flash {
   0% { background-color: transparent; }
-  50% { background-color: rgba(255, 255, 255, 0.5); }
+  50% { background-color: rgba(100, 100, 255, 0.5); }
   100% { background-color: transparent; }
+}
+
+
+.pool-overview {
+  color: #8997A5;
+  background-color: #ffffff;
+  font-size: 16px;
+}
+
+.pool-overview h1 {
+  color: #3D5873;
+  font-size: 28px;
+}
+
+.pool-overview-stat-title {
+  font-size: 14px;
+  padding-bottom: 10px;
+  color: #596D81;
+}
+
+.pool-overview-stat-value {
+  font-size: 24px;
+  color: #091440;
+}
+
+.block__content h1 {
+  color: #091440;
+  font-size: 24px;
+  padding-bottom: 10px;
+}
+
+.dcr-label {
+  background: #D3F0FD 0% 0% no-repeat padding-box;
+  border-radius: 3px;
+  font-size: 13px;
+  padding-left: 10px;
+  padding-right: 10px;
+  color: #091440;
+  font-family: "dcrstakepool-code", "Courier New", "monospace" !important;
+}
+
+.account-info-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #596D81;
 }
