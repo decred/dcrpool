@@ -7326,7 +7326,7 @@ h1 {
   font-size: 18px;
   line-height: 1.25;
   letter-spacing: normal;
-  color: #B7DEEE;
+  color: #596d81;
   font-weight: normal; }
   @media screen and (min-width: 576px) {
     h1 {
@@ -7599,7 +7599,7 @@ input[type="submit"]:disabled {
          object-fit: cover; }
   .main-carousel .carousel-cell {
     width: 100%;
-    height: 275px;
+    height: 290px;
     margin-right: 20px; }
     @media (max-width: 991.98px) {
       .main-carousel .carousel-cell {
