@@ -8059,17 +8059,14 @@ input[type="submit"]:disabled {
 .block {
   width: 100%; }
   .block__title {
-    padding: 20px 30px; }
+    padding: 0 30px 20px 20px; }
     @media (max-width: 767.98px) {
       .block__title {
-        padding: 20px 0; } }
+        padding: 0 30px 20px 20px; } }
     .block__title h1, .block__title p {
       margin-bottom: 0; }
     .block__title span {
       vertical-align: middle; }
-      @media (max-width: 767.98px) {
-        .block__title span {
-          margin-left: 30px; } }
     @media (max-width: 767.98px) {
       .block__title img + span {
         margin-left: 5px; } }
