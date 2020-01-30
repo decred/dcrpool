@@ -7528,7 +7528,7 @@ h2 {
   transition: all 0.6s; }
 
 input[type="submit"], button[type="submit"] {
-  padding: 14px 19px;
+  padding: 14px 30px;
   border-radius: 5px;
   background-color: #2970FF;
   border-color: #2970FF;
@@ -7537,7 +7537,7 @@ input[type="submit"], button[type="submit"] {
   line-height: 1.23;
   letter-spacing: normal;
   color: #fff;
-  min-width: 125px; }
+}
   input[type="submit"]:not([disabled]):hover, button[type="submit"]:not([disabled]):hover {
     color: #fff;
     background-color: #1A59F7;
@@ -8854,4 +8854,8 @@ table td {
   background: transparent url('/images/dropdown.svg') 0% 0% no-repeat padding-box;
   opacity: 1;
   cursor: pointer;
+}
+
+.no-data {
+  color: #8997A5;
 }

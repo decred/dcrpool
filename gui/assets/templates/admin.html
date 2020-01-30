@@ -1,80 +1,66 @@
 {{define "admin"}}
 {{template "header" .}}
 
+<div class="pool-overview pt-4 pb-3">
+    <div class="container">
 
-<section class="site-content">
+        
+        <div class="d-flex flex-wrap">
+            <h1 class="mr-auto text-nowrap">Admin Panel</h1>
+            
+            <div class="row">
+                <form class="p-2" action="/backup" method="post">
+                    {{.CSRF}}
+                    <button type="submit" class="btn btn-primary" style="padding:6px 6px; font-size: 12px;">Backup Database</button>
+                </form>
+                
+                <form class="p-2" action="/logout" method="post">
+                    {{.CSRF}}
+                    <button type="submit" class="btn btn-primary" style="padding:6px 6px; font-size: 12px;">Logout</button>
+                </form>
+            </div>
+        </div>
+            
+        {{template "pool-stats" .PoolStats}}
+
+    </div>
+</div>
+
 <div class="container">
 
-    <div class="col">
+    <div class="row">
 
-        <div class="row justify-content-around align-items-center">
-
-            <div class="row">
-                <section class="block">
-                    <div class="col-12 block__content">
-                        <p>Click this button to download a snapshot of the dcrpool database.</p>
-                        <form action="/backup" method="post">
-                            {{.CSRF}}
-                            <button type="submit" class="btn btn-primary">Download Backup</button>
-                        </form>
-
-                    </div>
-                </section>
-            </div>
-
-            <div class="row">
-                <section class="block">
-                    <div class="col-12 block__content">
-                        <form action="/logout" method="post">
-                            {{.CSRF}}
-                            <button type="submit" class="btn btn-primary">Logout</button>
-                        </form>
-                    </div>
-                </section>
-            </div>
-
-        </div>
-
-        <div class="row justify-content-center">
-
-            <div class="row">
-                <section class="block">
-                    <div class="col-12 block__title">
-                        <h1><span>All Connected Miners</span></h1>
-                    </div>
-                    <div class="col-12 block__content">
-                        <div style="overflow: auto; max-height: 250px;">
-                            <table class="table">
-                                <tr>
-                                    <th>Account</th>
-                                    <th>IP</th>
-                                    <th>Miner</th>
-                                    <th>Hash Rate</th>
-                                </tr>
-                                {{range $accountID, $clients := .Connections}}
-                                {{range $client := $clients}}
-                                <tr>
-                                    <td>{{$accountID}}</td>
-                                    <td>{{$client.IP}}</td>
-                                    <td>{{$client.Miner}}</td>
-                                    <td>{{hashString $client.HashRate}}</td>
-                                </tr>
-                                {{end}}
-                                {{else}}
-                                <tr>
-                                    <td colspan="100%">No miners connected</td>
-                                </tr>
-                                {{end}}
-                            </table>
-                        </div>
-                    </div>
-                </section>
+        <div class="col-12 p-3">
+            <div class="block__content">
+                <h1>All Connected Miners</h1>
+                <table class="table">
+                    <tr>
+                        <th>Account</th>
+                        <th>IP</th>
+                        <th>Miner</th>
+                        <th>Hash Rate</th>
+                    </tr>
+                    {{range $accountID, $clients := .Connections}}
+                    {{range $client := $clients}}
+                    <tr>
+                        <td><span class="dcr-label">{{$accountID}}</span></td>
+                        <td>{{$client.IP}}</td>
+                        <td>{{$client.Miner}}</td>
+                        <td>{{hashString $client.HashRate}}</td>
+                    </tr>
+                    {{end}}
+                    {{else}}
+                    <tr>
+                        <td colspan="100%"><span class="no-data">No miners connected</span></td>
+                    </tr>
+                    {{end}}
+                </table>
             </div>
         </div>
+
     </div>
 
 </div>
-</section>
 
 </body>
 

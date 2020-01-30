@@ -18,6 +18,7 @@ type adminPageData struct {
 	Connections map[string][]*pool.ClientInfo
 	CSRF        template.HTML
 	Designation string
+	PoolStats   poolStats
 }
 
 func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +45,20 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 	if session.Values["IsAdmin"] != true {
 		ui.renderTemplate(w, r, "login", pageData)
 		return
+	}
+
+	ui.poolHashMtx.RLock()
+	poolHash := ui.poolHash
+	ui.poolHashMtx.RUnlock()
+
+	pageData.PoolStats = poolStats{
+		LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
+		LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
+		PoolHashRate:      poolHash,
+		PaymentMethod:     ui.cfg.PaymentMethod,
+		Network:           ui.cfg.ActiveNet.Name,
+		PoolFee:           ui.cfg.PoolFee,
+		SoloPool:          ui.cfg.SoloPool,
 	}
 
 	pageData.Connections = ui.cfg.FetchClientInfo()

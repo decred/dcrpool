@@ -110,6 +110,16 @@ type GUI struct {
 	poolHashMtx   sync.RWMutex
 }
 
+type poolStats struct {
+	SoloPool          bool
+	PoolFee           float64
+	Network           string
+	PaymentMethod     string
+	LastWorkHeight    uint32
+	LastPaymentHeight uint32
+	PoolHashRate      string
+}
+
 // route configures the http router of the user interface.
 func (ui *GUI) route() {
 	ui.router = mux.NewRouter()

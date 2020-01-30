@@ -13,23 +13,17 @@ import (
 )
 
 type indexData struct {
-	MinerPorts        map[string]uint32
-	LastWorkHeight    uint32
-	LastPaymentHeight uint32
-	MinedWork         []minedWork
-	PoolHashRate      string
-	PoolDomain        string
-	WorkQuotas        []workQuota
-	SoloPool          bool
-	PaymentMethod     string
-	AccountStats      *AccountStats
-	Address           string
-	Admin             bool
-	Error             string
-	BlockExplorerURL  string
-	Network           string
-	Designation       string
-	PoolFee           float64
+	MinerPorts       map[string]uint32
+	MinedWork        []minedWork
+	PoolDomain       string
+	PoolStats        poolStats
+	WorkQuotas       []workQuota
+	AccountStats     *AccountStats
+	Address          string
+	Admin            bool
+	Error            string
+	BlockExplorerURL string
+	Designation      string
 }
 
 // AccountStats is a snapshot of an accounts contribution to the pool. This
@@ -69,21 +63,25 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 	poolHash := ui.poolHash
 	ui.poolHashMtx.RUnlock()
 
-	data := indexData{
-		WorkQuotas:        wQuotas,
-		PaymentMethod:     ui.cfg.PaymentMethod,
+	poolStats := poolStats{
 		LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
 		LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
-		MinedWork:         mWork,
 		PoolHashRate:      poolHash,
-		PoolDomain:        ui.cfg.Domain,
-		SoloPool:          ui.cfg.SoloPool,
-		Admin:             false,
-		BlockExplorerURL:  ui.cfg.BlockExplorerURL,
-		Designation:       ui.cfg.Designation,
-		PoolFee:           ui.cfg.PoolFee,
+		PaymentMethod:     ui.cfg.PaymentMethod,
 		Network:           ui.cfg.ActiveNet.Name,
-		MinerPorts:        ui.cfg.MinerPorts,
+		PoolFee:           ui.cfg.PoolFee,
+		SoloPool:          ui.cfg.SoloPool,
+	}
+
+	data := indexData{
+		WorkQuotas:       wQuotas,
+		MinedWork:        mWork,
+		PoolDomain:       ui.cfg.Domain,
+		PoolStats:        poolStats,
+		Admin:            false,
+		BlockExplorerURL: ui.cfg.BlockExplorerURL,
+		Designation:      ui.cfg.Designation,
+		MinerPorts:       ui.cfg.MinerPorts,
 	}
 
 	address := r.FormValue("address")
