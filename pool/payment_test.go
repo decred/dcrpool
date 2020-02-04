@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil/v2"
+	bolt "go.etcd.io/bbolt"
 )
 
 // makePaymentBundle creates a new payment bundle.

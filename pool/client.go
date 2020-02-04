@@ -21,11 +21,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	bolt "github.com/coreos/bbolt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/blockchain/standalone"
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/wire"
+	bolt "go.etcd.io/bbolt"
 )
 
 const (

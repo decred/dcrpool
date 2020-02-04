@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"time"
 
-	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/dcrutil/v2"
+	bolt "go.etcd.io/bbolt"
 )
 
 // Payment represents an outstanding payment for a pool account.

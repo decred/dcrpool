@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	bolt "github.com/coreos/bbolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 func persistJob(db *bolt.DB, header string, height uint32) (*Job, error) {

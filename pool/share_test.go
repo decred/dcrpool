@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg/v2"
+	bolt "go.etcd.io/bbolt"
 )
 
 // persistShare creates a persisted share with the provided account, share

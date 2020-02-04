@@ -3,7 +3,6 @@ module github.com/decred/dcrpool
 go 1.12
 
 require (
-	github.com/coreos/bbolt v1.3.3
 	github.com/davecgh/go-spew v1.1.1
 	github.com/decred/base58 v1.0.2 // indirect
 	github.com/decred/dcrd/blockchain/standalone v1.1.0
@@ -24,6 +23,7 @@ require (
 	github.com/gorilla/websocket v1.4.1
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/jrick/logrotate v1.0.0
+	go.etcd.io/bbolt v1.3.4
 	golang.org/x/crypto v0.0.0-20191206172530-e9b2fee46413
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/grpc v1.26.0
