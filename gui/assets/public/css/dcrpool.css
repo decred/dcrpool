@@ -7591,7 +7591,7 @@ input[type="submit"]:disabled {
          object-fit: cover; }
   .main-carousel .carousel-cell {
     width: 100%;
-    height: 290px;
+    height: 275px;
     margin-right: 20px; }
     @media (max-width: 991.98px) {
       .main-carousel .carousel-cell {

@@ -36,142 +36,131 @@
     <div class="row">
 
         <div class="col-12 p-3">
-            <section class="block">
-                <div class="col-12 block__title">
-                    <h1><span>Miner Configuration</span></h1>
-                </div>
-                <div class="col-12 block__content">
-                    <div class="main-carousel">
-                        <div class="carousel-cell">
-                            <div class="row">
-                                <div class="col-lg-6 col-12 main-carousel__image-container px-0 pl-lg-3 py-3 text-center">
-                                    <picture>
-                                        <img src="/images/carousel_1.png" class="img-fluid">
-                                    </picture>
-                                </div>
-                                <div class="col-lg-6 col-12 pl-3">
-                                    <h2>Identify the Miner</h2>
-                                    <p>dcrpool currently supports:</p>
-                                    <ul>
-                                        <li>Innosilicon D9</li>
-                                        <li>Antminer DR3</li>
-                                        <li>Antminer DR5</li>
-                                        <li>Whatsminer D1</li>
-                                    </ul>
-                                </div>
+            <div class="block__content">
+                <h1>Miner Configuration</h1>
+                <div class="main-carousel">
+                    <div class="carousel-cell">
+                        <div class="row">
+                            <div class="col-lg-6 col-12 main-carousel__image-container px-0 pl-lg-3 py-3 text-center">
+                                <picture>
+                                    <img src="/images/carousel_1.png" class="img-fluid">
+                                </picture>
                             </div>
-                        </div>
-                        <div class="carousel-cell">
-                            <div class="row">
-                                <div class="col-lg-6 col-12 main-carousel__image-container px-0 pl-lg-3 py-3 text-center">
-                                    <picture>
-                                        <img src="/images/carousel_2.png" class="img-fluid">
-                                    </picture>
-                                </div>
-                                <div class="col-lg-6 col-12 pl-3">
-                                    <h2>Connect the Miner</h2>
-                                    <p>To connect, set the pool URL to <span class="config">'localhost'</span>, and the miner port to:</p>
-                                    <ul>
-                                        <li>
-                                            <span class="config">{{.MinerPorts.innosilicond9}}</span>&nbsp;(Innosilicon D9)
-                                        </li>
-                                        <li>
-                                            <span class="config">{{.MinerPorts.antminerdr3}}</span>&nbsp;(Antminer DR3)
-                                        </li>
-                                        <li>
-                                            <span class="config">{{.MinerPorts.antminerdr5}}</span>&nbsp;(Antminer DR5)
-                                        </li>
-                                        <li>
-                                            <span class="config">{{.MinerPorts.whatsminerd1}}</span>&nbsp;(Whatsminer D1)
-                                        </li>
-                                    </ul>
-                                    <p>The username of the miner should be the payment address for receiving rewards and a unique name identifying the client, formatted as <span class="config">'address.name'</span></p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="carousel-cell">
-                            <div class="row">
-                                <div class="col-lg-6 col-12 main-carousel__image-container px-0 pl-lg-3 py-3 text-center">
-                                    <picture>
-                                        <img src="/images/carousel_3.png" class="img-fluid">
-                                    </picture>
-                                </div>
-                                <div class="col-lg-6 col-12 pl-3">
-                                    <h2>Confirm Miner Connection</h2>
-                                    <p>Use the associated address of the miner to confirm it is working for the pool via an account info lookup.</p>
-                                </div>
+                            <div class="col-lg-6 col-12 pl-3">
+                                <h2>Identify the Miner</h2>
+                                <p>dcrpool currently supports:</p>
+                                <ul>
+                                    <li>Innosilicon D9</li>
+                                    <li>Antminer DR3</li>
+                                    <li>Antminer DR5</li>
+                                    <li>Whatsminer D1</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
-                    <ul class="carousel-nav col-12 m-0">
-                    </ul>
-
-
+                    <div class="carousel-cell">
+                        <div class="row">
+                            <div class="col-lg-6 col-12 main-carousel__image-container px-0 pl-lg-3 py-3 text-center">
+                                <picture>
+                                    <img src="/images/carousel_2.png" class="img-fluid">
+                                </picture>
+                            </div>
+                            <div class="col-lg-6 col-12 pl-3">
+                                <h2>Connect the Miner</h2>
+                                <p>To connect, set the pool URL to <span class="config">'localhost'</span>, and the miner port to:</p>
+                                <ul>
+                                    <li>
+                                        <span class="config">{{.MinerPorts.innosilicond9}}</span>&nbsp;(Innosilicon D9)
+                                    </li>
+                                    <li>
+                                        <span class="config">{{.MinerPorts.antminerdr3}}</span>&nbsp;(Antminer DR3)
+                                    </li>
+                                    <li>
+                                        <span class="config">{{.MinerPorts.antminerdr5}}</span>&nbsp;(Antminer DR5)
+                                    </li>
+                                    <li>
+                                        <span class="config">{{.MinerPorts.whatsminerd1}}</span>&nbsp;(Whatsminer D1)
+                                    </li>
+                                </ul>
+                                <p>The username of the miner should be the payment address for receiving rewards and a unique name identifying the client, formatted as <span class="config">'address.name'</span></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="carousel-cell">
+                        <div class="row">
+                            <div class="col-lg-6 col-12 main-carousel__image-container px-0 pl-lg-3 py-3 text-center">
+                                <picture>
+                                    <img src="/images/carousel_3.png" class="img-fluid">
+                                </picture>
+                            </div>
+                            <div class="col-lg-6 col-12 pl-3">
+                                <h2>Confirm Miner Connection</h2>
+                                <p>Use the associated address of the miner to confirm it is working for the pool via an account info lookup.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </section>
+                <ul class="carousel-nav col-12 m-0">
+                </ul>
+
+
+            </div>
         </div>
     </div>
 
     <div class="row">
         
         <div class="col-md-6 col-12 p-3">
-            <section class="block">
-                <div class="col-12 block__title">
-                    <h1><span>Mined by Pool</span></h1>
-                </div>
-                <div class="col-12 block__content">
-                    <table id="mined-blocks-table" class="table">
-                        <thead>
-                            <tr>
-                                <th data-sort-method="number" data-sort-default>Height</th>
-                                <th data-sort-method="none">Miner</th>
-                                <th data-sort-method="none">Mined By</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {{ range .MinedWork }}
-                            <tr data-row-id="{{ .BlockHeight }}">
-                                <td><a href="{{ .BlockURL }}" rel="noopener noreferrer">{{ .BlockHeight }}</a>
-                                </td>
-                                <td>{{ .Miner }}</td>
-                                <td>
-                                    <span class="dcr-label">{{ .MinedBy }}</span>
-                                </td>
-                            </tr>
-                            {{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+            <div class="block__content">
+                <h1>Mined by Pool</h1>
+                <table id="mined-blocks-table" class="table">
+                    <thead>
+                        <tr>
+                            <th data-sort-method="number" data-sort-default>Height</th>
+                            <th data-sort-method="none">Miner</th>
+                            <th data-sort-method="none">Mined By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .MinedWork }}
+                        <tr data-row-id="{{ .BlockHeight }}">
+                            <td><a href="{{ .BlockURL }}" rel="noopener noreferrer">{{ .BlockHeight }}</a>
+                            </td>
+                            <td>{{ .Miner }}</td>
+                            <td>
+                                <span class="dcr-label">{{ .MinedBy }}</span>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         {{ if not .PoolStats.SoloPool}}
         <div class="col-md-6 col-12 p-3">
-            <section class="block">
-                <div class="col-12 block__title">
-                    <h1><span>Next Reward Payment</span></h1>
-                </div>
-                <div class="col-12 block__content">
-                    <table id="work-quota-table" class="table">
-                        <thead>
-                            <tr>
-                                <th data-sort-method='number' data-sort-default>Reward Percentage</th>
-                                <th data-sort-method='none'>Account</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {{ range .WorkQuotas }}
-                            <tr data-row-id="{{ .AccountID }}">
-                                <td>{{ .Percent }}</td>
-                                <td>
-                                    <span class="dcr-label">{{ .AccountID }}</span>
-                                </td>
-                            </tr>
-                            {{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+            <div class="block__content">
+                <h1>Next Reward Payment</h1>
+
+                <table id="work-quota-table" class="table">
+                    <thead>
+                        <tr>
+                            <th data-sort-method='number' data-sort-default>Reward Percentage</th>
+                            <th data-sort-method='none'>Account</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .WorkQuotas }}
+                        <tr data-row-id="{{ .AccountID }}">
+                            <td>{{ .Percent }}</td>
+                            <td>
+                                <span class="dcr-label">{{ .AccountID }}</span>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         {{end}}
