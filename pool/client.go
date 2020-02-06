@@ -381,7 +381,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	}
 	hash := header.BlockHash()
 	hashTarget := new(big.Rat).SetInt(standalone.HashToBig(&hash))
-	netDiff := new(big.Rat).Quo(diffInfo.powLimit, diffInfo.target)
+	netDiff := new(big.Rat).Quo(diffInfo.powLimit, target)
 	hashDiff := new(big.Rat).Quo(diffInfo.powLimit, hashTarget)
 	log.Tracef("network difficulty is: %s", netDiff.FloatString(4))
 	log.Tracef("pool difficulty is: %s", diffInfo.difficulty.FloatString(4))
@@ -491,6 +491,7 @@ func (c *Client) read() {
 		data, err := c.reader.ReadBytes('\n')
 		if err != nil {
 			if err == io.EOF {
+				log.Errorf("%s: EOF", c.id)
 				c.cancel()
 				return
 			}
