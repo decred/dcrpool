@@ -30,6 +30,9 @@ type EndpointConfig struct {
 	// MaxConnectionsPerHost represents the maximum number of connections
 	// allowed per host.
 	MaxConnectionsPerHost uint32
+	// MaxGenTime represents the share creation target time for the pool
+	// in seconds.
+	MaxGenTime uint64
 	// HubWg represents the hub's waitgroup.
 	HubWg *sync.WaitGroup
 	// SubmitWork sends solved block data to the consensus daemon.
@@ -164,6 +167,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 				FetchCurrentWork:  e.cfg.FetchCurrentWork,
 				WithinLimit:       e.cfg.WithinLimit,
 				HashCalcThreshold: hashCalcThreshold,
+				MaxGenTime:        e.cfg.MaxGenTime,
 			}
 			client, err := NewClient(msg.Conn, tcpAddr, cCfg)
 			if err != nil {

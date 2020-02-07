@@ -333,6 +333,7 @@ func (h *Hub) Listen() error {
 			AddConnection:         h.addConnection,
 			RemoveConnection:      h.removeConnection,
 			FetchHostConnections:  h.fetchHostConnections,
+			MaxGenTime:            h.cfg.MaxGenTime,
 		}
 		endpoint, err := NewEndpoint(eCfg, diffInfo, port, miner)
 		if err != nil {

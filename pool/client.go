@@ -82,11 +82,15 @@ type ClientConfig struct {
 	// HashCalcThreshold represents the minimum operating time in seconds
 	// before a client's hash rate is calculated.
 	HashCalcThreshold uint32
+	// MaxGenTime represents the share creation target time for the pool
+	// in seconds.
+	MaxGenTime uint64
 }
 
 // Client represents a client connection.
 type Client struct {
-	submissions int64 // update atomically.
+	submissions  int64  // update atomically.
+	lastWorkTime uint64 // update atomically.
 
 	id            string
 	addr          *net.TCPAddr
@@ -478,6 +482,36 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	}
 }
 
+// rollWork provides the client with timestamp-rolled work to avoid stalling.
+func (c *Client) rollWork(ctx context.Context) {
+	ticker := time.NewTicker(time.Second)
+
+	for {
+		select {
+		case <-ctx.Done():
+			ticker.Stop()
+			c.wg.Done()
+			return
+
+		case <-ticker.C:
+			// Send a timetamp-rolled work to the client if it fails to
+			// generate a work submission in twice the time it is estimated
+			// to according to its pool target.
+			lastWorkTime := atomic.LoadUint64(&c.lastWorkTime)
+			if lastWorkTime == 0 {
+				continue
+			}
+
+			now := uint64(time.Now().Unix())
+			if now-lastWorkTime >= (c.cfg.MaxGenTime * 2) {
+				log.Tracef("%s is stalling on current work, sending "+
+					"timestamp-rolled work", c.id)
+				c.updateWork()
+			}
+		}
+	}
+}
+
 // read receives incoming data and passes the message received for
 // processing. This must be run as goroutine.
 func (c *Client) read() {
@@ -528,9 +562,10 @@ func (c *Client) read() {
 }
 
 // updateWork updates a client with a timestamp-rolled current work.
-// This should be called after a client completes a work submission or
-// after client authentication.
-func (c *Client) updateWork(allowed bool) {
+// This should be called after a client completes a work submission,
+// after client authentication and when the client is stalling on
+// current work.
+func (c *Client) updateWork() {
 	// Only timestamp-roll current work for authorized and subscribed clients.
 	c.authorizedMtx.Lock()
 	authorized := c.authorized
@@ -540,9 +575,6 @@ func (c *Client) updateWork(allowed bool) {
 	c.subscribedMtx.Unlock()
 
 	if !subscribed || !authorized {
-		return
-	}
-	if !allowed {
 		return
 	}
 	currWorkE := c.cfg.FetchCurrentWork()
@@ -603,7 +635,7 @@ func (c *Client) process(ctx context.Context) {
 		case <-ctx.Done():
 			_, err := c.conn.Write([]byte{})
 			if err != nil {
-				log.Errorf("unable to close connection: %v", err)
+				log.Errorf("%s: unable to send close message: %v", c.id, err)
 			}
 			c.wg.Done()
 			return
@@ -618,16 +650,20 @@ func (c *Client) process(ctx context.Context) {
 				switch req.Method {
 				case Authorize:
 					c.handleAuthorizeRequest(req, allowed)
-					c.setDifficulty()
-					time.Sleep(time.Second)
-					c.updateWork(allowed)
+					if allowed {
+						c.setDifficulty()
+						time.Sleep(time.Second)
+						c.updateWork()
+					}
 
 				case Subscribe:
 					c.handleSubscribeRequest(req, allowed)
 
 				case Submit:
 					c.handleSubmitWorkRequest(req, allowed)
-					c.updateWork(allowed)
+					if allowed {
+						c.updateWork()
+					}
 
 				default:
 					log.Errorf("unknown request method for "+
@@ -716,6 +752,8 @@ func (c *Client) handleAntminerDR3Work(req *Request) {
 		c.cancel()
 		return
 	}
+
+	atomic.StoreUint64(&c.lastWorkTime, uint64(time.Now().Unix()))
 }
 
 // handleInnosiliconD9Work prepares work notifications for the Innosilicon D9.
@@ -749,6 +787,8 @@ func (c *Client) handleInnosiliconD9Work(req *Request) {
 		c.cancel()
 		return
 	}
+
+	atomic.StoreUint64(&c.lastWorkTime, uint64(time.Now().Unix()))
 }
 
 // handleWhatsminerD1Work prepares work notifications for the Whatsminer D1.
@@ -771,6 +811,8 @@ func (c *Client) handleWhatsminerD1Work(req *Request) {
 		c.cancel()
 		return
 	}
+
+	atomic.StoreUint64(&c.lastWorkTime, uint64(time.Now().Unix()))
 }
 
 // handleCPUWork prepares work for the cpu miner.
@@ -781,6 +823,8 @@ func (c *Client) handleCPUWork(req *Request) {
 		c.cancel()
 		return
 	}
+
+	atomic.StoreUint64(&c.lastWorkTime, uint64(time.Now().Unix()))
 }
 
 // setHashRate updates the client's hash rate.
@@ -812,7 +856,7 @@ func (c *Client) hashMonitor(ctx context.Context) {
 			if submissions == 0 {
 				continue
 			}
-			average := float64(hashCalcThreshold) / float64(submissions)
+			average := float64(c.cfg.HashCalcThreshold) / float64(submissions)
 			diffInfo := c.cfg.DifficultyInfo
 			num := new(big.Rat).Mul(diffInfo.difficulty,
 				new(big.Rat).SetFloat64(c.cfg.NonceIterations))
@@ -901,10 +945,11 @@ func (c *Client) run(ctx context.Context) {
 	endpointWg.Add(1)
 	go c.read()
 
-	c.wg.Add(3)
+	c.wg.Add(4)
 	go c.process(ctx)
 	go c.send(ctx)
 	go c.hashMonitor(ctx)
+	go c.rollWork(ctx)
 	c.wg.Wait()
 
 	c.shutdown()
