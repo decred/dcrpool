@@ -356,6 +356,11 @@ func (m *Miner) process(ctx context.Context) {
 					m.work.header = headerB
 					m.workMtx.Unlock()
 
+					if m.config.Stall {
+						log.Tracef("purposefully stalling on work")
+						continue
+					}
+
 					// Notify the miner of received work.
 					m.chainCh <- struct{}{}
 
@@ -374,12 +379,17 @@ func (m *Miner) process(ctx context.Context) {
 func (m *Miner) run(ctx context.Context) {
 	go m.read()
 	go m.keepAlive()
-	go m.core.solve(ctx)
 
-	m.wg.Add(3)
+	m.wg.Add(1)
 	go m.process(ctx)
-	go m.core.hashRateMonitor(ctx)
-	go m.core.generateBlocks(ctx)
+
+	if !m.config.Stall {
+		go m.core.solve(ctx)
+		m.wg.Add(2)
+		go m.core.hashRateMonitor(ctx)
+		go m.core.generateBlocks(ctx)
+	}
+
 	m.wg.Wait()
 }
 
