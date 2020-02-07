@@ -19,13 +19,10 @@ type adminPageData struct {
 	CSRF        template.HTML
 	Designation string
 	PoolStats   poolStats
+	Admin       bool
 }
 
 func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
-	pageData := adminPageData{
-		CSRF:        csrf.TemplateField(r),
-		Designation: ui.cfg.Designation,
-	}
 
 	session, err := ui.cookieStore.Get(r, "session")
 	if err != nil {
@@ -43,7 +40,7 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if session.Values["IsAdmin"] != true {
-		ui.renderTemplate(w, r, "login", pageData)
+		ui.GetIndex(w, r)
 		return
 	}
 
@@ -51,7 +48,7 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 	poolHash := ui.poolHash
 	ui.poolHashMtx.RUnlock()
 
-	pageData.PoolStats = poolStats{
+	poolStats := poolStats{
 		LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
 		LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
 		PoolHashRate:      poolHash,
@@ -61,7 +58,14 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 		SoloPool:          ui.cfg.SoloPool,
 	}
 
-	pageData.Connections = ui.cfg.FetchClientInfo()
+	pageData := adminPageData{
+		CSRF:        csrf.TemplateField(r),
+		Designation: ui.cfg.Designation,
+		Connections: ui.cfg.FetchClientInfo(),
+		PoolStats:   poolStats,
+		Admin:       true,
+	}
+
 	ui.renderTemplate(w, r, "admin", pageData)
 }
 
@@ -85,7 +89,7 @@ func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
 
 	if ui.cfg.BackupPass != pass {
 		log.Warn("Unauthorized access")
-		ui.GetAdmin(w, r)
+		ui.GetIndex(w, r)
 		return
 	}
 

@@ -6,10 +6,12 @@ package gui
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 	"strings"
 
 	"github.com/decred/dcrpool/pool"
+	"github.com/gorilla/csrf"
 )
 
 type indexData struct {
@@ -24,6 +26,7 @@ type indexData struct {
 	Error            string
 	BlockExplorerURL string
 	Designation      string
+	CSRF             template.HTML
 }
 
 // AccountStats is a snapshot of an accounts contribution to the pool. This
@@ -82,6 +85,7 @@ func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
 		BlockExplorerURL: ui.cfg.BlockExplorerURL,
 		Designation:      ui.cfg.Designation,
 		MinerPorts:       ui.cfg.MinerPorts,
+		CSRF:             csrf.TemplateField(r),
 	}
 
 	address := r.FormValue("address")

@@ -73,10 +73,10 @@
                 </a>
             </div>
 
-            
-            <a class="modalbtn" data-toggle="modal" data-target="#myModal"></a>
+            {{ if not .Admin }}
+            <a class="modalbtn" data-toggle="modal" data-target="#accountModal"></a>
 
-            <div class="modal fade" id="myModal" role="dialog">
+            <div class="modal fade" id="accountModal">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -85,17 +85,40 @@
                         </div>
                         <div class="modal-body">
                             <p>To know your mining account details, enter your mining address.</p>
-                            <form id="search-form" action="/" method="get">
-                                <input type="text" name="address" class="top-search" placeholder="Mining Address" spellcheck="false">
+                            <form class="modal-form" id="search-form" action="/" method="get">
+                                <input type="text" name="address" class="modal-input" placeholder="Mining Address" spellcheck="false">
                             </form>
                             <div class="d-flex flex-row pt-4 align-items-center">
-                                <a href="/admin">I'm an Admin</a>
+                                <a data-toggle="modal" href="#adminModal">I'm an Admin</a>
                                 <button form="search-form" type="submit" class="btn btn-primary ml-auto">Enter</button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <div class="modal fade" id="adminModal">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h1 class="modal-title">Admin Login</h1>
+                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <form class="modal-form" id="admin-form" action="/admin" method="post">
+                                <input type="password" name="password" class="modal-input" placeholder="Enter password">
+                                {{.CSRF}}
+                            </form>
+                            <div class="d-flex flex-row pt-4 align-items-center">
+                                <a data-toggle="modal" href="#accountModal">I'm not an Admin</a>
+                                <button form="admin-form" type="submit" class="btn btn-primary ml-auto">Login</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+            {{end}}
 
         </div>
     </nav>
