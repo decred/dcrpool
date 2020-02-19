@@ -2,13 +2,21 @@ var quotaSort;
 var minedBlocksSort;
 
 document.addEventListener("DOMContentLoaded", function () {
-    quotaSort = new Tablesort(document.getElementById('work-quota-table'), {
-        descending: true
-    });
+    workTable = document.getElementById('work-quota-table');
 
-    minedBlocksSort = new Tablesort(document.getElementById('mined-blocks-table'), {
-        descending: true
-    });
+    if (workTable != null) {
+        quotaSort = new Tablesort(workTable, {
+            descending: true
+        });
+    }
+
+    minedTable = document.getElementById('mined-blocks-table');
+
+    if (minedTable != null) {
+        minedBlocksSort = new Tablesort(minedTable, {
+            descending: true
+        });
+    }
 
     ws = new WebSocket('wss://' + window.location.host + '/ws');
     ws.addEventListener('message', function (e) {
@@ -44,7 +52,13 @@ function removeElement(el) {
 }
 
 function updateMinedBlocks(minedBlocks) {
-    blocksTableBody = document.getElementById('mined-blocks-table').querySelector('tbody');
+    blocksTable = document.getElementById('mined-blocks-table');
+       
+    if (blocksTable == null) {
+        return;
+    }
+    
+    blocksTableBody = blocksTable.querySelector('tbody');
 
     // Ensure all received blocks are in the table
     var changeMade = false;
@@ -89,7 +103,13 @@ function updateMinedBlocks(minedBlocks) {
 }
 
 function updateWorkQuotas(quotas) {
-    quotasTableBody = document.getElementById('work-quota-table').querySelector('tbody');
+    quotasTable = document.getElementById('work-quota-table');
+
+    if (quotasTable == null) {
+        return;
+    }
+
+    quotasTableBody = quotasTable.querySelector('tbody');
 
     // Ensure all received quotas are in the table
     var changeMade = false;
