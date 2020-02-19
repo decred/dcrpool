@@ -60,7 +60,6 @@ func (m *CPUMiner) hashRateMonitor(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			close(m.updateHashes)
 			m.miner.wg.Done()
 			return
 
@@ -89,7 +88,10 @@ func (m *CPUMiner) hashRateMonitor(ctx context.Context) {
 // This function will return early with false when conditions that trigger a
 // stale block such as a new block showing up or periodically when there are
 // new transactions and enough time has elapsed without finding a solution.
-func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.Rat, ticker *time.Ticker) bool {
+func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.Rat) bool {
+	ticker := time.NewTicker(333 * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
 		hashesCompleted := uint64(0)
 
@@ -116,6 +118,7 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 					case m.updateHashes <- hashesCompleted:
 						hashesCompleted = 0
 					default:
+						// Non-blocking receive fallthrough.
 					}
 
 				case <-m.miner.chainCh:
@@ -174,18 +177,19 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 // blocks while detecting when it is performing stale work. When a
 // a block is solved it is sent via the work channel.
 func (m *CPUMiner) solve(ctx context.Context) {
-	// Start a ticker which is used to signal checks for stale work and
-	// updates to the hash rate monitor.
-	ticker := time.NewTicker(333 * time.Millisecond)
-	defer ticker.Stop()
-
 	for {
 		m.miner.workMtx.RLock()
 		if m.miner.work.target == nil || m.miner.work.jobID == "" ||
 			m.miner.work.header == nil {
 			m.miner.workMtx.RUnlock()
 			time.Sleep(time.Second)
-			continue
+			select {
+			case <-ctx.Done():
+				m.miner.wg.Done()
+				return
+			default:
+				continue
+			}
 		}
 
 		headerB := make([]byte, len(m.miner.work.header))
@@ -194,8 +198,9 @@ func (m *CPUMiner) solve(ctx context.Context) {
 		jobID := m.miner.work.jobID
 		m.miner.workMtx.RUnlock()
 
-		if m.solveBlock(ctx, headerB, target, ticker) {
-			// Send the request.
+		switch m.solveBlock(ctx, headerB, target) {
+		case true:
+			// Send a submit work request.
 			worker := fmt.Sprintf("%s.%s", m.miner.config.Address,
 				m.miner.config.User)
 			id := m.miner.nextID()
@@ -203,9 +208,18 @@ func (m *CPUMiner) solve(ctx context.Context) {
 				m.workData.extraNonce2, m.workData.nTime, m.workData.nonce)
 			m.workCh <- req
 
-			// Stall to prevent mining too quickly.
-			time.Sleep(time.Second)
+		case false:
+			select {
+			case <-ctx.Done():
+				m.miner.wg.Done()
+				return
+			default:
+				// Non-blocking receive fallthrough.
+			}
 		}
+
+		// Stall to prevent mining too quickly.
+		time.Sleep(time.Millisecond * 500)
 	}
 }
 

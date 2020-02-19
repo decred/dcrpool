@@ -106,53 +106,61 @@ func (m *Miner) subscribe() error {
 
 // keepAlive checks the state of the connection to the pool and reconnects
 // if needed. This should be run as a goroutine.
-func (m *Miner) keepAlive() {
+func (m *Miner) keepAlive(ctx context.Context) {
 	for {
-		m.connectedMtx.RLock()
-		if m.connected {
+		select {
+		case <-ctx.Done():
+			m.conn.Close()
+			m.wg.Done()
+			return
+
+		default:
+			m.connectedMtx.RLock()
+			if m.connected {
+				m.connectedMtx.RUnlock()
+				time.Sleep(time.Second)
+				continue
+			}
 			m.connectedMtx.RUnlock()
-			time.Sleep(time.Second)
-			continue
-		}
-		m.connectedMtx.RUnlock()
 
-		poolAddr := strings.Replace(m.config.Pool, "stratum+tcp", "", 1)
-		conn, err := net.Dial("tcp", poolAddr)
-		if err != nil {
-			log.Errorf("unable connect to %s, %v", poolAddr, err)
+			poolAddr := strings.Replace(m.config.Pool, "stratum+tcp", "", 1)
+			conn, err := net.Dial("tcp", poolAddr)
+			if err != nil {
+				log.Errorf("unable connect to %s, %v", poolAddr, err)
+				time.Sleep(time.Second * 5)
+				continue
+			}
+
+			m.conn = conn
+			m.encoder = json.NewEncoder(m.conn)
+			m.reader = bufio.NewReader(m.conn)
+
+			err = m.subscribe()
+			if err != nil {
+				log.Errorf("unable to subscribe miner: %v", err)
+				time.Sleep(time.Second * 5)
+				continue
+			}
+
+			err = m.authenticate()
+			if err != nil {
+				log.Errorf("unable to authenticate miner: %v", err)
+				time.Sleep(time.Second * 5)
+				continue
+			}
+
+			m.connectedMtx.Lock()
+			m.connected = true
+			m.connectedMtx.Unlock()
+
 			time.Sleep(time.Second * 5)
-			continue
 		}
-
-		m.conn = conn
-		m.encoder = json.NewEncoder(m.conn)
-		m.reader = bufio.NewReader(m.conn)
-
-		err = m.subscribe()
-		if err != nil {
-			log.Errorf("unable to subscribe miner: %v", err)
-			time.Sleep(time.Second * 5)
-			continue
-		}
-
-		err = m.authenticate()
-		if err != nil {
-			log.Errorf("unable to authenticate miner: %v", err)
-			time.Sleep(time.Second * 5)
-			continue
-		}
-
-		m.connectedMtx.Lock()
-		m.connected = true
-		m.connectedMtx.Unlock()
-
-		time.Sleep(time.Second * 5)
 	}
 }
 
 // read receives incoming data and passes the message received for
 // processing. It must be run as a goroutine.
-func (m *Miner) read() {
+func (m *Miner) read(ctx context.Context) {
 	for {
 		// Read only if the miner is connected.
 		m.connectedMtx.RLock()
@@ -179,11 +187,17 @@ func (m *Miner) read() {
 
 			if nErr := err.(*net.OpError); nErr != nil {
 				if nErr.Op == "read" && nErr.Net == "tcp" {
-					continue
+					select {
+					case <-ctx.Done():
+						m.wg.Done()
+						return
+					default:
+						continue
+					}
 				}
 			}
 
-			log.Errorf("Failed to read bytes: %v", err)
+			log.Errorf("failed to read bytes: %v", err)
 			continue
 		}
 
@@ -362,7 +376,11 @@ func (m *Miner) process(ctx context.Context) {
 					}
 
 					// Notify the miner of received work.
-					m.chainCh <- struct{}{}
+					select {
+					case m.chainCh <- struct{}{}:
+					default:
+						// Non-blocking send fallthrough.
+					}
 
 				default:
 					log.Errorf("Unknown method for notification: %s", notif.Method)
@@ -377,20 +395,20 @@ func (m *Miner) process(ctx context.Context) {
 
 // run handles the process life cycles of the miner.
 func (m *Miner) run(ctx context.Context) {
-	go m.read()
-	go m.keepAlive()
-
-	m.wg.Add(1)
+	m.wg.Add(3)
+	go m.read(ctx)
+	go m.keepAlive(ctx)
 	go m.process(ctx)
 
 	if !m.config.Stall {
+		m.wg.Add(3)
 		go m.core.solve(ctx)
-		m.wg.Add(2)
 		go m.core.hashRateMonitor(ctx)
 		go m.core.generateBlocks(ctx)
 	}
 
 	m.wg.Wait()
+	log.Infof("Shutdown miner.")
 }
 
 // NewMiner creates a stratum mining client.
