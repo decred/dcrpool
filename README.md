@@ -110,13 +110,13 @@ dcrdrpchost=127.0.0.1:19556
 dcrdrpccert=/home/.dcrd/rpc.cert
 walletgrpchost=127.0.0.1:19558
 walletrpccert=/home/.dcrwallet/rpc.cert
-maxgentime=20
+maxgentime=20s
 solopool=false
 activenet=simnet
 walletpass=walletpass
 poolfeeaddrs=SsVPfV8yoMu7AvF5fGjxTGmQ57pGkaY6n8z
 paymentmethod=pplns
-lastnperiod=300
+lastnperiod=5m
 backuppass=backuppass
 guidir=/home/gui
 ```

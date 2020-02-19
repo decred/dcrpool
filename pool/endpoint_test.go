@@ -29,7 +29,7 @@ func testEndpoint(t *testing.T, db *bolt.DB) {
 	powLimit := chaincfg.SimNetParams().PowLimit
 	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
 	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
-	maxGenTime := new(big.Int).SetUint64(20)
+	maxGenTime := time.Second * 20
 	blake256Pad := generateBlake256Pad()
 	poolDiffs, err := NewDifficultySet(chaincfg.SimNetParams(),
 		new(big.Rat).SetInt(powLimit), maxGenTime)

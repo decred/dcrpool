@@ -10,6 +10,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg/v2"
@@ -30,9 +31,8 @@ type EndpointConfig struct {
 	// MaxConnectionsPerHost represents the maximum number of connections
 	// allowed per host.
 	MaxConnectionsPerHost uint32
-	// MaxGenTime represents the share creation target time for the pool
-	// in seconds.
-	MaxGenTime uint64
+	// MaxGenTime represents the share creation target time for the pool.
+	MaxGenTime time.Duration
 	// HubWg represents the hub's waitgroup.
 	HubWg *sync.WaitGroup
 	// SubmitWork sends solved block data to the consensus daemon.

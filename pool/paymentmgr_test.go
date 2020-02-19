@@ -25,7 +25,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		DB:              db,
 		ActiveNet:       activeNet,
 		PoolFee:         0.1,
-		LastNPeriod:     120,
+		LastNPeriod:     time.Second * 120,
 		SoloPool:        false,
 		PaymentMethod:   PPS,
 		MinPayment:      minPayment,

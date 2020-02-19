@@ -77,7 +77,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
 	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
 	blake256Pad := generateBlake256Pad()
-	maxGenTime := new(big.Int).SetUint64(20)
+	maxGenTime := time.Second * 20
 	poolDiffs, err := NewDifficultySet(chaincfg.SimNetParams(),
 		new(big.Rat).SetInt(powLimit), maxGenTime)
 	if err != nil {

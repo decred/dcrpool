@@ -82,15 +82,14 @@ type ClientConfig struct {
 	// HashCalcThreshold represents the minimum operating time in seconds
 	// before a client's hash rate is calculated.
 	HashCalcThreshold uint32
-	// MaxGenTime represents the share creation target time for the pool
-	// in seconds.
-	MaxGenTime uint64
+	// MaxGenTime represents the share creation target time for the pool.
+	MaxGenTime time.Duration
 }
 
 // Client represents a client connection.
 type Client struct {
-	submissions  int64  // update atomically.
-	lastWorkTime uint64 // update atomically.
+	submissions  int64 // update atomically.
+	lastWorkTime int64 // update atomically.
 
 	id            string
 	addr          *net.TCPAddr
@@ -497,13 +496,13 @@ func (c *Client) rollWork(ctx context.Context) {
 			// Send a timetamp-rolled work to the client if it fails to
 			// generate a work submission in twice the time it is estimated
 			// to according to its pool target.
-			lastWorkTime := atomic.LoadUint64(&c.lastWorkTime)
+			lastWorkTime := atomic.LoadInt64(&c.lastWorkTime)
 			if lastWorkTime == 0 {
 				continue
 			}
 
-			now := uint64(time.Now().Unix())
-			if now-lastWorkTime >= (c.cfg.MaxGenTime * 2) {
+			now := time.Now()
+			if now.Sub(time.Unix(lastWorkTime, 0)) >= c.cfg.MaxGenTime*2 {
 				log.Tracef("%s is stalling on current work, sending "+
 					"timestamp-rolled work", c.id)
 				c.updateWork()
@@ -753,7 +752,7 @@ func (c *Client) handleAntminerDR3Work(req *Request) {
 		return
 	}
 
-	atomic.StoreUint64(&c.lastWorkTime, uint64(time.Now().Unix()))
+	atomic.StoreInt64(&c.lastWorkTime, time.Now().Unix())
 }
 
 // handleInnosiliconD9Work prepares work notifications for the Innosilicon D9.
@@ -788,7 +787,7 @@ func (c *Client) handleInnosiliconD9Work(req *Request) {
 		return
 	}
 
-	atomic.StoreUint64(&c.lastWorkTime, uint64(time.Now().Unix()))
+	atomic.StoreInt64(&c.lastWorkTime, time.Now().Unix())
 }
 
 // handleWhatsminerD1Work prepares work notifications for the Whatsminer D1.
@@ -812,7 +811,7 @@ func (c *Client) handleWhatsminerD1Work(req *Request) {
 		return
 	}
 
-	atomic.StoreUint64(&c.lastWorkTime, uint64(time.Now().Unix()))
+	atomic.StoreInt64(&c.lastWorkTime, time.Now().Unix())
 }
 
 // handleCPUWork prepares work for the cpu miner.
@@ -824,7 +823,7 @@ func (c *Client) handleCPUWork(req *Request) {
 		return
 	}
 
-	atomic.StoreUint64(&c.lastWorkTime, uint64(time.Now().Unix()))
+	atomic.StoreInt64(&c.lastWorkTime, time.Now().Unix())
 }
 
 // setHashRate updates the client's hash rate.
