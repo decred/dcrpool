@@ -7632,7 +7632,7 @@ input[type="submit"]:disabled {
        } }
     @media (max-width: 767.98px) {
       .main-carousel .carousel-cell {
-        height: 520px;
+        height: 530px;
       font-size: 15px; } }
   .main-carousel .flickity-page-dots {
     left: 22%;
@@ -7691,13 +7691,14 @@ input[type="submit"]:disabled {
 
 .carousel-nav {
   position: absolute;
-  bottom: 55px;
+  bottom: 45px;
   right: 0;
   text-align: center;
   list-style: none;
   /* white circles */ }
   @media (max-width: 991.98px) {
     .carousel-nav {
+  bottom: 55px;
       display: -webkit-box;
       display: -ms-flexbox;
       display: flex;
