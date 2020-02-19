@@ -8847,6 +8847,7 @@ table td {
 }
 
 .pool-overview-stat-title {
+  min-width:115px;
   font-size: 14px;
   padding-bottom: 10px;
   color: #596D81;

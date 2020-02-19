@@ -2,34 +2,34 @@
 
 <div class="d-flex flex-row flex-wrap">
     
-    <div class="d-flex flex-column py-3 pr-4">
+    <div class="d-flex flex-column py-3 pr-2">
         <span class="pool-overview-stat-title">Pool Hash Rate</span>
         <div><span class="pool-overview-stat-value" id="pool-hash-rate">{{ .PoolHashRate }}</span></div>
     </div>
 
-    <div class="d-flex flex-column py-3 px-4">
+    <div class="d-flex flex-column py-3 pr-2">
         <span class="pool-overview-stat-title">Last Work Height</span>
         <div><span class="pool-overview-stat-value" id="last-work-height">{{ .LastWorkHeight }}</span></div>
     </div>
 
-    <div class="d-flex flex-column py-3 px-4">
+    <div class="d-flex flex-column py-3 pr-2">
         <span class="pool-overview-stat-title">Network</span>
         <div><span class="pool-overview-stat-value">{{.Network}}</span></div>
     </div>
 
-    <div class="d-flex flex-column py-3 px-4">
+    <div class="d-flex flex-column py-3 pr-2">
         <span class="pool-overview-stat-title">Pool Fee</span>
         <div><span class="pool-overview-stat-value">{{floatToPercent .PoolFee }}</span></div>
     </div>
 
     {{ if not .SoloPool }}
     
-    <div class="d-flex flex-column py-3 px-4">
+    <div class="d-flex flex-column py-3 pr-2">
         <span class="pool-overview-stat-title">Payment Method</span>
         <div><span class="pool-overview-stat-value">{{ upper .PaymentMethod }}</span></div>
     </div>
 
-    <div class="d-flex flex-column py-3 px-4">
+    <div class="d-flex flex-column py-3 pr-2">
         <span class="pool-overview-stat-title">Last Payment Height</span>
         <div><span class="pool-overview-stat-value" id="last-payment-height">{{ .LastPaymentHeight }}</span></div>
     </div>
