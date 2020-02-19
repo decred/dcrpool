@@ -36,40 +36,41 @@
     <div class="row">
 
         <div class="col-12 p-3">
-            <div class="block__content">
-                <h1>Miner Configuration</h1>
-                <div class="main-carousel">
-                    <div class="carousel-cell">
-                        <div class="row">
-                            <div class="col-lg-6 col-12 main-carousel__image-container px-0 pl-lg-3 py-3 text-center">
-                                <picture>
-                                    <img src="/images/carousel_1.png" class="img-fluid">
-                                </picture>
+            <div class="main-carousel">
+                <div class="carousel-cell">
+                    <div class="row m-0">
+                        <div class="col-lg-4 col-12 main-carousel__image-container text-center">
+                            <div class="carousel-image" style="background-image:url('/images/carousel_1.svg');">
                             </div>
-                            <div class="col-lg-6 col-12 pl-3">
-                                <h2>Identify the Miner</h2>
-                                <p>dcrpool currently supports:</p>
+                        </div>
+                        <div class="col-lg-8 col-12 py-3 px-4">
+                            <h2>Identify the Miner</h2>
+                            <p>dcrpool currently supports:</p>
+                            <div class="d-flex flex-row">
                                 <ul>
                                     <li>Innosilicon D9</li>
                                     <li>Antminer DR3</li>
+                                </ul>
+                                <ul>
                                     <li>Antminer DR5</li>
                                     <li>Whatsminer D1</li>
                                 </ul>
-                                <p>For Innosilicon D9 the pool only supports <a href="https://drive.google.com/open?id=1wofB_OUDkB2gxz_IS7wM8Br6ogKdYDmY">D9_20180602_094459.swu</a> 
-                                    firmware, ensure the D9 has the supported firmware before connecting.</p>
                             </div>
+                            <p>For Innosilicon D9 the pool only supports <a href="https://drive.google.com/open?id=1wofB_OUDkB2gxz_IS7wM8Br6ogKdYDmY">D9_20180602_094459.swu</a> 
+                                firmware, ensure the D9 has the supported firmware before connecting.</p>
                         </div>
                     </div>
-                    <div class="carousel-cell">
-                        <div class="row">
-                            <div class="col-lg-6 col-12 main-carousel__image-container px-0 pl-lg-3 py-3 text-center">
-                                <picture>
-                                    <img src="/images/carousel_2.png" class="img-fluid">
-                                </picture>
+                </div>
+                <div class="carousel-cell">
+                    <div class="row m-0">
+                        <div class="col-lg-4 col-12 main-carousel__image-container text-center">
+                            <div class="carousel-image" style="background-image:url('/images/carousel_2.svg');">
                             </div>
-                            <div class="col-lg-6 col-12 pl-3">
-                                <h2>Connect the Miner</h2>
-                                <p>To connect, set the pool URL to <span class="config">'localhost'</span>, and the miner port to:</p>
+                        </div>
+                        <div class="col-lg-8 col-12 py-3 px-4">
+                            <h2>Connect the Miner</h2>
+                            <p>To connect, set the pool URL to <span class="config">'localhost'</span>, and the miner port to:</p>
+                            <div class="d-flex flex-row">
                                 <ul>
                                     <li>
                                         <span class="config">{{.MinerPorts.innosilicond9}}</span>&nbsp;(Innosilicon D9)
@@ -77,6 +78,8 @@
                                     <li>
                                         <span class="config">{{.MinerPorts.antminerdr3}}</span>&nbsp;(Antminer DR3)
                                     </li>
+                                </ul>
+                                <ul>
                                     <li>
                                         <span class="config">{{.MinerPorts.antminerdr5}}</span>&nbsp;(Antminer DR5)
                                     </li>
@@ -84,31 +87,30 @@
                                         <span class="config">{{.MinerPorts.whatsminerd1}}</span>&nbsp;(Whatsminer D1)
                                     </li>
                                 </ul>
-                                <p>The username of the miner should be the payment address for receiving rewards and a unique name identifying the client, formatted as <span class="config">'address.name'</span></p>
                             </div>
-                        </div>
-                    </div>
-                    <div class="carousel-cell">
-                        <div class="row">
-                            <div class="col-lg-6 col-12 main-carousel__image-container px-0 pl-lg-3 py-3 text-center">
-                                <picture>
-                                    <img src="/images/carousel_3.png" class="img-fluid">
-                                </picture>
-                            </div>
-                            <div class="col-lg-6 col-12 pl-3">
-                                <h2>Confirm Miner Connection</h2>
-                                <p>To confirm a miner connection, look up its account information with 
-                                    its associated miner address. It should be listed as a connected miner with its 
-                                    curent hash rate in the 'Connected Clients' section if connected.</p>
-                            </div>
+                            <p>The username of the miner should be the payment address for receiving rewards and a unique name identifying the client, formatted as <span class="config">'address.name'</span></p>
                         </div>
                     </div>
                 </div>
-                <ul class="carousel-nav col-12 m-0">
-                </ul>
-
-
+                <div class="carousel-cell">
+                    <div class="row m-0">
+                        <div class="col-lg-4 col-12 main-carousel__image-container text-center">
+                            <div class="carousel-image" style="background-image:url('/images/carousel_3.svg');">
+                            </div>
+                        </div>
+                        <div class="col-lg-8 col-12 py-3 px-4">
+                            <h2>Confirm Miner Connection</h2>
+                            <p>To confirm a miner connection, look up its account information with 
+                                its associated miner address. It should be listed as a connected miner with its 
+                                curent hash rate in the 'Connected Clients' section if connected.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
+            <ul class="carousel-nav col-12 m-0">
+            </ul>
+
+
         </div>
     </div>
 

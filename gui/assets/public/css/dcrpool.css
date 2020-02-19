@@ -7346,17 +7346,12 @@ h1 {
       cursor: pointer; }
 
 h2 {
-  font-size: 17px;
+  font-size: 24px;
   line-height: 1.26;
   letter-spacing: normal;
   color: #091440;
-  font-weight: bold; }
-  @media screen and (min-width: 576px) {
-    h2 {
-      font-size: calc(17px + 2 * (100vw - 576px) / 864); } }
-  @media screen and (min-width: 1440px) {
-    h2 {
-      font-size: 19px; } }
+  font-weight: normal; }
+
 
 .text--size-11 {
   font-size: 11px;
@@ -7572,20 +7567,57 @@ input[type="submit"]:disabled {
       background-color: #1A59F7; }
 
 .main-carousel {
+  background-color: #ffffff;
+  color: #091440;
   font-size: 16px;
   width: 100%;
   margin-bottom: 20px;
   /* position dots in carousel */
   /* icon color */
   /* position outside */ }
+
+.main-carousel h2 {
+  margin-bottom: 20px;
+}
+.main-carousel p {
+  margin-bottom: 10px;
+}
+
+.main-carousel li {
+  padding-left: 10px;
+  padding-bottom: 10px;
+}
+.main-carousel ul {
+  list-style: none; /* Remove default bullets */
+  padding-left: 10px;
+  margin: 10px;
+}
+
+.main-carousel ul li::before {
+  content: "\2022"; /* Add custom bullets */
+  color: #2ED8A3;
+  font-weight: bold;
+  display: inline-block;
+  width: 1em;
+  margin-left: -1em;
+}
+  .carousel-image {
+    background-repeat:no-repeat;
+    background-position: center;
+    margin-left: 10px;
+    height: 100%;
+    width: 100%;
+
+  }
   .main-carousel__image-container {
+    background-color: #091440;
     min-height: 170px; }
     @media (min-width: 768px) {
       .main-carousel__image-container {
-        min-height: 145px; } }
+        min-height: 190px; } }
     @media (min-width: 992px) {
       .main-carousel__image-container {
-        min-height: 320px; } }
+        min-height: 275px; } }
     .main-carousel__image-container img {
       -o-object-fit: cover;
          object-fit: cover; }
@@ -7597,8 +7629,7 @@ input[type="submit"]:disabled {
       .main-carousel .carousel-cell {
         height: 510px;
         background-color: #fff;
-        padding-left: 15px;
-        padding-right: 15px; } }
+       } }
     @media (max-width: 767.98px) {
       .main-carousel .carousel-cell {
         height: 520px;
@@ -7660,7 +7691,7 @@ input[type="submit"]:disabled {
 
 .carousel-nav {
   position: absolute;
-  bottom: 40px;
+  bottom: 55px;
   right: 0;
   text-align: center;
   list-style: none;
@@ -7675,7 +7706,7 @@ input[type="submit"]:disabled {
               align-items: center; } }
   @media (min-width: 992px) {
     .carousel-nav {
-      height: 20px; } }
+      height: 30px; } }
   .carousel-nav li {
     display: inline-block;
     cursor: pointer;
