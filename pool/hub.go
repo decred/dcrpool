@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -58,7 +59,7 @@ var (
 	// generate a valid share when solo pool mode is activated. This is set to a
 	// high value to reduce the number of round trips to the pool by connected
 	// pool clients since pool shares are a non factor in solo pool mode.
-	soloMaxGenTime = new(big.Int).SetInt64(28)
+	soloMaxGenTime = time.Second * 28
 )
 
 // HubConfig represents configuration details for the hub.
@@ -68,11 +69,11 @@ type HubConfig struct {
 	DcrdRPCCfg            *rpcclient.ConnConfig
 	PoolFee               float64
 	MaxTxFeeReserve       dcrutil.Amount
-	MaxGenTime            uint64
+	MaxGenTime            time.Duration
 	WalletRPCCertFile     string
 	WalletGRPCHost        string
 	PaymentMethod         string
-	LastNPeriod           uint32
+	LastNPeriod           time.Duration
 	WalletPass            string
 	MinPayment            dcrutil.Amount
 	SoloPool              bool
@@ -138,10 +139,13 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	}
 	h.blake256Pad = generateBlake256Pad()
 	powLimit := new(big.Rat).SetInt(h.cfg.ActiveNet.PowLimit)
-	maxGenTime := new(big.Int).SetUint64(h.cfg.MaxGenTime)
+	maxGenTime := h.cfg.MaxGenTime
 	if h.cfg.SoloPool {
 		maxGenTime = soloMaxGenTime
 	}
+
+	log.Infof("Maximum work submission generation time at "+
+		"pool difficulty is %s.", maxGenTime)
 
 	var err error
 	h.poolDiffs, err = NewDifficultySet(h.cfg.ActiveNet, powLimit, maxGenTime)

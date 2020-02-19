@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/decred/dcrd/chaincfg/v2"
 )
@@ -43,12 +44,14 @@ type DifficultySet struct {
 }
 
 // NewDifficultySet generates difficulty data for all supported mining clients.
-func NewDifficultySet(net *chaincfg.Params, powLimit *big.Rat, maxGenTime *big.Int) (*DifficultySet, error) {
+func NewDifficultySet(net *chaincfg.Params, powLimit *big.Rat, maxGenTime time.Duration) (*DifficultySet, error) {
+	// TODO: Use SetInt64 once go 1.13 becomes the minumum version tested against.
+	genTime := new(big.Int).SetUint64(uint64(maxGenTime.Seconds()))
 	set := &DifficultySet{
 		diffs: make(map[string]*DifficultyInfo),
 	}
 	for miner, hashrate := range minerHashes {
-		target, difficulty, err := calculatePoolTarget(net, hashrate, maxGenTime)
+		target, difficulty, err := calculatePoolTarget(net, hashrate, genTime)
 		if err != nil {
 			desc := fmt.Sprintf("failed to calculate pool target for %s", miner)
 			return nil, MakeError(ErrCalcPoolTarget, desc, err)

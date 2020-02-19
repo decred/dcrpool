@@ -23,9 +23,9 @@ type PaymentMgrConfig struct {
 	ActiveNet *chaincfg.Params
 	// PoolFee represents the fee charged to participating accounts of the pool.
 	PoolFee float64
-	// LastNPeriod represents the period, in seconds, to source shares from
-	// with the PPLNS payment scheme.
-	LastNPeriod uint32
+	// LastNPeriod represents the period to source shares from when using the
+	// PPLNS payment scheme.
+	LastNPeriod time.Duration
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
 	// PaymentMethod represents the payment scheme of the pool.
@@ -297,7 +297,7 @@ func (pm *PaymentMgr) PPSSharePercentages() (map[string]*big.Rat, error) {
 // accounts based on work performed measured by the PPLNS payment scheme.
 func (pm *PaymentMgr) PPLNSSharePercentages() (map[string]*big.Rat, error) {
 	now := time.Now()
-	min := now.Add(-(time.Second * time.Duration(pm.cfg.LastNPeriod)))
+	min := now.Add(-pm.cfg.LastNPeriod)
 	minNano := nanoToBigEndianBytes(min.UnixNano())
 	shares, err := PPLNSEligibleShares(pm.cfg.DB, minNano)
 	if err != nil {
@@ -384,7 +384,7 @@ func (pm *PaymentMgr) payPerLastNShares(coinbase dcrutil.Amount, height uint32) 
 		if err != nil {
 			return err
 		}
-		minNano := time.Now().Add(-(time.Second * time.Duration(pm.cfg.LastNPeriod))).UnixNano()
+		minNano := time.Now().Add(-pm.cfg.LastNPeriod).UnixNano()
 		return pruneShares(tx, minNano)
 	})
 	return err

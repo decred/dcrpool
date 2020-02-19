@@ -41,9 +41,9 @@ const (
 	defaultDcrdRPCHost           = "127.0.0.1:19109"
 	defaultWalletGRPCHost        = "127.0.0.1:51028"
 	defaultPoolFeeAddr           = ""
-	defaultMaxGenTime            = 15
+	defaultMaxGenTime            = time.Second * 15
 	defaultPoolFee               = 0.01
-	defaultLastNPeriod           = 86400 // 1 day
+	defaultLastNPeriod           = time.Hour * 24
 	defaultWalletPass            = ""
 	defaultMaxTxFeeReserve       = 0.1
 	defaultSoloPool              = false
@@ -78,43 +78,43 @@ var runServiceCommand func(string) error
 
 // config defines the configuration options for the pool.
 type config struct {
-	HomeDir               string   `long:"homedir" ini-name:"homedir" description:"Path to application home directory."`
-	ConfigFile            string   `long:"configfile" ini-name:"configfile" description:"Path to configuration file."`
-	DataDir               string   `long:"datadir" ini-name:"datadir" description:"The data directory."`
-	ActiveNet             string   `long:"activenet" ini-name:"activenet" description:"The active network being mined on. {testnet3, mainnet, simnet}"`
-	GUIPort               uint32   `long:"guiport" ini-name:"guiport" description:"The pool GUI port."`
-	DebugLevel            string   `long:"debuglevel" ini-name:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
-	LogDir                string   `long:"logdir" ini-name:"logdir" description:"Directory to log output."`
-	DBFile                string   `long:"dbfile" ini-name:"dbfile" description:"Path to the database file."`
-	DcrdRPCHost           string   `long:"dcrdrpchost" ini-name:"dcrdrpchost" description:"The ip:port to establish an RPC connection for dcrd."`
-	DcrdRPCCert           string   `long:"dcrdrpccert" ini-name:"dcrdrpccert" description:"The dcrd RPC certificate."`
-	WalletGRPCHost        string   `long:"walletgrpchost" ini-name:"walletgrpchost" description:"The ip:port to establish a GRPC connection for the wallet."`
-	WalletRPCCert         string   `long:"walletrpccert" ini-name:"walletrpccert" description:"The wallet RPC certificate."`
-	RPCUser               string   `long:"rpcuser" ini-name:"rpcuser" description:"Username for RPC connections."`
-	RPCPass               string   `long:"rpcpass" ini-name:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
-	PoolFeeAddrs          []string `long:"poolfeeaddrs" ini-name:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
-	PoolFee               float64  `long:"poolfee" ini-name:"poolfee" description:"The fee charged for pool participation. eg. 0.01 (1%), 0.05 (5%)."`
-	MaxTxFeeReserve       float64  `long:"maxtxfeereserve" ini-name:"maxtxfeereserve" description:"The maximum amount reserved for transaction fees, in DCR."`
-	MaxGenTime            uint64   `long:"maxgentime" ini-name:"maxgentime" description:"The share creation target time for the pool in seconds. This currently should be below 30 seconds to increase the likelihood a work submission for clients between new work distributions by the pool."`
-	PaymentMethod         string   `long:"paymentmethod" ini-name:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
-	LastNPeriod           uint32   `long:"lastnperiod" ini-name:"lastnperiod" description:"The time period of interest, in seconds, when using PPLNS payment scheme."`
-	WalletPass            string   `long:"walletpass" ini-name:"walletpass" description:"The wallet passphrase."`
-	MinPayment            float64  `long:"minpayment" ini-name:"minpayment" description:"The minimum payment to process for an account."`
-	SoloPool              bool     `long:"solopool" ini-name:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
-	BackupPass            string   `long:"backuppass" ini-name:"backuppass" description:"The admin password, required for database backup."`
-	GUIDir                string   `long:"guidir" ini-name:"guidir" description:"The path to the directory containing the pool's user interface assets (templates, css etc.)"`
-	Domain                string   `long:"domain" ini-name:"domain" description:"The domain of the mining pool, required for TLS."`
-	UseLEHTTPS            bool     `long:"uselehttps" ini-name:"uselehttps" description:"This enables HTTPS using a Letsencrypt certificate. By default the pool uses a self-signed certificate for HTTPS."`
-	TLSCert               string   `long:"tlscert" ini-name:"tlscert" description:"Path to the TLS cert file."`
-	TLSKey                string   `long:"tlskey" ini-name:"tlskey" description:"Path to the TLS key file."`
-	Designation           string   `long:"designation" ini-name:"designation" description:"The designated codename for this pool. Customises the logo in the top toolbar."`
-	MaxConnectionsPerHost uint32   `long:"maxconnperhost" ini-name:"maxconnperhost" description:"The maximum number of connections allowed per host."`
-	Profile               string   `long:"profile" ini-name:"profile" description:"Enable HTTP profiling on given [addr:]port -- NOTE port must be between 1024 and 65536"`
-	CPUPort               uint32   `long:"cpuport" ini-name:"cpuport" description:"CPU miner connection port."`
-	D9Port                uint32   `long:"d9port" ini-name:"d9port" description:"Innosilicon D9 connection port."`
-	DR3Port               uint32   `long:"dr3port" ini-name:"dr3port" description:"Antminer DR3 connection port."`
-	DR5Port               uint32   `long:"dr5port" ini-name:"dr5port" description:"Antminer DR5 connection port."`
-	D1Port                uint32   `long:"d1port" ini-name:"d1port" description:"Whatsminer D1 connection port."`
+	HomeDir               string        `long:"homedir" ini-name:"homedir" description:"Path to application home directory."`
+	ConfigFile            string        `long:"configfile" ini-name:"configfile" description:"Path to configuration file."`
+	DataDir               string        `long:"datadir" ini-name:"datadir" description:"The data directory."`
+	ActiveNet             string        `long:"activenet" ini-name:"activenet" description:"The active network being mined on. {testnet3, mainnet, simnet}"`
+	GUIPort               uint32        `long:"guiport" ini-name:"guiport" description:"The pool GUI port."`
+	DebugLevel            string        `long:"debuglevel" ini-name:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
+	LogDir                string        `long:"logdir" ini-name:"logdir" description:"Directory to log output."`
+	DBFile                string        `long:"dbfile" ini-name:"dbfile" description:"Path to the database file."`
+	DcrdRPCHost           string        `long:"dcrdrpchost" ini-name:"dcrdrpchost" description:"The ip:port to establish an RPC connection for dcrd."`
+	DcrdRPCCert           string        `long:"dcrdrpccert" ini-name:"dcrdrpccert" description:"The dcrd RPC certificate."`
+	WalletGRPCHost        string        `long:"walletgrpchost" ini-name:"walletgrpchost" description:"The ip:port to establish a GRPC connection for the wallet."`
+	WalletRPCCert         string        `long:"walletrpccert" ini-name:"walletrpccert" description:"The wallet RPC certificate."`
+	RPCUser               string        `long:"rpcuser" ini-name:"rpcuser" description:"Username for RPC connections."`
+	RPCPass               string        `long:"rpcpass" ini-name:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
+	PoolFeeAddrs          []string      `long:"poolfeeaddrs" ini-name:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
+	PoolFee               float64       `long:"poolfee" ini-name:"poolfee" description:"The fee charged for pool participation. eg. 0.01 (1%), 0.05 (5%)."`
+	MaxTxFeeReserve       float64       `long:"maxtxfeereserve" ini-name:"maxtxfeereserve" description:"The maximum amount reserved for transaction fees, in DCR."`
+	MaxGenTime            time.Duration `long:"maxgentime" ini-name:"maxgentime" description:"The share creation target time for the pool. Valid time units are {s,m,h}. Minimum 2 seconds. This currently should be below 30 seconds to increase the likelihood a work submission for clients between new work distributions by the pool."`
+	PaymentMethod         string        `long:"paymentmethod" ini-name:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
+	LastNPeriod           time.Duration `long:"lastnperiod" ini-name:"lastnperiod" description:"The time period of interest when using PPLNS payment scheme. Valid time units are {s,m,h}. Minimum 60 seconds."`
+	WalletPass            string        `long:"walletpass" ini-name:"walletpass" description:"The wallet passphrase."`
+	MinPayment            float64       `long:"minpayment" ini-name:"minpayment" description:"The minimum payment to process for an account."`
+	SoloPool              bool          `long:"solopool" ini-name:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
+	BackupPass            string        `long:"backuppass" ini-name:"backuppass" description:"The admin password, required for database backup."`
+	GUIDir                string        `long:"guidir" ini-name:"guidir" description:"The path to the directory containing the pool's user interface assets (templates, css etc.)"`
+	Domain                string        `long:"domain" ini-name:"domain" description:"The domain of the mining pool, required for TLS."`
+	UseLEHTTPS            bool          `long:"uselehttps" ini-name:"uselehttps" description:"This enables HTTPS using a Letsencrypt certificate. By default the pool uses a self-signed certificate for HTTPS."`
+	TLSCert               string        `long:"tlscert" ini-name:"tlscert" description:"Path to the TLS cert file."`
+	TLSKey                string        `long:"tlskey" ini-name:"tlskey" description:"Path to the TLS key file."`
+	Designation           string        `long:"designation" ini-name:"designation" description:"The designated codename for this pool. Customises the logo in the top toolbar."`
+	MaxConnectionsPerHost uint32        `long:"maxconnperhost" ini-name:"maxconnperhost" description:"The maximum number of connections allowed per host."`
+	Profile               string        `long:"profile" ini-name:"profile" description:"Enable HTTP profiling on given [addr:]port -- NOTE port must be between 1024 and 65536"`
+	CPUPort               uint32        `long:"cpuport" ini-name:"cpuport" description:"CPU miner connection port."`
+	D9Port                uint32        `long:"d9port" ini-name:"d9port" description:"Innosilicon D9 connection port."`
+	DR3Port               uint32        `long:"dr3port" ini-name:"dr3port" description:"Antminer DR3 connection port."`
+	DR5Port               uint32        `long:"dr5port" ini-name:"dr5port" description:"Antminer DR5 connection port."`
+	D1Port                uint32        `long:"d1port" ini-name:"d1port" description:"Whatsminer D1 connection port."`
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
 	net                   *chaincfg.Params
@@ -559,6 +559,26 @@ func loadConfig() (*config, []string, error) {
 		}
 	}
 
+	// Do not allow maxgentime durations that are too short.
+	if cfg.MaxGenTime < time.Second*2 {
+		str := "%s: the maxgentime option may not be less " +
+			"than 2s -- parsed [%v]"
+		err := fmt.Errorf(str, funcName, cfg.MaxGenTime)
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
+	}
+
+	// Do not allow lastnperiod durations that are too short.
+	if cfg.LastNPeriod < time.Second*60 {
+		str := "%s: the lastnperiod option may not be less " +
+			"than 60s -- parsed [%v]"
+		err := fmt.Errorf(str, funcName, cfg.LastNPeriod)
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
+	}
+
 	// Warn about missing config file only after all other configuration is
 	// done. This prevents the warning on help messages and invalid
 	// options. Note this should go directly before the return.
@@ -600,7 +620,7 @@ func loadConfig() (*config, []string, error) {
 			cfg.Profile = net.JoinHostPort("127.0.0.1", cfg.Profile)
 		}
 
-		// Check the Profile is a valid address
+		// Ensure the profiling address is a valid tcp address.
 		_, portStr, err := net.SplitHostPort(cfg.Profile)
 		if err != nil {
 			str := "%s: profile: %s"
