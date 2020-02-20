@@ -7571,7 +7571,6 @@ input[type="submit"]:disabled {
   color: #091440;
   font-size: 16px;
   width: 100%;
-  margin-bottom: 20px;
   /* position dots in carousel */
   /* icon color */
   /* position outside */ }
@@ -7691,7 +7690,7 @@ input[type="submit"]:disabled {
 
 .carousel-nav {
   position: absolute;
-  bottom: 45px;
+  bottom: 20px;
   right: 0;
   text-align: center;
   list-style: none;
@@ -8812,27 +8811,27 @@ table td {
 }
 
 @keyframes flash {
-  0% { background-color: transparent; }
-  50% { background-color: rgba(100, 100, 255, 0.5); }
-  100% { background-color: transparent; }
+  0%   { color: #091440; }
+  50%  { color: #2ED8A3; }
+  100% { color: #091440; }
 }
 
 @-webkit-keyframes flash {
-  0% { background-color: transparent; }
-  50% { background-color: rgba(100, 100, 255, 0.5); }
-  100% { background-color: transparent; }
+  0%   { color: #091440; }
+  50%  { color: #2ED8A3; }
+  100% { color: #091440; }
 }
 
 @-moz-keyframes flash {
-  0% { background-color: transparent; }
-  50% { background-color: rgba(100, 100, 255, 0.5); }
-  100% { background-color: transparent; }
+  0%   { color: #091440; }
+  50%  { color: #2ED8A3; }
+  100% { color: #091440; }
 }
 
 @-ms-keyframes flash {
-  0% { background-color: transparent; }
-  50% { background-color: rgba(100, 100, 255, 0.5); }
-  100% { background-color: transparent; }
+  0%   { color: #091440; }
+  50%  { color: #2ED8A3; }
+  100% { color: #091440; }
 }
 
 

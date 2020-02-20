@@ -9,7 +9,7 @@
     </div>
 </noscript>
 
-<div class="pool-overview pt-4 pb-3">
+<div class="pool-overview pt-4 pb-3 mb-3">
     <div class="container">
 
         <h1>Account Information</h1>
@@ -35,44 +35,47 @@
 
 
 <div class="container">
-    <div class="col-12 p-3 pt-4 m-auto">
-        <div class="block__content">
-            <h1>Payments Received</h1>
-            
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Work Height</th>
-                        <th>Payment Height</th>
-                        <th>Created On</th>
-                        <th>Amount</th>
-                        <th>Tx ID</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{ range .AccountStats.Payments }}
-                    <tr>
-                        <td><a href="{{ blockURL $.BlockExplorerURL .Height}}"
-                                rel="noopener noreferrer">{{.Height}}</a></td>
-                        <td><a href="{{ blockURL $.BlockExplorerURL .PaidOnHeight}}"
-                                rel="noopener noreferrer">{{.PaidOnHeight}}</a></td>
-                        <td>{{ time .CreatedOn }}</td>
-                        <td>{{ printf "%.3f" .Amount.ToCoin }}&nbsp;DCR</td>
-                        <td><a href="{{ txURL $.BlockExplorerURL .TransactionID}}"
-                                rel="noopener noreferrer">{{ printf "%.10s" .TransactionID }}...</a>
-                        </td>
-                    </tr>
-                    {{else}}
-                    <tr>
-                        <td colspan="100%"><span class="no-data">No payments for account</span></td>
-                    </tr>
-                    {{end}}
-                </tbody>
-            </table>
+    <div class="row">
+        <div class="col-12 p-3">
+            <div class="block__content">
+                <h1>Payments Received</h1>
+                
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Work Height</th>
+                            <th>Payment Height</th>
+                            <th>Created On</th>
+                            <th>Amount</th>
+                            <th>Tx ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .AccountStats.Payments }}
+                        <tr>
+                            <td><a href="{{ blockURL $.BlockExplorerURL .Height}}"
+                                    rel="noopener noreferrer">{{.Height}}</a></td>
+                            <td><a href="{{ blockURL $.BlockExplorerURL .PaidOnHeight}}"
+                                    rel="noopener noreferrer">{{.PaidOnHeight}}</a></td>
+                            <td>{{ time .CreatedOn }}</td>
+                            <td>{{ printf "%.3f" .Amount.ToCoin }}&nbsp;DCR</td>
+                            <td><a href="{{ txURL $.BlockExplorerURL .TransactionID}}"
+                                    rel="noopener noreferrer">{{ printf "%.10s" .TransactionID }}...</a>
+                            </td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td colspan="100%"><span class="no-data">No payments for account</span></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
 
+            </div>
         </div>
-    </div>
 
+    </div>
+    
     <div class="row">
     
         <div class="col-md-6 col-12 p-3">
