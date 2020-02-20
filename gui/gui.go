@@ -29,6 +29,8 @@ import (
 	"github.com/decred/dcrpool/pool"
 )
 
+// Config contains all of the required configuration values for the GUI
+// component
 type Config struct {
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
@@ -110,6 +112,16 @@ type GUI struct {
 	poolHashMtx   sync.RWMutex
 }
 
+type poolStats struct {
+	SoloPool          bool
+	PoolFee           float64
+	Network           string
+	PaymentMethod     string
+	LastWorkHeight    uint32
+	LastPaymentHeight uint32
+	PoolHashRate      string
+}
+
 // route configures the http router of the user interface.
 func (ui *GUI) route() {
 	ui.router = mux.NewRouter()
@@ -127,11 +139,11 @@ func (ui *GUI) route() {
 	ui.router.PathPrefix("/js/").Handler(http.StripPrefix("/js/",
 		http.FileServer(jsDir)))
 
-	ui.router.HandleFunc("/", ui.GetIndex).Methods("GET")
-	ui.router.HandleFunc("/admin", ui.GetAdmin).Methods("GET")
-	ui.router.HandleFunc("/admin", ui.PostAdmin).Methods("POST")
-	ui.router.HandleFunc("/backup", ui.PostBackup).Methods("POST")
-	ui.router.HandleFunc("/logout", ui.PostLogout).Methods("POST")
+	ui.router.HandleFunc("/", ui.Homepage).Methods("GET")
+	ui.router.HandleFunc("/admin", ui.AdminPage).Methods("GET")
+	ui.router.HandleFunc("/admin", ui.AdminLogin).Methods("POST")
+	ui.router.HandleFunc("/backup", ui.DownloadDatabaseBackup).Methods("POST")
+	ui.router.HandleFunc("/logout", ui.AdminLogout).Methods("POST")
 
 	// Websocket endpoint allows the GUI to receive updated values
 	ui.router.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")

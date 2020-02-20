@@ -2,13 +2,21 @@ var quotaSort;
 var minedBlocksSort;
 
 document.addEventListener("DOMContentLoaded", function () {
-    quotaSort = new Tablesort(document.getElementById('work-quota-table'), {
-        descending: true
-    });
+    workTable = document.getElementById('work-quota-table');
 
-    minedBlocksSort = new Tablesort(document.getElementById('mined-blocks-table'), {
-        descending: true
-    });
+    if (workTable != null) {
+        quotaSort = new Tablesort(workTable, {
+            descending: true
+        });
+    }
+
+    minedTable = document.getElementById('mined-blocks-table');
+
+    if (minedTable != null) {
+        minedBlocksSort = new Tablesort(minedTable, {
+            descending: true
+        });
+    }
 
     ws = new WebSocket('wss://' + window.location.host + '/ws');
     ws.addEventListener('message', function (e) {
@@ -44,7 +52,13 @@ function removeElement(el) {
 }
 
 function updateMinedBlocks(minedBlocks) {
-    blocksTableBody = document.getElementById('mined-blocks-table').querySelector('tbody');
+    blocksTable = document.getElementById('mined-blocks-table');
+       
+    if (blocksTable == null) {
+        return;
+    }
+    
+    blocksTableBody = blocksTable.querySelector('tbody');
 
     // Ensure all received blocks are in the table
     var changeMade = false;
@@ -68,7 +82,10 @@ function updateMinedBlocks(minedBlocks) {
             a.innerHTML = minedBlocks[i].blockheight;
             newRow.insertCell(0).appendChild(a);
             newRow.insertCell(1).innerHTML = minedBlocks[i].miner;
-            newRow.insertCell(2).innerHTML = minedBlocks[i].minedby;
+            var span = document.createElement('span');
+            span.innerHTML = minedBlocks[i].minedby;
+            span.className = "dcr-label";
+            newRow.insertCell(2).appendChild(span); 
             flashElement(newRow);
             changeMade = true;
         }
@@ -86,7 +103,13 @@ function updateMinedBlocks(minedBlocks) {
 }
 
 function updateWorkQuotas(quotas) {
-    quotasTableBody = document.getElementById('work-quota-table').querySelector('tbody');
+    quotasTable = document.getElementById('work-quota-table');
+
+    if (quotasTable == null) {
+        return;
+    }
+
+    quotasTableBody = quotasTable.querySelector('tbody');
 
     // Ensure all received quotas are in the table
     var changeMade = false;
@@ -99,7 +122,7 @@ function updateWorkQuotas(quotas) {
                 // Row already exists for this account ID
                 exists = true;
                 // Update percentage for this account if required
-                var percent = rows[j].cells[1];
+                var percent = rows[j].cells[0];
                 if (quotas[i].percent != percent.innerHTML) {
                     percent.innerHTML = quotas[i].percent;
                     flashElement(percent);
@@ -113,8 +136,11 @@ function updateWorkQuotas(quotas) {
             // Add a new row for this account
             var newRow = quotasTableBody.insertRow(0);
             newRow.setAttribute("data-row-id", quotas[i].accountid);
-            newRow.insertCell(0).innerHTML = quotas[i].accountid;
-            newRow.insertCell(1).innerHTML = quotas[i].percent;
+            newRow.insertCell(0).innerHTML = quotas[i].percent;
+            var span = document.createElement('span');
+            span.innerHTML = quotas[i].accountid;
+            span.className = "dcr-label";
+            newRow.insertCell(1).append(span);
             flashElement(newRow);
             changeMade = true;
         }

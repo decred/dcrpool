@@ -18,13 +18,14 @@ type adminPageData struct {
 	Connections map[string][]*pool.ClientInfo
 	CSRF        template.HTML
 	Designation string
+	PoolStats   poolStats
+	Admin       bool
 }
 
-func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
-	pageData := adminPageData{
-		CSRF:        csrf.TemplateField(r),
-		Designation: ui.cfg.Designation,
-	}
+// AdminPage is the handler for "GET /admin". If the current session is
+// authenticated as an admin, the admin.html template is rendered, otherwise the
+// request is redirected to the Homepage handler.
+func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
 
 	session, err := ui.cookieStore.Get(r, "session")
 	if err != nil {
@@ -42,15 +43,39 @@ func (ui *GUI) GetAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if session.Values["IsAdmin"] != true {
-		ui.renderTemplate(w, r, "login", pageData)
+		ui.Homepage(w, r)
 		return
 	}
 
-	pageData.Connections = ui.cfg.FetchClientInfo()
+	ui.poolHashMtx.RLock()
+	poolHash := ui.poolHash
+	ui.poolHashMtx.RUnlock()
+
+	poolStats := poolStats{
+		LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
+		LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
+		PoolHashRate:      poolHash,
+		PaymentMethod:     ui.cfg.PaymentMethod,
+		Network:           ui.cfg.ActiveNet.Name,
+		PoolFee:           ui.cfg.PoolFee,
+		SoloPool:          ui.cfg.SoloPool,
+	}
+
+	pageData := adminPageData{
+		CSRF:        csrf.TemplateField(r),
+		Designation: ui.cfg.Designation,
+		Connections: ui.cfg.FetchClientInfo(),
+		PoolStats:   poolStats,
+		Admin:       true,
+	}
+
 	ui.renderTemplate(w, r, "admin", pageData)
 }
 
-func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
+// AdminLogin is the handler for "POST /admin". If proper admin credentials are
+// supplied, the session is authenticated and the admin.html template is
+// rendered, otherwise the request is redirected to the homepage handler.
+func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	session, err := ui.cookieStore.Get(r, "session")
 	if err != nil {
 		if !strings.Contains(err.Error(), "value is not valid") {
@@ -70,7 +95,7 @@ func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
 
 	if ui.cfg.BackupPass != pass {
 		log.Warn("Unauthorized access")
-		ui.GetAdmin(w, r)
+		ui.Homepage(w, r)
 		return
 	}
 
@@ -84,7 +109,10 @@ func (ui *GUI) PostAdmin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
-func (ui *GUI) PostLogout(w http.ResponseWriter, r *http.Request) {
+// AdminLogout is the handler for "POST /logout". The admin authentication is
+// removed from the current session and the request is redirected to the
+// homepage handler.
+func (ui *GUI) AdminLogout(w http.ResponseWriter, r *http.Request) {
 	session, err := ui.cookieStore.Get(r, "session")
 	if err != nil {
 		if !strings.Contains(err.Error(), "value is not valid") {
@@ -102,10 +130,13 @@ func (ui *GUI) PostLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func (ui *GUI) PostBackup(w http.ResponseWriter, r *http.Request) {
+// DownloadDatabaseBackup is the handler for "POST /backup". If the current
+// session is authenticated as an admin, a binary representation of the whole
+// database is generated and returned to the client.
+func (ui *GUI) DownloadDatabaseBackup(w http.ResponseWriter, r *http.Request) {
 	session, err := ui.cookieStore.Get(r, "session")
 	if err != nil {
 		if !strings.Contains(err.Error(), "value is not valid") {

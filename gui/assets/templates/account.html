@@ -1,0 +1,147 @@
+{{define "account"}}
+{{template "header" .}}
+
+<noscript style="display:inherit;">
+    <div class="snackbar snackbar-warning">
+        <div class="snackbar-message">
+            <p>Javascript seems to be disabled. This will break some site features.</p>
+        </div>
+    </div>
+</noscript>
+
+<div class="pool-overview pt-4 pb-3 mb-3">
+    <div class="container">
+
+        <h1>Account Information</h1>
+
+        <div class="row">
+            <div class="col-lg-7 col-12 py-2">
+                <div class="d-flex flex-column">
+                    <div class="account-info-title pb-2">Account</div>
+                    <div><span class="dcr-label">{{.AccountStats.AccountID}}</span></div>
+                </div>
+            </div>
+
+            <div class="col-lg-5 col-12 py-2">
+                <div class="d-flex flex-column">
+                    <div class="account-info-title pb-2">Address</div>
+                    <div><span class="dcr-label">{{.Address}}</span></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+
+<div class="container">
+    <div class="row">
+        <div class="col-12 p-3">
+            <div class="block__content">
+                <h1>Payments Received</h1>
+                
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Work Height</th>
+                            <th>Payment Height</th>
+                            <th>Created On</th>
+                            <th>Amount</th>
+                            <th>Tx ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .AccountStats.Payments }}
+                        <tr>
+                            <td><a href="{{ blockURL $.BlockExplorerURL .Height}}"
+                                    rel="noopener noreferrer">{{.Height}}</a></td>
+                            <td><a href="{{ blockURL $.BlockExplorerURL .PaidOnHeight}}"
+                                    rel="noopener noreferrer">{{.PaidOnHeight}}</a></td>
+                            <td>{{ time .CreatedOn }}</td>
+                            <td>{{ printf "%.3f" .Amount.ToCoin }}&nbsp;DCR</td>
+                            <td><a href="{{ txURL $.BlockExplorerURL .TransactionID}}"
+                                    rel="noopener noreferrer">{{ printf "%.10s" .TransactionID }}...</a>
+                            </td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td colspan="100%"><span class="no-data">No payments for account</span></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+
+            </div>
+        </div>
+
+    </div>
+    
+    <div class="row">
+    
+        <div class="col-md-6 col-12 p-3">
+            <div class="block__content">
+                <h1>Blocks Mined</h1>
+
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Height</th>
+                            <th>Confirmed</th>
+                            <th>Miner</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .AccountStats.MinedWork }}
+                        <tr>
+                            <td><a href="{{ blockURL $.BlockExplorerURL .Height}}"
+                                    rel="noopener noreferrer">{{.Height}}</a></td>
+                            <td>{{.Confirmed}}</td>
+                            <td>{{.Miner}}</td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td colspan="100%"><span class="no-data">No mined work</span></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+
+            </div>
+        </div>
+
+
+        <div class="col-md-6 col-12 p-3">
+            <div class="block__content">
+                <h1>Connected Clients</h1>
+
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Miner</th>
+                            <th>Hash Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .AccountStats.Clients }}
+                        <tr>
+                            <td>{{.Miner}}</td>
+                            <td>{{hashString .HashRate}}</td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td colspan="100%"><span class="no-data">No connected clients</span></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+
+            </div>
+        </div>
+
+</div>
+
+<script src='/js/modal.js'></script>
+
+</body>
+</html>
+{{end}}

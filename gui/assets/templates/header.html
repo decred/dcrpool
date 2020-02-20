@@ -4,14 +4,19 @@
 
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>dcrpool</title>
-    <link rel="stylesheet" type="text/css" href="/css/bootstrap-4.3.1.min.css">
+    <title>{{.Designation}} pool</title>
+    <link rel="stylesheet" type="text/css" href="/css/vendor/bootstrap-4.4.1.min.css">
     <link rel="stylesheet" type="text/css" href="/css/fonts.css">
     <link rel="stylesheet" type="text/css" href="/css/dcrpool.css">
 
-    <script src='/js/tablesort.min.js'></script>
-    <script src='/js/tablesort.number.min.js'></script>
-    <script src='/js/socket.js'></script>
+    <script src='/js/vendor/tablesort.min.js'></script>
+    <script src='/js/vendor/tablesort.number.min.js'></script>
+
+    <script src="/js/vendor/jquery-slim-3.4.1.min.js"></script>
+    <script src="/js/vendor/popper-1.16.0.min.js"></script>
+    <script src="/js/vendor/bootstrap-4.4.1.min.js"></script>
+	<script src="/js/vendor/flickity.pkgd.min.js"></script>
+    
 
     <!--  Custom favicon  -->
     <!-- Apple PWA -->
@@ -46,16 +51,17 @@
 <body>
     <nav class="site-header py-sm-3 px-sm-5 navbar">
         <div class="container flex-nowrap">
+
             <div>
                 <a class="py-1 border-0 d-flex justify-content-start align-items-center" href="/"
                     rel="noopener noreferrer">
                     <div class="logo--logo">
                         <svg xmlns="http://www.w3.org/2000/svg" width="23" height="20" fill="none" viewBox="0 0 23 20">
-                            <path fill="#E9F8FE" fill-opacity="0" d="M0 0h23v19.167H0z"></path>
-                            <path fill="#E9F8FE"
+                            <path fill="#091440" fill-opacity="0" d="M0 0h23v19.167H0z"></path>
+                            <path fill="#091440"
                                 d="M4.792 4.792L0 0h5.175l7.667 7.667H7.667a3.834 3.834 0 1 0 0 7.666h1.917l3.833 3.834h-5.75A7.667 7.667 0 0 1 0 11.5c0-3.11 1.533-5.615 4.792-6.708z">
                             </path>
-                            <path fill="#E9F8FE"
+                            <path fill="#091440"
                                 d="M18.208 14.375L23 19.167h-5.175L10.158 11.5h5.175a3.834 3.834 0 0 0 0-7.667h-1.917L9.583 0h5.75A7.667 7.667 0 0 1 23 7.667c0 3.109-1.533 5.615-4.792 6.708z">
                             </path>
                         </svg>
@@ -67,19 +73,54 @@
                 </a>
             </div>
 
-            <div class="search-container pl-2">
-                <form class="search-form" action="" method="get">
-                    <input type="text" name="address" class="top-search" placeholder="Search for your mining address..."
-                        spellcheck="false">
-                    <button class="search-bttn">
-                        <img class="info-icon" src="/images/search.svg" alt="">
-                    </button>
-                </form>
+            {{ if not .Admin }}
+            <a class="modalbtn" data-toggle="modal" data-target="#accountModal"></a>
+
+            <div class="modal fade" id="accountModal">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h1 class="modal-title">Account Information</h1>
+                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <p>To know your mining account details, enter your mining address.</p>
+                            <form class="modal-form" id="search-form" action="/" method="get">
+                                <input type="text" name="address" class="modal-input" placeholder="Mining Address" spellcheck="false">
+                            </form>
+                            <div class="d-flex flex-row pt-4 align-items-center">
+                                <a data-toggle="modal" href="#adminModal">I'm an Admin</a>
+                                <button form="search-form" type="submit" class="btn btn-primary ml-auto">Enter</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            <div class="modal fade" id="adminModal">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h1 class="modal-title">Admin Login</h1>
+                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <form class="modal-form" id="admin-form" action="/admin" method="post">
+                                <input type="password" name="password" class="modal-input" placeholder="Enter password">
+                                {{.CSRF}}
+                            </form>
+                            <div class="d-flex flex-row pt-4 align-items-center">
+                                <a data-toggle="modal" href="#accountModal">I'm not an Admin</a>
+                                <button form="admin-form" type="submit" class="btn btn-primary ml-auto">Login</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+            {{end}}
 
         </div>
     </nav>
 
-    <section class="site-content">
-        <div class="container">
-            {{end}}
+{{end}}
