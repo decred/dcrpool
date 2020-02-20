@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"strings"
 
 	"github.com/decred/dcrpool/pool"
 	"github.com/gorilla/csrf"
@@ -42,14 +41,11 @@ type AccountStats struct {
 // provided, the account.html template is rendered and populated with the
 // relevant account information, otherwise the index.html template is rendered.
 func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
-	session, err := ui.cookieStore.Get(r, "session")
+	session, err := getSession(r, ui.cookieStore)
 	if err != nil {
-		if !strings.Contains(err.Error(), "value is not valid") {
-			log.Errorf("session error: %v", err)
-			return
-		}
-
-		log.Errorf("session error: %v, new session generated", err)
+		log.Errorf("getSession error: %v", err)
+		http.Error(w, "Session error", http.StatusInternalServerError)
+		return
 	}
 
 	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {

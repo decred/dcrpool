@@ -165,6 +165,18 @@ func (ui *GUI) renderTemplate(w http.ResponseWriter, _ *http.Request, name strin
 	}
 }
 
+func getSession(r *http.Request, cookieStore *sessions.CookieStore) (*sessions.Session, error) {
+	session, err := cookieStore.Get(r, "session")
+	if err != nil {
+		// "value is not valid" occurs if the CSRF secret changes.
+		// This is common and not a cause for concern - no need to error out.
+		if strings.Contains(err.Error(), "securecookie: the value is not valid") {
+			err = nil
+		}
+	}
+	return session, err
+}
+
 // NewGUI creates an instance of the user interface.
 func NewGUI(cfg *Config) (*GUI, error) {
 	ui := &GUI{

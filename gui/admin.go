@@ -7,7 +7,6 @@ package gui
 import (
 	"html/template"
 	"net/http"
-	"strings"
 
 	"github.com/gorilla/csrf"
 
@@ -27,14 +26,11 @@ type adminPageData struct {
 // request is redirected to the Homepage handler.
 func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
 
-	session, err := ui.cookieStore.Get(r, "session")
+	session, err := getSession(r, ui.cookieStore)
 	if err != nil {
-		if !strings.Contains(err.Error(), "value is not valid") {
-			log.Errorf("session error: %v", err)
-			return
-		}
-
-		log.Errorf("session error: %v, new session generated", err)
+		log.Errorf("getSession error: %v", err)
+		http.Error(w, "Session error", http.StatusInternalServerError)
+		return
 	}
 
 	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
@@ -76,14 +72,11 @@ func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
 // supplied, the session is authenticated and the admin.html template is
 // rendered, otherwise the request is redirected to the homepage handler.
 func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
-	session, err := ui.cookieStore.Get(r, "session")
+	session, err := getSession(r, ui.cookieStore)
 	if err != nil {
-		if !strings.Contains(err.Error(), "value is not valid") {
-			log.Errorf("session error: %v", err)
-			return
-		}
-
-		log.Errorf("session error: %v, new session generated", err)
+		log.Errorf("getSession error: %v", err)
+		http.Error(w, "Session error", http.StatusInternalServerError)
+		return
 	}
 
 	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
@@ -113,14 +106,11 @@ func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
 // removed from the current session and the request is redirected to the
 // homepage handler.
 func (ui *GUI) AdminLogout(w http.ResponseWriter, r *http.Request) {
-	session, err := ui.cookieStore.Get(r, "session")
+	session, err := getSession(r, ui.cookieStore)
 	if err != nil {
-		if !strings.Contains(err.Error(), "value is not valid") {
-			log.Errorf("session error: %v", err)
-			return
-		}
-
-		log.Errorf("session error: %v, new session generated", err)
+		log.Errorf("getSession error: %v", err)
+		http.Error(w, "Session error", http.StatusInternalServerError)
+		return
 	}
 
 	session.Values["IsAdmin"] = false
@@ -137,14 +127,11 @@ func (ui *GUI) AdminLogout(w http.ResponseWriter, r *http.Request) {
 // session is authenticated as an admin, a binary representation of the whole
 // database is generated and returned to the client.
 func (ui *GUI) DownloadDatabaseBackup(w http.ResponseWriter, r *http.Request) {
-	session, err := ui.cookieStore.Get(r, "session")
+	session, err := getSession(r, ui.cookieStore)
 	if err != nil {
-		if !strings.Contains(err.Error(), "value is not valid") {
-			log.Errorf("session error: %v", err)
-			return
-		}
-
-		log.Errorf("session error: %v, new session generated", err)
+		log.Errorf("getSession error: %v", err)
+		http.Error(w, "Session error", http.StatusInternalServerError)
+		return
 	}
 
 	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
