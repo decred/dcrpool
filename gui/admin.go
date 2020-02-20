@@ -93,7 +93,7 @@ func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
 
 	pass := r.FormValue("password")
 
-	if ui.cfg.BackupPass != pass {
+	if ui.cfg.AdminPass != pass {
 		log.Warn("Unauthorized access")
 		ui.Homepage(w, r)
 		return

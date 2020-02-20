@@ -40,8 +40,8 @@ type Config struct {
 	GUIDir string
 	// CSRFSecret represents the frontend's CSRF secret.
 	CSRFSecret []byte
-	// BackupPass represents the database backup password.
-	BackupPass string
+	// AdminPass represents the admin password.
+	AdminPass string
 	// GUIPort represents the port the frontend is served on.
 	GUIPort uint32
 	// TLSCertFile represents the TLS certificate file path.
