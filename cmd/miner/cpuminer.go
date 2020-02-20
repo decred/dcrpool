@@ -187,6 +187,7 @@ func (m *CPUMiner) solve(ctx context.Context) {
 			case <-ctx.Done():
 				m.miner.wg.Done()
 				return
+
 			default:
 				continue
 			}
@@ -208,18 +209,19 @@ func (m *CPUMiner) solve(ctx context.Context) {
 				m.workData.extraNonce2, m.workData.nTime, m.workData.nonce)
 			m.workCh <- req
 
+			// Stall to prevent mining too quickly.
+			time.Sleep(time.Millisecond * 500)
+
 		case false:
 			select {
 			case <-ctx.Done():
 				m.miner.wg.Done()
 				return
+
 			default:
 				// Non-blocking receive fallthrough.
 			}
 		}
-
-		// Stall to prevent mining too quickly.
-		time.Sleep(time.Millisecond * 500)
 	}
 }
 
