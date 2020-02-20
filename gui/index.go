@@ -38,7 +38,10 @@ type AccountStats struct {
 	AccountID string
 }
 
-func (ui *GUI) GetIndex(w http.ResponseWriter, r *http.Request) {
+// Homepage is the handler for "GET /". If a valid address parameter is
+// provided, the account.html template is rendered and populated with the
+// relevant account information, otherwise the index.html template is rendered.
+func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 	session, err := ui.cookieStore.Get(r, "session")
 	if err != nil {
 		if !strings.Contains(err.Error(), "value is not valid") {
