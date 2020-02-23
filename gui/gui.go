@@ -254,7 +254,7 @@ func (ui *GUI) loadTemplates() error {
 func (ui *GUI) Run(ctx context.Context) {
 	go func() {
 		if !ui.cfg.UseLEHTTPS {
-			log.Tracef("Starting GUI server on port %d (https)", ui.cfg.GUIPort)
+			log.Infof("Starting GUI server on port %d (https)", ui.cfg.GUIPort)
 			ui.server = &http.Server{
 				WriteTimeout: time.Second * 30,
 				ReadTimeout:  time.Second * 30,
@@ -290,7 +290,7 @@ func (ui *GUI) Run(ctx context.Context) {
 
 			// Redirect all regular http requests to their https endpoints.
 			go func() {
-				log.Trace("Starting GUI server on port 80 (http, will forward to https)")
+				log.Info("Starting GUI server on port 80 (http, will forward to https)")
 				if err := http.ListenAndServe(port80,
 					certMgr.HTTPHandler(nil)); err != nil &&
 					err != http.ErrServerClosed {
@@ -298,7 +298,7 @@ func (ui *GUI) Run(ctx context.Context) {
 				}
 			}()
 
-			log.Trace("Starting GUI server on port 443 (https)")
+			log.Info("Starting GUI server on port 443 (https)")
 			ui.server = &http.Server{
 				WriteTimeout: time.Second * 30,
 				ReadTimeout:  time.Second * 30,
