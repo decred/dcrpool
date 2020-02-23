@@ -101,7 +101,7 @@ type config struct {
 	WalletPass            string        `long:"walletpass" ini-name:"walletpass" description:"The wallet passphrase."`
 	MinPayment            float64       `long:"minpayment" ini-name:"minpayment" description:"The minimum payment to process for an account."`
 	SoloPool              bool          `long:"solopool" ini-name:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
-	BackupPass            string        `long:"backuppass" ini-name:"backuppass" description:"The admin password, required for database backup."`
+	AdminPass             string        `long:"adminpass" ini-name:"adminpass" description:"The admin password."`
 	GUIDir                string        `long:"guidir" ini-name:"guidir" description:"The path to the directory containing the pool's user interface assets (templates, css etc.)"`
 	Domain                string        `long:"domain" ini-name:"domain" description:"The domain of the mining pool, required for TLS."`
 	UseLEHTTPS            bool          `long:"uselehttps" ini-name:"uselehttps" description:"This enables HTTPS using a Letsencrypt certificate. By default the pool uses a self-signed certificate for HTTPS."`
@@ -495,9 +495,9 @@ func loadConfig() (*config, []string, error) {
 	// logger variables may be used.
 	initLogRotator(filepath.Join(cfg.LogDir, defaultLogFilename))
 
-	// Ensure the backup password is set.
-	if cfg.BackupPass == "" {
-		str := "%s: pool backup password is not set"
+	// Ensure the admin password is set.
+	if cfg.AdminPass == "" {
+		str := "%s: the adminpass option is not set"
 		err := fmt.Errorf(str, funcName)
 		return nil, nil, err
 	}

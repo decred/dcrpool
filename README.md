@@ -97,7 +97,7 @@ dcrdrpchost=127.0.0.1:19556
 dcrdrpccert=/home/.dcrd/rpc.cert
 solopool=true
 activenet=mainnet
-backuppass=backuppass
+adminpass=adminpass
 guidir=/home/gui
 ```
 
@@ -117,7 +117,7 @@ walletpass=walletpass
 poolfeeaddrs=SsVPfV8yoMu7AvF5fGjxTGmQ57pGkaY6n8z
 paymentmethod=pplns
 lastnperiod=5m
-backuppass=backuppass
+adminpass=adminpass
 guidir=/home/gui
 ```
 

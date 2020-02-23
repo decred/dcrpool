@@ -136,7 +136,7 @@ func newPool(cfg *config) (*miningPool, error) {
 	gcfg := &gui.Config{
 		SoloPool:                cfg.SoloPool,
 		GUIDir:                  cfg.GUIDir,
-		BackupPass:              cfg.BackupPass,
+		AdminPass:               cfg.AdminPass,
 		GUIPort:                 cfg.GUIPort,
 		UseLEHTTPS:              cfg.UseLEHTTPS,
 		Domain:                  cfg.Domain,

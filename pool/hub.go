@@ -78,7 +78,7 @@ type HubConfig struct {
 	MinPayment            dcrutil.Amount
 	SoloPool              bool
 	PoolFeeAddrs          []dcrutil.Address
-	BackupPass            string
+	AdminPass             string
 	Secret                string
 	NonceIterations       float64
 	MinerPorts            map[string]uint32
