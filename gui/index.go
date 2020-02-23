@@ -28,8 +28,8 @@ type indexData struct {
 	CSRF             template.HTML
 }
 
-// AccountStats is a snapshot of an accounts contribution to the pool. This
-// comprises of blocks mined by the pool and payments made to the account.
+// AccountStats is a snapshot of an accounts contribution to the pool. This is
+// comprised of blocks mined by the pool and payments made to the account.
 type AccountStats struct {
 	MinedWork []*pool.AcceptedWork
 	Payments  []*pool.Payment
@@ -49,7 +49,7 @@ func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
-		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
+		http.Error(w, "Request limit exceeded", http.StatusTooManyRequests)
 		return
 	}
 
