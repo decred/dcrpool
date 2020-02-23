@@ -391,7 +391,7 @@ func (ui *GUI) Run(ctx context.Context) {
 					ticks = 0
 				}
 
-				ui.updateWS()
+				ui.updateWebSocket()
 
 			case <-ctx.Done():
 				return
