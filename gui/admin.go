@@ -64,7 +64,7 @@ func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
 		Admin:       true,
 	}
 
-	ui.renderTemplate(w, r, "admin", pageData)
+	ui.renderTemplate(w, "admin", pageData)
 }
 
 // AdminLogin is the handler for "POST /admin". If proper admin credentials are

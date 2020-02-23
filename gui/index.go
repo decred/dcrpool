@@ -89,7 +89,7 @@ func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 
 	address := r.FormValue("address")
 	if address == "" {
-		ui.renderTemplate(w, r, "index", data)
+		ui.renderTemplate(w, "index", data)
 		return
 	}
 
@@ -101,13 +101,13 @@ func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 	accountID, err := pool.AccountID(address, ui.cfg.ActiveNet)
 	if err != nil {
 		data.Error = fmt.Sprintf("Unable to generate account ID for address %s", address)
-		ui.renderTemplate(w, r, "index", data)
+		ui.renderTemplate(w, "index", data)
 		return
 	}
 
 	if !ui.cfg.AccountExists(accountID) {
 		data.Error = fmt.Sprintf("Nothing found for address %s", address)
-		ui.renderTemplate(w, r, "index", data)
+		ui.renderTemplate(w, "index", data)
 		return
 	}
 
@@ -129,7 +129,7 @@ func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 
 	if len(work) == 0 && len(payments) == 0 {
 		data.Error = fmt.Sprintf("No confirmed work for %s", address)
-		ui.renderTemplate(w, r, "index", data)
+		ui.renderTemplate(w, "index", data)
 		return
 	}
 
@@ -140,5 +140,5 @@ func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 		AccountID: accountID,
 	}
 
-	ui.renderTemplate(w, r, "account", data)
+	ui.renderTemplate(w, "account", data)
 }
