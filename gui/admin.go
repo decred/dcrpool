@@ -68,8 +68,8 @@ func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // AdminLogin is the handler for "POST /admin". If proper admin credentials are
-// supplied, the session is authenticated and the admin.html template is
-// rendered, otherwise returns a redirection to the homepage.
+// supplied, the session is authenticated and a "200 OK" response is returned,
+// otherwise a "401 Unauthorized" response is returned.
 func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	session, err := getSession(r, ui.cookieStore)
 	if err != nil {
@@ -87,7 +87,7 @@ func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
 
 	if ui.cfg.AdminPass != pass {
 		log.Warn("Unauthorized access")
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
@@ -98,7 +98,7 @@ func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	w.WriteHeader(http.StatusOK)
 }
 
 // AdminLogout is the handler for "POST /logout". The admin authentication is
