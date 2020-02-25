@@ -169,8 +169,10 @@ func getSession(r *http.Request, cookieStore *sessions.CookieStore) (*sessions.S
 	session, err := cookieStore.Get(r, "session")
 	if err != nil {
 		// "value is not valid" occurs if the CSRF secret changes.
-		// This is common and not a cause for concern - no need to error out.
+		// This is common during development (eg. when using the test harness)
+		// but it should not occur in production.
 		if strings.Contains(err.Error(), "securecookie: the value is not valid") {
+			log.Warnf("getSession error: CSRF secret has changed. Generating new session.")
 			err = nil
 		}
 	}
