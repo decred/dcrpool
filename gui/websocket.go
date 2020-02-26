@@ -2,6 +2,7 @@ package gui
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -35,10 +36,12 @@ type minedWork struct {
 	Miner       string `json:"miner"`
 }
 
+// registerWebSocket is the handler for "GET /ws". It updates the HTTP request
+// to a websocket and adds the caller to a list of connected clients.
 func (ui *GUI) registerWebSocket(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Errorf("websocket error: %v", err)
+		log.Errorf("registerWebSocket error: %v", err)
 		return
 	}
 	clientsMtx.Lock()
@@ -46,8 +49,8 @@ func (ui *GUI) registerWebSocket(w http.ResponseWriter, r *http.Request) {
 	clientsMtx.Unlock()
 }
 
-// updateWS sends updates to all connected websocket clients.
-func (ui *GUI) updateWS() {
+// updateWebSocket sends updates to all connected websocket clients.
+func (ui *GUI) updateWebSocket() {
 	ui.poolHashMtx.RLock()
 	poolHash := ui.poolHash
 	ui.poolHashMtx.RUnlock()
@@ -68,7 +71,11 @@ func (ui *GUI) updateWS() {
 	for client := range clients {
 		err := client.WriteJSON(msg)
 		if err != nil {
-			log.Errorf("websocket error: %v", err)
+			// "broken pipe" indicates the client has disconnected.
+			// We don't need to log an error in this case.
+			if !strings.Contains(err.Error(), "write: broken pipe") {
+				log.Errorf("updateWebSocket: error on client %s: %v", client.LocalAddr(), err)
+			}
 			client.Close()
 			delete(clients, client)
 		}

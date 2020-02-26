@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"strings"
 
 	"github.com/decred/dcrpool/pool"
 	"github.com/gorilla/csrf"
@@ -29,8 +28,8 @@ type indexData struct {
 	CSRF             template.HTML
 }
 
-// AccountStats is a snapshot of an accounts contribution to the pool. This
-// comprises of blocks mined by the pool and payments made to the account.
+// AccountStats is a snapshot of an accounts contribution to the pool. This is
+// comprised of blocks mined by the pool and payments made to the account.
 type AccountStats struct {
 	MinedWork []*pool.AcceptedWork
 	Payments  []*pool.Payment
@@ -42,18 +41,15 @@ type AccountStats struct {
 // provided, the account.html template is rendered and populated with the
 // relevant account information, otherwise the index.html template is rendered.
 func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
-	session, err := ui.cookieStore.Get(r, "session")
+	session, err := getSession(r, ui.cookieStore)
 	if err != nil {
-		if !strings.Contains(err.Error(), "value is not valid") {
-			log.Errorf("session error: %v", err)
-			return
-		}
-
-		log.Errorf("session error: %v, new session generated", err)
+		log.Errorf("getSession error: %v", err)
+		http.Error(w, "Session error", http.StatusInternalServerError)
+		return
 	}
 
 	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
-		http.Error(w, "Request limit exceeded", http.StatusBadRequest)
+		http.Error(w, "Request limit exceeded", http.StatusTooManyRequests)
 		return
 	}
 
@@ -93,7 +89,7 @@ func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 
 	address := r.FormValue("address")
 	if address == "" {
-		ui.renderTemplate(w, r, "index", data)
+		ui.renderTemplate(w, "index", data)
 		return
 	}
 
@@ -105,13 +101,13 @@ func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 	accountID, err := pool.AccountID(address, ui.cfg.ActiveNet)
 	if err != nil {
 		data.Error = fmt.Sprintf("Unable to generate account ID for address %s", address)
-		ui.renderTemplate(w, r, "index", data)
+		ui.renderTemplate(w, "index", data)
 		return
 	}
 
 	if !ui.cfg.AccountExists(accountID) {
 		data.Error = fmt.Sprintf("Nothing found for address %s", address)
-		ui.renderTemplate(w, r, "index", data)
+		ui.renderTemplate(w, "index", data)
 		return
 	}
 
@@ -133,7 +129,7 @@ func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 
 	if len(work) == 0 && len(payments) == 0 {
 		data.Error = fmt.Sprintf("No confirmed work for %s", address)
-		ui.renderTemplate(w, r, "index", data)
+		ui.renderTemplate(w, "index", data)
 		return
 	}
 
@@ -144,5 +140,5 @@ func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 		AccountID: accountID,
 	}
 
-	ui.renderTemplate(w, r, "account", data)
+	ui.renderTemplate(w, "account", data)
 }

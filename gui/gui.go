@@ -150,7 +150,7 @@ func (ui *GUI) route() {
 }
 
 // renderTemplate executes the provided template.
-func (ui *GUI) renderTemplate(w http.ResponseWriter, _ *http.Request, name string, data interface{}) {
+func (ui *GUI) renderTemplate(w http.ResponseWriter, name string, data interface{}) {
 	var doc bytes.Buffer
 	err := ui.templates.ExecuteTemplate(&doc, name, data)
 	if err != nil {
@@ -163,6 +163,20 @@ func (ui *GUI) renderTemplate(w http.ResponseWriter, _ *http.Request, name strin
 	if err != nil {
 		log.Errorf("unable to render template: %v", err)
 	}
+}
+
+func getSession(r *http.Request, cookieStore *sessions.CookieStore) (*sessions.Session, error) {
+	session, err := cookieStore.Get(r, "session")
+	if err != nil {
+		// "value is not valid" occurs if the CSRF secret changes.
+		// This is common during development (eg. when using the test harness)
+		// but it should not occur in production.
+		if strings.Contains(err.Error(), "securecookie: the value is not valid") {
+			log.Warnf("getSession error: CSRF secret has changed. Generating new session.")
+			err = nil
+		}
+	}
+	return session, err
 }
 
 // NewGUI creates an instance of the user interface.
@@ -242,7 +256,7 @@ func (ui *GUI) loadTemplates() error {
 func (ui *GUI) Run(ctx context.Context) {
 	go func() {
 		if !ui.cfg.UseLEHTTPS {
-			log.Tracef("Starting GUI server on port %d (https)", ui.cfg.GUIPort)
+			log.Infof("Starting GUI server on port %d (https)", ui.cfg.GUIPort)
 			ui.server = &http.Server{
 				WriteTimeout: time.Second * 30,
 				ReadTimeout:  time.Second * 30,
@@ -278,7 +292,7 @@ func (ui *GUI) Run(ctx context.Context) {
 
 			// Redirect all regular http requests to their https endpoints.
 			go func() {
-				log.Trace("Starting GUI server on port 80 (http, will forward to https)")
+				log.Info("Starting GUI server on port 80 (http, will forward to https)")
 				if err := http.ListenAndServe(port80,
 					certMgr.HTTPHandler(nil)); err != nil &&
 					err != http.ErrServerClosed {
@@ -286,7 +300,7 @@ func (ui *GUI) Run(ctx context.Context) {
 				}
 			}()
 
-			log.Trace("Starting GUI server on port 443 (https)")
+			log.Info("Starting GUI server on port 443 (https)")
 			ui.server = &http.Server{
 				WriteTimeout: time.Second * 30,
 				ReadTimeout:  time.Second * 30,
@@ -379,7 +393,7 @@ func (ui *GUI) Run(ctx context.Context) {
 					ticks = 0
 				}
 
-				ui.updateWS()
+				ui.updateWebSocket()
 
 			case <-ctx.Done():
 				return
