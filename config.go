@@ -51,6 +51,7 @@ const (
 	defaultGUIDir                = "gui"
 	defaultUseLEHTTPS            = false
 	defaultCPUPort               = 5550
+	defaultDCR1Port              = 5551
 	defaultD9Port                = 5552
 	defaultDR3Port               = 5553
 	defaultDR5Port               = 5554
@@ -115,6 +116,7 @@ type config struct {
 	DR3Port               uint32        `long:"dr3port" ini-name:"dr3port" description:"Antminer DR3 connection port."`
 	DR5Port               uint32        `long:"dr5port" ini-name:"dr5port" description:"Antminer DR5 connection port."`
 	D1Port                uint32        `long:"d1port" ini-name:"d1port" description:"Whatsminer D1 connection port."`
+	DCR1Port              uint32        `long:"dcr1port" ini-name:"dcr1port" description:"Obelisk DCR1 connection port."`
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
 	net                   *chaincfg.Params
@@ -342,6 +344,7 @@ func loadConfig() (*config, []string, error) {
 		DR3Port:               defaultDR3Port,
 		DR5Port:               defaultDR5Port,
 		D1Port:                defaultD1Port,
+		DCR1Port:              defaultDCR1Port,
 	}
 
 	// Service options which are only added on Windows.

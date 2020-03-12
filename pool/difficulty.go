@@ -16,6 +16,7 @@ const (
 	AntminerDR3   = "antminerdr3"
 	AntminerDR5   = "antminerdr5"
 	WhatsminerD1  = "whatsminerd1"
+	ObeliskDCR1   = "obeliskdcr1"
 )
 
 var (
@@ -23,6 +24,7 @@ var (
 	// hashrates.
 	minerHashes = map[string]*big.Int{
 		CPU:           new(big.Int).SetInt64(5e3),
+		ObeliskDCR1:   new(big.Int).SetInt64(1.2e12),
 		InnosiliconD9: new(big.Int).SetInt64(2.4e12),
 		AntminerDR3:   new(big.Int).SetInt64(7.8e12),
 		AntminerDR5:   new(big.Int).SetInt64(35e12),

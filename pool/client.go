@@ -290,6 +290,13 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 
 	var resp *Response
 	switch c.cfg.FetchMiner() {
+	case ObeliskDCR1:
+		// The DCR1 is not fully complaint with the stratum spec.
+		// It uses a 4-byte extraNonce2 regardless of the
+		// extraNonce2Size provided.
+		resp = SubscribeResponse(*req.ID, nid, c.extraNonce1,
+			ExtraNonce2Size, nil)
+
 	case AntminerDR3, AntminerDR5:
 		// The DR5 and DR3 are not fully complaint with the stratum spec.
 		// They use an 8-byte extraNonce2 regardless of the
@@ -639,9 +646,9 @@ func (c *Client) process(ctx context.Context) {
 			c.wg.Done()
 			return
 
-		case payLoad := <-c.readCh:
-			msg := payLoad.msg
-			msgType := payLoad.msgType
+		case payload := <-c.readCh:
+			msg := payload.msg
+			msgType := payload.msgType
 			allowed := c.cfg.WithinLimit(ip, PoolClient)
 			switch msgType {
 			case RequestMessage:
@@ -826,6 +833,42 @@ func (c *Client) handleCPUWork(req *Request) {
 	atomic.StoreInt64(&c.lastWorkTime, time.Now().Unix())
 }
 
+// handleObeliskDCR1Work prepares work for the Obelisk DCR1.
+func (c *Client) handleObeliskDCR1Work(req *Request) {
+	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
+		cleanJob, err := ParseWorkNotification(req)
+	if err != nil {
+		log.Errorf("unable to parse work message: %v", err)
+	}
+
+	// The DCR1 requires the nBits and nTime fields of a mining.notify message
+	// as big endian.
+	nBits, err = hexReversed(nBits)
+	if err != nil {
+		log.Errorf("unable to hex reverse nBits: %v", err)
+		c.cancel()
+		return
+	}
+	nTime, err = hexReversed(nTime)
+	if err != nil {
+		log.Errorf("unable to hex reverse nTime: %v", err)
+		c.cancel()
+		return
+	}
+
+	prevBlockRev := reversePrevBlockWords(prevBlock)
+	workNotif := WorkNotification(jobID, prevBlockRev,
+		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
+	err = c.encoder.Encode(workNotif)
+	if err != nil {
+		log.Errorf("message encoding error: %v", err)
+		c.cancel()
+		return
+	}
+
+	atomic.StoreInt64(&c.lastWorkTime, time.Now().Unix())
+}
+
 // setHashRate updates the client's hash rate.
 func (c *Client) setHashRate(hash *big.Rat) {
 	c.hashRateMtx.Lock()
@@ -917,6 +960,10 @@ func (c *Client) send(ctx context.Context) {
 
 					case WhatsminerD1:
 						c.handleWhatsminerD1Work(req)
+						log.Tracef("%s notified of new work", c.id)
+
+					case ObeliskDCR1:
+						c.handleObeliskDCR1Work(req)
 						log.Tracef("%s notified of new work", c.id)
 
 					default:
