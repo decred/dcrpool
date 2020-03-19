@@ -168,8 +168,8 @@ func (work *AcceptedWork) Delete(db *bolt.DB) error {
 // List is ordered, most recent comes first.
 func ListMinedWork(db *bolt.DB, n int) ([]*AcceptedWork, error) {
 	minedWork := make([]*AcceptedWork, 0)
-	if n == 0 {
-		return minedWork, nil
+	if n <= 0 {
+		return minedWork, fmt.Errorf("n cannot be less than or equal to zero")
 	}
 
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -209,8 +209,8 @@ func ListMinedWork(db *bolt.DB, n int) ([]*AcceptedWork, error) {
 // List is ordered, most recent comes first.
 func listMinedWorkByAccount(db *bolt.DB, accountID string, n int) ([]*AcceptedWork, error) {
 	minedWork := make([]*AcceptedWork, 0)
-	if n == 0 {
-		return minedWork, nil
+	if n <= 0 {
+		return minedWork, fmt.Errorf("n cannot be less than or equal to zero")
 	}
 
 	err := db.Update(func(tx *bolt.Tx) error {

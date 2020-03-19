@@ -50,8 +50,33 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
+	workE := NewAcceptedWork(
+		"0000000000000000032e25218be722327ae3dccf9015756facb2f98931fda7b8",
+		"00000000000000000476712b2f5df31bc62b9976066262af2d639a551853c056",
+		431611, xID, "dcr1")
+
+	// Ensure updating a non persisted accepted work returns an error.
+	err = workE.Update(db)
+	if err == nil {
+		t.Fatal("Update: expected a no accepted work found error")
+	}
+
+	// Ensure creating an already existing accepted work returns an error.
+	err = workD.Create(db)
+	if err == nil {
+		t.Fatal("Create: expected a duplicate accepted work error")
+	}
+
+	// Ensure fetching a non existent accepted work returns an error.
+	id := AcceptedWorkID(workC.BlockHash, workD.Height)
+
+	_, err = FetchAcceptedWork(db, id)
+	if err == nil {
+		t.Fatalf("FetchAcceptedWork: expected a non-existent accepted work error")
+	}
+
 	// Fetch an accepted work with its id.
-	id := AcceptedWorkID(workC.BlockHash, workC.Height)
+	id = AcceptedWorkID(workC.BlockHash, workC.Height)
 
 	fetchedWork, err := FetchAcceptedWork(db, id)
 	if err != nil {
@@ -66,6 +91,28 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 	if fetchedWork.Height != workC.Height {
 		t.Fatalf("expected (%v) as fetched work block height, got (%v)",
 			fetchedWork.Height, workC.Height)
+	}
+
+	// Ensure requesting negative or zero most recent accepted work returns
+	// an error.
+	_, err = ListMinedWork(db, -1)
+	if err == nil {
+		t.Fatal("ListMineWork: expected negative N error")
+	}
+
+	_, err = ListMinedWork(db, 0)
+	if err == nil {
+		t.Fatalf("ListMinedWork: expected zero N error")
+	}
+
+	_, err = listMinedWorkByAccount(db, string(id), -1)
+	if err == nil {
+		t.Fatalf("listMinedWorkByAccount: expected negative N error")
+	}
+
+	_, err = listMinedWorkByAccount(db, string(id), 0)
+	if err == nil {
+		t.Fatalf("listMinedWorkByAccount: expected zero N error")
 	}
 
 	// Ensure the accepted work are not listed as mined since they are not
