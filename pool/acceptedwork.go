@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	bolt "github.com/coreos/bbolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 // AcceptedWork represents an accepted work submission to the network.

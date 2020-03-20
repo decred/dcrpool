@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg/v2"
+	bolt "go.etcd.io/bbolt"
 )
 
 func persistAccount(db *bolt.DB, address string, activeNet *chaincfg.Params) (*Account, error) {

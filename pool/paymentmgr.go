@@ -9,11 +9,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/mempool/v3"
 	txrules "github.com/decred/dcrwallet/wallet/v3/txrules"
+	bolt "go.etcd.io/bbolt"
 )
 
 type PaymentMgrConfig struct {

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg/v2"
+	bolt "go.etcd.io/bbolt"
 )
 
 func makeConn(listener *net.TCPListener, serverCh chan net.Conn) (net.Conn, net.Conn, error) {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	bolt "github.com/coreos/bbolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 func persistAcceptedWork(db *bolt.DB, blockHash string, prevHash string,

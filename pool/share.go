@@ -12,9 +12,9 @@ import (
 	"math/big"
 	"time"
 
-	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/dcrutil/v2"
+	bolt "go.etcd.io/bbolt"
 )
 
 var (

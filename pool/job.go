@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"time"
 
-	bolt "github.com/coreos/bbolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 // Job represents cached copies of work delivered to clients.

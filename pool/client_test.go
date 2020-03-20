@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	bolt "github.com/coreos/bbolt"
 	"github.com/decred/dcrd/chaincfg/v2"
+	bolt "go.etcd.io/bbolt"
 )
 
 func testClient(t *testing.T, db *bolt.DB) {
