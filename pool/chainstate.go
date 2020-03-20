@@ -28,6 +28,14 @@ type ChainStateConfig struct {
 	GeneratePayments func(uint32, dcrutil.Amount) error
 	// GetBlock fetches the block associated with the provided block hash.
 	GetBlock func(*chainhash.Hash) (*wire.MsgBlock, error)
+	// PruneJobs removes all jobs with heights less than the provided height.
+	PruneJobs func(*bolt.DB, uint32) error
+	// PruneAcceptedWork removes all accepted work not confirmed as mined
+	// work with heights less than the provided height.
+	PruneAcceptedWork func(*bolt.DB, uint32) error
+	// PendingPaymentsAtHeight fetches all pending payments at
+	// the provided height.
+	PendingPaymentsAtHeight func(*bolt.DB, uint32) ([]*Payment, error)
 	// Cancel represents the pool's context cancellation function.
 	Cancel context.CancelFunc
 	// HubWg represents the hub's waitgroup.
@@ -100,9 +108,10 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			var header wire.BlockHeader
 			err := header.FromBytes(msg.Header)
 			if err != nil {
+				// Errors generated parsing block notifications should not
+				// terminate the chainstate process.
 				log.Errorf("unable to create header from bytes: %v", err)
 				close(msg.Done)
-				cs.cfg.Cancel()
 				continue
 			}
 			err = cs.cfg.PayDividends(header.Height)
@@ -113,8 +122,11 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit
-				err := PruneJobs(cs.cfg.DB, pruneLimit)
+				err := cs.cfg.PruneJobs(cs.cfg.DB, pruneLimit)
 				if err != nil {
+					// Errors generated pruning invalidated jobs indicate an
+					// underlying issue accessing the database. The chainstate
+					// process will be terminated as a result.
 					log.Errorf("unable to prune jobs to height %d: %v",
 						pruneLimit, err)
 					close(msg.Done)
@@ -124,20 +136,26 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 
 			// If the parent of the connected block is an accepted work of the
-			// pool, confirm it as mined. The parent of a connected block
-			// at this point is guaranteed to have its corresponding accepted
-			// work persisted if it was mined by the pool.
+			// pool, confirm it as mined.
 			parentID := AcceptedWorkID(header.PrevBlock.String(), header.Height-1)
 			work, err := FetchAcceptedWork(cs.cfg.DB, parentID)
 			if err != nil {
+				// If the parent of the connected block is not an accepted
+				// work of the the pool, ignore it.
+				if IsError(err, ErrValueNotFound) {
+					close(msg.Done)
+					continue
+				}
+
+				// Errors generated, except for a value not found error,
+				// looking up accepted work indicates an underlying issue
+				// accessing the database. The chainstate process will be
+				// terminated as a result.
 				log.Errorf("unable to fetch accepted work for block #%d's "+
 					"parent %s : %v", header.Height,
 					header.PrevBlock.String(), err)
 				close(msg.Done)
-				continue
-			}
-			if work == nil {
-				close(msg.Done)
+				cs.cfg.Cancel()
 				continue
 			}
 
@@ -145,6 +163,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			work.Confirmed = true
 			err = work.Update(cs.cfg.DB)
 			if err != nil {
+				// Errors generated updating work state indicate an underlying
+				// issue accessing the database. The chainstate process will
+				// be terminated as a result.
 				log.Errorf("unable to confirm accepted work for block "+
 					"%s: %v", header.PrevBlock.String(), err)
 				close(msg.Done)
@@ -155,8 +176,12 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				header.PrevBlock.String(), header.Height)
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit
-				err = PruneAcceptedWork(cs.cfg.DB, pruneLimit)
+				err = cs.cfg.PruneAcceptedWork(cs.cfg.DB, pruneLimit)
 				if err != nil {
+					// Errors generated pruning invalidated accepted
+					// work indicate an underlying issue accessing
+					// the database. The chainstate process will be
+					// terminated as a result.
 					log.Errorf("unable to prune accepted work below "+
 						"height #%d: %v", pruneLimit, err)
 					close(msg.Done)
@@ -165,8 +190,15 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				}
 			}
 			if !cs.cfg.SoloPool {
+				// TODO: look into keeping track of payment processing for
+				// confirmed mined work to facilitate recovery when
+				// fetch block calls err.
 				block, err := cs.cfg.GetBlock(&header.PrevBlock)
 				if err != nil {
+					// Errors generated fetching blocks of confirmed mined
+					// work are curently fatal because payments are
+					// sourced from coinbases. The chainstate process will be
+					// terminated as a result.
 					log.Errorf("unable to fetch block with hash %x: %v",
 						header.PrevBlock, err)
 					close(msg.Done)
@@ -176,7 +208,10 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				coinbase := dcrutil.Amount(block.Transactions[0].TxOut[2].Value)
 				err = cs.cfg.GeneratePayments(block.Header.Height, coinbase)
 				if err != nil {
-					log.Errorf("unable to generate shares: %v", err)
+					// Errors generated creating payments are fatal since it is
+					// required to distribute payments to participating miners.
+					// The chainstate process will be terminated as a result.
+					log.Errorf("unable to generate payments: %v", err)
 					close(msg.Done)
 					cs.cfg.Cancel()
 					continue
@@ -188,36 +223,99 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			var header wire.BlockHeader
 			err := header.FromBytes(msg.Header)
 			if err != nil {
+				// Errors generated parsing block notifications should not
+				// terminate the chainstate process.
 				log.Errorf("unable to create header from bytes: %v", err)
 				close(msg.Done)
-				cs.cfg.Cancel()
 				continue
 			}
 
-			// Delete mined work if it is disconnected from the chain. At this
-			// point a mined confirmed block will have its corresponding
-			// accepted block record persisted.
-			id := AcceptedWorkID(header.BlockHash().String(), header.Height)
+			// Check if the disconnected block confirms a mined block, if it
+			// does unconfirm it.
+			id := AcceptedWorkID(header.PrevBlock.String(), header.Height-1)
+			confWork, err := FetchAcceptedWork(cs.cfg.DB, id)
+			if err != nil {
+				// Errors generated, except for a value not found error,
+				// looking up accepted work indicates an underlying issue
+				// accessing the database. The chainstate process will be
+				// terminated as a result.
+				if !IsError(err, ErrValueNotFound) {
+					log.Errorf("unable to fetch accepted work for block #%d's "+
+						"parent %s : %v", header.Height,
+						header.PrevBlock.String(), err)
+					close(msg.Done)
+					cs.cfg.Cancel()
+					continue
+				}
+
+				// If the parent of the disconnected block is not an accepted
+				// work of the the pool, ignore it.
+			}
+
+			if confWork != nil {
+				confWork.Confirmed = false
+				err = confWork.Update(cs.cfg.DB)
+				if err != nil {
+					// Errors generated updating work state indicate an underlying
+					// issue accessing the database. The chainstate process will
+					// be terminated as a result.
+					log.Errorf("unable to unconfirm accepted work for block "+
+						"%s: %v", header.PrevBlock.String(), err)
+					close(msg.Done)
+					cs.cfg.Cancel()
+					continue
+				}
+
+				log.Tracef("Mined work unconfirmed %s via disconnected "+
+					"block #%d", header.PrevBlock.String(), header.Height)
+			}
+
+			// If the disconnected block is an accepted work of the pool
+			// ensure it is not confirmed mined.
+			id = AcceptedWorkID(header.BlockHash().String(), header.Height)
 			work, err := FetchAcceptedWork(cs.cfg.DB, id)
 			if err != nil {
-				log.Errorf("unable to fetch mined work: %v", err)
-				close(msg.Done)
-				continue
-			}
-			err = work.Delete(cs.cfg.DB)
-			if err != nil {
-				log.Errorf("unable to delete mined work: %v", err)
+				// If the disconnected block is not an accepted
+				// work of the the pool, ignore it.
+				if IsError(err, ErrValueNotFound) {
+					close(msg.Done)
+					continue
+				}
+
+				// Errors generated, except for a value not found error,
+				// looking up accepted work indicates an underlying issue
+				// accessing the database. The chainstate process will be
+				// terminated as a result.
+				log.Errorf("unable to fetch accepted work for block #%d: %v",
+					header.Height, header.PrevBlock.String(), err)
 				close(msg.Done)
 				cs.cfg.Cancel()
 				continue
 			}
-			log.Tracef("Confirmed mined work %s disconnected", header.BlockHash().String())
+			work.Confirmed = false
+			err = work.Update(cs.cfg.DB)
+			if err != nil {
+				// Errors generated updating work state indicate an underlying
+				// issue accessing the database. The chainstate process will
+				// be terminated as a result.
+				log.Errorf("unable to unconfirm mined work "+
+					"at height #%d: %v", err)
+				close(msg.Done)
+				cs.cfg.Cancel()
+				continue
+			}
+			log.Tracef("Disconnected mined work %s at height #%d",
+				header.BlockHash().String(), header.Height)
+
 			if !cs.cfg.SoloPool {
 				// If the disconnected block is an accepted work from the pool,
 				// delete all associated payments.
-				payments, err := fetchPendingPaymentsAtHeight(cs.cfg.DB,
+				payments, err := cs.cfg.PendingPaymentsAtHeight(cs.cfg.DB,
 					header.Height)
 				if err != nil {
+					// Errors generated looking up pending payments
+					// indicates an underlying issue accessing the database.
+					// The chainstate process will be terminated as a result.
 					log.Errorf("failed to fetch pending payments "+
 						"at height #%d: %v", header.Height, err)
 					close(msg.Done)
@@ -227,6 +325,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				for _, pmt := range payments {
 					err = pmt.Delete(cs.cfg.DB)
 					if err != nil {
+						// Errors generated updating work state indicate
+						// an underlying issue accessing the database. The
+						// chainstate process will be terminated as a result.
 						log.Errorf("unable to delete pending payment", err)
 						close(msg.Done)
 						cs.cfg.Cancel()

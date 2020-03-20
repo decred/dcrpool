@@ -173,7 +173,7 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure mined work cannot be pruned.
-	err = PruneAcceptedWork(db, workD.Height+1)
+	err = pruneAcceptedWork(db, workD.Height+1)
 	if err != nil {
 		t.Fatalf("PruneAcceptedWork error: %v", err)
 	}
@@ -201,7 +201,7 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure unconfirmed work can be pruned.
-	err = PruneAcceptedWork(db, workD.Height+1)
+	err = pruneAcceptedWork(db, workD.Height+1)
 	if err != nil {
 		t.Fatalf("PruneAcceptedWork error: %v", err)
 	}

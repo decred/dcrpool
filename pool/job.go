@@ -121,8 +121,8 @@ func (job *Job) Delete(db *bolt.DB) error {
 	return deleteEntry(db, jobBkt, []byte(job.UUID))
 }
 
-// PruneJobs removes all jobs with heights less than the provided height.
-func PruneJobs(db *bolt.DB, height uint32) error {
+// pruneJobs removes all jobs with heights less than the provided height.
+func pruneJobs(db *bolt.DB, height uint32) error {
 	heightBE := heightToBigEndianBytes(height)
 	err := db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchJobBucket(tx)
