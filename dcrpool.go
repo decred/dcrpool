@@ -179,7 +179,6 @@ func main() {
 	// and configures it accordingly.
 	cfg, _, err := loadConfig()
 	if err != nil {
-		mpLog.Error(err)
 		return
 	}
 	defer func() {
