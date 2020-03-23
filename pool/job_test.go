@@ -70,7 +70,7 @@ func testJob(t *testing.T, db *bolt.DB) {
 	jobB.Height = 57
 
 	// Ensure jobs can be pruned.
-	err = PruneJobs(db, 57)
+	err = pruneJobs(db, 57)
 	if err != nil {
 		t.Fatalf("PruneJobs error: %v", err)
 	}

@@ -116,6 +116,23 @@ func (h *Hub) persistPoolMode(tx *bolt.Tx, mode uint32) error {
 	return pbkt.Put(soloPool, b)
 }
 
+// PruneJobs removes all jobs with heights less than the provided height.
+func (h *Hub) pruneJobs(db *bolt.DB, height uint32) error {
+	return pruneJobs(db, height)
+}
+
+// PruneAcceptedWork removes all accepted work not confirmed as mined
+// work with heights less than the provided height.
+func (h *Hub) pruneAcceptedWork(db *bolt.DB, height uint32) error {
+	return pruneAcceptedWork(db, height)
+}
+
+// pendingPaymentsAtHeight fetches all pending payments at
+// the provided height.
+func (h *Hub) pendingPaymentsAtHeight(db *bolt.DB, height uint32) ([]*Payment, error) {
+	return fetchPendingPaymentsAtHeight(db, height)
+}
+
 // generateBlake256Pad creates the extra padding needed for work
 // submissions over the getwork RPC.
 func generateBlake256Pad() []byte {
@@ -171,13 +188,16 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	}
 
 	sCfg := &ChainStateConfig{
-		DB:               h.db,
-		SoloPool:         h.cfg.SoloPool,
-		PayDividends:     h.paymentMgr.payDividends,
-		GeneratePayments: h.paymentMgr.generatePayments,
-		GetBlock:         h.getBlock,
-		Cancel:           h.cancel,
-		HubWg:            h.wg,
+		DB:                      h.db,
+		SoloPool:                h.cfg.SoloPool,
+		PayDividends:            h.paymentMgr.payDividends,
+		GeneratePayments:        h.paymentMgr.generatePayments,
+		GetBlock:                h.getBlock,
+		PruneJobs:               h.pruneJobs,
+		PruneAcceptedWork:       h.pruneAcceptedWork,
+		PendingPaymentsAtHeight: h.pendingPaymentsAtHeight,
+		Cancel:                  h.cancel,
+		HubWg:                   h.wg,
 	}
 	h.chainState = NewChainState(sCfg)
 

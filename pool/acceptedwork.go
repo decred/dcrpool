@@ -244,9 +244,9 @@ func listMinedWorkByAccount(db *bolt.DB, accountID string, n int) ([]*AcceptedWo
 	return minedWork, nil
 }
 
-// PruneAcceptedWork removes all accepted work not confirmed as mined work with
+// pruneAcceptedWork removes all accepted work not confirmed as mined work with
 // heights less than the provided height.
-func PruneAcceptedWork(db *bolt.DB, height uint32) error {
+func pruneAcceptedWork(db *bolt.DB, height uint32) error {
 	err := db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
 		if err != nil {

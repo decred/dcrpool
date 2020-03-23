@@ -3,6 +3,7 @@ package pool
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -13,67 +14,7 @@ import (
 )
 
 func testChainState(t *testing.T, db *bolt.DB) {
-	ctx, cancel := context.WithCancel(context.Background())
 	var minedHeader wire.BlockHeader
-	var confHeader wire.BlockHeader
-	cCfg := &ChainStateConfig{
-		DB:       db,
-		SoloPool: false,
-		PayDividends: func(uint32) error {
-			return nil
-		},
-		GeneratePayments: func(uint32, dcrutil.Amount) error {
-			return nil
-		},
-		GetBlock: func(*chainhash.Hash) (*wire.MsgBlock, error) {
-			// Return a fake block.
-			coinbase := wire.NewMsgTx()
-			coinbase.AddTxOut(wire.NewTxOut(0, []byte{}))
-			coinbase.AddTxOut(wire.NewTxOut(1, []byte{}))
-			coinbase.AddTxOut(wire.NewTxOut(100, []byte{}))
-			txs := make([]*wire.MsgTx, 1)
-			txs[0] = coinbase
-			block := &wire.MsgBlock{
-				Header:       minedHeader,
-				Transactions: txs,
-			}
-			return block, nil
-		},
-		Cancel: cancel,
-		HubWg:  new(sync.WaitGroup),
-	}
-
-	cs := NewChainState(cCfg)
-	cCfg.HubWg.Add(1)
-	go cs.handleChainUpdates(ctx)
-
-	// Create the accepted work to be confirmed.
-	work := NewAcceptedWork(
-		"00007979602e13db87f6c760bbf27c137f4112b9e1988724bd245fb0bb7d1283",
-		"00006fb4ee4609e90196cfa41df2f1129a64553f935f21e6940b38e7e26e7dff",
-		42, xID, CPU)
-	err := work.Create(cs.cfg.DB)
-	if err != nil {
-		t.Fatalf("unable to persist accepted work %v", err)
-	}
-
-	// Create associated job of the work to be confirmed.
-	workE := "07000000ff7d6ee2e7380b94e6215f933f55649a12f1f21da4cf" +
-		"9601e90946eeb46f000066f27e7f98656bc19195a0a6d3a93d0d774b2e5" +
-		"83f49f20f6fef11b38443e21a05bad23ac3f14278f0ad74a86ce08ca44d" +
-		"05e0e2b0cd3bc91066904c311f482e01000000000000000000000000000" +
-		"0004fa83b20204e0000000000002a000000a50300004348fa5d00000000" +
-		"00000000000000000000000000000000000000000000000000000000000" +
-		"00000000000008000000100000000000005a0"
-	job, err := NewJob(workE, 42)
-	if err != nil {
-		t.Fatalf("unable to create job %v", err)
-	}
-	err = job.Create(cs.cfg.DB)
-	if err != nil {
-		log.Errorf("failed to persist job %v", err)
-		return
-	}
 
 	// Create mined work header.
 	headerE := "07000000ff7d6ee2e7380b94e6215f933f55649a12f1f21da4cf" +
@@ -96,13 +37,113 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		t.Fatalf("unexpected serialization error: %v", err)
 	}
 
+	payDividends := func(uint32) error {
+		return nil
+	}
+	generatePayments := func(uint32, dcrutil.Amount) error {
+		return nil
+	}
+	getBlock := func(*chainhash.Hash) (*wire.MsgBlock, error) {
+		// Return a fake block.
+		coinbase := wire.NewMsgTx()
+		coinbase.AddTxOut(wire.NewTxOut(0, []byte{}))
+		coinbase.AddTxOut(wire.NewTxOut(1, []byte{}))
+		coinbase.AddTxOut(wire.NewTxOut(100, []byte{}))
+		txs := make([]*wire.MsgTx, 1)
+		txs[0] = coinbase
+		block := &wire.MsgBlock{
+			Header:       minedHeader,
+			Transactions: txs,
+		}
+		return block, nil
+	}
+	pruneJobs := func(*bolt.DB, uint32) error {
+		return nil
+	}
+	pruneAcceptedWork := func(*bolt.DB, uint32) error {
+		return nil
+	}
+	pendingPaymentsAtHeight := func(*bolt.DB, uint32) ([]*Payment, error) {
+		return []*Payment{
+			{Account: xID, Amount: dcrutil.Amount(100)},
+		}, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var confHeader wire.BlockHeader
+	cCfg := &ChainStateConfig{
+		DB:                      db,
+		SoloPool:                false,
+		PayDividends:            payDividends,
+		GeneratePayments:        generatePayments,
+		GetBlock:                getBlock,
+		PruneJobs:               pruneJobs,
+		PruneAcceptedWork:       pruneAcceptedWork,
+		PendingPaymentsAtHeight: pendingPaymentsAtHeight,
+		Cancel:                  cancel,
+		HubWg:                   new(sync.WaitGroup),
+	}
+
+	cs := NewChainState(cCfg)
+	cCfg.HubWg.Add(1)
+	go cs.handleChainUpdates(ctx)
+
+	// Create the accepted work to be confirmed.
+	work := NewAcceptedWork(
+		"00007979602e13db87f6c760bbf27c137f4112b9e1988724bd245fb0bb7d1283",
+		"00006fb4ee4609e90196cfa41df2f1129a64553f935f21e6940b38e7e26e7dff",
+		42, xID, CPU)
+	err = work.Create(cs.cfg.DB)
+	if err != nil {
+		t.Fatalf("unable to persist accepted work %v", err)
+	}
+
+	// Create associated job of the work to be confirmed.
+	workE := "07000000ff7d6ee2e7380b94e6215f933f55649a12f1f21da4cf" +
+		"9601e90946eeb46f000066f27e7f98656bc19195a0a6d3a93d0d774b2e5" +
+		"83f49f20f6fef11b38443e21a05bad23ac3f14278f0ad74a86ce08ca44d" +
+		"05e0e2b0cd3bc91066904c311f482e01000000000000000000000000000" +
+		"0004fa83b20204e0000000000002a000000a50300004348fa5d00000000" +
+		"00000000000000000000000000000000000000000000000000000000000" +
+		"00000000000008000000100000000000005a0"
+	job, err := NewJob(workE, 42)
+	if err != nil {
+		t.Fatalf("unable to create job %v", err)
+	}
+	err = job.Create(cs.cfg.DB)
+	if err != nil {
+		log.Errorf("failed to persist job %v", err)
+		return
+	}
+
+	// Ensure a malformed connected block does not terminate the chain
+	// state process.
+	headerME := "0700000083127dbbb05f24bd248798e1b912417f137cf2bb60c7f" +
+		"687db132e60797900007d79305d0f130f1371fe8e6a7d8aed721e969d45" +
+		"e94ecbffe229c85e3fea8d2b8aba150b44486aa58f4c01a574e6a6c8657" +
+		"66b3d3554fcc31d7061741e424158010000000000000000000a00000000" +
+		"004fa83b20204e0000000000002b0000003a0f00004548fa5d70230000e" +
+		"78793200000000000000000000000000000000000000000000000000000" +
+		"0000000000"
+	headerMB, err := hex.DecodeString(headerME)
+	if err != nil {
+		t.Fatalf("unexpected encoding error %v", err)
+	}
+
+	malformedMsg := &blockNotification{
+		Header: headerMB,
+		Done:   make(chan bool),
+	}
+	cs.connCh <- malformedMsg
+	<-malformedMsg.Done
+
 	// Create confirmation block header.
-	headerE = "0700000083127dbbb05f24bd248798e1b912417f137cf2bb60c7" +
-		"f687db132e60797900007d79305d0f130f1371fe8e6a7d8aed721e969d4" +
-		"5e94ecbffe229c85e3fea8d2b8aba150b44486aa58f4c01a574e6a6c865" +
-		"766b3d3554fcc31d7061741e424158010000000000000000000a0000000" +
-		"0004fa83b20204e0000000000002b0000003a0f00004548fa5d70230000" +
-		"e78793200000000000000000000000000000000000000000000000000000" +
+	headerE = "0700000083127dbbb05f24bd248798e1b912417f137cf2bb60c7f" +
+		"687db132e60797900007d79305d0f130f1371fe8e6a7d8aed721e969d45" +
+		"e94ecbffe229c85e3fea8d2b8aba150b44486aa58f4c01a574e6a6c8657" +
+		"66b3d3554fcc31d7061741e424158010000000000000000000a00000000" +
+		"004fa83b20204e0000000000002b0000003a0f00004548fa5d70230000e" +
+		"78793200000000000000000000000000000000000000000000000000000" +
 		"000000000000"
 	headerB, err = hex.DecodeString(headerE)
 	if err != nil {
@@ -153,11 +194,49 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	cs.discCh <- discMinedMsg
 	<-discMinedMsg.Done
 
-	// Ensure the confirmed mined work is now removed.
-	_, err = FetchAcceptedWork(cs.cfg.DB, []byte(work.UUID))
-	if err == nil {
-		t.Fatalf("expected a value not found error")
+	// Ensure the mined work is no longer confirmed mined.
+	discMinedWork, err := FetchAcceptedWork(cs.cfg.DB, []byte(work.UUID))
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
 	}
+	if discMinedWork.Confirmed {
+		t.Fatalf("disconnected mined work a height #%d should "+
+			"be unconfirmed", discMinedWork.Height)
+	}
+
+	// Ensure a malformed disconnected block does not terminate the chain state
+	// process.
+	malformedMsg = &blockNotification{
+		Header: headerMB,
+		Done:   make(chan bool),
+	}
+	cs.discCh <- malformedMsg
+	<-malformedMsg.Done
+
+	// Ensure a dividend payment error does not teminate the chain state process.
+	minedMsg = &blockNotification{
+		Header: minedHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.connCh <- minedMsg
+	<-minedMsg.Done
+	cs.cfg.PayDividends = func(uint32) error {
+		return fmt.Errorf("unable to publish dividend transaction")
+	}
+
+	confMsg = &blockNotification{
+		Header: confHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.connCh <- confMsg
+	<-confMsg.Done
+	discConfMsg = &blockNotification{
+		Header: confHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.discCh <- discConfMsg
+	<-discConfMsg.Done
+	cs.cfg.PayDividends = payDividends
 
 	// Ensure the last work height can be updated.
 	initialLastWorkHeight := cs.fetchLastWorkHeight()
@@ -169,7 +248,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 			updatedLastWorkHeight, lastWorkHeight)
 	}
 
-	// Enwsure the current work can be updated.
+	// Ensure the current work can be updated.
 	initialCurrentWork := cs.fetchCurrentWork()
 	updatedCurrentWork := headerE
 	cs.setCurrentWork(updatedCurrentWork)
@@ -179,8 +258,126 @@ func testChainState(t *testing.T, db *bolt.DB) {
 			updatedCurrentWork, currentWork)
 	}
 
-	// Switch the
-
 	cancel()
+	cs.cfg.HubWg.Wait()
+
+	runChainState := func() {
+		ctx, cancel = context.WithCancel(context.Background())
+		cs = NewChainState(cCfg)
+		cCfg.HubWg = new(sync.WaitGroup)
+		cCfg.Cancel = cancel
+		cCfg.HubWg.Add(1)
+		go cs.handleChainUpdates(ctx)
+	}
+
+	runChainState()
+
+	// Ensure a prune jobs error terminates the chain state process.
+	minedMsg = &blockNotification{
+		Header: minedHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.connCh <- minedMsg
+	<-minedMsg.Done
+	cs.cfg.PruneJobs = func(*bolt.DB, uint32) error {
+		return fmt.Errorf("unable to prune jobs")
+	}
+
+	confMsg = &blockNotification{
+		Header: confHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.connCh <- confMsg
+	<-confMsg.Done
+	cs.cfg.PruneJobs = pruneJobs
+	cs.cfg.HubWg.Wait()
+
+	runChainState()
+
+	// Ensure a generate payment error terminates the chain state process.
+	minedMsg = &blockNotification{
+		Header: minedHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.connCh <- minedMsg
+	<-minedMsg.Done
+	cs.cfg.GeneratePayments = func(uint32, dcrutil.Amount) error {
+		return fmt.Errorf("unable to generate payments")
+	}
+
+	confMsg = &blockNotification{
+		Header: confHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.connCh <- confMsg
+	<-confMsg.Done
+	cs.cfg.GeneratePayments = generatePayments
+	cs.cfg.HubWg.Wait()
+
+	runChainState()
+
+	// Ensure a prune accepted work error terminates the chain state process.
+	minedMsg = &blockNotification{
+		Header: minedHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.connCh <- minedMsg
+	<-minedMsg.Done
+	cs.cfg.PruneAcceptedWork = func(*bolt.DB, uint32) error {
+		return fmt.Errorf("unable to prune accepted work")
+	}
+
+	confMsg = &blockNotification{
+		Header: confHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.connCh <- confMsg
+	<-confMsg.Done
+	cs.cfg.PruneAcceptedWork = pruneAcceptedWork
+	cs.cfg.HubWg.Wait()
+
+	runChainState()
+
+	// Ensure a pending payments at height error terminates the chain
+	// state process.
+	minedMsg = &blockNotification{
+		Header: minedHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.connCh <- minedMsg
+	<-minedMsg.Done
+	cs.cfg.PendingPaymentsAtHeight = func(*bolt.DB, uint32) ([]*Payment, error) {
+		return nil, fmt.Errorf("unable to fetch pending payments")
+	}
+
+	discMinedMsg = &blockNotification{
+		Header: minedHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.discCh <- discMinedMsg
+	<-discMinedMsg.Done
+	cs.cfg.PendingPaymentsAtHeight = pendingPaymentsAtHeight
+	cs.cfg.HubWg.Wait()
+
+	runChainState()
+
+	// Ensure a get block error terminates the chain state process.
+	minedMsg = &blockNotification{
+		Header: minedHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.connCh <- minedMsg
+	<-minedMsg.Done
+	cs.cfg.GetBlock = func(*chainhash.Hash) (*wire.MsgBlock, error) {
+		return nil, fmt.Errorf("unable to get block")
+	}
+
+	confMsg = &blockNotification{
+		Header: confHeaderB,
+		Done:   make(chan bool),
+	}
+	cs.connCh <- confMsg
+	<-confMsg.Done
+	cs.cfg.GetBlock = getBlock
 	cs.cfg.HubWg.Wait()
 }
