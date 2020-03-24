@@ -3,7 +3,6 @@ package pool
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/chaincfg/v2"
 	bolt "go.etcd.io/bbolt"
 )
@@ -54,7 +54,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 		}
 	}()
 
-	// Create a new client.
+	// Create a new client connection.
 	c, s, err := makeConn(ln, serverCh)
 	if err != nil {
 		t.Fatalf("[makeConn] unexpected error: %v", err)
@@ -121,42 +121,38 @@ func testClient(t *testing.T, db *bolt.DB) {
 			return true
 		},
 		HashCalcThreshold: 1,
+		ClientTimeout:     time.Second * 2,
 	}
 	client, err := NewClient(c, tcpAddr, cCfg)
 	if err != nil {
 		t.Fatalf("[NewClient] unexpected error: %v", err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-
-	go client.run(ctx)
+	go client.run(client.ctx)
 	time.Sleep(time.Millisecond * 50)
-
 	sE := json.NewEncoder(s)
-	sR := bufio.NewReaderSize(s, MaxMessageSize)
+	sR := bufio.NewReaderSize(s, maxMessageSize)
 
 	recvCh := make(chan []byte)
-	go func() {
+	readMsg := func(c *Client, r *bufio.Reader) {
 		for {
 			select {
-			case <-ctx.Done():
+			case <-c.ctx.Done():
 				return
 			default:
 			}
 
-			data, err := sR.ReadBytes('\n')
+			data, err := r.ReadBytes('\n')
 			if err != nil {
 				if err == io.EOF {
-					cancel()
+					c.cancel()
 					return
 				}
-
 				nErr, ok := err.(*net.OpError)
 				if !ok {
 					log.Errorf("failed to read bytes: %v", err)
-					cancel()
+					c.cancel()
 					return
 				}
-
 				if nErr != nil {
 					if nErr.Op == "read" && nErr.Net == "tcp" {
 						switch {
@@ -165,88 +161,230 @@ func testClient(t *testing.T, db *bolt.DB) {
 						case !nErr.Timeout():
 							log.Errorf("read error: %v", err)
 						}
-						cancel()
+						c.cancel()
 						return
 					}
 				}
 
 				log.Errorf("failed to read bytes: %v %T", err, err)
-				cancel()
+				c.cancel()
 				return
 			}
-
 			recvCh <- data
 		}
-	}()
+	}
 
-	// Send an authorize request.
+	go readMsg(client, sR)
+
+	// Ensure the client receives an error response when a malformed
+	// authorize request is sent.
 	id := uint64(1)
-	r := AuthorizeRequest(&id, "mn", "SsiuwSRYvH7pqWmRxFJWR8Vmqc3AWsjmK2Y")
+	r := &Request{
+		ID:     &id,
+		Method: Authorize,
+		Params: []string{},
+	}
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-
-	// Ensure an authorize response was sent back.
 	data := <-recvCh
 	msg, mType, err := IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
-
 	if mType != ResponseMessage {
 		t.Fatalf("expected an auth response message, got %v", mType)
 	}
-
 	resp, ok := msg.(*Response)
 	if !ok {
 		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
 	}
-
 	if resp.ID != *r.ID {
 		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
 	}
+	if resp.Error == nil {
+		t.Fatal("expected a malformed authorize error response")
+	}
 
-	// Ensure a difficulty notification was sent
+	// Ensure a CPU client receives an error response when a malformed
+	// authorize request with an invalid user format is sent.
+	id++
+	r = &Request{
+		ID:     &id,
+		Method: Authorize,
+		Params: []string{"mn", ""},
+	}
+	err = sE.Encode(r)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	data = <-recvCh
+	msg, _, err = IdentifyMessage(data)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.Error == nil {
+		t.Fatal("expected an invalid username authorize error response")
+	}
+
+	// Ensure a CPU client receives an error response when it has
+	// exhausted its request limits.
+	client.cfg.WithinLimit = func(ip string, clientType int) bool {
+		return false
+	}
+	id++
+	r = AuthorizeRequest(&id, "mn", "SsiuwSRYvH7pqWmRxFJWR8Vmqc3AWsjmK2Y")
+	err = sE.Encode(r)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	data = <-recvCh
+	msg, _, err = IdentifyMessage(data)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.Error == nil {
+		t.Fatal("expected a rate limit error response")
+	}
+	client.cfg.WithinLimit = func(ip string, clientType int) bool {
+		return true
+	}
+
+	// Ensure a CPU client receives a valid non-error response when
+	// a valid authorize request is sent.
+	id++
+	r = AuthorizeRequest(&id, "mn", "SsiuwSRYvH7pqWmRxFJWR8Vmqc3AWsjmK2Y")
+	err = sE.Encode(r)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
 	data = <-recvCh
 	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
-
+	if mType != ResponseMessage {
+		t.Fatalf("expected an auth response message, got %v: %v", mType, spew.Sdump(msg))
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.ID != *r.ID {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.Error != nil {
+		t.Fatalf("expected non-error authorize response, got %v", resp.Error)
+	}
+	data = <-recvCh
+	msg, mType, err = IdentifyMessage(data)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
 	if mType != NotificationMessage {
 		t.Fatalf("expected a notification message, got %v", mType)
 	}
-
 	req, ok := msg.(*Request)
 	if !ok {
 		t.Fatalf("unable to cast message as request")
 	}
-
 	if req.Method != SetDifficulty {
 		t.Fatalf("expected %s message method, got %s", SetDifficulty, req.Method)
 	}
 
-	// Send a subscribe request.
+	// Ensure a Whatsminer D1 client receives an error response when a
+	// malformed subscribe request with an invalid user format is sent.
 	setMiner(WhatsminerD1)
+	id++
+	r = &Request{
+		ID:     &id,
+		Method: Subscribe,
+		Params: nil,
+	}
+	err = sE.Encode(r)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	data = <-recvCh
+	msg, mType, err = IdentifyMessage(data)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a subscribe response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.ID != *r.ID {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.Error == nil {
+		t.Fatal("expected a malformed subscribe request error response")
+	}
+
+	// Ensure a Whatsminer D1 client receives an error response when
+	// it has exhausted its request limits.
+	client.cfg.WithinLimit = func(ip string, clientType int) bool {
+		return false
+	}
 	id++
 	r = SubscribeRequest(&id, "mcpu", "1.0.1", "mn001")
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
+	data = <-recvCh
+	msg, mType, err = IdentifyMessage(data)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a subscribe response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.ID != *r.ID {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.Error == nil {
+		t.Fatal("expected a rate limit error response")
+	}
+	client.cfg.WithinLimit = func(ip string, clientType int) bool {
+		return true
+	}
 
-	// Ensure an subscribe response was sent back.
+	// Ensure a Whatsminer D1 client receives a valid non-error
+	// response when a valid subscribe request is sent.
+	id++
+	r = SubscribeRequest(&id, "mcpu", "1.0.1", "")
+	err = sE.Encode(r)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
 	data = <-recvCh
 	_, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
-
 	if mType != ResponseMessage {
 		t.Fatalf("expected a subscribe response message, got %v", mType)
 	}
 
+	// Ensure an Antminer DR3 client receives a valid non-error
+	// response when a valid subscribe request is sent.
 	setMiner(AntminerDR3)
 	id++
 	r.ID = &id
@@ -254,19 +392,17 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-
-	// Ensure an subscribe response was sent back.
 	data = <-recvCh
 	_, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
-
 	if mType != ResponseMessage {
 		t.Fatalf("expected a subscribe response message, got %v", mType)
 	}
 
-	// Ensure an subscribe response was sent back.
+	// Ensure a CPU client receives a valid non-error response when a
+	// valid subscribe request is sent.
 	setMiner(CPU)
 	id++
 	r.ID = &id
@@ -274,27 +410,27 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-
 	data = <-recvCh
 	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
-
 	if mType != ResponseMessage {
 		t.Fatalf("expected a subscribe response message, got %v", mType)
 	}
-
 	resp, ok = msg.(*Response)
 	if !ok {
-		t.Fatalf("expected subsriberesponse with id %d, got %d", *r.ID, resp.ID)
+		t.Fatalf("expected subsribe response with id %d, got %d", *r.ID, resp.ID)
 	}
-
 	if resp.ID != *r.ID {
 		t.Fatalf("expected suscribe response with id %d, got %d", *r.ID, resp.ID)
 	}
+	if resp.Error != nil {
+		t.Fatalf("expected non-error subscribe response, got %v", resp.Error)
+	}
 
-	// Ensure the client is authorized and subscribed for work updates.
+	// Ensure the CPU client is now authorized and subscribed
+	// for work updates.
 	client.authorizedMtx.Lock()
 	authorized := client.authorized
 	client.authorizedMtx.Unlock()
@@ -319,12 +455,10 @@ func testClient(t *testing.T, db *bolt.DB) {
 		"000a6030000954cee5d00000000000000000000000000000000000" +
 		"000000000000000000000000000000000000000000000800000010" +
 		"0000000000005a0"
-
 	job, err := NewJob(workE, 41)
 	if err != nil {
 		t.Fatalf("unable to create job %v", err)
 	}
-
 	err = job.Create(client.cfg.DB)
 	if err != nil {
 		t.Fatalf("failed to persist job %v", err)
@@ -337,132 +471,407 @@ func testClient(t *testing.T, db *bolt.DB) {
 	nTime := workE[272:280]
 	genTx2 := workE[352:360]
 
-	// Send a work notification.
+	// Send a work notification to the CPU client.
 	r = WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
 		blockVersion, nBits, nTime, true)
-
 	client.ch <- r
-
-	// Ensure cpu work notification was received.
 	cpuWork := <-recvCh
 	msg, mType, err = IdentifyMessage(cpuWork)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
-
 	if mType != NotificationMessage {
 		t.Fatalf("expected a notification message, got %v", mType)
 	}
-
 	req, ok = msg.(*Request)
 	if !ok {
 		t.Fatalf("unable to cast message as request")
 	}
-
 	if req.Method != Notify {
 		t.Fatalf("expected %s message method, got %s", Notify, req.Method)
 	}
 
-	// Update the miner type of the endpoint.
-	setMiner(InnosiliconD9)
+	// Claim a weighted share for the CPU client.
+	err = client.claimWeightedShare()
+	if err != nil {
+		t.Fatalf("[claimWeightedShare (CPU)] unexpected error: %v", err)
+	}
 
-	// Send another work notification.
+	// Ensure a CPU client receives an error response when
+	// it triggers a weighted share error.
+	client.cfg.SoloPool = true
+	err = client.claimWeightedShare()
+	if err == nil {
+		t.Fatalf("[claimWeightedShare (CPU)] expected a solo pool mode error")
+	}
+	client.cfg.SoloPool = false
+	client.cfg.ActiveNet = chaincfg.MainNetParams()
+	err = client.claimWeightedShare()
+	if err == nil {
+		t.Fatalf("[claimWeightedShare (CPU)] expected an active " +
+			"network cpu share error")
+	}
+	client.cfg.ActiveNet = chaincfg.SimNetParams()
+
+	// Send a work notification to an Innosilicon D9 client.
+	setMiner(InnosiliconD9)
 	client.ch <- r
 
-	// Ensure the work notification recieved is different from the cpu work
-	// received.
+	// Ensure the work notification received is unique to the D9.
 	d9Work := <-recvCh
 	if bytes.Equal(cpuWork, d9Work) {
 		t.Fatalf("expected innosilicond9 work to be different from cpu work")
 	}
 
-	// Update the miner type of the endpoint.
-	setMiner(WhatsminerD1)
+	// Claim a weighted share for the Innosilicon D9 client.
+	err = client.claimWeightedShare()
+	if err != nil {
+		t.Fatalf("[claimWeightedShare (D9)] unexpected error: %v", err)
+	}
 
-	// Send another work notification.
+	// Send a work notification to a Whatsminer D1 client.
+	setMiner(WhatsminerD1)
 	client.ch <- r
 
-	// Ensure the work notification recieved is different from the D9 work
-	// received.
+	// Ensure the work notification received is unique to the D1.
 	d1Work := <-recvCh
 	if bytes.Equal(d1Work, d9Work) {
-		t.Fatalf("expected whatsminer d1 work to be different from innosilion d9 work")
+		t.Fatalf("expected whatsminer d1 work to be different from " +
+			"innosilion d9 work")
 	}
 
-	// Update the miner type of the endpoint.
-	setMiner(AntminerDR3)
+	// Claim a weighted share for the Whatsminer D1.
+	err = client.claimWeightedShare()
+	if err != nil {
+		t.Fatalf("[claimWeightedShare (D1)] unexpected error: %v", err)
+	}
 
-	// Send another work notification.
+	// Send a work notification to an Antminer DR3 client.
+	setMiner(AntminerDR3)
 	client.ch <- r
 
-	// Ensure the work notification recieved is different from the D1 work
-	// received.
+	// Ensure the work notification received is unique to the DR3.
 	dr3Work := <-recvCh
 	if bytes.Equal(d1Work, dr3Work) {
-		t.Fatalf("expected antminer dr3 work to be different from whatsminer d1 work")
+		t.Fatalf("expected antminer dr3 work to be different from " +
+			"whatsminer d1 work")
 	}
 
-	// Update the miner type of the endpoint.
-	setMiner(AntminerDR5)
+	// Claim a weighted share for the Antminer DR3.
+	err = client.claimWeightedShare()
+	if err != nil {
+		t.Fatalf("[claimWeightedShare (DR3)] unexpected error: %v", err)
+	}
 
-	// Send another work notification.
+	// Send a work notification to an Antminer DR5 client.
+	setMiner(AntminerDR5)
 	client.ch <- r
 
-	// Ensure the work notification recieved is different from the D1 work
-	// received.
+	// Ensure the work notification received is identical to that of the DR3.
 	dr5Work := <-recvCh
 	if !bytes.Equal(dr5Work, dr3Work) {
-		t.Fatalf("expected antminer dr3 work to be equal to antminer dr5 work")
+		t.Fatalf("expected antminer dr5 work to be equal to antminer dr3 work")
+	}
+
+	// Claim a weighted share for the Antminer DR5.
+	err = client.claimWeightedShare()
+	if err != nil {
+		t.Fatalf("[claimWeightedShare (DR5)] unexpected error: %v", err)
 	}
 
 	// Update the miner type of the endpoint.
+	// Ensure a CPU client receives an error response when
+	// a malformed work submission is sent.
 	setMiner(CPU)
-
-	id = uint64(3)
-	sub := SubmitWorkRequest(&id, "tcl", job.UUID, "00000000",
-		"954cee5d", "6ddf0200")
-
-	// Send a work submission.
+	id++
+	sub := &Request{
+		ID:     &id,
+		Method: Submit,
+		Params: []string{"tcl", job.UUID, "00000000"},
+	}
 	err = sE.Encode(sub)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-
-	// Ensure a response was sent back for the cpu submission.
 	cpuSub := <-recvCh
-
 	msg, mType, err = IdentifyMessage(cpuSub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
-
 	if mType != ResponseMessage {
 		t.Fatalf("expected a response message, got %v", mType)
 	}
-
 	resp, ok = msg.(*Response)
 	if !ok {
 		t.Fatalf("unable to cast message as response")
 	}
-
 	if resp.ID != *sub.ID {
 		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
 	}
+	if resp.Error == nil {
+		t.Fatal("expected a malformed work submission error")
+	}
 
-	// Update the miner type of the endpoint.
-	setMiner(WhatsminerD1)
-
+	// Ensure a CPU client receives an error response when
+	// submitting work when its exhausted its rate limit.
+	client.cfg.WithinLimit = func(ip string, clientType int) bool {
+		return false
+	}
 	id++
-	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000",
-		"954cee5d", "6ddf0200")
-
-	// Send a work submission.
+	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000", "954cee5d", "6ddf0200")
 	err = sE.Encode(sub)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
+	cpuSub = <-recvCh
+	msg, mType, err = IdentifyMessage(cpuSub)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("unable to cast message as response")
+	}
+	if resp.ID != *sub.ID {
+		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
+	}
+	if resp.Error == nil {
+		t.Fatal("expected a rate limit error")
+	}
+	client.cfg.WithinLimit = func(ip string, clientType int) bool {
+		return true
+	}
 
-	// Ensure a response was sent back for the whatsminer submission.
+	// Ensure a CPU client receives an error response when
+	// submitting work referencing a non-existent job.
+	workE = "07000000e2bb3110848ec197118e8df2a3bc85dcaf5a787008a9c70721" +
+		"09dfb25e0a000047fe98e377430404709f8045ebf14b3a1903237c2adb49ed55" +
+		"72412eb2e0ca3c8ad3ffc23e946e1cce2dca67e2f711a78f41003358630b7923" +
+		"1f0af3311bd73c010000000000000000000a000000000064ad2620204e000000" +
+		"0000002e0000003b0f000005ec705e0000000000000000000000000000000000" +
+		"0000000000000000000000000000000000000000000000800000010000000000" +
+		"0005a0"
+	job, err = NewJob(workE, 46)
+	if err != nil {
+		t.Fatalf("[NewJob] unexpected error: %v", err)
+	}
+	err = job.Create(client.cfg.DB)
+	if err != nil {
+		t.Fatalf("failed to persist job %v", err)
+	}
+	client.extraNonce1 = "b072e5dc"
+	id++
+	sub = SubmitWorkRequest(&id, "tcl", "notajob", "00000000", "05ec705e", "116f0200")
+	err = sE.Encode(sub)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	cpuSub = <-recvCh
+	msg, mType, err = IdentifyMessage(cpuSub)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("unable to cast message as response")
+	}
+	if resp.ID != *sub.ID {
+		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
+	}
+	if resp.Error == nil {
+		t.Fatalf("expected a job not found error")
+	}
+
+	// Ensure a non-supported client receives an error response when
+	// submitting work.
+	setMiner("notaminer")
+	id++
+	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000", "05ec705e", "116f0200")
+	err = sE.Encode(sub)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	cpuSub = <-recvCh
+	msg, mType, err = IdentifyMessage(cpuSub)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("unable to cast message as response")
+	}
+	if resp.ID != *sub.ID {
+		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
+	}
+	if resp.Error == nil {
+		t.Fatalf("expected an unknown miner type error")
+	}
+
+	// Ensure a CPU client receives an error response if it cannot
+	// submit work.
+	setMiner(CPU)
+	client.cfg.SubmitWork = func(submission *string) (bool, error) {
+		return false, fmt.Errorf("unable to submit work")
+	}
+	id++
+	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000", "05ec705e", "116f0200")
+	err = sE.Encode(sub)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	cpuSub = <-recvCh
+	msg, mType, err = IdentifyMessage(cpuSub)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("unable to cast message as response")
+	}
+	if resp.ID != *sub.ID {
+		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
+	}
+	if resp.Error == nil {
+		t.Fatalf("expected a submit work error")
+	}
+	client.cfg.SubmitWork = func(submission *string) (bool, error) {
+		return true, nil
+	}
+
+	// Ensure a CPU client receives a non-error response when
+	// submitting valid work.
+	id++
+	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000", "05ec705e", "116f0200")
+	err = sE.Encode(sub)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	cpuSub = <-recvCh
+	msg, mType, err = IdentifyMessage(cpuSub)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("unable to cast message as response")
+	}
+	if resp.ID != *sub.ID {
+		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
+	}
+	if resp.Error != nil {
+		t.Fatalf("expected a non-error work submission response, got %v", resp.Error)
+	}
+
+	// Ensure a CPU client receives an error response when
+	// submitting duplicate work.
+	id++
+	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000", "05ec705e", "116f0200")
+	err = sE.Encode(sub)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	cpuSub = <-recvCh
+	msg, mType, err = IdentifyMessage(cpuSub)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("unable to cast message as response")
+	}
+	if resp.ID != *sub.ID {
+		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
+	}
+	if resp.Error == nil {
+		t.Fatal("expected a work exists work submission error")
+	}
+	client.cfg.SubmitWork = func(submission *string) (bool, error) {
+		return false, nil
+	}
+
+	// Ensure a CPU client receives an error response when
+	// submitting work intended for a different network.
+	client.cfg.ActiveNet = chaincfg.MainNetParams()
+	id++
+	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000", "05ec705e", "116f0200")
+	err = sE.Encode(sub)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	cpuSub = <-recvCh
+	msg, mType, err = IdentifyMessage(cpuSub)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("unable to cast message as response")
+	}
+	if resp.ID != *sub.ID {
+		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
+	}
+	if resp.Error == nil {
+		t.Fatal("expected a claim work submission error")
+	}
+	client.cfg.ActiveNet = chaincfg.SimNetParams()
+
+	// Ensure a CPU client receives an error response when
+	// submitting work that is rejected by the network.
+	id++
+	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000", "05ec705e", "116f0200")
+	err = sE.Encode(sub)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	cpuSub = <-recvCh
+	msg, mType, err = IdentifyMessage(cpuSub)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("unable to cast message as response")
+	}
+	if resp.ID != *sub.ID {
+		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
+	}
+	if resp.Error != nil {
+		t.Fatalf("expected no-error work submission response, got %v", resp.Error)
+	}
+
+	// Ensure the pool processes Whatsminer D1 work submissions.
+	setMiner(WhatsminerD1)
+	id++
+	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000",
+		"954cee5d", "6ddf0200")
+	err = sE.Encode(sub)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
 	d1Sub := <-recvCh
 	msg, mType, err = IdentifyMessage(d1Sub)
 	if err != nil {
@@ -479,53 +888,40 @@ func testClient(t *testing.T, db *bolt.DB) {
 		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
 	}
 
-	// Update the miner type of the endpoint.
+	// Ensure the pool processes Antminer DR3 work submissions.
 	setMiner(AntminerDR3)
-
 	id++
 	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000",
 		"954cee5d", "6ddf0200")
-
-	// Send a work submission.
 	err = sE.Encode(sub)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-
-	// Ensure a response was sent back for the antminer dr3 submission.
 	dr3Sub := <-recvCh
 	msg, mType, err = IdentifyMessage(dr3Sub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
-
 	if mType != ResponseMessage {
 		t.Fatalf("expected a response message, got %v", mType)
 	}
-
 	resp, ok = msg.(*Response)
 	if !ok {
 		t.Fatalf("unable to cast message as response")
 	}
-
 	if resp.ID != *sub.ID {
 		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
 	}
 
-	// Update the miner type of the endpoint.
+	// Ensure the pool processes Antminer DR5 work submissions.
 	setMiner(AntminerDR5)
-
 	id++
 	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000",
 		"954cee5d", "6ddf0200")
-
-	// Send a work submission.
 	err = sE.Encode(sub)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-
-	// Ensure a response was sent back for the antminer dr5 submission.
 	dr5Sub := <-recvCh
 	msg, mType, err = IdentifyMessage(dr5Sub)
 	if err != nil {
@@ -542,61 +938,29 @@ func testClient(t *testing.T, db *bolt.DB) {
 		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
 	}
 
-	// Update the miner type of the endpoint.
+	// Ensure the pool processes Antminer D9 work submissions.
 	setMiner(InnosiliconD9)
-
 	id++
 	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000",
 		"954cee5d", "6ddf0200")
-
-	// Send a work submission.
 	err = sE.Encode(sub)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-
-	// Trigger time-rolled work updates by setting the hub's current work.
-	setCurrentWork(workE)
-
-	// Ensure a response was sent back for the antminer d9 submission.
 	d9Sub := <-recvCh
-
 	msg, mType, err = IdentifyMessage(d9Sub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
-
 	if mType != ResponseMessage {
 		t.Fatalf("expected a response message, got %v", mType)
 	}
-
 	resp, ok = msg.(*Response)
 	if !ok {
 		t.Fatalf("unable to cast message as response")
 	}
-
 	if resp.ID != *sub.ID {
 		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
-	}
-
-	// Ensure the client receives time-rolled work.
-	timeRolledWork := <-recvCh
-	msg, mType, err = IdentifyMessage(timeRolledWork)
-	if err != nil {
-		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
-	}
-
-	if mType != NotificationMessage {
-		t.Fatalf("expected a notification message, got %v", mType)
-	}
-
-	req, ok = msg.(*Request)
-	if !ok {
-		t.Fatalf("unable to cast message as request")
-	}
-
-	if req.Method != Notify {
-		t.Fatalf("expected %s message method, got %s", Notify, req.Method)
 	}
 
 	// Fake a bunch of submissions and calculate the hash rate.
@@ -608,12 +972,184 @@ func testClient(t *testing.T, db *bolt.DB) {
 		t.Fatal("expected a non-nil client hash rate")
 	}
 
+	// Ensure the client gets terminated if it sends an unknown message type.
+	id++
+	r = &Request{
+		ID:     &id,
+		Method: "unknown",
+	}
+	err = sE.Encode(r)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+
+	// Create a new client connection.
+	c, s, err = makeConn(ln, serverCh)
+	if err != nil {
+		t.Fatalf("[makeConn] unexpected error: %v", err)
+	}
+
+	addr = c.RemoteAddr()
+	tcpAddr, err = net.ResolveTCPAddr(addr.Network(), addr.String())
+	if err != nil {
+		t.Fatalf("unable to parse tcp addresss: %v", err)
+	}
+
+	cCfg.SoloPool = true
+	client, err = NewClient(c, tcpAddr, cCfg)
+	if err != nil {
+		t.Fatalf("[NewClient] unexpected error: %v", err)
+	}
+
+	go client.run(client.ctx)
+	time.Sleep(time.Millisecond * 50)
+
+	sE = json.NewEncoder(s)
+	sR = bufio.NewReaderSize(s, maxMessageSize)
+
+	go readMsg(client, sR)
+
+	// Ensure a CPU client receives a valid non-error response when
+	// a valid authorize request is sent.
+	id++
+	r = AuthorizeRequest(&id, "mn", "SsiuwSRYvH7pqWmRxFJWR8Vmqc3AWsjmK2Y")
+	err = sE.Encode(r)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	data = <-recvCh
+	msg, mType, err = IdentifyMessage(data)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected an auth response message, got %v: %v", mType, spew.Sdump(msg))
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.ID != *r.ID {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.Error != nil {
+		t.Fatalf("expected non-error authorize response, got %v", resp.Error)
+	}
+	data = <-recvCh
+	msg, mType, err = IdentifyMessage(data)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != NotificationMessage {
+		t.Fatalf("expected a notification message, got %v", mType)
+	}
+	req, ok = msg.(*Request)
+	if !ok {
+		t.Fatalf("unable to cast message as request")
+	}
+	if req.Method != SetDifficulty {
+		t.Fatalf("expected %s message method, got %s", SetDifficulty, req.Method)
+	}
+
+	// Ensure a CPU client receives a valid non-error response when
+	// a valid subscribe request is sent.
+	id++
+	r = SubscribeRequest(&id, "mcpu", "1.0.1", "")
+	err = sE.Encode(r)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	data = <-recvCh
+	msg, mType, err = IdentifyMessage(data)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a subscribe response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("expected subsribe response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.ID != *r.ID {
+		t.Fatalf("expected suscribe response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.Error != nil {
+		t.Fatalf("expected non-error subscribe response, got %v", resp.Error)
+	}
+
+	// Ensure the CPU client is now authorized and subscribed
+	// for work updates.
+	client.authorizedMtx.Lock()
+	authorized = client.authorized
+	client.authorizedMtx.Unlock()
+
+	if !authorized {
+		t.Fatalf("expected an authorized mining client")
+	}
+
+	client.subscribedMtx.Lock()
+	subscribed = client.subscribed
+	client.subscribedMtx.Unlock()
+
+	if !subscribed {
+		t.Fatalf("expected a subscribed mining client")
+	}
+
+	// Trigger time-rolled work updates to the CPU  client.
+	setCurrentWork(workE)
+
+	// Send a work notification to the CPU client.
+	r = WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
+		blockVersion, nBits, nTime, true)
+	client.ch <- r
+	cpuWork = <-recvCh
+	msg, mType, err = IdentifyMessage(cpuWork)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != NotificationMessage {
+		t.Fatalf("expected a notification message, got %v", mType)
+	}
+	req, ok = msg.(*Request)
+	if !ok {
+		t.Fatalf("unable to cast message as request")
+	}
+	if req.Method != Notify {
+		t.Fatalf("expected %s message method, got %s", Notify, req.Method)
+	}
+
+	// Ensure the client receives time-rolled work.
+	timeRolledWork := <-recvCh
+	msg, mType, err = IdentifyMessage(timeRolledWork)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != NotificationMessage {
+		t.Fatalf("expected a notification message, got %v", mType)
+	}
+	req, ok = msg.(*Request)
+	if !ok {
+		t.Fatalf("unable to cast message as request")
+	}
+	if req.Method != Notify {
+		t.Fatalf("expected %s message method, got %s", Notify, req.Method)
+	}
+
+	// Trigger a client timeout by waiting.
+	time.Sleep(time.Second * 3)
+
 	// Empty the job bucket.
 	err = emptyBucket(db, jobBkt)
 	if err != nil {
 		t.Fatalf("emptyBucket error: %v", err)
 	}
 
-	cancel()
+	// Empty the share bucket.
+	err = emptyBucket(db, shareBkt)
+	if err != nil {
+		t.Fatalf("emptyBucket error: %v", err)
+	}
+
 	client.cfg.EndpointWg.Wait()
 }

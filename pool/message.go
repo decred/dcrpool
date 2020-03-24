@@ -55,30 +55,30 @@ type StratumError struct {
 }
 
 // NewStratumError creates a stratum error instance.
-func NewStratumError(code uint32, traceback *string) *StratumError {
-	var message string
+func NewStratumError(code uint32, err error) *StratumError {
+	var msg string
 
 	switch code {
 	case StaleJob:
-		message = "Stale Job"
+		msg = "Stale Job"
 	case DuplicateShare:
-		message = "Duplicate share"
+		msg = "Duplicate share"
 	case LowDifficultyShare:
-		message = "Low difficulty share"
+		msg = "Low difficulty share"
 	case UnauthorizedWorker:
-		message = "Unauthorized worker"
+		msg = "Unauthorized worker"
 	case NotSubscribed:
-		message = "Not subscribed"
+		msg = "Not subscribed"
 	case Unknown:
 		fallthrough
 	default:
-		message = "Other/Unknown"
+		msg = "Other/Unknown"
 	}
 
 	return &StratumError{
 		Code:      code,
-		Message:   message,
-		Traceback: traceback,
+		Message:   fmt.Sprintf("%s: %s", msg, err.Error()),
+		Traceback: nil,
 	}
 }
 
@@ -178,6 +178,11 @@ func ParseAuthorizeRequest(req *Request) (string, error) {
 	auth, ok := req.Params.([]interface{})
 	if !ok {
 		desc := "failed to parse authorize parameters"
+		return "", MakeError(ErrParse, desc, nil)
+	}
+
+	if len(auth) < 2 {
+		desc := fmt.Sprintf("expected 2 params, got %v", len(auth))
 		return "", MakeError(ErrParse, desc, nil)
 	}
 
@@ -591,6 +596,12 @@ func ParseSubmitWorkRequest(req *Request, miner string) (string, string, string,
 	params, ok := req.Params.([]interface{})
 	if !ok {
 		desc := "failed to parse submit work parameters"
+		return "", "", "", "", "", MakeError(ErrParse, desc, nil)
+	}
+
+	if len(params) < 5 {
+		desc := fmt.Sprintf("expected 5 submit work "+
+			"parameters, got %d", len(params))
 		return "", "", "", "", "", MakeError(ErrParse, desc, nil)
 	}
 
