@@ -41,27 +41,27 @@ func hashString(hash *big.Rat) string {
 
 	if hash.Cmp(PetaHash) > 0 {
 		ph := new(big.Rat).Quo(hash, PetaHash)
-		return fmt.Sprintf("%v PH/s", ph.FloatString(4))
+		return fmt.Sprintf("%v PH/s", ph.FloatString(2))
 	}
 
 	if hash.Cmp(TeraHash) > 0 {
 		th := new(big.Rat).Quo(hash, TeraHash)
-		return fmt.Sprintf("%v TH/s", th.FloatString(4))
+		return fmt.Sprintf("%v TH/s", th.FloatString(2))
 	}
 
 	if hash.Cmp(GigaHash) > 0 {
 		gh := new(big.Rat).Quo(hash, GigaHash)
-		return fmt.Sprintf("%v GH/s", gh.FloatString(4))
+		return fmt.Sprintf("%v GH/s", gh.FloatString(2))
 	}
 
 	if hash.Cmp(MegaHash) > 0 {
 		mh := new(big.Rat).Quo(hash, MegaHash)
-		return fmt.Sprintf("%v MH/s", mh.FloatString(4))
+		return fmt.Sprintf("%v MH/s", mh.FloatString(2))
 	}
 
 	if hash.Cmp(KiloHash) > 0 {
 		kh := new(big.Rat).Quo(hash, KiloHash)
-		return fmt.Sprintf("%v KH/s", kh.FloatString(4))
+		return fmt.Sprintf("%v KH/s", kh.FloatString(2))
 	}
 
 	return "< 1KH/s"
