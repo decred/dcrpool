@@ -33,28 +33,30 @@
         <div class="col-12 p-3">
             <div class="block__content">
                 <h1>All Connected Miners</h1>
-                <table class="table">
-                    <tr>
-                        <th>Account</th>
-                        <th>IP</th>
-                        <th>Miner</th>
-                        <th>Hash Rate</th>
-                    </tr>
-                    {{range $accountID, $clients := .Connections}}
-                    {{range $client := $clients}}
-                    <tr>
-                        <td><span class="dcr-label">{{$accountID}}</span></td>
-                        <td>{{$client.IP}}</td>
-                        <td>{{$client.Miner}}</td>
-                        <td>{{hashString $client.HashRate}}</td>
-                    </tr>
-                    {{end}}
-                    {{else}}
-                    <tr>
-                        <td colspan="100%"><span class="no-data">No miners connected</span></td>
-                    </tr>
-                    {{end}}
-                </table>
+                <div class="overflow-auto">
+                    <table class="table">
+                        <tr>
+                            <th>Account</th>
+                            <th>IP</th>
+                            <th>Miner</th>
+                            <th>Hash Rate</th>
+                        </tr>
+                        {{range $accountID, $clients := .Connections}}
+                        {{range $client := $clients}}
+                        <tr>
+                            <td><span class="dcr-label">{{$accountID}}</span></td>
+                            <td>{{$client.IP}}</td>
+                            <td>{{$client.Miner}}</td>
+                            <td>{{hashString $client.HashRate}}</td>
+                        </tr>
+                        {{end}}
+                        {{else}}
+                        <tr>
+                            <td colspan="100%"><span class="no-data">No miners connected</span></td>
+                        </tr>
+                        {{end}}
+                    </table>
+                </div>
             </div>
         </div>
 

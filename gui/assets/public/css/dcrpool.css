@@ -8873,6 +8873,10 @@ table td {
   font-family: "dcrstakepool-code", "Courier New", "monospace" !important;
 }
 
+.pool-overview .dcr-label {
+  word-break: break-word;
+}
+
 .account-info-title {
   font-size: 14px;
   font-weight: bold;
