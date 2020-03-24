@@ -165,9 +165,10 @@ func (c *Client) claimWeightedShare() error {
 	if c.cfg.SoloPool {
 		return fmt.Errorf("cannot claim shares in solo pool mode")
 	}
-	if c.cfg.ActiveNet.Name == chaincfg.MainNetParams().Name && c.cfg.FetchMiner() == CPU {
+	if c.cfg.ActiveNet.Name == chaincfg.MainNetParams().Name &&
+		c.cfg.FetchMiner() == CPU {
 		return fmt.Errorf("cannot claim shares for cpu miners on mainnet, " +
-			"reserved for simnet testing purposes only")
+			"reserved for testing purposes only (simnet, testnet)")
 	}
 	weight := ShareWeights[c.cfg.FetchMiner()]
 	share := NewShare(c.account, weight)

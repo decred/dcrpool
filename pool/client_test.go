@@ -121,7 +121,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 			return true
 		},
 		HashCalcThreshold: 1,
-		ClientTimeout:     time.Second * 2,
+		ClientTimeout:     time.Millisecond * 1300,
 	}
 	client, err := NewClient(c, tcpAddr, cCfg)
 	if err != nil {
@@ -966,7 +966,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 	// Fake a bunch of submissions and calculate the hash rate.
 	setMiner(CPU)
 	atomic.StoreInt64(&client.submissions, 50)
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Millisecond * 1200)
 	hash := client.fetchHashRate()
 	if hash == ZeroRat {
 		t.Fatal("expected a non-nil client hash rate")
@@ -1137,7 +1137,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 	}
 
 	// Trigger a client timeout by waiting.
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Millisecond * 1500)
 
 	// Empty the job bucket.
 	err = emptyBucket(db, jobBkt)
