@@ -127,12 +127,6 @@ func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(work) == 0 && len(payments) == 0 {
-		data.Error = fmt.Sprintf("No confirmed work for %s", address)
-		ui.renderTemplate(w, "index", data)
-		return
-	}
-
 	data.AccountStats = &AccountStats{
 		MinedWork: work,
 		Payments:  payments,
