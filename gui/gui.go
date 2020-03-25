@@ -140,6 +140,7 @@ func (ui *GUI) route() {
 		http.FileServer(jsDir)))
 
 	ui.router.HandleFunc("/", ui.Homepage).Methods("GET")
+	ui.router.HandleFunc("/account", ui.DoesAccountExist).Methods("GET")
 	ui.router.HandleFunc("/admin", ui.AdminPage).Methods("GET")
 	ui.router.HandleFunc("/admin", ui.AdminLogin).Methods("POST")
 	ui.router.HandleFunc("/backup", ui.DownloadDatabaseBackup).Methods("POST")

@@ -74,9 +74,9 @@
             </div>
 
             {{ if not .Admin }}
-            <a class="modalbtn" data-toggle="modal" data-target="#accountModal"></a>
+            <a class="modalbtn" data-toggle="modal" data-target="#account-modal"></a>
 
-            <div class="modal fade" id="accountModal">
+            <div class="modal fade" id="account-modal">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -85,21 +85,23 @@
                         </div>
                         <div class="modal-body">
                             <p>To know your mining account details, enter your mining address.</p>
-                            <form class="modal-form" id="search-form" action="/" method="get">
+                            <form class="modal-form" id="account-form" action="/account" method="get">
                                 <div class="modal-input">
                                     <input type="text" name="address" placeholder="Mining Address" spellcheck="false">
+                                    <div class="icon-warning"></div>
                                 </div>
+                                <div class="err-message"></div>
                             </form>
                             <div class="d-flex flex-row pt-4 align-items-center">
-                                <a data-toggle="modal" href="#adminModal">I'm an Admin</a>
-                                <button form="search-form" type="submit" class="btn btn-primary ml-auto">Enter</button>
+                                <a data-toggle="modal" href="#admin-modal">I'm an Admin</a>
+                                <button form="account-form" type="submit" class="btn btn-primary ml-auto">Enter</button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="modal fade" id="adminModal">
+            <div class="modal fade" id="admin-modal">
                 <div class="modal-dialog modal-sm">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -112,12 +114,11 @@
                                     <input type="password" name="password" required placeholder="Enter password">
                                     <div class="icon-warning"></div>
                                 </div>
-                                <div class="err-message">
-                                </div>
+                                <div class="err-message"></div>
                                 {{.CSRF}}
                             </form>
                             <div class="d-flex flex-row pt-4 align-items-center">
-                                <a data-toggle="modal" href="#accountModal">I'm not an Admin</a>
+                                <a data-toggle="modal" href="#account-modal">I'm not an Admin</a>
                                 <button form="admin-form" type="submit" class="btn btn-primary ml-auto">Login</button>
                             </div>
                         </div>
