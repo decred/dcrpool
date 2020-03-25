@@ -86,7 +86,9 @@
                         <div class="modal-body">
                             <p>To know your mining account details, enter your mining address.</p>
                             <form class="modal-form" id="search-form" action="/" method="get">
-                                <input type="text" name="address" class="modal-input" placeholder="Mining Address" spellcheck="false">
+                                <div class="modal-input">
+                                    <input type="text" name="address" placeholder="Mining Address" spellcheck="false">
+                                </div>
                             </form>
                             <div class="d-flex flex-row pt-4 align-items-center">
                                 <a data-toggle="modal" href="#adminModal">I'm an Admin</a>
@@ -98,20 +100,20 @@
             </div>
 
             <div class="modal fade" id="adminModal">
-                <div class="modal-dialog">
+                <div class="modal-dialog modal-sm">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h1 class="modal-title">Admin Login</h1>
                             <button type="button" class="close" data-dismiss="modal">&times;</button>
                         </div>
-                        <div class="modal-body text-center">
-                            <div id="password-error" class="snackbar snackbar-error m-0" style="display: none;">
-                                <div class="snackbar-message">
-                                    <p></p>
-                                </div>
-                            </div>
+                        <div class="modal-body">
                             <form class="modal-form" id="admin-form" action="/admin" method="post">
-                                <input type="password" name="password" class="modal-input" placeholder="Enter password">
+                                <div class="modal-input">
+                                    <input type="password" name="password" required placeholder="Enter password">
+                                    <div class="icon-warning"></div>
+                                </div>
+                                <div class="err-message">
+                                </div>
                                 {{.CSRF}}
                             </form>
                             <div class="d-flex flex-row pt-4 align-items-center">
