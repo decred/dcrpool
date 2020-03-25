@@ -87,7 +87,7 @@ func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
 
 	if ui.cfg.AdminPass != pass {
 		log.Warn("Unauthorized access")
-		w.WriteHeader(http.StatusUnauthorized)
+		http.Error(w, "Incorrect password", http.StatusUnauthorized)
 		return
 	}
 

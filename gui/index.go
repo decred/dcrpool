@@ -142,3 +142,35 @@ func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 
 	ui.renderTemplate(w, "account", data)
 }
+
+// DoesAccountExist is the handler for "GET /account". If the provided address
+// has an account on the server a "200 OK" response is returned, otherwise a
+// "400 Bad Request" is returned.
+func (ui *GUI) DoesAccountExist(w http.ResponseWriter, r *http.Request) {
+	session, err := getSession(r, ui.cookieStore)
+	if err != nil {
+		log.Errorf("getSession error: %v", err)
+		http.Error(w, "Session error", http.StatusInternalServerError)
+		return
+	}
+
+	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
+		http.Error(w, "Request limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+
+	address := r.FormValue("address")
+
+	accountID, err := pool.AccountID(address, ui.cfg.ActiveNet)
+	if err != nil {
+		http.Error(w, "Invalid address", http.StatusBadRequest)
+		return
+	}
+
+	if !ui.cfg.AccountExists(accountID) {
+		http.Error(w, "Nothing found for address", http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
