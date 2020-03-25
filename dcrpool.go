@@ -90,6 +90,10 @@ func newPool(cfg *config) (*miningPool, error) {
 	if err != nil {
 		return nil, err
 	}
+	err = addPort(minerPorts, pool.ObeliskDCR1, cfg.DCR1Port)
+	if err != nil {
+		return nil, err
+	}
 
 	db, err := pool.InitDB(cfg.DBFile, cfg.SoloPool)
 	if err != nil {
