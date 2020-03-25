@@ -29,13 +29,16 @@ import (
 )
 
 const (
-	// MaxMessageSize represents the maximum size of a transmitted message
+	// maxMessageSize represents the maximum size of a transmitted message
 	// allowed, in bytes.
-	MaxMessageSize = 250
+	maxMessageSize = 250
 
 	// hashCalcThreshold represents the minimum operating time in seconds
 	// before a client's hash rate is calculated.
 	hashCalcThreshold = 20
+
+	// clientTimeout represents the read/write timeout for the client.
+	clientTimeout = time.Minute * 4
 )
 
 var (
@@ -84,6 +87,8 @@ type ClientConfig struct {
 	HashCalcThreshold uint32
 	// MaxGenTime represents the share creation target time for the pool.
 	MaxGenTime time.Duration
+	// ClientTimeout represents the connection read/write timeout.
+	ClientTimeout time.Duration
 }
 
 // Client represents a client connection.
@@ -103,8 +108,6 @@ type Client struct {
 	extraNonce1   string
 	ch            chan Message
 	readCh        chan readPayload
-	req           map[uint64]string
-	reqMtx        sync.RWMutex
 	account       string
 	authorized    bool
 	authorizedMtx sync.Mutex
@@ -139,7 +142,7 @@ func NewClient(conn net.Conn, addr *net.TCPAddr, cCfg *ClientConfig) (*Client, e
 		ch:       make(chan Message),
 		readCh:   make(chan readPayload),
 		encoder:  json.NewEncoder(conn),
-		reader:   bufio.NewReaderSize(conn, MaxMessageSize),
+		reader:   bufio.NewReaderSize(conn, maxMessageSize),
 		hashRate: ZeroRat,
 	}
 	err := c.generateExtraNonce1()
@@ -148,14 +151,6 @@ func NewClient(conn net.Conn, addr *net.TCPAddr, cCfg *ClientConfig) (*Client, e
 	}
 	c.id = fmt.Sprintf("%v/%v", c.extraNonce1, c.cfg.FetchMiner())
 	return c, nil
-}
-
-// fetchStratumMethod fetches the method of the associated request.
-func (c *Client) fetchStratumMethod(id uint64) string {
-	c.reqMtx.RLock()
-	method := c.req[id]
-	c.reqMtx.RUnlock()
-	return method
 }
 
 // shutdown terminates all client processes and established connections.
@@ -167,9 +162,13 @@ func (c *Client) shutdown() {
 // claimWeightedShare records a weighted share for the pool client. This
 // serves as proof of verifiable work contributed to the mining pool.
 func (c *Client) claimWeightedShare() error {
-	if c.cfg.ActiveNet.Name == chaincfg.MainNetParams().Name && c.cfg.FetchMiner() == CPU {
-		log.Error("cpu miners are reserved for only simnet testing purposes")
-		return nil
+	if c.cfg.SoloPool {
+		return fmt.Errorf("cannot claim shares in solo pool mode")
+	}
+	if c.cfg.ActiveNet.Name == chaincfg.MainNetParams().Name &&
+		c.cfg.FetchMiner() == CPU {
+		return fmt.Errorf("cannot claim shares for cpu miners on mainnet, " +
+			"reserved for testing purposes only (simnet, testnet)")
 	}
 	weight := ShareWeights[c.cfg.FetchMiner()]
 	share := NewShare(c.account, weight)
@@ -177,13 +176,13 @@ func (c *Client) claimWeightedShare() error {
 }
 
 // handleAuthorizeRequest processes authorize request messages received.
-func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
+func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 	if !allowed {
-		log.Errorf("unable to process authorize request, limit reached")
-		err := NewStratumError(Unknown, nil)
-		resp := AuthorizeResponse(*req.ID, false, err)
+		err := fmt.Errorf("unable to process authorize request, limit reached")
+		sErr := NewStratumError(Unknown, err)
+		resp := AuthorizeResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return
+		return err
 	}
 
 	// The client's username is expected to be of the format address.clientid
@@ -191,23 +190,23 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	// just the client's id.
 	username, err := ParseAuthorizeRequest(req)
 	if err != nil {
-		log.Errorf("unable to parse authorize request: %v", err)
-		err := NewStratumError(Unknown, nil)
-		resp := AuthorizeResponse(*req.ID, false, err)
+		err := fmt.Errorf("unable to parse authorize request: %v", err)
+		sErr := NewStratumError(Unknown, err)
+		resp := AuthorizeResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return
+		return err
 	}
 
 	switch c.cfg.SoloPool {
 	case false:
 		parts := strings.Split(username, ".")
 		if len(parts) != 2 {
-			log.Errorf("invalid username format, expected "+
+			err := fmt.Errorf("invalid username format, expected "+
 				"`address.clientid`, got %v", username)
-			err := NewStratumError(Unknown, nil)
-			resp := AuthorizeResponse(*req.ID, false, err)
+			sErr := NewStratumError(Unknown, err)
+			resp := AuthorizeResponse(*req.ID, false, sErr)
 			c.ch <- resp
-			return
+			return err
 		}
 
 		name := strings.TrimSpace(parts[1])
@@ -216,39 +215,39 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 		// Fetch the account of the address provided.
 		id, err := AccountID(address, c.cfg.ActiveNet)
 		if err != nil {
-			log.Errorf("unable to generate account id: %v", err)
-			err := NewStratumError(Unknown, nil)
-			resp := AuthorizeResponse(*req.ID, false, err)
+			err := fmt.Errorf("unable to generate account id: %v", err)
+			sErr := NewStratumError(Unknown, err)
+			resp := AuthorizeResponse(*req.ID, false, sErr)
 			c.ch <- resp
-			return
+			return err
 		}
 		_, err = FetchAccount(c.cfg.DB, []byte(id))
 		if err != nil {
 			if !IsError(err, ErrValueNotFound) {
-				log.Errorf("unable to fetch account: %v", err)
-				err := NewStratumError(Unknown, nil)
-				resp := AuthorizeResponse(*req.ID, false, err)
+				err := fmt.Errorf("unable to fetch account: %v", err)
+				sErr := NewStratumError(Unknown, err)
+				resp := AuthorizeResponse(*req.ID, false, sErr)
 				c.ch <- resp
-				return
+				return err
 			}
 		}
 
 		// Create the account if it does not already exist.
 		account, err := NewAccount(address, c.cfg.ActiveNet)
 		if err != nil {
-			log.Errorf("unable to create account: %v", err)
-			err := NewStratumError(Unknown, nil)
-			resp := AuthorizeResponse(*req.ID, false, err)
+			err := fmt.Errorf("unable to create account: %v", err)
+			sErr := NewStratumError(Unknown, err)
+			resp := AuthorizeResponse(*req.ID, false, sErr)
 			c.ch <- resp
-			return
+			return err
 		}
 		err = account.Create(c.cfg.DB)
 		if err != nil {
-			log.Errorf("unable to persist account: %v", err)
-			err := NewStratumError(Unknown, nil)
-			resp := AuthorizeResponse(*req.ID, false, err)
+			err := fmt.Errorf("unable to persist account: %v", err)
+			sErr := NewStratumError(Unknown, err)
+			resp := AuthorizeResponse(*req.ID, false, sErr)
 			c.ch <- resp
-			return
+			return err
 		}
 		c.account = id
 		c.name = name
@@ -262,25 +261,27 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) {
 	c.authorizedMtx.Unlock()
 	resp := AuthorizeResponse(*req.ID, true, nil)
 	c.ch <- resp
+
+	return nil
 }
 
 // handleSubscribeRequest processes subscription request messages received.
-func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
+func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 	if !allowed {
-		log.Errorf("unable to process subscribe request, limit reached")
-		err := NewStratumError(Unknown, nil)
-		resp := SubscribeResponse(*req.ID, "", "", 0, err)
+		err := fmt.Errorf("unable to process subscribe request, limit reached")
+		sErr := NewStratumError(Unknown, err)
+		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
 		c.ch <- resp
-		return
+		return err
 	}
 
 	_, nid, err := ParseSubscribeRequest(req)
 	if err != nil {
-		log.Errorf("unable to parse subscribe request: %v", err)
-		err := NewStratumError(Unknown, nil)
-		resp := SubscribeResponse(*req.ID, "", "", 0, err)
+		err := fmt.Errorf("unable to parse subscribe request: %v", err)
+		sErr := NewStratumError(Unknown, err)
+		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
 		c.ch <- resp
-		return
+		return err
 	}
 
 	// Generate a subscription id if none exists.
@@ -332,6 +333,8 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) {
 	c.subscribedMtx.Lock()
 	c.subscribed = true
 	c.subscribedMtx.Unlock()
+
+	return nil
 }
 
 // setDifficulty sends the pool client's difficulty ratio.
@@ -342,52 +345,52 @@ func (c *Client) setDifficulty() {
 }
 
 // handleSubmitWorkRequest processes work submission request messages received.
-func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
+func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) error {
 	if !allowed {
-		log.Errorf("unable to process submit work request, limit reached")
-		err := NewStratumError(Unknown, nil)
-		resp := SubmitWorkResponse(*req.ID, false, err)
+		err := fmt.Errorf("unable to process submit work request, limit reached")
+		sErr := NewStratumError(Unknown, err)
+		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return
+		return err
 	}
 
 	_, jobID, extraNonce2E, nTimeE, nonceE, err :=
 		ParseSubmitWorkRequest(req, c.cfg.FetchMiner())
 	if err != nil {
-		log.Errorf("unable to parse submit work request: %v", err)
-		err := NewStratumError(Unknown, nil)
-		resp := SubmitWorkResponse(*req.ID, false, err)
+		err := fmt.Errorf("unable to parse submit work request: %v", err)
+		sErr := NewStratumError(Unknown, err)
+		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return
+		return err
 	}
 	job, err := FetchJob(c.cfg.DB, []byte(jobID))
 	if err != nil {
-		log.Errorf("unable to fetch job: %v", err)
-		err := NewStratumError(Unknown, nil)
-		resp := SubmitWorkResponse(*req.ID, false, err)
+		err := fmt.Errorf("unable to fetch job: %v", err)
+		sErr := NewStratumError(Unknown, err)
+		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return
+		return err
 	}
 	header, err := GenerateSolvedBlockHeader(job.Header, c.extraNonce1,
 		extraNonce2E, nTimeE, nonceE, c.cfg.FetchMiner())
 	if err != nil {
-		log.Errorf("unable to generate solved block header: %v", err)
-		err := NewStratumError(Unknown, nil)
-		resp := SubmitWorkResponse(*req.ID, false, err)
+		err := fmt.Errorf("unable to generate solved block header: %v", err)
+		sErr := NewStratumError(Unknown, err)
+		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return
+		return err
 	}
 	diffInfo := c.cfg.DifficultyInfo
 	target := new(big.Rat).SetInt(standalone.CompactToBig(header.Bits))
 
 	// The target difficulty must be larger than zero.
 	if target.Sign() <= 0 {
-		log.Errorf("block target difficulty of %064x is too "+
+		err := fmt.Errorf("block target difficulty of %064x is too "+
 			"low", target)
-		err := NewStratumError(Unknown, nil)
-		resp := SubmitWorkResponse(*req.ID, false, err)
+		sErr := NewStratumError(Unknown, err)
+		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return
+		return err
 	}
 	hash := header.BlockHash()
 	hashTarget := new(big.Rat).SetInt(standalone.HashToBig(&hash))
@@ -400,12 +403,12 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	// Only submit work to the network if the submitted blockhash is
 	// less than the pool target for the client.
 	if hashTarget.Cmp(diffInfo.target) > 0 {
-		log.Errorf("submitted work from %s is not less than its "+
+		err := fmt.Errorf("submitted work from %s is not less than its "+
 			"corresponding pool target", c.id)
-		err := NewStratumError(LowDifficultyShare, nil)
-		resp := SubmitWorkResponse(*req.ID, false, err)
+		sErr := NewStratumError(LowDifficultyShare, err)
+		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return
+		return err
 	}
 	atomic.AddInt64(&c.submissions, 1)
 
@@ -414,32 +417,32 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	if !c.cfg.SoloPool {
 		err := c.claimWeightedShare()
 		if err != nil {
-			log.Errorf("failed to persist weighted share for %v: %v", c.id, err)
-			err := NewStratumError(Unknown, nil)
-			resp := SubmitWorkResponse(*req.ID, false, err)
+			err := fmt.Errorf("unable to claim weighted share for %v: %v",
+				c.id, err)
+			sErr := NewStratumError(Unknown, err)
+			resp := SubmitWorkResponse(*req.ID, false, sErr)
 			c.ch <- resp
-			return
+			return err
 		}
 	}
 
 	// Only submit work to the network if the submitted blockhash is
 	// less than the network target difficulty.
 	if hashTarget.Cmp(target) > 0 {
-		log.Tracef("submitted work from %s is not less than the "+
-			"network target difficulty", c.id)
-		resp := SubmitWorkResponse(*req.ID, true, nil)
+		resp := SubmitWorkResponse(*req.ID, false, nil)
 		c.ch <- resp
-		return
+		return fmt.Errorf("submitted work from %s is not less than the "+
+			"network target difficulty", c.id)
 	}
 
 	// Generate and send the work submission.
 	headerB, err := header.Bytes()
 	if err != nil {
-		log.Errorf("unable to fetch block header bytes: %v", err)
-		err := NewStratumError(Unknown, nil)
-		resp := SubmitWorkResponse(*req.ID, false, err)
+		err := fmt.Errorf("unable to fetch block header bytes: %v", err)
+		sErr := NewStratumError(Unknown, err)
+		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return
+		return err
 	}
 	submissionB := make([]byte, getworkDataLen)
 	copy(submissionB[:wire.MaxBlockHeaderPayload], headerB)
@@ -448,44 +451,43 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) {
 	submission := hex.EncodeToString(submissionB)
 	accepted, err := c.cfg.SubmitWork(&submission)
 	if err != nil {
-		log.Errorf("unable to submit work request: %v", err)
-		err := NewStratumError(Unknown, nil)
-		resp := SubmitWorkResponse(*req.ID, false, err)
+		err := fmt.Errorf("unable to submit work request: %v", err)
+		sErr := NewStratumError(Unknown, err)
+		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return
+		return err
 	}
 
-	switch accepted {
-	case true:
-		// Create accepted work if the work submission is accepted
-		// by the mining node.
-		work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
-			header.Height, c.account, c.cfg.FetchMiner())
-		err := work.Create(c.cfg.DB)
-		if err != nil {
-			// If the submitted accepted work already exists, ignore the
-			// submission.
-			if IsError(err, ErrWorkExists) {
-				log.Tracef("Work %s already exists, ignoring.", hash.String())
-				err := NewStratumError(DuplicateShare, nil)
-				resp := SubmitWorkResponse(*req.ID, false, err)
-				c.ch <- resp
-				return
-			}
-			log.Errorf("unable to persist accepted work: %v", err)
-			err := NewStratumError(Unknown, nil)
-			resp := SubmitWorkResponse(*req.ID, false, err)
-			c.ch <- resp
-			return
-		}
-		log.Tracef("Work %s accepted by the network", hash.String())
-		return
-
-	case false:
-		log.Tracef("Work %s rejected by the network", hash.String())
+	if !accepted {
 		c.ch <- SubmitWorkResponse(*req.ID, false, nil)
-		return
+		return fmt.Errorf("work %s rejected by the network", hash.String())
 	}
+
+	// Create accepted work if the work submission is accepted
+	// by the mining node.
+	work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
+		header.Height, c.account, c.cfg.FetchMiner())
+	err = work.Create(c.cfg.DB)
+	if err != nil {
+		// If the submitted accepted work already exists, ignore the
+		// submission.
+		if IsError(err, ErrWorkExists) {
+			err := fmt.Errorf("work %s already exists, ignoring", hash.String())
+			sErr := NewStratumError(DuplicateShare, err)
+			resp := SubmitWorkResponse(*req.ID, false, sErr)
+			c.ch <- resp
+			return err
+		}
+		err := fmt.Errorf("unable to persist accepted work: %v", err)
+		sErr := NewStratumError(Unknown, err)
+		resp := SubmitWorkResponse(*req.ID, false, sErr)
+		c.ch <- resp
+		return err
+	}
+	log.Tracef("Work %s accepted by the network", hash.String())
+	resp := SubmitWorkResponse(*req.ID, true, nil)
+	c.ch <- resp
+	return nil
 }
 
 // rollWork provides the client with timestamp-rolled work to avoid stalling.
@@ -510,8 +512,6 @@ func (c *Client) rollWork(ctx context.Context) {
 
 			now := time.Now()
 			if now.Sub(time.Unix(lastWorkTime, 0)) >= c.cfg.MaxGenTime*2 {
-				log.Tracef("%s is stalling on current work, sending "+
-					"timestamp-rolled work", c.id)
 				c.updateWork()
 			}
 		}
@@ -522,7 +522,7 @@ func (c *Client) rollWork(ctx context.Context) {
 // processing. This must be run as goroutine.
 func (c *Client) read() {
 	for {
-		err := c.conn.SetDeadline(time.Now().Add(time.Minute * 4))
+		err := c.conn.SetDeadline(time.Now().Add(c.cfg.ClientTimeout))
 		if err != nil {
 			log.Errorf("%s: unable to set deadline: %v", c.id, err)
 			c.cancel()
@@ -655,7 +655,11 @@ func (c *Client) process(ctx context.Context) {
 				req := msg.(*Request)
 				switch req.Method {
 				case Authorize:
-					c.handleAuthorizeRequest(req, allowed)
+					err := c.handleAuthorizeRequest(req, allowed)
+					if err != nil {
+						log.Error(err)
+						continue
+					}
 					if allowed {
 						c.setDifficulty()
 						time.Sleep(time.Second)
@@ -663,10 +667,18 @@ func (c *Client) process(ctx context.Context) {
 					}
 
 				case Subscribe:
-					c.handleSubscribeRequest(req, allowed)
+					err := c.handleSubscribeRequest(req, allowed)
+					if err != nil {
+						log.Error(err)
+						continue
+					}
 
 				case Submit:
-					c.handleSubmitWorkRequest(req, allowed)
+					err := c.handleSubmitWorkRequest(req, allowed)
+					if err != nil {
+						log.Error(err)
+						continue
+					}
 					if allowed {
 						c.updateWork()
 					}
@@ -680,14 +692,7 @@ func (c *Client) process(ctx context.Context) {
 
 			case ResponseMessage:
 				resp := msg.(*Response)
-				method := c.fetchStratumMethod(resp.ID)
-				if method == "" {
-					log.Errorf("no request found for response with id: %d",
-						resp.ID, spew.Sdump(resp))
-					c.cancel()
-					continue
-				}
-				log.Errorf("unknown request method for response: %s", method)
+				log.Errorf("unexpected response message: %v", spew.Sdump(resp))
 				c.cancel()
 				continue
 

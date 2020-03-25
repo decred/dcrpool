@@ -168,6 +168,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 				WithinLimit:       e.cfg.WithinLimit,
 				HashCalcThreshold: hashCalcThreshold,
 				MaxGenTime:        e.cfg.MaxGenTime,
+				ClientTimeout:     clientTimeout,
 			}
 			client, err := NewClient(msg.Conn, tcpAddr, cCfg)
 			if err != nil {
