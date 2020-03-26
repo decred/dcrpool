@@ -2,6 +2,7 @@ package pool
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/decred/dcrd/chaincfg/v2"
@@ -71,7 +72,11 @@ func teardownDB(db *bolt.DB, dbPath string) error {
 	if err != nil {
 		return err
 	}
-	return nil
+	backup := filepath.Join(filepath.Dir(db.Path()), backupFile)
+	if _, err := os.Stat(backup); os.IsNotExist(err) {
+		return nil
+	}
+	return os.Remove(backup)
 }
 
 // TestPool runs all pool related tests.
@@ -90,6 +95,7 @@ func TestPool(t *testing.T) {
 
 	defer td()
 
+	testFetchBucketHelpers(t)
 	testInitDB(t)
 	testDatabase(t, db)
 	testAcceptedWork(t, db)

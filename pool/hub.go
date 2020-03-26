@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -533,7 +534,7 @@ func (h *Hub) shutdown() {
 	h.db.Close()
 }
 
-// run handles the process lifecycles of the pool hub.
+// Run handles the process lifecycles of the pool hub.
 func (h *Hub) Run(ctx context.Context) {
 	for _, e := range h.endpoints {
 		go e.run(ctx)
@@ -541,8 +542,15 @@ func (h *Hub) Run(ctx context.Context) {
 	}
 	go h.chainState.handleChainUpdates(ctx)
 	h.wg.Add(1)
-
 	h.wg.Wait()
+
+	log.Tracef("backing up db.")
+	backupPath := filepath.Join(filepath.Dir(h.db.Path()), backupFile)
+	err := backup(h.db, backupPath)
+	if err != nil {
+		log.Errorf("unable to backup db: %v", err)
+	}
+
 	h.shutdown()
 }
 

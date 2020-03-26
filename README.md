@@ -39,6 +39,9 @@ of the address mining rewards are paid to and its name, formatted as:
 the address provided in the username to create an account, all other connected 
 miners with the same address set will contribute work to that account.  
 
+As a contingency, the pool maintains a backup of the database (`backup.kv`), 
+created on shutdown in the same directory as the database itself.
+
 The user interface of the pool provides public access to statistics and pool 
 account data. Users of the pool can access all payments, mined blocks by the 
 account and also work contributed by clients of the account via the interface. 
@@ -46,7 +49,7 @@ The interface is only accessible via HTTPS and by default uses a self-signed
 certificate, served on port `:8080`. In production, particularly for pool 
 mining, a certificate from an authority (`CA`) like 
 [letsencrypt](https://letsencrypt.org/) is recommended. The user interface also 
-provides pool administrators database backup functionality when needed.
+provides pool administrators database backup functionality when needed. 
 
 ## Installing and Updating
 
