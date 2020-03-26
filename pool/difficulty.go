@@ -47,8 +47,7 @@ type DifficultySet struct {
 
 // NewDifficultySet generates difficulty data for all supported mining clients.
 func NewDifficultySet(net *chaincfg.Params, powLimit *big.Rat, maxGenTime time.Duration) (*DifficultySet, error) {
-	// TODO: Use SetInt64 once go 1.13 becomes the minumum version tested against.
-	genTime := new(big.Int).SetUint64(uint64(maxGenTime.Seconds()))
+	genTime := new(big.Int).SetInt64(int64(maxGenTime.Seconds()))
 	set := &DifficultySet{
 		diffs: make(map[string]*DifficultyInfo),
 	}

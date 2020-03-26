@@ -183,6 +183,17 @@ func testShares(t *testing.T, db *bolt.DB) {
 			"got %v (for x), %v (for y).", shareCount, forAccX, forAccY)
 	}
 
+	// Ensure a share cannot be updated or deleted.
+	share := shares[0]
+	err = share.Update(db)
+	if err == nil {
+		t.Fatal("expected a not supported error")
+	}
+	err = share.Delete(db)
+	if err == nil {
+		t.Fatal("expected a not supported error")
+	}
+
 	// Empty the share bucket.
 	err = emptyBucket(db, shareBkt)
 	if err != nil {

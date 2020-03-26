@@ -91,5 +91,10 @@ func (r *RateLimiter) withinLimit(ip string, clientType int) bool {
 		// create a new limiter if the incoming request is from a new client.
 		reqLimiter = r.addRequestLimiter(ip, clientType)
 	}
+
+	if reqLimiter == nil {
+		return false
+	}
+
 	return reqLimiter.Allow()
 }

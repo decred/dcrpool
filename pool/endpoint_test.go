@@ -85,7 +85,9 @@ func testEndpoint(t *testing.T, db *bolt.DB) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go endpoint.run(ctx)
 	time.Sleep(time.Millisecond * 100)
-	laddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", "127.0.0.1", port+1))
+
+	laddr, err := net.ResolveTCPAddr("tcp",
+		fmt.Sprintf("%s:%d", "127.0.0.1", port+1))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -216,6 +218,19 @@ func testEndpoint(t *testing.T, db *bolt.DB) {
 		t.Fatalf("[FetchHostConnections] expected %d connection(s) for host %s"+
 			" connections, got %d", 0, host, hostConnections)
 	}
+
+	// Ensure the endpoint listener can create connections.
+	ep, err := net.ResolveTCPAddr("tcp",
+		fmt.Sprintf("%s:%d", "127.0.0.1", port))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	conn, err := net.Dial("tcp", ep.String())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer conn.Close()
+
 	cancel()
 	endpoint.cfg.HubWg.Wait()
 }
