@@ -401,6 +401,31 @@ func testClient(t *testing.T, db *bolt.DB) {
 		t.Fatalf("expected a subscribe response message, got %v", mType)
 	}
 
+	// Ensure an Obelisk DCR1 client receives a valid non-error
+	// response when a valid subscribe request is sent.
+	setMiner(ObeliskDCR1)
+	id++
+	r.ID = &id
+	err = sE.Encode(r)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	data = <-recvCh
+	msg, mType, err = IdentifyMessage(data)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a subscribe response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("expected subsribe response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.ID != *r.ID {
+		t.Fatalf("expected suscribe response with id %d, got %d", *r.ID, resp.ID)
+	}
+
 	// Ensure a CPU client receives a valid non-error response when a
 	// valid subscribe request is sent.
 	setMiner(CPU)
@@ -579,7 +604,23 @@ func testClient(t *testing.T, db *bolt.DB) {
 		t.Fatalf("[claimWeightedShare (DR5)] unexpected error: %v", err)
 	}
 
-	// Update the miner type of the endpoint.
+	// Send a work notification to an Obelisk DCR1 client.
+	setMiner(ObeliskDCR1)
+	client.ch <- r
+
+	// Ensure the work notification received is unique to the DCR1.
+	dcr1Work := <-recvCh
+	if !bytes.Equal(dr5Work, dcr1Work) {
+		t.Fatalf("expected obelisk DCR1 work to be different from " +
+			"antminer dr5 work")
+	}
+
+	// Claim a weighted share for the Obelisk DCR1.
+	err = client.claimWeightedShare()
+	if err != nil {
+		t.Fatalf("[claimWeightedShare (DCR1)] unexpected error: %v", err)
+	}
+
 	// Ensure a CPU client receives an error response when
 	// a malformed work submission is sent.
 	setMiner(CPU)
@@ -938,7 +979,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
 	}
 
-	// Ensure the pool processes Antminer D9 work submissions.
+	// Ensure the pool processes Innosilicon D9 work submissions.
 	setMiner(InnosiliconD9)
 	id++
 	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000",
@@ -949,6 +990,31 @@ func testClient(t *testing.T, db *bolt.DB) {
 	}
 	d9Sub := <-recvCh
 	msg, mType, err = IdentifyMessage(d9Sub)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("unable to cast message as response")
+	}
+	if resp.ID != *sub.ID {
+		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
+	}
+
+	// Ensure the pool processes Obelisk DCR1 work submissions.
+	setMiner(ObeliskDCR1)
+	id++
+	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000",
+		"954cee5d", "6ddf0200")
+	err = sE.Encode(sub)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	dcr1Sub := <-recvCh
+	msg, mType, err = IdentifyMessage(dcr1Sub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
