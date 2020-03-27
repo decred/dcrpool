@@ -7,6 +7,7 @@ package pool
 import (
 	"encoding/binary"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -52,6 +53,8 @@ var (
 	csrfSecret = []byte("csrfsecret")
 	// poolFeesK is the key used to track pool fee payouts.
 	poolFeesK = "fees"
+	// backup is the database backup file name.
+	backupFile = "backup.kv"
 )
 
 // openDB creates a connection to the provided bolt storage, the returned
@@ -225,13 +228,12 @@ func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 
 	if switchMode {
 		// Backup the current database and wipe it.
-		now := time.Now().Format(time.RFC3339)
-		file := fmt.Sprintf("dcrpool@%v.kv", now)
-		err := backup(db, file)
+		backupPath := filepath.Join(filepath.Dir(db.Path()), backupFile)
+		err := backup(db, backupPath)
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("Pool mode changed, database backup %s created.", file)
+		log.Infof("Pool mode changed, database backup created.")
 		err = purge(db)
 		if err != nil {
 			return nil, err

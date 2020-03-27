@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -520,6 +521,18 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 	return txid.String(), nil
 }
 
+// backup persists a copy of the database to file  on shutdown.
+func (h *Hub) backup(ctx context.Context) {
+	<-ctx.Done()
+	log.Tracef("backing up db.")
+	backupPath := filepath.Join(filepath.Dir(h.db.Path()), backupFile)
+	err := backup(h.db, backupPath)
+	if err != nil {
+		log.Errorf("unable to backup db: %v", err)
+	}
+	h.wg.Done()
+}
+
 // shutdown tears down the hub and releases resources used.
 func (h *Hub) shutdown() {
 	if !h.cfg.SoloPool {
@@ -533,13 +546,16 @@ func (h *Hub) shutdown() {
 	h.db.Close()
 }
 
-// run handles the process lifecycles of the pool hub.
+// Run handles the process lifecycles of the pool hub.
 func (h *Hub) Run(ctx context.Context) {
 	for _, e := range h.endpoints {
 		go e.run(ctx)
 		h.wg.Add(1)
 	}
 	go h.chainState.handleChainUpdates(ctx)
+	h.wg.Add(1)
+
+	go h.backup(ctx)
 	h.wg.Add(1)
 
 	h.wg.Wait()

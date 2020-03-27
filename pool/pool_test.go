@@ -63,15 +63,8 @@ func setupDB() (*bolt.DB, error) {
 
 // teardownDB closes the connection to the db and deletes the db file.
 func teardownDB(db *bolt.DB, dbPath string) error {
-	err := db.Close()
-	if err != nil {
-		return err
-	}
-	err = os.Remove(dbPath)
-	if err != nil {
-		return err
-	}
-	return nil
+	db.Close()
+	return os.Remove(dbPath)
 }
 
 // TestPool runs all pool related tests.
@@ -90,6 +83,7 @@ func TestPool(t *testing.T) {
 
 	defer td()
 
+	testFetchBucketHelpers(t)
 	testInitDB(t)
 	testDatabase(t, db)
 	testAcceptedWork(t, db)
