@@ -166,7 +166,17 @@ func testAccountPayments(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
-	pmts, err := fetchPaymentsForAccount(db, xID, 10)
+	pmts, err := fetchPendingPaymentsAtHeight(db, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(pmts) == 2 {
+		t.Fatalf("expected 2 pending payments at "+
+			"height #%d, got %d", 10, len(pmts))
+	}
+
+	pmts, err = fetchPaymentsForAccount(db, xID, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,6 +198,57 @@ func testAccountPayments(t *testing.T, db *bolt.DB) {
 
 	if paid != 2 {
 		t.Fatalf("expected archived payments to be %v, got %v", 2, paid)
+	}
+
+	// Make a payment bundle from the payments fetched.
+	bdls := generatePaymentBundles(pmts)
+	if len(bdls) != 1 {
+		t.Fatalf("expected 1 payment bundle, got %d", len(bdls))
+	}
+
+	epb := bdls[0]
+	if len(pmts) != len(epb.Payments) {
+		t.Fatalf("expected %d payments in bundle, got %d",
+			len(pmts), len(epb.Payments))
+	}
+
+	// Ensure fetching a non-existent payment returns an error.
+	pmtID := GeneratePaymentID(time.Now().UnixNano(), 300, xID)
+	_, err = GetPayment(db, pmtID)
+	if err == nil {
+		t.Fatal("[GetPayment] expected a value not found error")
+	}
+
+	// Fetching an existingpayment.
+	expectedPmt := pmts[0]
+	pmtID = GeneratePaymentID(expectedPmt.CreatedOn,
+		expectedPmt.Height, expectedPmt.Account)
+	pmt, err := GetPayment(db, pmtID)
+	if err != nil {
+		t.Fatalf("[GetPayment] unexpected error: %v", err)
+	}
+
+	// Ensure the returned payment matches the expected.
+	if expectedPmt.Height != pmt.Height {
+		t.Fatalf("expected payment height %d, got %d",
+			expectedPmt.Height, pmt.Height)
+	}
+
+	if expectedPmt.Account != pmt.Account {
+		t.Fatalf("expected payment account %s, got %s",
+			expectedPmt.Account, pmt.Account)
+	}
+
+	if expectedPmt.CreatedOn != pmt.CreatedOn {
+		t.Fatalf("expected payment created on time %d, "+
+			"got %d", expectedPmt.CreatedOn, pmt.CreatedOn)
+	}
+
+	// Persist an updated payment.
+	pmt.PaidOnHeight = 100
+	err = pmt.Update(db)
+	if err != nil {
+		t.Fatalf("[Update]: unexpected error: %v", err)
 	}
 
 	// Empty the payment bucket.
