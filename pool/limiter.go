@@ -5,6 +5,7 @@
 package pool
 
 import (
+	"fmt"
 	"sync"
 
 	"golang.org/x/time/rate"
@@ -48,7 +49,7 @@ func NewRateLimiter() *RateLimiter {
 }
 
 // addRequestLimiter adds a new client request limiter to the limiter set.
-func (r *RateLimiter) addRequestLimiter(ip string, clientType int) *rate.Limiter {
+func (r *RateLimiter) addRequestLimiter(ip string, clientType int) (*rate.Limiter, error) {
 	var limiter *rate.Limiter
 	switch clientType {
 	case APIClient:
@@ -56,13 +57,14 @@ func (r *RateLimiter) addRequestLimiter(ip string, clientType int) *rate.Limiter
 	case PoolClient:
 		limiter = rate.NewLimiter(clientTokenRate, clientBurst)
 	default:
-		log.Errorf("unknown client type provided: %s", clientType)
-		return nil
+		return nil, fmt.Errorf("unknown client type provided: %d", clientType)
 	}
+
 	r.mutex.Lock()
 	r.limiters[ip] = limiter
 	r.mutex.Unlock()
-	return limiter
+
+	return limiter, nil
 }
 
 // fetchLimiter fetches the request limiter referenced by the provided
@@ -84,17 +86,18 @@ func (r *RateLimiter) removeLimiter(ip string) {
 // withinLimit asserts that the client referenced by the provided IP
 // address is within the limits of the rate limiter, therefore can make
 // further requests. If no request limiter is found for the provided IP
-// address a new one is created.
+// address a new one is created. withinLimit returns false if an unknown
+// client type is provided.
 func (r *RateLimiter) withinLimit(ip string, clientType int) bool {
 	reqLimiter := r.fetchLimiter(ip)
 	if reqLimiter == nil {
-		// create a new limiter if the incoming request is from a new client.
-		reqLimiter = r.addRequestLimiter(ip, clientType)
+		// Create a new limiter if the incoming request is from a new client.
+		var err error
+		reqLimiter, err = r.addRequestLimiter(ip, clientType)
+		if err != nil {
+			log.Error(err)
+			return false
+		}
 	}
-
-	if reqLimiter == nil {
-		return false
-	}
-
 	return reqLimiter.Allow()
 }
