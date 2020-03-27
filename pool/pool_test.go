@@ -2,7 +2,6 @@ package pool
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/decred/dcrd/chaincfg/v2"
@@ -64,19 +63,8 @@ func setupDB() (*bolt.DB, error) {
 
 // teardownDB closes the connection to the db and deletes the db file.
 func teardownDB(db *bolt.DB, dbPath string) error {
-	err := db.Close()
-	if err != nil {
-		return err
-	}
-	err = os.Remove(dbPath)
-	if err != nil {
-		return err
-	}
-	backup := filepath.Join(filepath.Dir(db.Path()), backupFile)
-	if _, err := os.Stat(backup); os.IsNotExist(err) {
-		return nil
-	}
-	return os.Remove(backup)
+	db.Close()
+	return os.Remove(dbPath)
 }
 
 // TestPool runs all pool related tests.

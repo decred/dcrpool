@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"net"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -221,6 +223,17 @@ func testHub(t *testing.T, db *bolt.DB) {
 		t.Fatalf("emptyBucket error: %v", err)
 	}
 
+	backup := filepath.Join(filepath.Dir(db.Path()), backupFile)
+
 	cancel()
 	hub.wg.Wait()
+
+	// Delete the database backup.
+	if _, err := os.Stat(backup); os.IsNotExist(err) {
+		t.Fatalf("backup (%s) does not exist", backup)
+	}
+	err = os.Remove(backup)
+	if err != nil {
+		t.Fatalf("backup deletion error: %v", err)
+	}
 }

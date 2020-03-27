@@ -7,6 +7,7 @@ package pool
 import (
 	"encoding/binary"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -227,7 +228,8 @@ func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 
 	if switchMode {
 		// Backup the current database and wipe it.
-		err := backup(db, backupFile)
+		backupPath := filepath.Join(filepath.Dir(db.Path()), backupFile)
+		err := backup(db, backupPath)
 		if err != nil {
 			return nil, err
 		}

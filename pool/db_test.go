@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/decred/dcrd/chaincfg/v2"
@@ -275,6 +276,16 @@ func testInitDB(t *testing.T) {
 	db, err = InitDB(dbPath, true)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	// Delete the database backup.
+	backup := filepath.Join(filepath.Dir(db.Path()), backupFile)
+	if _, err := os.Stat(backup); os.IsNotExist(err) {
+		t.Fatalf("backup (%s) does not exist", backup)
+	}
+	err = os.Remove(backup)
+	if err != nil {
+		t.Fatalf("backup deletion error: %v", err)
 	}
 }
 
