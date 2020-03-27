@@ -35,6 +35,8 @@ func testFetchBucketHelpers(t *testing.T) {
 	}
 	defer td()
 
+	expectedNotFoundErr := fmt.Errorf("expected main bucket not found error")
+
 	pmtMgr := &PaymentMgr{}
 
 	// Ensure payment manager helpers return an error when the
@@ -42,101 +44,93 @@ func testFetchBucketHelpers(t *testing.T) {
 	err = db.View(func(tx *bolt.Tx) error {
 		err = pmtMgr.loadLastPaymentCreatedOn(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		err = pmtMgr.loadLastPaymentHeight(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		err = pmtMgr.loadLastPaymentPaidOn(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		err = pmtMgr.loadTxFeeReserve(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		err = pmtMgr.persistLastPaymentCreatedOn(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		err = pmtMgr.persistLastPaymentHeight(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		err = pmtMgr.persistLastPaymentPaidOn(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		err = pmtMgr.persistTxFeeReserve(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
 
 		return nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Ensure fetch bucket helpers return an error when the
 	// pool bucket cannot be found.
 	err = db.View(func(tx *bolt.Tx) error {
 		_, err := fetchWorkBucket(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		_, err = fetchAccountBucket(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		_, err = fetchWorkBucket(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		_, err = fetchJobBucket(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		_, err = fetchPaymentBucket(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		_, err = fetchPaymentArchiveBucket(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		_, err = fetchShareBucket(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNotFoundErr
 		}
-
 		return nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	err = deleteEntry(db, paymentBkt, []byte("k"))
 	if err == nil {
-		t.Fatal("expected main bucket not found error")
+		t.Fatal(expectedNotFoundErr)
 	}
 
 	err = emptyBucket(db, paymentBkt)
 	if err == nil {
-		t.Fatal("expected main bucket not found error")
+		t.Fatal(expectedNotFoundErr)
 	}
 
 	err = purge(db)
 	if err == nil {
-		t.Fatal("expected main bucket not found error")
+		t.Fatal(expectedNotFoundErr)
 	}
 
 	// Create the pool database bucket.
@@ -163,46 +157,45 @@ func testFetchBucketHelpers(t *testing.T) {
 		t.Fatalf("db update error: %v", err)
 	}
 
+	expectedNestedNotFoundErr := fmt.Errorf("expected nested bucket not found error")
+
 	// Ensure fetch bucket helpers return an error if the
 	// required nested bucket cannot be found.
 	err = db.View(func(tx *bolt.Tx) error {
 		_, err := fetchWorkBucket(tx)
 		if err == nil {
-			t.Fatal("expected nested bucket not found error")
+			return expectedNestedNotFoundErr
 		}
-
 		_, err = fetchAccountBucket(tx)
 		if err == nil {
-			t.Fatal("expected nested bucket not found error")
+			return expectedNestedNotFoundErr
 		}
-
 		_, err = fetchWorkBucket(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNestedNotFoundErr
 		}
-
 		_, err = fetchJobBucket(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNestedNotFoundErr
 		}
-
 		_, err = fetchPaymentBucket(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNestedNotFoundErr
 		}
-
 		_, err = fetchPaymentArchiveBucket(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNestedNotFoundErr
 		}
-
 		_, err = fetchShareBucket(tx)
 		if err == nil {
-			t.Fatal("expected main bucket not found error")
+			return expectedNestedNotFoundErr
 		}
 
 		return nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 }
 
@@ -254,6 +247,9 @@ func testInitDB(t *testing.T) {
 		}
 		return nil
 	})
+	if err != nil {
+		t.Fatalf("db create error: %v", err)
+	}
 
 	// Persist the pool mode.
 	err = db.Update(func(tx *bolt.Tx) error {
@@ -266,6 +262,9 @@ func testInitDB(t *testing.T) {
 		binary.LittleEndian.PutUint32(b, 0)
 		return pbkt.Put(soloPool, b)
 	})
+	if err != nil {
+		t.Fatalf("db update error: %v", err)
+	}
 
 	err = db.Close()
 	if err != nil {
@@ -274,10 +273,6 @@ func testInitDB(t *testing.T) {
 
 	// Trigger a pool mode switch.
 	db, err = InitDB(dbPath, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	if err != nil {
 		t.Fatal(err)
 	}
