@@ -1,19 +1,10 @@
 var quotaSort;
-var minedBlocksSort;
 
 document.addEventListener("DOMContentLoaded", function () {
     workTable = document.getElementById('work-quota-table');
 
     if (workTable != null) {
         quotaSort = new Tablesort(workTable, {
-            descending: true
-        });
-    }
-
-    minedTable = document.getElementById('mined-blocks-table');
-
-    if (minedTable != null) {
-        minedBlocksSort = new Tablesort(minedTable, {
             descending: true
         });
     }
@@ -28,10 +19,6 @@ document.addEventListener("DOMContentLoaded", function () {
             msg.workquotas = [];
         }
         updateWorkQuotas(msg.workquotas);
-        if (msg.minedblocks == null) {
-            msg.minedblocks = [];
-        }
-        updateMinedBlocks(msg.minedblocks);
     });
 });
 
@@ -49,57 +36,6 @@ function flashElement(el) {
 }
 function removeElement(el) {
     el.parentNode.removeChild(el);
-}
-
-function updateMinedBlocks(minedBlocks) {
-    blocksTable = document.getElementById('mined-blocks-table');
-       
-    if (blocksTable == null) {
-        return;
-    }
-    
-    blocksTableBody = blocksTable.querySelector('tbody');
-
-    // Ensure all received blocks are in the table
-    var changeMade = false;
-    for (i = 0; i < minedBlocks.length; i++) {
-        var exists = false;
-        var rows = blocksTableBody.querySelectorAll('tr');
-        for (j = 0; j < rows.length; j++) {
-            var blockHeight = rows[j].getAttribute('data-row-id');
-            if (minedBlocks[i].blockheight == blockHeight) {
-                exists = true;
-                break;
-            }
-        }
-
-        if (exists == false) {
-            // Add a new row for this block
-            var newRow = blocksTableBody.insertRow(0);
-            newRow.setAttribute("data-row-id", minedBlocks[i].blockheight);
-            var a = document.createElement('a');
-            a.setAttribute('href', minedBlocks[i].blockurl);
-            a.innerHTML = minedBlocks[i].blockheight;
-            newRow.insertCell(0).appendChild(a);
-            newRow.insertCell(1).innerHTML = minedBlocks[i].miner;
-            var span = document.createElement('span');
-            span.innerHTML = minedBlocks[i].minedby;
-            span.className = "dcr-label";
-            newRow.insertCell(2).appendChild(span); 
-            flashElement(newRow);
-            changeMade = true;
-        }
-    }
-
-    if (changeMade) {
-        minedBlocksSort.refresh();
-    }
-
-    // Remove all but the 10 most recent blocks
-    var rowsToRemove = blocksTableBody.querySelectorAll('tr:nth-child(10) ~ tr');
-    for (j = 0; j < rowsToRemove.length; j++) {
-        removeElement(rowsToRemove[j]);
-    }
 }
 
 function updateWorkQuotas(quotas) {

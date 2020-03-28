@@ -95,16 +95,6 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 
 	// Ensure requesting negative or zero most recent accepted work returns
 	// an error.
-	_, err = ListMinedWork(db, -1)
-	if err == nil {
-		t.Fatal("ListMineWork: expected negative N error")
-	}
-
-	_, err = ListMinedWork(db, 0)
-	if err == nil {
-		t.Fatalf("ListMinedWork: expected zero N error")
-	}
-
 	_, err = listMinedWorkByAccount(db, string(id), -1)
 	if err == nil {
 		t.Fatalf("listMinedWorkByAccount: expected negative N error")
@@ -117,7 +107,7 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 
 	// Ensure the accepted work are not listed as mined since they are not
 	// confirmed.
-	minedWork, err := ListMinedWork(db, 4)
+	minedWork, err := ListMinedWork(db)
 	if err != nil {
 		t.Fatalf("ListMinedWork error: %v", err)
 	}
@@ -152,7 +142,7 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure accepted work are listed as mined since they are confirmed.
-	minedWork, err = ListMinedWork(db, 4)
+	minedWork, err = ListMinedWork(db)
 	if err != nil {
 		t.Fatalf("ListMinedWork error: %v", err)
 	}
@@ -178,7 +168,7 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 		t.Fatalf("PruneAcceptedWork error: %v", err)
 	}
 
-	minedWork, err = ListMinedWork(db, 4)
+	minedWork, err = ListMinedWork(db)
 	if err != nil {
 		t.Fatalf("ListMinedWork error: %v", err)
 	}
@@ -223,7 +213,7 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure there are no mined work.
-	minedWork, err = ListMinedWork(db, 4)
+	minedWork, err = ListMinedWork(db)
 	if err != nil {
 		t.Fatalf("ListMinedWork error: %v", err)
 	}

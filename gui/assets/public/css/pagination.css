@@ -1,0 +1,65 @@
+.page-select {
+  display: flex;
+}
+
+.paginationjs {
+  font-size: 16px;
+  box-sizing: initial;
+  margin-left: auto;
+}
+.paginationjs:after {
+  display: table;
+  content: " ";
+  clear: both;
+}
+.paginationjs .paginationjs-pages {
+  float: left;
+}
+.paginationjs .paginationjs-pages ul {
+  float: left;
+  margin: 0;
+  padding: 0;
+}
+.paginationjs .paginationjs-pages li {
+  float: left;
+  list-style: none;
+}
+.paginationjs .paginationjs-pages li > a {
+  width: 22px;
+  height: 22px;
+  line-height: 22px;
+  margin: 0 2px;
+  display: block;
+  background: #fff;
+  color: #3D5873;
+  text-decoration: none;
+  text-align: center;
+  border-radius: 3px;
+}
+.paginationjs .paginationjs-pages li > a:hover {
+  background: #eee;
+}
+.paginationjs .paginationjs-pages li.active > a {
+  background:#E6EAED;
+  color: #2970FF;
+}
+.paginationjs .paginationjs-pages li.disabled > a {
+  opacity: .3;
+}
+.paginationjs .paginationjs-pages li.disabled > a:hover {
+  background: none;
+}
+
+.paginationjs .pagination-arrow {
+  height: 100%;
+  width: 100%;
+  background-repeat: no-repeat;
+  background-size: 13px 12px;
+  background-position: center;
+}
+.paginationjs .pagination-arrow-right {
+  background-image: url(/images/right_arrow.svg);
+}
+.paginationjs .pagination-arrow-left {
+  background-image: url(/images/left_arrow.svg);
+}

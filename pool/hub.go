@@ -595,9 +595,9 @@ func (h *Hub) FetchAccountClientInfo(accountID string) []*ClientInfo {
 	return info
 }
 
-// FetchMinedWork returns the last ten mined blocks by the pool.
+// FetchMinedWork returns all confirmed blocks mined by the pool.
 func (h *Hub) FetchMinedWork() ([]*AcceptedWork, error) {
-	return ListMinedWork(h.db, 10)
+	return ListMinedWork(h.db)
 }
 
 // FetchPoolHashRate returns the hash rate of the pool.
