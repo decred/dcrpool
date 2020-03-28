@@ -71,7 +71,7 @@ type Config struct {
 	// AddPaymentRequest creates a payment request from the provided account
 	// if not already requested.
 	AddPaymentRequest func(addr string) error
-	// FetchMinedWork returns the last ten mined blocks by the pool.
+	// FetchMinedWork returns all confirmed blocks mined by the pool.
 	FetchMinedWork func() ([]*pool.AcceptedWork, error)
 	// FetchWorkQuotas returns the reward distribution to pool accounts
 	// based on work contributed per the payment scheme used by the pool.
@@ -145,6 +145,9 @@ func (ui *GUI) route() {
 	ui.router.HandleFunc("/admin", ui.AdminLogin).Methods("POST")
 	ui.router.HandleFunc("/backup", ui.DownloadDatabaseBackup).Methods("POST")
 	ui.router.HandleFunc("/logout", ui.AdminLogout).Methods("POST")
+
+	// Paginated endpoints allow the GUI to request pages of data
+	ui.router.HandleFunc("/mined_blocks", ui.PaginatedMinedBlocks).Methods("GET")
 
 	// Websocket endpoint allows the GUI to receive updated values
 	ui.router.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")
@@ -328,8 +331,66 @@ func (ui *GUI) Run(ctx context.Context) {
 		}
 	}()
 
-	// Use a ticker to push updates through the socket periodically
+	updateCachedData := func() error {
+		var err error
+		work, err := ui.cfg.FetchMinedWork()
+		if err != nil {
+			return err
+		}
+
+		// Parse and format mined work by the pool.
+		workData := make([]minedWork, 0)
+		for _, work := range work {
+			workData = append(workData, minedWork{
+				BlockHeight: work.Height,
+				BlockURL:    blockURL(ui.cfg.BlockExplorerURL, work.Height),
+				MinedBy:     truncateAccountID(work.MinedBy),
+				Miner:       work.Miner,
+			})
+		}
+
+		// Update mined work cache.
+		ui.minedWorkMtx.Lock()
+		ui.minedWork = workData
+		ui.minedWorkMtx.Unlock()
+
+		quotas, err := ui.cfg.FetchWorkQuotas()
+		if err != nil {
+			return err
+		}
+
+		// Parse and format work quotas of the pool.
+		quotaData := make([]workQuota, 0)
+		for _, quota := range quotas {
+			quotaData = append(quotaData, workQuota{
+				AccountID: truncateAccountID(quota.AccountID),
+				Percent:   ratToPercent(quota.Percentage),
+			})
+		}
+
+		// Update work quotas cache.
+		ui.workQuotasMtx.Lock()
+		ui.workQuotas = quotaData
+		ui.workQuotasMtx.Unlock()
+
+		poolHash, _ := ui.cfg.FetchPoolHashRate()
+
+		// Update pool hash cache.
+		ui.poolHashMtx.Lock()
+		ui.poolHash = hashString(poolHash)
+		ui.poolHashMtx.Unlock()
+		return nil
+	}
+
+	err := updateCachedData()
+	if err != nil {
+		log.Error(err)
+	}
+
+	// Use a ticker to periodically update cached data and push updates through
+	// any established websockets
 	go func(ctx context.Context) {
+
 		var ticks uint32
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -341,56 +402,10 @@ func (ui *GUI) Run(ctx context.Context) {
 
 				// After three ticks (15 seconds) update cached pool data.
 				if ticks == 3 {
-					var err error
-					work, err := ui.cfg.FetchMinedWork()
+					err := updateCachedData()
 					if err != nil {
 						log.Error(err)
-						continue
 					}
-
-					// Parse and format mined work by the pool.
-					workData := make([]minedWork, 0)
-					for _, work := range work {
-						workData = append(workData, minedWork{
-							BlockHeight: work.Height,
-							BlockURL:    blockURL(ui.cfg.BlockExplorerURL, work.Height),
-							MinedBy:     truncateAccountID(work.MinedBy),
-							Miner:       work.Miner,
-						})
-					}
-
-					// Update mined work cache.
-					ui.minedWorkMtx.Lock()
-					ui.minedWork = workData
-					ui.minedWorkMtx.Unlock()
-
-					quotas, err := ui.cfg.FetchWorkQuotas()
-					if err != nil {
-						log.Error(err)
-						continue
-					}
-
-					// Parse and format work quotas of the pool.
-					quotaData := make([]workQuota, 0)
-					for _, quota := range quotas {
-						quotaData = append(quotaData, workQuota{
-							AccountID: truncateAccountID(quota.AccountID),
-							Percent:   ratToPercent(quota.Percentage),
-						})
-					}
-
-					// Update work quotas cache.
-					ui.workQuotasMtx.Lock()
-					ui.workQuotas = quotaData
-					ui.workQuotasMtx.Unlock()
-
-					poolHash, _ := ui.cfg.FetchPoolHashRate()
-
-					// Update pool hash cache.
-					ui.poolHashMtx.Lock()
-					ui.poolHash = hashString(poolHash)
-					ui.poolHashMtx.Unlock()
-
 					ticks = 0
 				}
 

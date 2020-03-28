@@ -7291,41 +7291,6 @@ a.text-dark:hover, a.text-dark:focus {
     color: inherit;
     border-color: #dee2e6; } }
 
-/**
- * Fluid Props
- */
-@font-face {
-  font-family: "dcrstakepool-code";
-  src: url("fonts/SourceCodePro-Regular/SourceCodePro-Regular.ttf.woff2") format("woff2"), url("fonts/SourceCodePro-Regular/SourceCodePro-Regular.ttf.woff") format("woff"), url("fonts/SourceCodePro-Regular/SourceCodePro-Regular.ttf") format("truetype"), url("fonts/SourceCodePro-Regular/SourceCodePro-Regular.eot") format("embedded-opentype"); }
-
-@font-face {
-  font-family: "dcrstakepool";
-  src: url("fonts/SourceSansPro-Regular/SourceSansPro-Regular.ttf.woff2") format("woff2"), url("fonts/SourceSansPro-Regular/SourceSansPro-Regular.ttf.woff") format("woff"), url("fonts/SourceSansPro-Regular/SourceSansPro-Regular.ttf") format("truetype"), url("fonts/SourceSansPro-Regular/SourceSansPro-Regular.eot") format("embedded-opentype"); }
-
-@font-face {
-  font-family: "dcrstakepool";
-  src: url("fonts/SourceSansPro-Semibold/SourceSansPro-Semibold.ttf.woff2") format("woff2"), url("fonts/SourceSansPro-Semibold/SourceSansPro-Semibold.ttf.woff") format("woff"), url("fonts/SourceSansPro-Semibold/SourceSansPro-Semibold.ttf") format("truetype"), url("fonts/SourceSansPro-Semibold/SourceSansPro-Semibold.eot") format("embedded-opentype");
-  font-weight: bold; }
-
-@font-face {
-  font-family: "dcrstakepool";
-  src: url("fonts/SourceSansPro-It/SourceSansPro-It.ttf.woff2") format("woff2"), url("fonts/SourceSansPro-It/SourceSansPro-It.ttf.woff") format("woff"), url("fonts/SourceSansPro-It/SourceSansPro-It.ttf") format("truetype"), url("fonts/SourceSansPro-It/SourceSansPro-It.eot") format("embedded-opentype");
-  font-style: italic; }
-
-@font-face {
-  font-family: "dcrstakepool";
-  src: url("fonts/SourceSansPro-SemiboldIt/SourceSansPro-SemiboldIt.ttf.woff2") format("woff2"), url("fonts/SourceSansPro-SemiboldIt/SourceSansPro-SemiboldIt.ttf.woff") format("woff"), url("fonts/SourceSansPro-SemiboldIt/SourceSansPro-SemiboldIt.ttf") format("truetype"), url("fonts/SourceSansPro-SemiboldIt/SourceSansPro-SemiboldIt.eot") format("embedded-opentype");
-  font-style: italic;
-  font-weight: bold; }
-
-html, body {
-  /* use !important to prevent issues with browser extensions that change fonts */
-  font-family: "dcrstakepool", "Verdana", "sans-serif" !important; }
-
-pre, code {
-  /* use !important to prevent issues with browser extensions that change fonts */
-  font-family: "dcrstakepool-code", "Courier New", "monospace" !important; }
-
 h1 {
   font-size: 18px;
   line-height: 1.25;
@@ -8479,8 +8444,13 @@ input[type="submit"]:disabled {
   color: #0c1e3e; }
 
 
-.table td {
-  border-top: 1px solid #F3F5F6; }
+.table tbody td {
+  border-top: 1px solid #F3F5F6;
+}
+
+.table tbody:last-child td {
+  border-bottom: 1px solid #F3F5F6;
+}
 
 .table-scroll-y .table {
   margin-bottom: 0; }

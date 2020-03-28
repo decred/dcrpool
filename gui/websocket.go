@@ -18,7 +18,6 @@ type payload struct {
 	LastWorkHeight    uint32      `json:"lastworkheight"`
 	LastPaymentHeight uint32      `json:"lastpaymentheight"`
 	WorkQuotas        []workQuota `json:"workquotas"`
-	MinedWork         []minedWork `json:"minedblocks"`
 }
 
 // workQuota represents dividend garnered by pool accounts through work
@@ -26,14 +25,6 @@ type payload struct {
 type workQuota struct {
 	AccountID string `json:"accountid"`
 	Percent   string `json:"percent"`
-}
-
-// minedWork represents a block mined by the pool.
-type minedWork struct {
-	BlockHeight uint32 `json:"blockheight"`
-	BlockURL    string `json:"blockurl"`
-	MinedBy     string `json:"minedby"`
-	Miner       string `json:"miner"`
 }
 
 // registerWebSocket is the handler for "GET /ws". It updates the HTTP request
@@ -54,9 +45,6 @@ func (ui *GUI) updateWebSocket() {
 	ui.poolHashMtx.RLock()
 	poolHash := ui.poolHash
 	ui.poolHashMtx.RUnlock()
-	ui.minedWorkMtx.RLock()
-	minedWork := append(ui.minedWork[:0:0], ui.minedWork...)
-	ui.minedWorkMtx.RUnlock()
 	ui.workQuotasMtx.RLock()
 	workQuotas := append(ui.workQuotas[:0:0], ui.workQuotas...)
 	ui.workQuotasMtx.RUnlock()
@@ -65,7 +53,6 @@ func (ui *GUI) updateWebSocket() {
 		LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
 		PoolHashRate:      poolHash,
 		WorkQuotas:        workQuotas,
-		MinedWork:         minedWork,
 	}
 	clientsMtx.Lock()
 	for client := range clients {

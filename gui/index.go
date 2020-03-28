@@ -53,8 +53,14 @@ func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get the most recently mined blocks (max 10)
 	ui.minedWorkMtx.RLock()
-	mWork := append(ui.minedWork[:0:0], ui.minedWork...)
+	lastBlock := 10
+	count := len(ui.minedWork)
+	if count < 10 {
+		lastBlock = count
+	}
+	mWork := ui.minedWork[0:lastBlock]
 	ui.minedWorkMtx.RUnlock()
 
 	ui.workQuotasMtx.RLock()

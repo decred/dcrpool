@@ -162,16 +162,12 @@ func (work *AcceptedWork) Delete(db *bolt.DB) error {
 	return deleteEntry(db, workBkt, []byte(work.UUID))
 }
 
-// ListMinedWork returns the N most recent work data associated with blocks
+// ListMinedWork returns work data associated with all confirmed blocks
 // mined by the pool.
 //
 // List is ordered, most recent comes first.
-func ListMinedWork(db *bolt.DB, n int) ([]*AcceptedWork, error) {
+func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
 	minedWork := make([]*AcceptedWork, 0)
-	if n <= 0 {
-		return minedWork, fmt.Errorf("n cannot be less than or equal to zero")
-	}
-
 	err := db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
 		if err != nil {
@@ -188,9 +184,6 @@ func ListMinedWork(db *bolt.DB, n int) ([]*AcceptedWork, error) {
 
 			if work.Confirmed {
 				minedWork = append(minedWork, &work)
-				if len(minedWork) == n {
-					return nil
-				}
 			}
 		}
 

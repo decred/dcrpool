@@ -1,7 +1,6 @@
 {{define "index"}}
 {{template "header" .}}
 
-
 {{ with .Error }}
 <div class="snackbar snackbar-error">
     <div class="snackbar-message">
@@ -119,33 +118,38 @@
     </div>
 
     <div class="row">
-        
+
         <div class="col-lg-6 col-12 p-3">
             <div class="block__content">
                 <h1>Mined by Pool</h1>
-                <div class="overflow-auto">
-                    <table id="mined-blocks-table" class="table">
-                        <thead>
-                            <tr>
-                                <th data-sort-method="number" data-sort-default>Height</th>
-                                <th data-sort-method="none">Miner</th>
-                                <th data-sort-method="none">Mined By</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {{ range .MinedWork }}
-                            <tr data-row-id="{{ .BlockHeight }}">
-                                <td><a href="{{ .BlockURL }}" rel="noopener noreferrer">{{ .BlockHeight }}</a>
-                                </td>
-                                <td>{{ .Miner }}</td>
-                                <td>
-                                    <span class="dcr-label">{{ .MinedBy }}</span>
-                                </td>
-                            </tr>
-                            {{end}}
-                        </tbody>
-                    </table>
-                </div>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th data-sort-method="number" data-sort-default>Height</th>
+                            <th data-sort-method="none">Miner</th>
+                            <th data-sort-method="none">Mined By</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mined-blocks-table-body">
+                        {{ range .MinedWork }}
+                        <tr data-row-id="{{ .BlockHeight }}">
+                            <td><a href="{{ .BlockURL }}" rel="noopener noreferrer">{{ .BlockHeight }}</a>
+                            </td>
+                            <td>{{ .Miner }}</td>
+                            <td>
+                                <span class="dcr-label">{{ .MinedBy }}</span>
+                            </td>
+                        </tr>
+                        {{ else }}
+                        <tr>
+                            <td colspan="100%"><span class="no-data">No mined blocks</span></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+
+                <div id="mined-blocks-page-select" class="page-select"></div>
+
             </div>
         </div>
 
@@ -184,6 +188,7 @@
 <script src='/js/carousel.js'></script>
 <script src='/js/socket.js'></script>
 <script src='/js/modal.js'></script>
+<script src='/js/pagination.js'></script>
 
 </body>
 </html>
