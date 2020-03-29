@@ -19,6 +19,9 @@ import (
 	"github.com/decred/dcrd/rpcclient/v5"
 	"github.com/decred/dcrpool/gui"
 	"github.com/decred/dcrpool/pool"
+	"github.com/decred/dcrwallet/rpc/walletrpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // miningPool represents a decred Proof-of-Work mining pool.
@@ -103,9 +106,6 @@ func newPool(cfg *config) (*miningPool, error) {
 	hcfg := &pool.HubConfig{
 		DB:                    db,
 		ActiveNet:             cfg.net,
-		WalletRPCCertFile:     cfg.WalletRPCCert,
-		WalletGRPCHost:        cfg.WalletGRPCHost,
-		DcrdRPCCfg:            dcrdRPCCfg,
 		PoolFee:               cfg.PoolFee,
 		MaxTxFeeReserve:       maxTxFeeReserve,
 		MaxGenTime:            cfg.MaxGenTime,
@@ -123,7 +123,51 @@ func newPool(cfg *config) (*miningPool, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = p.hub.Connect()
+
+	// Establish a connection to the mining node.
+	ntfnHandlers := p.hub.CreateNotificationHandlers()
+	nodeConn, err := rpcclient.New(dcrdRPCCfg, ntfnHandlers)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := nodeConn.NotifyWork(); err != nil {
+		nodeConn.Shutdown()
+		return nil, err
+	}
+	if err := nodeConn.NotifyBlocks(); err != nil {
+		nodeConn.Shutdown()
+		return nil, err
+	}
+
+	p.hub.SetNodeConnection(nodeConn)
+
+	// Establish a connection to the wallet if the pool is mining as a
+	// publicly available mining poolin solo.
+	if !cfg.SoloPool {
+		creds, err := credentials.
+			NewClientTLSFromFile(cfg.WalletRPCCert, "localhost")
+		if err != nil {
+			return nil, err
+		}
+
+		grpc, err := grpc.Dial(cfg.WalletGRPCHost,
+			grpc.WithTransportCredentials(creds))
+		if err != nil {
+			return nil, err
+		}
+
+		walletConn := walletrpc.NewWalletServiceClient(grpc)
+		req := &walletrpc.BalanceRequest{RequiredConfirmations: 1}
+		_, err = walletConn.Balance(context.TODO(), req)
+		if err != nil {
+			return nil, err
+		}
+
+		p.hub.SetWalletConnection(walletConn, grpc.Close)
+	}
+
+	err = p.hub.FetchWork()
 	if err != nil {
 		return nil, err
 	}
