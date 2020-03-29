@@ -112,7 +112,7 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 		t.Fatalf("ListMinedWork error: %v", err)
 	}
 
-	if len(minedWork) > 0 {
+	if len(minedWork) != 0 {
 		t.Fatalf("expected no mined work")
 	}
 
@@ -147,7 +147,7 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 		t.Fatalf("ListMinedWork error: %v", err)
 	}
 
-	if len(minedWork) < 4 {
+	if len(minedWork) != 4 {
 		t.Fatalf("expected %v mined work, got %v", 4, len(minedWork))
 	}
 
@@ -157,7 +157,7 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 		t.Fatalf("ListMinedWork error: %v", err)
 	}
 
-	if len(minedWork) > 1 {
+	if len(minedWork) != 1 {
 		t.Fatalf("expected %v mined work for account %v, got %v", 1,
 			yID, len(minedWork))
 	}
@@ -173,7 +173,7 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 		t.Fatalf("ListMinedWork error: %v", err)
 	}
 
-	if len(minedWork) < 4 {
+	if len(minedWork) != 4 {
 		t.Fatalf("expected %v mined work, got %v", 4, len(minedWork))
 	}
 
@@ -218,7 +218,7 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 		t.Fatalf("ListMinedWork error: %v", err)
 	}
 
-	if len(minedWork) > 0 {
+	if len(minedWork) != 0 {
 		t.Fatalf("expected %v mined work, got %v", 0, len(minedWork))
 	}
 }
