@@ -179,6 +179,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 			"after feeA replenish to be %d, got %d", feeReserve+feeA, updatedTFR)
 	}
 
+	txFeeReserve = mgr.fetchTxFeeReserve()
 	feeB, err := dcrutil.NewAmount(2)
 	if err != nil {
 		t.Fatalf("[NewAmount] unexpected error: %v", err)
@@ -186,7 +187,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	updatedFeeB := mgr.replenishTxFeeReserve(feeB)
 	if updatedFeeB >= feeB {
 		t.Fatalf("[replenishTxFeeReserve] expected fees after replenishing "+
-			" with feeB to be %d, got %d", zeroAmount, updatedFeeA)
+			" with feeB to be %d, got %d", feeB-(maxTxFeeReserve-txFeeReserve), updatedFeeB)
 	}
 	updatedTFR = mgr.fetchTxFeeReserve()
 	if updatedTFR != maxTxFeeReserve {
