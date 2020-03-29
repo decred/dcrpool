@@ -317,9 +317,7 @@ func (m *Miner) process(ctx context.Context) {
 
 					log.Tracef("Difficulty is %v", difficulty)
 
-					// Switch to big.Rat.SetUint64() when go1.13 is the
-					// minimum supported for test builds.
-					diff := new(big.Rat).SetInt(new(big.Int).SetUint64(difficulty))
+					diff := new(big.Rat).SetUint64(difficulty)
 					target, err := pool.DifficultyToTarget(m.config.net, diff)
 					if err != nil {
 						log.Errorf("Difficulty to target conversion error: %v", err)
