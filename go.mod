@@ -11,6 +11,7 @@ require (
 	github.com/decred/dcrd/crypto/blake256 v1.0.0
 	github.com/decred/dcrd/dcrutil/v2 v2.0.1
 	github.com/decred/dcrd/mempool/v3 v3.1.0
+	github.com/decred/dcrd/rpc/jsonrpc/types/v2 v2.0.0
 	github.com/decred/dcrd/rpcclient/v5 v5.0.0
 	github.com/decred/dcrd/wire v1.3.0
 	github.com/decred/dcrwallet/rpc/walletrpc v0.3.0

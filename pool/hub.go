@@ -22,12 +22,12 @@ import (
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/dcrutil/v2"
+	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/rpcclient/v5"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/rpc/walletrpc"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 const (
@@ -63,16 +63,32 @@ var (
 	soloMaxGenTime = time.Second * 28
 )
 
+// WalletConnection defines the functionality needed by a wallet
+// grpc connection for the pool.
+type WalletConnection interface {
+	ConstructTransaction(context.Context, *walletrpc.ConstructTransactionRequest, ...grpc.CallOption) (*walletrpc.ConstructTransactionResponse, error)
+	SignTransaction(context.Context, *walletrpc.SignTransactionRequest, ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
+	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
+}
+
+// NodeConnection defines the funcationality needed a mining node
+// connection for the pool.
+type NodeConnection interface {
+	GetWorkSubmit(string) (bool, error)
+	GetWork() (*chainjson.GetWorkResult, error)
+	GetBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, error)
+	NotifyWork() error
+	NotifyBlocks() error
+	Shutdown()
+}
+
 // HubConfig represents configuration details for the hub.
 type HubConfig struct {
 	ActiveNet             *chaincfg.Params
 	DB                    *bolt.DB
-	DcrdRPCCfg            *rpcclient.ConnConfig
 	PoolFee               float64
 	MaxTxFeeReserve       dcrutil.Amount
 	MaxGenTime            time.Duration
-	WalletRPCCertFile     string
-	WalletGRPCHost        string
 	PaymentMethod         string
 	LastNPeriod           time.Duration
 	WalletPass            string
@@ -94,10 +110,11 @@ type Hub struct {
 	db             *bolt.DB
 	cfg            *HubConfig
 	limiter        *RateLimiter
-	rpcc           *rpcclient.Client
-	gConn          *grpc.ClientConn
-	grpc           walletrpc.WalletServiceClient
-	grpcMtx        sync.Mutex
+	nodeConn       NodeConnection
+	nodeConnMtx    sync.Mutex
+	walletClose    func() error
+	walletConn     WalletConnection
+	walletConnMtx  sync.Mutex
 	poolDiffs      *DifficultySet
 	paymentMgr     *PaymentMgr
 	chainState     *ChainState
@@ -107,6 +124,21 @@ type Hub struct {
 	endpoints      []*Endpoint
 	blake256Pad    []byte
 	wg             *sync.WaitGroup
+}
+
+// SetNodeConnection sets the mining node connection.
+func (h *Hub) SetNodeConnection(conn NodeConnection) {
+	h.nodeConnMtx.Lock()
+	h.nodeConn = conn
+	h.nodeConnMtx.Unlock()
+}
+
+// SetWalletConnection sets the wallet connection and it's associated close .
+func (h *Hub) SetWalletConnection(conn WalletConnection, close func() error) {
+	h.walletConnMtx.Lock()
+	h.walletConn = conn
+	h.walletClose = close
+	h.walletConnMtx.Unlock()
 }
 
 // persistPoolMode saves the pool mode to the db.
@@ -223,16 +255,26 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 
 // submitWork sends solved block data to the consensus daemon for evaluation.
 func (h *Hub) submitWork(data *string) (bool, error) {
-	status, err := h.rpcc.GetWorkSubmit(*data)
-	if err != nil {
-		return false, err
+	h.nodeConnMtx.Lock()
+	defer h.nodeConnMtx.Unlock()
+
+	if h.nodeConn == nil {
+		return false, MakeError(ErrOther, "node connection unset", nil)
 	}
-	return status, err
+
+	return h.nodeConn.GetWorkSubmit(*data)
 }
 
 // getWork fetches available work from the consensus daemon.
 func (h *Hub) getWork() (string, string, error) {
-	work, err := h.rpcc.GetWork()
+	h.nodeConnMtx.Lock()
+	defer h.nodeConnMtx.Unlock()
+
+	if h.nodeConn == nil {
+		return "", "", MakeError(ErrOther, "node connection unset", nil)
+	}
+
+	work, err := h.nodeConn.GetWork()
 	if err != nil {
 		return "", "", err
 	}
@@ -261,11 +303,14 @@ func (h *Hub) AddPaymentRequest(addr string) error {
 
 // getBlock fetches the blocks associated with the provided block hash.
 func (h *Hub) getBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
-	block, err := h.rpcc.GetBlock(blockHash)
-	if err != nil {
-		return nil, err
+	h.nodeConnMtx.Lock()
+	defer h.nodeConnMtx.Unlock()
+
+	if h.nodeConn == nil {
+		return nil, MakeError(ErrOther, "node connection unset", nil)
 	}
-	return block, err
+
+	return h.nodeConn.GetBlock(blockHash)
 }
 
 // fetchHostConnections returns the client connection count for the
@@ -378,10 +423,9 @@ func (h *Hub) CloseListeners() {
 	}
 }
 
-// Connect establishes connections with the consensus daemon and the wallet.
-func (h *Hub) Connect() error {
-	// Create handlers for chain notifications being subscribed for.
-	ntfnHandlers := &rpcclient.NotificationHandlers{
+// CreateNotificationHandlers returns handlers for block and work notifications.
+func (h *Hub) CreateNotificationHandlers() *rpcclient.NotificationHandlers {
+	return &rpcclient.NotificationHandlers{
 		OnBlockConnected: func(headerB []byte, transactions [][]byte) {
 			h.chainState.connCh <- &blockNotification{
 				Header: headerB,
@@ -406,56 +450,11 @@ func (h *Hub) Connect() error {
 			}
 		},
 	}
+}
 
-	// Establish RPC connection with dcrd.
-	rpcc, err := rpcclient.New(h.cfg.DcrdRPCCfg, ntfnHandlers)
-	if err != nil {
-		desc := "dcrd rpc error"
-		return MakeError(ErrOther, desc, err)
-	}
-
-	h.rpcc = rpcc
-	if err := h.rpcc.NotifyWork(); err != nil {
-		h.rpcc.Shutdown()
-		desc := "notify work rpc error (dcrd)"
-		return MakeError(ErrOther, desc, err)
-	}
-	if err := h.rpcc.NotifyBlocks(); err != nil {
-		h.rpcc.Shutdown()
-		desc := "notify blocks error (dcrd)"
-		return MakeError(ErrOther, desc, err)
-	}
-
-	// Establish GRPC connection with the wallet if not in solo pool mode.
-	if !h.cfg.SoloPool {
-		creds, err := credentials.NewClientTLSFromFile(h.cfg.WalletRPCCertFile,
-			"localhost")
-		if err != nil {
-			desc := "grpc tls error (dcrwallet)"
-			return MakeError(ErrOther, desc, err)
-		}
-		h.gConn, err = grpc.Dial(h.cfg.WalletGRPCHost,
-			grpc.WithTransportCredentials(creds))
-		if err != nil {
-			desc := "grpc dial error (dcrwallet)"
-			return MakeError(ErrOther, desc, err)
-		}
-		if h.gConn == nil {
-			desc := "unable to establish grpc with dcrwallet"
-			return MakeError(ErrOther, desc, nil)
-		}
-		h.grpc = walletrpc.NewWalletServiceClient(h.gConn)
-		req := &walletrpc.BalanceRequest{
-			RequiredConfirmations: 1,
-		}
-		h.grpcMtx.Lock()
-		_, err = h.grpc.Balance(context.TODO(), req)
-		h.grpcMtx.Unlock()
-		if err != nil {
-			desc := "grpc request error (dcrwallet)"
-			return MakeError(ErrOther, desc, err)
-		}
-	}
+// FetchWork queries the mining node for work. This should be called
+// immediately the pool starts to avoid for a work notification.
+func (h *Hub) FetchWork() error {
 	work, _, err := h.getWork()
 	if err != nil {
 		desc := "unable to fetch current work"
@@ -489,9 +488,9 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 		OutputSelectionAlgorithm: walletrpc.ConstructTransactionRequest_ALL,
 		NonChangeOutputs:         outs,
 	}
-	h.grpcMtx.Lock()
-	constructTxResp, err := h.grpc.ConstructTransaction(context.TODO(), constructTxReq)
-	h.grpcMtx.Unlock()
+	h.walletConnMtx.Lock()
+	constructTxResp, err := h.walletConn.ConstructTransaction(context.TODO(), constructTxReq)
+	h.walletConnMtx.Unlock()
 	if err != nil {
 		return "", err
 	}
@@ -499,18 +498,18 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 		SerializedTransaction: constructTxResp.UnsignedTransaction,
 		Passphrase:            []byte(h.cfg.WalletPass),
 	}
-	h.grpcMtx.Lock()
-	signedTxResp, err := h.grpc.SignTransaction(context.TODO(), signTxReq)
-	h.grpcMtx.Unlock()
+	h.walletConnMtx.Lock()
+	signedTxResp, err := h.walletConn.SignTransaction(context.TODO(), signTxReq)
+	h.walletConnMtx.Unlock()
 	if err != nil {
 		return "", err
 	}
 	pubTxReq := &walletrpc.PublishTransactionRequest{
 		SignedTransaction: signedTxResp.Transaction,
 	}
-	h.grpcMtx.Lock()
-	pubTxResp, err := h.grpc.PublishTransaction(context.TODO(), pubTxReq)
-	h.grpcMtx.Unlock()
+	h.walletConnMtx.Lock()
+	pubTxResp, err := h.walletConn.PublishTransaction(context.TODO(), pubTxReq)
+	h.walletConnMtx.Unlock()
 	if err != nil {
 		return "", err
 	}
@@ -536,13 +535,17 @@ func (h *Hub) backup(ctx context.Context) {
 // shutdown tears down the hub and releases resources used.
 func (h *Hub) shutdown() {
 	if !h.cfg.SoloPool {
-		if h.gConn != nil {
-			h.gConn.Close()
+		h.walletConnMtx.Lock()
+		if h.walletClose != nil {
+			h.walletClose()
 		}
+		h.walletConnMtx.Unlock()
 	}
-	if h.rpcc != nil {
-		h.rpcc.Shutdown()
+	h.nodeConnMtx.Lock()
+	if h.nodeConn != nil {
+		h.nodeConn.Shutdown()
 	}
+	h.nodeConnMtx.Unlock()
 	h.db.Close()
 }
 
