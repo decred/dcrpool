@@ -21,7 +21,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/blockchain/standalone"
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/wire"
@@ -684,15 +683,22 @@ func (c *Client) process(ctx context.Context) {
 					}
 
 				default:
-					log.Errorf("unknown request method for "+
-						"request: %s", req.Method)
+					log.Errorf("unknown request method for request: %s",
+						req.Method)
 					c.cancel()
 					continue
 				}
 
 			case ResponseMessage:
 				resp := msg.(*Response)
-				log.Errorf("unexpected response message: %v", spew.Sdump(resp))
+				r, err := json.Marshal(resp)
+				if err != nil {
+					log.Errorf("unable to encode response as JSON: %v", err)
+					c.cancel()
+					continue
+				}
+
+				log.Errorf("unexpected response message received: %v", string(r))
 				c.cancel()
 				continue
 
