@@ -15,7 +15,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/blockchain/standalone"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrpool/pool"
@@ -159,7 +158,6 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 					m.workData.extraNonce2 = hex.EncodeToString(headerB[148:152])
 
 					m.updateHashes <- hashesCompleted
-					log.Tracef("Solved block header is: %v", spew.Sdump(header))
 					log.Infof("Solved block hash at height (%v) is (%v)",
 						header.Height, header.BlockHash().String())
 					return true

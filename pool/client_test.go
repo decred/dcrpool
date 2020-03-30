@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/chaincfg/v2"
 	bolt "go.etcd.io/bbolt"
 )
@@ -273,7 +272,8 @@ func testClient(t *testing.T, db *bolt.DB) {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
 	if mType != ResponseMessage {
-		t.Fatalf("expected an auth response message, got %v: %v", mType, spew.Sdump(msg))
+		t.Fatalf("expected an auth response message (%d), got %d",
+			mType, msg.MessageType())
 	}
 	resp, ok = msg.(*Response)
 	if !ok {
@@ -1089,7 +1089,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
 	if mType != ResponseMessage {
-		t.Fatalf("expected an auth response message, got %v: %v", mType, spew.Sdump(msg))
+		t.Fatalf("expected an auth response message (%d), got %d", mType, msg.MessageType())
 	}
 	resp, ok = msg.(*Response)
 	if !ok {

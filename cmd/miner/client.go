@@ -16,8 +16,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
-
 	"github.com/decred/dcrpool/pool"
 )
 
@@ -200,9 +198,6 @@ func (m *Miner) read(ctx context.Context) {
 			log.Errorf("failed to read bytes: %v", err)
 			continue
 		}
-
-		log.Tracef("Message received is: %v", spew.Sdump(string(data)))
-
 		m.readCh <- data
 	}
 }
@@ -237,8 +232,7 @@ func (m *Miner) process(ctx context.Context) {
 				resp := msg.(*pool.Response)
 				method := m.fetchRequest(resp.ID)
 				if method == "" {
-					log.Error("No request found for response with id: ", resp.ID,
-						spew.Sdump(resp))
+					log.Errorf("No request found for response with id: %d", resp.ID)
 					m.cancel()
 					continue
 				}
@@ -292,7 +286,11 @@ func (m *Miner) process(ctx context.Context) {
 						continue
 					}
 
-					log.Tracef("Accepted status is %v", accepted)
+					if accepted {
+						log.Trace("Submitted work was accepted by the network")
+					} else {
+						log.Trace("Submitted work was rejected by the network")
+					}
 
 					if sErr != nil {
 						log.Errorf("Stratum mining.submit error: [%d, %s, %s]",
@@ -362,8 +360,6 @@ func (m *Miner) process(ctx context.Context) {
 						m.cancel()
 						continue
 					}
-
-					log.Tracef("Block header is: %v", spew.Sdump(blockHeader))
 
 					m.workMtx.Lock()
 					m.work.jobID = jobID
