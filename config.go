@@ -201,10 +201,8 @@ func parseAndSetDebugLevels(debugLevel string) error {
 
 // fileExists reports whether the named file or directory exists.
 func fileExists(name string) bool {
-	if _, err := os.Stat(name); err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
+	if _, err := os.Stat(name); os.IsNotExist(err) {
+		return false
 	}
 	return true
 }

@@ -168,7 +168,7 @@ func (work *AcceptedWork) Delete(db *bolt.DB) error {
 // List is ordered, most recent comes first.
 func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
 	minedWork := make([]*AcceptedWork, 0)
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
 		if err != nil {
 			return err
@@ -206,7 +206,7 @@ func listMinedWorkByAccount(db *bolt.DB, accountID string, n int) ([]*AcceptedWo
 		return minedWork, fmt.Errorf("n cannot be less than or equal to zero")
 	}
 
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
 		if err != nil {
 			return err
