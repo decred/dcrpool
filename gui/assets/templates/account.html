@@ -95,8 +95,8 @@
                         <tbody>
                             {{ range .MinedWork }}
                             <tr>
-                                <td><a href="{{ blockURL $.BlockExplorerURL .Height}}"
-                                        rel="noopener noreferrer">{{.Height}}</a></td>
+                                <td><a href="{{ .BlockURL}}"
+                                        rel="noopener noreferrer">{{.BlockHeight}}</a></td>
                                 <td>{{.Confirmed}}</td>
                                 <td>{{.Miner}}</td>
                             </tr>

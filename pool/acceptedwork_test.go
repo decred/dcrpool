@@ -93,27 +93,14 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 			fetchedWork.Height, workC.Height)
 	}
 
-	// Ensure requesting negative or zero most recent accepted work returns
-	// an error.
-	_, err = listMinedWorkByAccount(db, string(id), -1)
-	if err == nil {
-		t.Fatalf("listMinedWorkByAccount: expected negative N error")
-	}
-
-	_, err = listMinedWorkByAccount(db, string(id), 0)
-	if err == nil {
-		t.Fatalf("listMinedWorkByAccount: expected zero N error")
-	}
-
-	// Ensure the accepted work are not listed as mined since they are not
-	// confirmed.
+	// Ensure unconfirmed work is returned
 	minedWork, err := ListMinedWork(db)
 	if err != nil {
 		t.Fatalf("ListMinedWork error: %v", err)
 	}
 
-	if len(minedWork) != 0 {
-		t.Fatalf("expected no mined work")
+	if len(minedWork) != 4 {
+		t.Fatalf("expected unconfirmed work to be returned")
 	}
 
 	// Confirm all accepted work a mined work.
@@ -149,17 +136,6 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 
 	if len(minedWork) != 4 {
 		t.Fatalf("expected %v mined work, got %v", 4, len(minedWork))
-	}
-
-	// Ensure account Y has only one associated mined work.
-	minedWork, err = listMinedWorkByAccount(db, yID, 4)
-	if err != nil {
-		t.Fatalf("ListMinedWork error: %v", err)
-	}
-
-	if len(minedWork) != 1 {
-		t.Fatalf("expected %v mined work for account %v, got %v", 1,
-			yID, len(minedWork))
 	}
 
 	// Ensure mined work cannot be pruned.

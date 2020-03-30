@@ -611,7 +611,10 @@ func (h *Hub) FetchAccountClientInfo(accountID string) []*ClientInfo {
 	return info
 }
 
-// FetchMinedWork returns all confirmed blocks mined by the pool.
+// FetchMinedWork returns work data associated with all blocks mined by the pool
+// regardless of whether they are confirmed or not.
+//
+// List is ordered, most recent comes first.
 func (h *Hub) FetchMinedWork() ([]*AcceptedWork, error) {
 	return ListMinedWork(h.db)
 }
@@ -661,13 +664,6 @@ func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 		})
 	}
 	return quotas, nil
-}
-
-// FetchMinedWorkByAccount returns a list of mined work by the provided address.
-// List is ordered, most recent comes first.
-func (h *Hub) FetchMinedWorkByAccount(id string) ([]*AcceptedWork, error) {
-	work, err := listMinedWorkByAccount(h.db, id, 10)
-	return work, err
 }
 
 // FetchPaymentsForAccount returns a list or payments made to the provided address.

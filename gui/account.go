@@ -17,7 +17,7 @@ import (
 // account template.
 type accountPageData struct {
 	HeaderData       headerData
-	MinedWork        []*pool.AcceptedWork
+	MinedWork        []minedWork
 	Payments         []*pool.Payment
 	Clients          []*pool.ClientInfo
 	AccountID        string
@@ -60,13 +60,18 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	work, err := ui.cfg.FetchMinedWorkByAccount(accountID)
-	if err != nil {
-		ui.renderIndex(w, r, fmt.Sprintf("FetchMinedWorkByAddress error: %v",
-			err.Error()))
-		return
-
+	// Get the most recently mined blocks by this account (max 10)
+	work := make([]minedWork, 0)
+	ui.minedWorkMtx.RLock()
+	for _, v := range ui.minedWork {
+		if v.AccountID == accountID {
+			work = append(work, v)
+			if len(work) >= 10 {
+				break
+			}
+		}
 	}
+	ui.minedWorkMtx.RUnlock()
 
 	payments, err := ui.cfg.FetchPaymentsForAccount(accountID)
 	if err != nil {

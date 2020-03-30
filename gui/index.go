@@ -30,14 +30,18 @@ type indexPageData struct {
 // message. The error message will only be displayed if the browser has
 // Javascript enabled.
 func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError string) {
-	// Get the most recently mined blocks (max 10)
+
+	// Get the most recent confirmed mined blocks (max 10)
+	work := make([]minedWork, 0)
 	ui.minedWorkMtx.RLock()
-	lastBlock := 10
-	count := len(ui.minedWork)
-	if count < 10 {
-		lastBlock = count
+	for _, v := range ui.minedWork {
+		if v.Confirmed {
+			work = append(work, v)
+			if len(work) >= 10 {
+				break
+			}
+		}
 	}
-	mWork := ui.minedWork[0:lastBlock]
 	ui.minedWorkMtx.RUnlock()
 
 	ui.workQuotasMtx.RLock()
@@ -64,7 +68,7 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 			SoloPool:          ui.cfg.SoloPool,
 		},
 		WorkQuotas: wQuotas,
-		MinedWork:  mWork,
+		MinedWork:  work,
 		PoolDomain: ui.cfg.Domain,
 		MinerPorts: ui.cfg.MinerPorts,
 		ModalError: modalError,

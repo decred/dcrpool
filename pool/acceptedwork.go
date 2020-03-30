@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -162,8 +161,8 @@ func (work *AcceptedWork) Delete(db *bolt.DB) error {
 	return deleteEntry(db, workBkt, []byte(work.UUID))
 }
 
-// ListMinedWork returns work data associated with all confirmed blocks
-// mined by the pool.
+// ListMinedWork returns work data associated with all blocks mined by the pool
+// regardless of whether they are confirmed or not.
 //
 // List is ordered, most recent comes first.
 func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
@@ -182,50 +181,7 @@ func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
 				return err
 			}
 
-			if work.Confirmed {
-				minedWork = append(minedWork, &work)
-			}
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return minedWork, nil
-}
-
-// listMinedWorkByAccount returns the N most recent mined work data on
-// blocks mined by the provided pool account id.
-//
-// List is ordered, most recent comes first.
-func listMinedWorkByAccount(db *bolt.DB, accountID string, n int) ([]*AcceptedWork, error) {
-	minedWork := make([]*AcceptedWork, 0)
-	if n <= 0 {
-		return minedWork, fmt.Errorf("n cannot be less than or equal to zero")
-	}
-
-	err := db.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchWorkBucket(tx)
-		if err != nil {
-			return err
-		}
-
-		cursor := bkt.Cursor()
-		for k, v := cursor.Last(); k != nil; k, v = cursor.Prev() {
-			var work AcceptedWork
-			err := json.Unmarshal(v, &work)
-			if err != nil {
-				return err
-			}
-
-			if strings.Compare(work.MinedBy, accountID) == 0 && work.Confirmed {
-				minedWork = append(minedWork, &work)
-				if len(minedWork) == n {
-					return nil
-				}
-			}
+			minedWork = append(minedWork, &work)
 		}
 
 		return nil

@@ -17,6 +17,9 @@ type minedWork struct {
 	BlockURL    string `json:"blockurl"`
 	MinedBy     string `json:"minedby"`
 	Miner       string `json:"miner"`
+	Confirmed   bool   `json:"confirmed"`
+	// AccountID holds the full ID (not truncated) and so should not be json encoded
+	AccountID string `json:"-"`
 }
 
 type minedWorkPayload struct {

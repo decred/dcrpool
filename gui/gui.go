@@ -71,7 +71,7 @@ type Config struct {
 	// AddPaymentRequest creates a payment request from the provided account
 	// if not already requested.
 	AddPaymentRequest func(addr string) error
-	// FetchMinedWork returns all confirmed blocks mined by the pool.
+	// FetchMinedWork returns all blocks mined by the pool.
 	FetchMinedWork func() ([]*pool.AcceptedWork, error)
 	// FetchWorkQuotas returns the reward distribution to pool accounts
 	// based on work contributed per the payment scheme used by the pool.
@@ -84,8 +84,6 @@ type Config struct {
 	FetchClientInfo func() map[string][]*pool.ClientInfo
 	// AccountExists checks if the provided account id references a pool account.
 	AccountExists func(accountID string) bool
-	// FetchMinedWorkByAccount returns a list of mined work by the provided address.
-	FetchMinedWorkByAccount func(id string) ([]*pool.AcceptedWork, error)
 	// FetchPaymentsForAccount returns a list or payments made to the provided address.
 	FetchPaymentsForAccount func(id string) ([]*pool.Payment, error)
 	// FetchAccountClientInfo returns all clients belonging to the provided
@@ -357,6 +355,8 @@ func (ui *GUI) Run(ctx context.Context) {
 				BlockURL:    blockURL(ui.cfg.BlockExplorerURL, work.Height),
 				MinedBy:     truncateAccountID(work.MinedBy),
 				Miner:       work.Miner,
+				AccountID:   work.MinedBy,
+				Confirmed:   work.Confirmed,
 			})
 		}
 
