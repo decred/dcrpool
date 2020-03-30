@@ -141,20 +141,17 @@
                 <table class="table">
                     <thead>
                         <tr>
-                            <th data-sort-method="number" data-sort-default>Height</th>
-                            <th data-sort-method="none">Miner</th>
-                            <th data-sort-method="none">Mined By</th>
+                            <th>Height</th>
+                            <th>Miner</th>
+                            <th>Mined By</th>
                         </tr>
                     </thead>
-                    <tbody id="mined-blocks-table-body">
+                    <tbody id="blocks-table">
                         {{ range .MinedWork }}
-                        <tr data-row-id="{{ .BlockHeight }}">
-                            <td><a href="{{ .BlockURL }}" rel="noopener noreferrer">{{ .BlockHeight }}</a>
-                            </td>
+                        <tr>
+                            <td><a href="{{ .BlockURL }}" rel="noopener noreferrer">{{ .BlockHeight }}</a></td>
                             <td>{{ .Miner }}</td>
-                            <td>
-                                <span class="dcr-label">{{ .MinedBy }}</span>
-                            </td>
+                            <td><span class="dcr-label">{{ .MinedBy }}</span></td>
                         </tr>
                         {{ else }}
                         <tr>
@@ -164,7 +161,7 @@
                     </tbody>
                 </table>
 
-                <div id="mined-blocks-page-select" class="page-select"></div>
+                <div id="blocks-page-select" class="page-select"></div>
 
             </div>
         </div>

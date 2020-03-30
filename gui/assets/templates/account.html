@@ -83,31 +83,30 @@
         <div class="col-lg-6 col-12 p-3">
             <div class="block__content">
                 <h1>Blocks Mined</h1>
-                <div class="overflow-auto">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Height</th>
-                                <th>Confirmed</th>
-                                <th>Miner</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {{ range .MinedWork }}
-                            <tr>
-                                <td><a href="{{ .BlockURL}}"
-                                        rel="noopener noreferrer">{{.BlockHeight}}</a></td>
-                                <td>{{.Confirmed}}</td>
-                                <td>{{.Miner}}</td>
-                            </tr>
-                            {{else}}
-                            <tr>
-                                <td colspan="100%"><span class="no-data">No mined work</span></td>
-                            </tr>
-                            {{end}}
-                        </tbody>
-                    </table>
-                </div>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Height</th>
+                            <th>Confirmed</th>
+                            <th>Miner</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blocks-by-account-table">
+                        {{ range .MinedWork }}
+                        <tr>
+                            <td><a href="{{ .BlockURL}}" rel="noopener noreferrer">{{.BlockHeight}}</a></td>
+                            <td>{{.Confirmed}}</td>
+                            <td>{{.Miner}}</td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td colspan="100%"><span class="no-data">No mined blocks</span></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+
+                <div id="blocks-by-account-page-select" class="page-select"></div>
 
             </div>
         </div>
@@ -144,7 +143,11 @@
 
 </div>
 
+<script>
+    var accountID = "{{.AccountID}}";
+</script>
 <script src='/js/modal.js'></script>
+<script src='/js/pagination.js'></script>
 
 </body>
 </html>

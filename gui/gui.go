@@ -156,7 +156,8 @@ func (ui *GUI) route() {
 	ui.router.HandleFunc("/logout", ui.AdminLogout).Methods("POST")
 
 	// Paginated endpoints allow the GUI to request pages of data
-	ui.router.HandleFunc("/mined_blocks", ui.PaginatedMinedBlocks).Methods("GET")
+	ui.router.HandleFunc("/blocks", ui.PaginatedBlocks).Methods("GET")
+	ui.router.HandleFunc("/blocks_by_account", ui.PaginatedBlocksByAccount).Methods("GET")
 
 	// Websocket endpoint allows the GUI to receive updated values
 	ui.router.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")
