@@ -32,25 +32,16 @@ type indexPageData struct {
 func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError string) {
 
 	// Get the most recent confirmed mined blocks (max 10)
-	work := make([]minedWork, 0)
-	ui.minedWorkMtx.RLock()
-	for _, v := range ui.minedWork {
+	allWork := ui.cache.getMinedWork()
+	recentWork := make([]minedWork, 0)
+	for _, v := range allWork {
 		if v.Confirmed {
-			work = append(work, v)
-			if len(work) >= 10 {
+			recentWork = append(recentWork, v)
+			if len(recentWork) >= 10 {
 				break
 			}
 		}
 	}
-	ui.minedWorkMtx.RUnlock()
-
-	ui.workQuotasMtx.RLock()
-	wQuotas := append(ui.workQuotas[:0:0], ui.workQuotas...)
-	ui.workQuotasMtx.RUnlock()
-
-	ui.poolHashMtx.RLock()
-	poolHash := ui.poolHash
-	ui.poolHashMtx.RUnlock()
 
 	data := indexPageData{
 		HeaderData: headerData{
@@ -61,14 +52,14 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 		PoolStatsData: poolStatsData{
 			LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
 			LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
-			PoolHashRate:      poolHash,
+			PoolHashRate:      ui.cache.getPoolHash(),
 			PaymentMethod:     ui.cfg.PaymentMethod,
 			Network:           ui.cfg.ActiveNet.Name,
 			PoolFee:           ui.cfg.PoolFee,
 			SoloPool:          ui.cfg.SoloPool,
 		},
-		WorkQuotas: wQuotas,
-		MinedWork:  work,
+		WorkQuotas: ui.cache.getQuotas(),
+		MinedWork:  recentWork,
 		PoolDomain: ui.cfg.Domain,
 		MinerPorts: ui.cfg.MinerPorts,
 		ModalError: modalError,

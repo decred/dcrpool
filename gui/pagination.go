@@ -12,16 +12,6 @@ import (
 	"github.com/decred/dcrpool/pool"
 )
 
-type minedWork struct {
-	BlockHeight uint32 `json:"blockheight"`
-	BlockURL    string `json:"blockurl"`
-	MinedBy     string `json:"minedby"`
-	Miner       string `json:"miner"`
-	Confirmed   bool   `json:"confirmed"`
-	// AccountID holds the full ID (not truncated) and so should not be json encoded
-	AccountID string `json:"-"`
-}
-
 type minedWorkPayload struct {
 	Blocks []minedWork `json:"blocks"`
 	Count  int         `json:"count"`
@@ -61,13 +51,12 @@ func (ui *GUI) PaginatedBlocks(w http.ResponseWriter, r *http.Request) {
 	lastBlock := offset + pageSize
 
 	// Get the requested blocks from the cache.
-	ui.minedWorkMtx.RLock()
-	count := len(ui.minedWork)
+	allWork := ui.cache.getMinedWork()
+	count := len(allWork)
 	if lastBlock > count {
 		lastBlock = count
 	}
-	requestedBlocks := ui.minedWork[offset:lastBlock]
-	ui.minedWorkMtx.RUnlock()
+	requestedBlocks := allWork[offset:lastBlock]
 
 	// Prepare json response
 	payload := minedWorkPayload{
@@ -124,13 +113,12 @@ func (ui *GUI) PaginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 
 	// Get all blocks mined by this account
 	work := make([]minedWork, 0)
-	ui.minedWorkMtx.RLock()
-	for _, v := range ui.minedWork {
+	allWork := ui.cache.getMinedWork()
+	for _, v := range allWork {
 		if v.AccountID == accountID {
 			work = append(work, v)
 		}
 	}
-	ui.minedWorkMtx.RUnlock()
 
 	count := len(work)
 	if lastBlock > count {

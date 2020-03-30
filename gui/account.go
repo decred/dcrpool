@@ -61,17 +61,16 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the most recently mined blocks by this account (max 10)
-	work := make([]minedWork, 0)
-	ui.minedWorkMtx.RLock()
-	for _, v := range ui.minedWork {
+	allWork := ui.cache.getMinedWork()
+	recentWork := make([]minedWork, 0)
+	for _, v := range allWork {
 		if v.AccountID == accountID {
-			work = append(work, v)
-			if len(work) >= 10 {
+			recentWork = append(recentWork, v)
+			if len(recentWork) >= 10 {
 				break
 			}
 		}
 	}
-	ui.minedWorkMtx.RUnlock()
 
 	payments, err := ui.cfg.FetchPaymentsForAccount(accountID)
 	if err != nil {
@@ -86,7 +85,7 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 			Designation: ui.cfg.Designation,
 			ShowMenu:    true,
 		},
-		MinedWork:        work,
+		MinedWork:        recentWork,
 		Payments:         payments,
 		Clients:          ui.cfg.FetchAccountClientInfo(accountID),
 		AccountID:        accountID,

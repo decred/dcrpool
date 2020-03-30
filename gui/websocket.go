@@ -20,13 +20,6 @@ type payload struct {
 	WorkQuotas        []workQuota `json:"workquotas"`
 }
 
-// workQuota represents dividend garnered by pool accounts through work
-// contributed.
-type workQuota struct {
-	AccountID string `json:"accountid"`
-	Percent   string `json:"percent"`
-}
-
 // registerWebSocket is the handler for "GET /ws". It updates the HTTP request
 // to a websocket and adds the caller to a list of connected clients.
 func (ui *GUI) registerWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -42,17 +35,11 @@ func (ui *GUI) registerWebSocket(w http.ResponseWriter, r *http.Request) {
 
 // updateWebSocket sends updates to all connected websocket clients.
 func (ui *GUI) updateWebSocket() {
-	ui.poolHashMtx.RLock()
-	poolHash := ui.poolHash
-	ui.poolHashMtx.RUnlock()
-	ui.workQuotasMtx.RLock()
-	workQuotas := append(ui.workQuotas[:0:0], ui.workQuotas...)
-	ui.workQuotasMtx.RUnlock()
 	msg := payload{
 		LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
 		LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
-		PoolHashRate:      poolHash,
-		WorkQuotas:        workQuotas,
+		PoolHashRate:      ui.cache.getPoolHash(),
+		WorkQuotas:        ui.cache.getQuotas(),
 	}
 	clientsMtx.Lock()
 	for client := range clients {

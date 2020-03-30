@@ -16,7 +16,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/crypto/acme/autocert"
@@ -100,14 +99,7 @@ type GUI struct {
 	cookieStore *sessions.CookieStore
 	router      *mux.Router
 	server      *http.Server
-
-	// The following fields cache pool data.
-	minedWork     []minedWork
-	minedWorkMtx  sync.RWMutex
-	workQuotas    []workQuota
-	workQuotasMtx sync.RWMutex
-	poolHash      string
-	poolHashMtx   sync.RWMutex
+	cache       *Cache
 }
 
 // poolStatsData contains all of the necessary information to render the
@@ -196,10 +188,8 @@ func getSession(r *http.Request, cookieStore *sessions.CookieStore) (*sessions.S
 // NewGUI creates an instance of the user interface.
 func NewGUI(cfg *Config) (*GUI, error) {
 	ui := &GUI{
-		cfg:        cfg,
-		limiter:    pool.NewRateLimiter(),
-		minedWork:  make([]minedWork, 0),
-		workQuotas: make([]workQuota, 0),
+		cfg:     cfg,
+		limiter: pool.NewRateLimiter(),
 	}
 
 	switch cfg.ActiveNet.Name {
@@ -341,63 +331,22 @@ func (ui *GUI) Run(ctx context.Context) {
 		}
 	}()
 
-	updateCachedData := func() error {
-		var err error
-		work, err := ui.cfg.FetchMinedWork()
-		if err != nil {
-			return err
-		}
-
-		// Parse and format mined work by the pool.
-		workData := make([]minedWork, 0)
-		for _, work := range work {
-			workData = append(workData, minedWork{
-				BlockHeight: work.Height,
-				BlockURL:    blockURL(ui.cfg.BlockExplorerURL, work.Height),
-				MinedBy:     truncateAccountID(work.MinedBy),
-				Miner:       work.Miner,
-				AccountID:   work.MinedBy,
-				Confirmed:   work.Confirmed,
-			})
-		}
-
-		// Update mined work cache.
-		ui.minedWorkMtx.Lock()
-		ui.minedWork = workData
-		ui.minedWorkMtx.Unlock()
-
-		quotas, err := ui.cfg.FetchWorkQuotas()
-		if err != nil {
-			return err
-		}
-
-		// Parse and format work quotas of the pool.
-		quotaData := make([]workQuota, 0)
-		for _, quota := range quotas {
-			quotaData = append(quotaData, workQuota{
-				AccountID: truncateAccountID(quota.AccountID),
-				Percent:   ratToPercent(quota.Percentage),
-			})
-		}
-
-		// Update work quotas cache.
-		ui.workQuotasMtx.Lock()
-		ui.workQuotas = quotaData
-		ui.workQuotasMtx.Unlock()
-
-		poolHash, _ := ui.cfg.FetchPoolHashRate()
-
-		// Update pool hash cache.
-		ui.poolHashMtx.Lock()
-		ui.poolHash = hashString(poolHash)
-		ui.poolHashMtx.Unlock()
-		return nil
-	}
-
-	err := updateCachedData()
+	// Initalise the cache
+	work, err := ui.cfg.FetchMinedWork()
 	if err != nil {
 		log.Error(err)
+		return
 	}
+
+	quotas, err := ui.cfg.FetchWorkQuotas()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	poolHash, _ := ui.cfg.FetchPoolHashRate()
+
+	ui.cache = InitCache(work, quotas, poolHash, ui.cfg.BlockExplorerURL)
 
 	// Use a ticker to periodically update cached data and push updates through
 	// any established websockets
@@ -413,11 +362,25 @@ func (ui *GUI) Run(ctx context.Context) {
 				ticks++
 
 				// After three ticks (15 seconds) update cached pool data.
+				// TODO: Only update cached data when necessary.
 				if ticks == 3 {
-					err := updateCachedData()
+					work, err := ui.cfg.FetchMinedWork()
 					if err != nil {
 						log.Error(err)
+					} else {
+						ui.cache.updateMinedWork(work)
 					}
+
+					quotas, err := ui.cfg.FetchWorkQuotas()
+					if err != nil {
+						log.Error(err)
+					} else {
+						ui.cache.updateQuotas(quotas)
+					}
+
+					poolHash, _ := ui.cfg.FetchPoolHashRate()
+					ui.cache.updateHashrate(poolHash)
+
 					ticks = 0
 				}
 

@@ -41,10 +41,6 @@ func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ui.poolHashMtx.RLock()
-	poolHash := ui.poolHash
-	ui.poolHashMtx.RUnlock()
-
 	pageData := adminPageData{
 		HeaderData: headerData{
 			CSRF:        csrf.TemplateField(r),
@@ -54,7 +50,7 @@ func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
 		PoolStatsData: poolStatsData{
 			LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
 			LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
-			PoolHashRate:      poolHash,
+			PoolHashRate:      ui.cache.getPoolHash(),
 			PaymentMethod:     ui.cfg.PaymentMethod,
 			Network:           ui.cfg.ActiveNet.Name,
 			PoolFee:           ui.cfg.PoolFee,
