@@ -1,13 +1,29 @@
 {{define "index"}}
-{{template "header" .}}
+{{template "header" .HeaderData}}
 
-{{ with .Error }}
-<div class="snackbar snackbar-error">
-    <div class="snackbar-message">
-        <p>{{.}}</p>
+{{ if .ModalError }}
+<div class="modal fade" id="error-modal">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title">Invalid Address</h1>
+                <button type="button" class="modal-close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>{{ .ModalError }}</p>
+                <div class="d-flex flex-row pt-4 align-items-center">
+                    <button class="btn btn-primary ml-auto" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+        
     </div>
 </div>
-{{end}}
+
+<script>
+    $("#error-modal").modal();
+</script>
+{{ end }}
 
 <noscript style="display:inherit;">
     <div class="snackbar snackbar-warning">
@@ -25,7 +41,7 @@
         <p class="pt-1 pb-2">To mine, point your miner to the pool and set the username as described below in the miner
             configuration section.</p>
         
-        {{template "pool-stats" .PoolStats}}
+        {{template "pool-stats" .PoolStatsData}}
         
     </div>
 </div>
@@ -44,7 +60,7 @@
                         </div>
                         <div class="col-lg-8 col-12 py-3 px-4">
                             <h2>Identify the Miner</h2>
-                            <p>{{.Designation}} pool currently supports:</p>
+                            <p>{{.HeaderData.Designation}} pool currently supports:</p>
                             <div class="d-flex flex-row">
                                 <ul>
                                     <li>Innosilicon&nbsp;D9</li>
@@ -153,7 +169,7 @@
             </div>
         </div>
 
-        {{ if not .PoolStats.SoloPool}}
+        {{ if not .PoolStatsData.SoloPool}}
         <div class="col-lg-6 col-12 p-3">
             <div class="block__content">
                 <h1>Next Reward Payment</h1>

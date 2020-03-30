@@ -75,7 +75,7 @@
                 </a>
             </div>
 
-            {{ if not .Admin }}
+            {{ if .ShowMenu }}
             <a class="modalbtn" data-toggle="modal" data-target="#account-modal"></a>
 
             <div class="modal fade" id="account-modal">
@@ -83,13 +83,13 @@
                     <div class="modal-content">
                         <div class="modal-header">
                             <h1 class="modal-title">Account Information</h1>
-                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                            <button type="button" class="modal-close" data-dismiss="modal">&times;</button>
                         </div>
                         <div class="modal-body">
                             <p>To know your mining account details, enter your mining address.</p>
-                            <form class="modal-form" id="account-form" action="/account" method="get">
+                            <form class="modal-form" id="account-form" action="/account_exist" method="get">
                                 <div class="modal-input">
-                                    <input type="text" name="address" placeholder="Mining Address" spellcheck="false">
+                                    <input type="text" name="address" required placeholder="Mining Address" spellcheck="false">
                                     <div class="icon-warning"></div>
                                 </div>
                                 <div class="err-message"></div>
@@ -108,7 +108,7 @@
                     <div class="modal-content">
                         <div class="modal-header">
                             <h1 class="modal-title">Admin Login</h1>
-                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                            <button type="button" class="modal-close" data-dismiss="modal">&times;</button>
                         </div>
                         <div class="modal-body">
                             <form class="modal-form" id="admin-form" action="/admin" method="post">

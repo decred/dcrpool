@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Decred developers
+// Copyright (c) 2020 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -112,7 +112,9 @@ type GUI struct {
 	poolHashMtx   sync.RWMutex
 }
 
-type poolStats struct {
+// poolStatsData contains all of the necessary information to render the
+// pool-stats template.
+type poolStatsData struct {
 	SoloPool          bool
 	PoolFee           float64
 	Network           string
@@ -120,6 +122,14 @@ type poolStats struct {
 	LastWorkHeight    uint32
 	LastPaymentHeight uint32
 	PoolHashRate      string
+}
+
+// headerData contains all of the necessary information to render the
+// header template.
+type headerData struct {
+	CSRF        template.HTML
+	Designation string
+	ShowMenu    bool
 }
 
 // route configures the http router of the user interface.
@@ -140,7 +150,8 @@ func (ui *GUI) route() {
 		http.FileServer(jsDir)))
 
 	ui.router.HandleFunc("/", ui.Homepage).Methods("GET")
-	ui.router.HandleFunc("/account", ui.IsPoolAccount).Methods("GET")
+	ui.router.HandleFunc("/account/{address}", ui.Account).Methods("GET")
+	ui.router.HandleFunc("/account_exist", ui.IsPoolAccount).Methods("GET")
 	ui.router.HandleFunc("/admin", ui.AdminPage).Methods("GET")
 	ui.router.HandleFunc("/admin", ui.AdminLogin).Methods("POST")
 	ui.router.HandleFunc("/backup", ui.DownloadDatabaseBackup).Methods("POST")

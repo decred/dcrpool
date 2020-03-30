@@ -1,11 +1,10 @@
-// Copyright (c) 2019 The Decred developers
+// Copyright (c) 2020 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package gui
 
 import (
-	"html/template"
 	"net/http"
 
 	"github.com/gorilla/csrf"
@@ -13,12 +12,12 @@ import (
 	"github.com/decred/dcrpool/pool"
 )
 
+// adminPageData contains all of the necessary information to render the admin
+// template.
 type adminPageData struct {
-	Connections map[string][]*pool.ClientInfo
-	CSRF        template.HTML
-	Designation string
-	PoolStats   poolStats
-	Admin       bool
+	HeaderData    headerData
+	PoolStatsData poolStatsData
+	Connections   map[string][]*pool.ClientInfo
 }
 
 // AdminPage is the handler for "GET /admin". If the current session is
@@ -46,22 +45,22 @@ func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
 	poolHash := ui.poolHash
 	ui.poolHashMtx.RUnlock()
 
-	poolStats := poolStats{
-		LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
-		LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
-		PoolHashRate:      poolHash,
-		PaymentMethod:     ui.cfg.PaymentMethod,
-		Network:           ui.cfg.ActiveNet.Name,
-		PoolFee:           ui.cfg.PoolFee,
-		SoloPool:          ui.cfg.SoloPool,
-	}
-
 	pageData := adminPageData{
-		CSRF:        csrf.TemplateField(r),
-		Designation: ui.cfg.Designation,
+		HeaderData: headerData{
+			CSRF:        csrf.TemplateField(r),
+			Designation: ui.cfg.Designation,
+			ShowMenu:    false,
+		},
+		PoolStatsData: poolStatsData{
+			LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
+			LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
+			PoolHashRate:      poolHash,
+			PaymentMethod:     ui.cfg.PaymentMethod,
+			Network:           ui.cfg.ActiveNet.Name,
+			PoolFee:           ui.cfg.PoolFee,
+			SoloPool:          ui.cfg.SoloPool,
+		},
 		Connections: ui.cfg.FetchClientInfo(),
-		PoolStats:   poolStats,
-		Admin:       true,
 	}
 
 	ui.renderTemplate(w, "admin", pageData)

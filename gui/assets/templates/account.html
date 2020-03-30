@@ -1,5 +1,5 @@
 {{define "account"}}
-{{template "header" .}}
+{{template "header" .HeaderData}}
 
 <noscript style="display:inherit;">
     <div class="snackbar snackbar-warning">
@@ -18,7 +18,7 @@
             <div class="col-lg-7 col-12 py-2">
                 <div class="d-flex flex-column">
                     <div class="account-info-title pb-2">Account</div>
-                    <div><span class="dcr-label">{{.AccountStats.AccountID}}</span></div>
+                    <div><span class="dcr-label">{{.AccountID}}</span></div>
                 </div>
             </div>
 
@@ -52,7 +52,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {{ range .AccountStats.Payments }}
+                            {{ range .Payments }}
                             <tr>
                                 <td><a href="{{ blockURL $.BlockExplorerURL .Height}}"
                                         rel="noopener noreferrer">{{.Height}}</a></td>
@@ -93,7 +93,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {{ range .AccountStats.MinedWork }}
+                            {{ range .MinedWork }}
                             <tr>
                                 <td><a href="{{ blockURL $.BlockExplorerURL .Height}}"
                                         rel="noopener noreferrer">{{.Height}}</a></td>
@@ -126,7 +126,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {{ range .AccountStats.Clients }}
+                            {{ range .Clients }}
                             <tr>
                                 <td>{{.Miner}}</td>
                                 <td>{{hashString .HashRate}}</td>
