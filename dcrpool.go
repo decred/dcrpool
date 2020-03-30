@@ -143,7 +143,7 @@ func newPool(cfg *config) (*miningPool, error) {
 	p.hub.SetNodeConnection(nodeConn)
 
 	// Establish a connection to the wallet if the pool is mining as a
-	// publicly available mining poolin solo.
+	// publicly available mining pool.
 	if !cfg.SoloPool {
 		creds, err := credentials.
 			NewClientTLSFromFile(cfg.WalletRPCCert, "localhost")

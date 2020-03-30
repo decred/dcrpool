@@ -71,7 +71,7 @@ type WalletConnection interface {
 	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
 }
 
-// NodeConnection defines the funcationality needed a mining node
+// NodeConnection defines the functionality needed by a mining node
 // connection for the pool.
 type NodeConnection interface {
 	GetWorkSubmit(string) (bool, error)
@@ -114,7 +114,6 @@ type Hub struct {
 	nodeConnMtx    sync.Mutex
 	walletClose    func() error
 	walletConn     WalletConnection
-	walletConnMtx  sync.Mutex
 	poolDiffs      *DifficultySet
 	paymentMgr     *PaymentMgr
 	chainState     *ChainState
@@ -133,12 +132,10 @@ func (h *Hub) SetNodeConnection(conn NodeConnection) {
 	h.nodeConnMtx.Unlock()
 }
 
-// SetWalletConnection sets the wallet connection and it's associated close .
+// SetWalletConnection sets the wallet connection and it's associated close.
 func (h *Hub) SetWalletConnection(conn WalletConnection, close func() error) {
-	h.walletConnMtx.Lock()
 	h.walletConn = conn
 	h.walletClose = close
-	h.walletConnMtx.Unlock()
 }
 
 // persistPoolMode saves the pool mode to the db.
@@ -471,6 +468,10 @@ func (h *Hub) HasClients() bool {
 
 // PublishTransaction creates a transaction paying pool accounts for work done.
 func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, targetAmt dcrutil.Amount) (string, error) {
+	if h.walletConn == nil {
+		return "", fmt.Errorf("wallet connnection unset")
+	}
+
 	outs := make([]*walletrpc.ConstructTransactionRequest_Output, 0, len(payouts))
 	for addr, amt := range payouts {
 		out := &walletrpc.ConstructTransactionRequest_Output{
@@ -488,9 +489,7 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 		OutputSelectionAlgorithm: walletrpc.ConstructTransactionRequest_ALL,
 		NonChangeOutputs:         outs,
 	}
-	h.walletConnMtx.Lock()
 	constructTxResp, err := h.walletConn.ConstructTransaction(context.TODO(), constructTxReq)
-	h.walletConnMtx.Unlock()
 	if err != nil {
 		return "", err
 	}
@@ -498,18 +497,14 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 		SerializedTransaction: constructTxResp.UnsignedTransaction,
 		Passphrase:            []byte(h.cfg.WalletPass),
 	}
-	h.walletConnMtx.Lock()
 	signedTxResp, err := h.walletConn.SignTransaction(context.TODO(), signTxReq)
-	h.walletConnMtx.Unlock()
 	if err != nil {
 		return "", err
 	}
 	pubTxReq := &walletrpc.PublishTransactionRequest{
 		SignedTransaction: signedTxResp.Transaction,
 	}
-	h.walletConnMtx.Lock()
 	pubTxResp, err := h.walletConn.PublishTransaction(context.TODO(), pubTxReq)
-	h.walletConnMtx.Unlock()
 	if err != nil {
 		return "", err
 	}
@@ -535,11 +530,9 @@ func (h *Hub) backup(ctx context.Context) {
 // shutdown tears down the hub and releases resources used.
 func (h *Hub) shutdown() {
 	if !h.cfg.SoloPool {
-		h.walletConnMtx.Lock()
 		if h.walletClose != nil {
 			h.walletClose()
 		}
-		h.walletConnMtx.Unlock()
 	}
 	h.nodeConnMtx.Lock()
 	if h.nodeConn != nil {
