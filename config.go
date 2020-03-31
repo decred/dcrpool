@@ -36,15 +36,11 @@ const (
 	defaultDBFilename            = "dcrpool.kv"
 	defaultTLSCertFilename       = "dcrpool.cert"
 	defaultTLSKeyFilename        = "dcrpool.key"
-	defaultRPCUser               = "dcrp"
-	defaultRPCPass               = "dcrppass"
 	defaultDcrdRPCHost           = "127.0.0.1:19109"
 	defaultWalletGRPCHost        = "127.0.0.1:51028"
-	defaultPoolFeeAddr           = ""
 	defaultMaxGenTime            = time.Second * 15
 	defaultPoolFee               = 0.01
 	defaultLastNPeriod           = time.Hour * 24
-	defaultWalletPass            = ""
 	defaultMaxTxFeeReserve       = 0.1
 	defaultSoloPool              = false
 	defaultGUIPort               = 8080
@@ -316,18 +312,14 @@ func loadConfig() (*config, []string, error) {
 		DBFile:                defaultDBFile,
 		DebugLevel:            defaultLogLevel,
 		LogDir:                defaultLogDir,
-		RPCUser:               defaultRPCUser,
-		RPCPass:               defaultRPCPass,
 		DcrdRPCHost:           defaultDcrdRPCHost,
 		WalletGRPCHost:        defaultWalletGRPCHost,
-		PoolFeeAddrs:          []string{defaultPoolFeeAddr},
 		PoolFee:               defaultPoolFee,
 		MaxTxFeeReserve:       defaultMaxTxFeeReserve,
 		MaxGenTime:            defaultMaxGenTime,
 		ActiveNet:             defaultActiveNet,
 		PaymentMethod:         defaultPaymentMethod,
 		LastNPeriod:           defaultLastNPeriod,
-		WalletPass:            defaultWalletPass,
 		MinPayment:            defaultMinPayment,
 		SoloPool:              defaultSoloPool,
 		GUIPort:               defaultGUIPort,
@@ -501,6 +493,20 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
+	// Ensure the dcrd rpc username is set.
+	if cfg.RPCUser == "" {
+		str := "%s: the rpcuser option is not set"
+		err := fmt.Errorf(str, funcName)
+		return nil, nil, err
+	}
+
+	// Ensure the dcrd rpc password is set.
+	if cfg.RPCPass == "" {
+		str := "%s: the rpcpass option is not set"
+		err := fmt.Errorf(str, funcName)
+		return nil, nil, err
+	}
+
 	// Create the data directory.
 	err = os.MkdirAll(cfg.DataDir, 0700)
 	if err != nil {
@@ -544,6 +550,30 @@ func loadConfig() (*config, []string, error) {
 			return nil, nil, err
 		}
 
+		// Ensure pool fee is valid
+		if cfg.PoolFee < 0 || cfg.PoolFee > 1 {
+			str := "%s: poolfee should be between 0 and 1"
+			err := fmt.Errorf(str, funcName)
+			return nil, nil, err
+		}
+
+		// Ensure the password to unlock the wallet.
+		// Needed to pay dividends to pool contributors.
+		if cfg.WalletPass == "" {
+			str := "%s: the walletpass option is not set"
+			err := fmt.Errorf(str, funcName)
+			return nil, nil, err
+		}
+
+		// Ensure address to collect pool fees is provided.
+		if len(cfg.PoolFeeAddrs[0]) == 0 {
+			str := "%s: the poolfeeaddrs option is not set"
+			err := fmt.Errorf(str, funcName)
+			return nil, nil, err
+		}
+
+		// Parse pool fee addresses
+		cfg.PoolFeeAddrs = strings.Split(cfg.PoolFeeAddrs[0], ",")
 		for _, pAddr := range cfg.PoolFeeAddrs {
 			addr, err := dcrutil.DecodeAddress(pAddr, cfg.net)
 			if err != nil {
