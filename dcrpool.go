@@ -105,7 +105,7 @@ func newPool(cfg *config) (*miningPool, error) {
 
 	hcfg := &pool.HubConfig{
 		DB:                    db,
-		ActiveNet:             cfg.net,
+		ActiveNet:             cfg.net.Params,
 		PoolFee:               cfg.PoolFee,
 		MaxTxFeeReserve:       maxTxFeeReserve,
 		MaxGenTime:            cfg.MaxGenTime,
@@ -190,7 +190,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		Domain:                  cfg.Domain,
 		TLSCertFile:             cfg.TLSCert,
 		TLSKeyFile:              cfg.TLSKey,
-		ActiveNet:               cfg.net,
+		ActiveNet:               cfg.net.Params,
 		PaymentMethod:           cfg.PaymentMethod,
 		Designation:             cfg.Designation,
 		PoolFee:                 cfg.PoolFee,

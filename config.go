@@ -36,8 +36,8 @@ const (
 	defaultDBFilename            = "dcrpool.kv"
 	defaultTLSCertFilename       = "dcrpool.cert"
 	defaultTLSKeyFilename        = "dcrpool.key"
-	defaultDcrdRPCHost           = "127.0.0.1:19109"
-	defaultWalletGRPCHost        = "127.0.0.1:51028"
+	defaultDcrdRPCHost           = "127.0.0.1"
+	defaultWalletGRPCHost        = "127.0.0.1"
 	defaultMaxGenTime            = time.Second * 15
 	defaultPoolFee               = 0.01
 	defaultLastNPeriod           = time.Hour * 24
@@ -115,7 +115,7 @@ type config struct {
 	DCR1Port              uint32        `long:"dcr1port" ini-name:"dcr1port" description:"Obelisk DCR1 connection port."`
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
-	net                   *chaincfg.Params
+	net                   *params
 }
 
 // serviceOptions defines the configuration options for the daemon as a service on
@@ -289,6 +289,16 @@ func cleanAndExpandPath(path string) string {
 	}
 
 	return filepath.Join(homeDir, path)
+}
+
+// normalizeAddress returns addr with the passed default port appended if
+// there is not already a port specified.
+func normalizeAddress(addr, defaultPort string) string {
+	_, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return net.JoinHostPort(addr, defaultPort)
+	}
+	return addr
 }
 
 // loadConfig initializes and parses the config using a config file and command
@@ -532,15 +542,19 @@ func loadConfig() (*config, []string, error) {
 	// Set the mining active network.
 	switch cfg.ActiveNet {
 	case chaincfg.TestNet3Params().Name:
-		cfg.net = chaincfg.TestNet3Params()
+		cfg.net = &mainNetParams
 	case chaincfg.MainNetParams().Name:
-		cfg.net = chaincfg.MainNetParams()
+		cfg.net = &testNet3Params
 	case chaincfg.SimNetParams().Name:
-		cfg.net = chaincfg.SimNetParams()
+		cfg.net = &simNetParams
 	default:
 		return nil, nil, fmt.Errorf("unknown network provided %v",
 			cfg.ActiveNet)
 	}
+
+	// Add default ports for the active network if there's no ports specified
+	cfg.DcrdRPCHost = normalizeAddress(cfg.DcrdRPCHost, cfg.net.DcrdRPCServerPort)
+	cfg.WalletGRPCHost = normalizeAddress(cfg.WalletGRPCHost, cfg.net.WalletRPCServerPort)
 
 	if !cfg.SoloPool {
 		// Ensure a valid payment method is set.
