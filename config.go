@@ -542,9 +542,9 @@ func loadConfig() (*config, []string, error) {
 	// Set the mining active network.
 	switch cfg.ActiveNet {
 	case chaincfg.TestNet3Params().Name:
-		cfg.net = &mainNetParams
-	case chaincfg.MainNetParams().Name:
 		cfg.net = &testNet3Params
+	case chaincfg.MainNetParams().Name:
+		cfg.net = &mainNetParams
 	case chaincfg.SimNetParams().Name:
 		cfg.net = &simNetParams
 	default:
