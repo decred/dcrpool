@@ -581,8 +581,9 @@ func loadConfig() (*config, []string, error) {
 
 		// Ensure address to collect pool fees is provided.
 		// jessevdk/go-flags does not automatically split the string, so at this
-		// point the first item of the array contains the full string.
-		if len(cfg.PoolFeeAddrs[0]) == 0 {
+		// point either the array is empty, or the first item of the array
+		// contains the full string.
+		if len(cfg.PoolFeeAddrs) == 0 || len(cfg.PoolFeeAddrs[0]) == 0 {
 			str := "%s: the poolfeeaddrs option is not set"
 			err := fmt.Errorf(str, funcName)
 			return nil, nil, err
