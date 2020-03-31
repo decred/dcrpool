@@ -467,16 +467,14 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	if preCfg.ConfigFile != defaultConfigFile {
-		err := flags.NewIniParser(parser).ParseFile(preCfg.ConfigFile)
-		if err != nil {
-			if _, ok := err.(*os.PathError); !ok {
-				fmt.Fprintf(os.Stderr, "error parsing config file: %v\n", err)
-				fmt.Fprintln(os.Stderr, usageMessage)
-				return nil, nil, err
-			}
-			configFileError = err
+	err = flags.NewIniParser(parser).ParseFile(preCfg.ConfigFile)
+	if err != nil {
+		if _, ok := err.(*os.PathError); !ok {
+			fmt.Fprintf(os.Stderr, "error parsing config file: %v\n", err)
+			fmt.Fprintln(os.Stderr, usageMessage)
+			return nil, nil, err
 		}
+		configFileError = err
 	}
 
 	// Parse command line options again to ensure they take precedence.
