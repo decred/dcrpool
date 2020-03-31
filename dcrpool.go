@@ -227,8 +227,8 @@ func main() {
 	// and configures it accordingly.
 	cfg, _, err := loadConfig()
 	if err != nil {
-		fmt.Println(err)
-		return
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 	defer func() {
 		if logRotator != nil {
@@ -239,7 +239,7 @@ func main() {
 	p, err := newPool(cfg)
 	if err != nil {
 		mpLog.Error(err)
-		return
+		os.Exit(1)
 	}
 
 	if cfg.Profile != "" {
