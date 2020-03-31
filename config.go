@@ -36,15 +36,11 @@ const (
 	defaultDBFilename            = "dcrpool.kv"
 	defaultTLSCertFilename       = "dcrpool.cert"
 	defaultTLSKeyFilename        = "dcrpool.key"
-	defaultRPCUser               = "dcrp"
-	defaultRPCPass               = "dcrppass"
-	defaultDcrdRPCHost           = "127.0.0.1:19109"
-	defaultWalletGRPCHost        = "127.0.0.1:51028"
-	defaultPoolFeeAddr           = ""
+	defaultDcrdRPCHost           = "127.0.0.1"
+	defaultWalletGRPCHost        = "127.0.0.1"
 	defaultMaxGenTime            = time.Second * 15
 	defaultPoolFee               = 0.01
 	defaultLastNPeriod           = time.Hour * 24
-	defaultWalletPass            = ""
 	defaultMaxTxFeeReserve       = 0.1
 	defaultSoloPool              = false
 	defaultGUIPort               = 8080
@@ -119,7 +115,7 @@ type config struct {
 	DCR1Port              uint32        `long:"dcr1port" ini-name:"dcr1port" description:"Obelisk DCR1 connection port."`
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
-	net                   *chaincfg.Params
+	net                   *params
 }
 
 // serviceOptions defines the configuration options for the daemon as a service on
@@ -295,6 +291,16 @@ func cleanAndExpandPath(path string) string {
 	return filepath.Join(homeDir, path)
 }
 
+// normalizeAddress returns addr with the passed default port appended if
+// there is not already a port specified.
+func normalizeAddress(addr, defaultPort string) string {
+	_, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return net.JoinHostPort(addr, defaultPort)
+	}
+	return addr
+}
+
 // loadConfig initializes and parses the config using a config file and command
 // line options.
 //
@@ -316,18 +322,14 @@ func loadConfig() (*config, []string, error) {
 		DBFile:                defaultDBFile,
 		DebugLevel:            defaultLogLevel,
 		LogDir:                defaultLogDir,
-		RPCUser:               defaultRPCUser,
-		RPCPass:               defaultRPCPass,
 		DcrdRPCHost:           defaultDcrdRPCHost,
 		WalletGRPCHost:        defaultWalletGRPCHost,
-		PoolFeeAddrs:          []string{defaultPoolFeeAddr},
 		PoolFee:               defaultPoolFee,
 		MaxTxFeeReserve:       defaultMaxTxFeeReserve,
 		MaxGenTime:            defaultMaxGenTime,
 		ActiveNet:             defaultActiveNet,
 		PaymentMethod:         defaultPaymentMethod,
 		LastNPeriod:           defaultLastNPeriod,
-		WalletPass:            defaultWalletPass,
 		MinPayment:            defaultMinPayment,
 		SoloPool:              defaultSoloPool,
 		GUIPort:               defaultGUIPort,
@@ -467,16 +469,14 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	if preCfg.ConfigFile != defaultConfigFile {
-		err := flags.NewIniParser(parser).ParseFile(preCfg.ConfigFile)
-		if err != nil {
-			if _, ok := err.(*os.PathError); !ok {
-				fmt.Fprintf(os.Stderr, "error parsing config file: %v\n", err)
-				fmt.Fprintln(os.Stderr, usageMessage)
-				return nil, nil, err
-			}
-			configFileError = err
+	err = flags.NewIniParser(parser).ParseFile(preCfg.ConfigFile)
+	if err != nil {
+		if _, ok := err.(*os.PathError); !ok {
+			fmt.Fprintf(os.Stderr, "error parsing config file: %v\n", err)
+			fmt.Fprintln(os.Stderr, usageMessage)
+			return nil, nil, err
 		}
+		configFileError = err
 	}
 
 	// Parse command line options again to ensure they take precedence.
@@ -499,6 +499,20 @@ func loadConfig() (*config, []string, error) {
 	// Ensure the admin password is set.
 	if cfg.AdminPass == "" {
 		str := "%s: the adminpass option is not set"
+		err := fmt.Errorf(str, funcName)
+		return nil, nil, err
+	}
+
+	// Ensure the dcrd rpc username is set.
+	if cfg.RPCUser == "" {
+		str := "%s: the rpcuser option is not set"
+		err := fmt.Errorf(str, funcName)
+		return nil, nil, err
+	}
+
+	// Ensure the dcrd rpc password is set.
+	if cfg.RPCPass == "" {
+		str := "%s: the rpcpass option is not set"
 		err := fmt.Errorf(str, funcName)
 		return nil, nil, err
 	}
@@ -528,15 +542,19 @@ func loadConfig() (*config, []string, error) {
 	// Set the mining active network.
 	switch cfg.ActiveNet {
 	case chaincfg.TestNet3Params().Name:
-		cfg.net = chaincfg.TestNet3Params()
+		cfg.net = &mainNetParams
 	case chaincfg.MainNetParams().Name:
-		cfg.net = chaincfg.MainNetParams()
+		cfg.net = &testNet3Params
 	case chaincfg.SimNetParams().Name:
-		cfg.net = chaincfg.SimNetParams()
+		cfg.net = &simNetParams
 	default:
 		return nil, nil, fmt.Errorf("unknown network provided %v",
 			cfg.ActiveNet)
 	}
+
+	// Add default ports for the active network if there are no ports specified.
+	cfg.DcrdRPCHost = normalizeAddress(cfg.DcrdRPCHost, cfg.net.DcrdRPCServerPort)
+	cfg.WalletGRPCHost = normalizeAddress(cfg.WalletGRPCHost, cfg.net.WalletRPCServerPort)
 
 	if !cfg.SoloPool {
 		// Ensure a valid payment method is set.
@@ -546,6 +564,33 @@ func loadConfig() (*config, []string, error) {
 			return nil, nil, err
 		}
 
+		// Ensure pool fee is valid.
+		if cfg.PoolFee < 0 || cfg.PoolFee > 1 {
+			str := "%s: poolfee should be between 0 and 1"
+			err := fmt.Errorf(str, funcName)
+			return nil, nil, err
+		}
+
+		// Ensure the password to unlock the wallet is provided.
+		// Wallet password is required to pay dividends to pool contributors.
+		if cfg.WalletPass == "" {
+			str := "%s: the walletpass option is not set"
+			err := fmt.Errorf(str, funcName)
+			return nil, nil, err
+		}
+
+		// Ensure address to collect pool fees is provided.
+		// jessevdk/go-flags does not automatically split the string, so at this
+		// point either the array is empty, or the first item of the array
+		// contains the full string.
+		if len(cfg.PoolFeeAddrs) == 0 || len(cfg.PoolFeeAddrs[0]) == 0 {
+			str := "%s: the poolfeeaddrs option is not set"
+			err := fmt.Errorf(str, funcName)
+			return nil, nil, err
+		}
+
+		// Split the string into an array, and parse pool fee addresses.
+		cfg.PoolFeeAddrs = strings.Split(cfg.PoolFeeAddrs[0], ",")
 		for _, pAddr := range cfg.PoolFeeAddrs {
 			addr, err := dcrutil.DecodeAddress(pAddr, cfg.net)
 			if err != nil {
