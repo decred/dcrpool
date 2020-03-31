@@ -114,11 +114,13 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				close(msg.Done)
 				continue
 			}
-			err = cs.cfg.PayDividends(header.Height)
-			if err != nil {
-				log.Errorf("unable to process payments: %v", err)
-				close(msg.Done)
-				continue
+			if !cs.cfg.SoloPool {
+				err = cs.cfg.PayDividends(header.Height)
+				if err != nil {
+					log.Errorf("unable to process payments: %v", err)
+					close(msg.Done)
+					continue
+				}
 			}
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit
