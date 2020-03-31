@@ -552,7 +552,7 @@ func loadConfig() (*config, []string, error) {
 			cfg.ActiveNet)
 	}
 
-	// Add default ports for the active network if there's no ports specified
+	// Add default ports for the active network if there are no ports specified.
 	cfg.DcrdRPCHost = normalizeAddress(cfg.DcrdRPCHost, cfg.net.DcrdRPCServerPort)
 	cfg.WalletGRPCHost = normalizeAddress(cfg.WalletGRPCHost, cfg.net.WalletRPCServerPort)
 
@@ -564,15 +564,15 @@ func loadConfig() (*config, []string, error) {
 			return nil, nil, err
 		}
 
-		// Ensure pool fee is valid
+		// Ensure pool fee is valid.
 		if cfg.PoolFee < 0 || cfg.PoolFee > 1 {
 			str := "%s: poolfee should be between 0 and 1"
 			err := fmt.Errorf(str, funcName)
 			return nil, nil, err
 		}
 
-		// Ensure the password to unlock the wallet.
-		// Needed to pay dividends to pool contributors.
+		// Ensure the password to unlock the wallet is provided.
+		// Wallet password is required to pay dividends to pool contributors.
 		if cfg.WalletPass == "" {
 			str := "%s: the walletpass option is not set"
 			err := fmt.Errorf(str, funcName)
@@ -586,7 +586,7 @@ func loadConfig() (*config, []string, error) {
 			return nil, nil, err
 		}
 
-		// Parse pool fee addresses
+		// Parse pool fee addresses.
 		cfg.PoolFeeAddrs = strings.Split(cfg.PoolFeeAddrs[0], ",")
 		for _, pAddr := range cfg.PoolFeeAddrs {
 			addr, err := dcrutil.DecodeAddress(pAddr, cfg.net)
