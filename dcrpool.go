@@ -227,6 +227,7 @@ func main() {
 	// and configures it accordingly.
 	cfg, _, err := loadConfig()
 	if err != nil {
+		fmt.Println(err)
 		return
 	}
 	defer func() {
