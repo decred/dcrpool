@@ -349,9 +349,14 @@ func ParseSubscribeResponse(resp *Response) (string, string, string, uint64, err
 // SetDifficultyNotification creates a set difficulty notification message.
 func SetDifficultyNotification(difficulty *big.Rat) *Request {
 	diff, _ := difficulty.Float64()
+	iDiff := uint64(diff)
+	if iDiff == 0 {
+		iDiff = 1
+	}
+
 	return &Request{
 		Method: SetDifficulty,
-		Params: []uint64{uint64(diff)},
+		Params: []uint64{iDiff},
 	}
 }
 
