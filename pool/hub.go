@@ -619,18 +619,6 @@ func (h *Hub) FetchMinedWork() ([]*AcceptedWork, error) {
 	return ListMinedWork(h.db)
 }
 
-// FetchPoolHashRate returns the hash rate of the pool.
-func (h *Hub) FetchPoolHashRate() (*big.Rat, map[string][]*ClientInfo) {
-	clientInfo := h.FetchClientInfo()
-	poolHashRate := new(big.Rat).SetInt64(0)
-	for _, clients := range clientInfo {
-		for _, miner := range clients {
-			poolHashRate = poolHashRate.Add(poolHashRate, miner.HashRate)
-		}
-	}
-	return poolHashRate, clientInfo
-}
-
 // Quota details the portion of mining rewrds due an account for work
 // contributed to the pool.
 type Quota struct {

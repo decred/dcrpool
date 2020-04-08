@@ -9,16 +9,14 @@ import (
 
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/sessions"
-
-	"github.com/decred/dcrpool/pool"
 )
 
 // adminPageData contains all of the necessary information to render the admin
 // template.
 type adminPageData struct {
-	HeaderData    headerData
-	PoolStatsData poolStatsData
-	Connections   map[string][]*pool.ClientInfo
+	HeaderData       headerData
+	PoolStatsData    poolStatsData
+	ConnectedClients map[string][]client
 }
 
 // AdminPage is the handler for "GET /admin". If the current session is
@@ -31,6 +29,8 @@ func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
+
+	clients := ui.cache.getClients()
 
 	pageData := adminPageData{
 		HeaderData: headerData{
@@ -47,7 +47,7 @@ func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
 			PoolFee:           ui.cfg.PoolFee,
 			SoloPool:          ui.cfg.SoloPool,
 		},
-		Connections: ui.cfg.FetchClientInfo(),
+		ConnectedClients: clients,
 	}
 
 	ui.renderTemplate(w, "admin", pageData)

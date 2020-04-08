@@ -11,6 +11,14 @@ import (
 	"github.com/decred/dcrpool/pool"
 )
 
+// client represents a mining client. It is json annotated so it can easily be
+// encoded and sent over a websocket or pagination request.
+type client struct {
+	Miner    string `json:"miner"`
+	IP       string `json:"ip"`
+	HashRate string `json:"hashrate"`
+}
+
 // minedWork represents a block mined by the pool. It is json annotated so it
 // can easily be encoded and sent over a websocket or pagination request.
 type minedWork struct {
@@ -46,28 +54,33 @@ type Cache struct {
 
 	poolHash    string
 	poolHashMtx sync.RWMutex
+
+	clients    map[string][]client
+	clientsMtx sync.RWMutex
 }
 
 // InitCache initialises and returns a cache for use in the GUI.
-func InitCache(work []*pool.AcceptedWork, quotas []*pool.Quota, poolHash *big.Rat, blockExplorerURL string) *Cache {
+func InitCache(work []*pool.AcceptedWork, quotas []*pool.Quota,
+	clients map[string][]*pool.ClientInfo, blockExplorerURL string) *Cache {
+
 	cache := Cache{blockExplorerURL: blockExplorerURL}
 	cache.updateMinedWork(work)
 	cache.updateQuotas(quotas)
-	cache.updateHashrate(poolHash)
+	cache.updateClients(clients)
 	return &cache
 }
 
+// updateMinedWork refreshes the cached list of blocks mined by the pool.
 func (c *Cache) updateMinedWork(work []*pool.AcceptedWork) {
-	// Parse and format mined work by the pool.
-	workData := make([]minedWork, 0)
-	for _, work := range work {
+	workData := make([]minedWork, 0, len(work))
+	for _, w := range work {
 		workData = append(workData, minedWork{
-			BlockHeight: work.Height,
-			BlockURL:    blockURL(c.blockExplorerURL, work.Height),
-			MinedBy:     truncateAccountID(work.MinedBy),
-			Miner:       work.Miner,
-			AccountID:   work.MinedBy,
-			Confirmed:   work.Confirmed,
+			BlockHeight: w.Height,
+			BlockURL:    blockURL(c.blockExplorerURL, w.Height),
+			MinedBy:     truncateAccountID(w.MinedBy),
+			Miner:       w.Miner,
+			AccountID:   w.MinedBy,
+			Confirmed:   w.Confirmed,
 		})
 	}
 
@@ -76,14 +89,16 @@ func (c *Cache) updateMinedWork(work []*pool.AcceptedWork) {
 	c.minedWorkMtx.Unlock()
 }
 
+// getMinedWork retrieves the cached list of blocks mined by the pool.
 func (c *Cache) getMinedWork() []minedWork {
 	c.minedWorkMtx.RLock()
 	defer c.minedWorkMtx.RUnlock()
 	return c.minedWork
 }
 
+// updateQuotas refreshes the cached list of pending dividend payments.
 func (c *Cache) updateQuotas(quotas []*pool.Quota) {
-	quotaData := make([]workQuota, 0)
+	quotaData := make([]workQuota, 0, len(quotas))
 	for _, quota := range quotas {
 		quotaData = append(quotaData, workQuota{
 			AccountID: truncateAccountID(quota.AccountID),
@@ -96,20 +111,48 @@ func (c *Cache) updateQuotas(quotas []*pool.Quota) {
 	c.workQuotasMtx.Unlock()
 }
 
+// updateQuotas retrieves the cached list of pending dividend payments.
 func (c *Cache) getQuotas() []workQuota {
 	c.workQuotasMtx.RLock()
 	defer c.workQuotasMtx.RUnlock()
 	return c.workQuotas
 }
 
-func (c *Cache) updateHashrate(poolHash *big.Rat) {
-	c.poolHashMtx.Lock()
-	c.poolHash = hashString(poolHash)
-	c.poolHashMtx.Unlock()
-}
-
+// getPoolHash retrieves the total hashrate of all connected mining clients.
 func (c *Cache) getPoolHash() string {
 	c.poolHashMtx.RLock()
 	defer c.poolHashMtx.RUnlock()
 	return c.poolHash
+}
+
+// updateClients will refresh the cached list of connected clients, as well as
+// recalculating the total hashrate for all connected clients.
+func (c *Cache) updateClients(clients map[string][]*pool.ClientInfo) {
+	clientInfo := make(map[string][]client)
+	poolHashRate := new(big.Rat).SetInt64(0)
+	for account, c2 := range clients {
+		for _, c := range c2 {
+			clientInfo[account] = append(clientInfo[account], client{
+				Miner:    c.Miner,
+				IP:       c.IP,
+				HashRate: hashString(c.HashRate),
+			})
+			poolHashRate = poolHashRate.Add(poolHashRate, c.HashRate)
+		}
+	}
+
+	c.poolHashMtx.Lock()
+	c.poolHash = hashString(poolHashRate)
+	c.poolHashMtx.Unlock()
+
+	c.clientsMtx.Lock()
+	c.clients = clientInfo
+	c.clientsMtx.Unlock()
+}
+
+// getClients retrieves the cached list of connected clients.
+func (c *Cache) getClients() map[string][]client {
+	c.clientsMtx.RLock()
+	defer c.clientsMtx.RUnlock()
+	return c.clients
 }

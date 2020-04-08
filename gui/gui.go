@@ -10,7 +10,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"html/template"
-	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -75,19 +74,14 @@ type Config struct {
 	// FetchWorkQuotas returns the reward distribution to pool accounts
 	// based on work contributed per the payment scheme used by the pool.
 	FetchWorkQuotas func() ([]*pool.Quota, error)
-	// FetchPoolHashRate returns the hash rate of the pool.
-	FetchPoolHashRate func() (*big.Rat, map[string][]*pool.ClientInfo)
+	// FetchClientInfo returns details about all connected pool clients.
+	FetchClientInfo func() map[string][]*pool.ClientInfo
 	// BackupDB streams a backup of the database over an http response.
 	BackupDB func(w http.ResponseWriter) error
-	// FetchClientInfo returns connection details about all pool clients.
-	FetchClientInfo func() map[string][]*pool.ClientInfo
 	// AccountExists checks if the provided account id references a pool account.
 	AccountExists func(accountID string) bool
 	// FetchPaymentsForAccount returns a list or payments made to the provided address.
 	FetchPaymentsForAccount func(id string) ([]*pool.Payment, error)
-	// FetchAccountClientInfo returns all clients belonging to the provided
-	// account id.
-	FetchAccountClientInfo func(accountID string) []*pool.ClientInfo
 }
 
 // GUI represents the the mining pool user interface.
@@ -153,6 +147,7 @@ func (ui *GUI) route() {
 	// Paginated endpoints allow the GUI to request pages of data.
 	apiRouter.HandleFunc("/blocks", ui.PaginatedBlocks).Methods("GET")
 	apiRouter.HandleFunc("/account/{accountID}/blocks", ui.PaginatedBlocksByAccount).Methods("GET")
+	apiRouter.HandleFunc("/account/{accountID}/clients", ui.PaginatedClientsByAccount).Methods("GET")
 
 	// Websocket endpoint allows the GUI to receive updated values.
 	apiRouter.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")
@@ -223,7 +218,6 @@ func (ui *GUI) loadTemplates() error {
 	}
 
 	httpTemplates := template.New("template").Funcs(template.FuncMap{
-		"hashString":        hashString,
 		"upper":             strings.ToUpper,
 		"ratToPercent":      ratToPercent,
 		"floatToPercent":    floatToPercent,
@@ -333,9 +327,9 @@ func (ui *GUI) Run(ctx context.Context) {
 		return
 	}
 
-	poolHash, _ := ui.cfg.FetchPoolHashRate()
+	clients := ui.cfg.FetchClientInfo()
 
-	ui.cache = InitCache(work, quotas, poolHash, ui.cfg.BlockExplorerURL)
+	ui.cache = InitCache(work, quotas, clients, ui.cfg.BlockExplorerURL)
 
 	// Use a ticker to periodically update cached data and push updates through
 	// any established websockets
@@ -367,8 +361,8 @@ func (ui *GUI) Run(ctx context.Context) {
 						ui.cache.updateQuotas(quotas)
 					}
 
-					poolHash, _ := ui.cfg.FetchPoolHashRate()
-					ui.cache.updateHashrate(poolHash)
+					clients := ui.cfg.FetchClientInfo()
+					ui.cache.updateClients(clients)
 
 					ticks = 0
 				}

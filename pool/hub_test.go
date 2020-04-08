@@ -203,20 +203,6 @@ func testHub(t *testing.T, db *bolt.DB) {
 			"of 1, got %d", len(cInfo))
 	}
 
-	// Ensure there are no connected clients for test accounts
-	aInfo := hub.FetchAccountClientInfo(xID)
-	if len(aInfo) != 0 {
-		t.Fatalf("[FetchClientInfo] expected a client info size of 0"+
-			" for account x, got %d", len(cInfo))
-	}
-
-	// Ensure connected clients do not have an associated account.
-	aInfo = hub.FetchAccountClientInfo("")
-	if len(aInfo) != 1 {
-		t.Fatalf("[FetchClientInfo] expected a client info size "+
-			"of 1 for clients with no associated account, got %d", len(cInfo))
-	}
-
 	// Empty the share bucket.
 	err = emptyBucket(db, shareBkt)
 	if err != nil {

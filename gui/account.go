@@ -18,7 +18,7 @@ type accountPageData struct {
 	HeaderData       headerData
 	MinedWork        []minedWork
 	Payments         []*pool.Payment
-	Clients          []*pool.ClientInfo
+	ConnectedClients []client
 	AccountID        string
 	Address          string
 	BlockExplorerURL string
@@ -66,6 +66,8 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	clients := ui.cache.getClients()[accountID]
+
 	data := &accountPageData{
 		HeaderData: headerData{
 			CSRF:        csrf.TemplateField(r),
@@ -74,7 +76,7 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 		},
 		MinedWork:        recentWork,
 		Payments:         payments,
-		Clients:          ui.cfg.FetchAccountClientInfo(accountID),
+		ConnectedClients: clients,
 		AccountID:        accountID,
 		Address:          address,
 		BlockExplorerURL: ui.cfg.BlockExplorerURL,

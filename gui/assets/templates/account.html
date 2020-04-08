@@ -115,29 +115,29 @@
         <div class="col-lg-6 col-12 p-3">
             <div class="block__content">
                 <h1>Connected Clients</h1>
-                <div class="overflow-auto">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Miner</th>
+                            <th>Hash Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="account-clients-table">
+                        {{ range .ConnectedClients }}
+                        <tr>
+                            <td>{{.Miner}}</td>
+                            <td>{{.HashRate}}</td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td colspan="100%"><span class="no-data">No connected clients</span></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
 
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Miner</th>
-                                <th>Hash Rate</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {{ range .Clients }}
-                            <tr>
-                                <td>{{.Miner}}</td>
-                                <td>{{hashString .HashRate}}</td>
-                            </tr>
-                            {{else}}
-                            <tr>
-                                <td colspan="100%"><span class="no-data">No connected clients</span></td>
-                            </tr>
-                            {{end}}
-                        </tbody>
-                    </table>
-                </div>
+                <div id="account-clients-page-select" class="page-select"></div>
+
             </div>
         </div>
 

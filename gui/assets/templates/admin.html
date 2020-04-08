@@ -41,13 +41,13 @@
                             <th>Miner</th>
                             <th>Hash Rate</th>
                         </tr>
-                        {{range $accountID, $clients := .Connections}}
+                        {{range $accountID, $clients := .ConnectedClients}}
                         {{range $client := $clients}}
                         <tr>
                             <td><span class="dcr-label">{{$accountID}}</span></td>
                             <td>{{$client.IP}}</td>
                             <td>{{$client.Miner}}</td>
-                            <td>{{hashString $client.HashRate}}</td>
+                            <td>{{$client.HashRate}}</td>
                         </tr>
                         {{end}}
                         {{else}}

@@ -47,3 +47,28 @@ if ( $('#blocks-by-account-page-select').length ) {
         }
     });
 };
+
+if ( $('#account-clients-page-select').length ) {
+    $('#account-clients-page-select').pagination({
+        dataSource: "/account/" + accountID + "/clients",
+        hideWhenLessThanOnePage: true,
+        nextText: '<div class="pagination-arrow pagination-arrow-right"></div>',
+        prevText: '<div class="pagination-arrow pagination-arrow-left"></div>',
+        locator: "clients",
+        totalNumberLocator: function(response) {
+            return response.count;
+        },
+        callback: function(data) {
+            var html = '';
+
+            if (data.length > 0) {
+                $.each(data, function(_, item){
+                    html += '<tr><td>' + item.miner + '</td><td>' + item.hashrate + '</td></tr>';
+                });
+            } else {
+                html += '<tr><td colspan="100%"><span class="no-data">No connected clients</span></td></tr>';
+            }
+            $('#account-clients-table').html(html);
+        }
+    });
+};
