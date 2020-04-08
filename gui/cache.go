@@ -61,7 +61,7 @@ type Cache struct {
 
 // InitCache initialises and returns a cache for use in the GUI.
 func InitCache(work []*pool.AcceptedWork, quotas []*pool.Quota,
-	clients map[string][]*pool.ClientInfo, blockExplorerURL string) *Cache {
+	clients []*pool.Client, blockExplorerURL string) *Cache {
 
 	cache := Cache{blockExplorerURL: blockExplorerURL}
 	cache.updateMinedWork(work)
@@ -127,18 +127,18 @@ func (c *Cache) getPoolHash() string {
 
 // updateClients will refresh the cached list of connected clients, as well as
 // recalculating the total hashrate for all connected clients.
-func (c *Cache) updateClients(clients map[string][]*pool.ClientInfo) {
-	clientInfo := make(map[string][]client)
+func (c *Cache) updateClients(clients []*pool.Client) {
+	clientInfo := make(map[string][]client, 0)
 	poolHashRate := new(big.Rat).SetInt64(0)
-	for account, c2 := range clients {
-		for _, c := range c2 {
-			clientInfo[account] = append(clientInfo[account], client{
-				Miner:    c.Miner,
-				IP:       c.IP,
-				HashRate: hashString(c.HashRate),
-			})
-			poolHashRate = poolHashRate.Add(poolHashRate, c.HashRate)
-		}
+	for _, c := range clients {
+		clientHashRate := c.FetchHashRate()
+		accountID := c.FetchAccountID()
+		clientInfo[accountID] = append(clientInfo[accountID], client{
+			Miner:    c.FetchMinerType(),
+			IP:       c.FetchIPAddr(),
+			HashRate: hashString(clientHashRate),
+		})
+		poolHashRate = poolHashRate.Add(poolHashRate, clientHashRate)
 	}
 
 	c.poolHashMtx.Lock()

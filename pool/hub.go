@@ -562,53 +562,17 @@ func (h *Hub) Run(ctx context.Context) {
 	h.shutdown()
 }
 
-// ClientInfo represents client miner information.
-type ClientInfo struct {
-	Miner    string
-	IP       string
-	HashRate *big.Rat
-}
-
 // FetchClientInfo returns connection details about all pool clients.
-func (h *Hub) FetchClientInfo() map[string][]*ClientInfo {
-	clientInfo := make(map[string][]*ClientInfo)
+func (h *Hub) FetchClientInfo() []*Client {
+	allClients := make([]*Client, 0)
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
 		for _, client := range endpoint.clients {
-			hash := client.fetchHashRate()
-			clientInfo[client.account] = append(clientInfo[client.account],
-				&ClientInfo{
-					Miner:    endpoint.miner,
-					IP:       client.addr.String(),
-					HashRate: hash,
-				})
+			allClients = append(allClients, client)
 		}
 		endpoint.clientsMtx.Unlock()
 	}
-	return clientInfo
-}
-
-// FetchAccountClientInfo returns all clients belonging to the provided
-// account id.
-func (h *Hub) FetchAccountClientInfo(accountID string) []*ClientInfo {
-	info := make([]*ClientInfo, 0)
-	for _, endpoint := range h.endpoints {
-		endpoint.clientsMtx.Lock()
-		for _, client := range endpoint.clients {
-			if client.account == accountID {
-				client.hashRateMtx.RLock()
-				hash := client.hashRate
-				client.hashRateMtx.RUnlock()
-				info = append(info, &ClientInfo{
-					Miner:    endpoint.miner,
-					IP:       client.addr.String(),
-					HashRate: hash,
-				})
-			}
-		}
-		endpoint.clientsMtx.Unlock()
-	}
-	return info
+	return allClients
 }
 
 // FetchMinedWork returns work data associated with all blocks mined by the pool
