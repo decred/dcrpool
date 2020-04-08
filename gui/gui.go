@@ -74,10 +74,10 @@ type Config struct {
 	// FetchWorkQuotas returns the reward distribution to pool accounts
 	// based on work contributed per the payment scheme used by the pool.
 	FetchWorkQuotas func() ([]*pool.Quota, error)
-	// FetchClientInfo returns details about all connected pool clients.
-	FetchClientInfo func() []*pool.Client
 	// BackupDB streams a backup of the database over an http response.
 	BackupDB func(w http.ResponseWriter) error
+	// FetchClientInfo returns details about all connected pool clients.
+	FetchClientInfo func() []*pool.Client
 	// AccountExists checks if the provided account id references a pool account.
 	AccountExists func(accountID string) bool
 	// FetchPaymentsForAccount returns a list or payments made to the provided address.
@@ -122,35 +122,35 @@ func (ui *GUI) route() {
 
 	// Use a separate router without rate limiting (or other restrictions) for
 	// static assets.
-	assetRouter := ui.router.PathPrefix("/assets").Subrouter()
+	assetsRouter := ui.router.PathPrefix("/assets").Subrouter()
 
 	assetsDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "assets/public/"))
-	assetRouter.PathPrefix("/").Handler(http.StripPrefix("/assets",
+	assetsRouter.PathPrefix("/").Handler(http.StripPrefix("/assets",
 		http.FileServer(assetsDir)))
 
 	// All other routes have rate limiting and CSRF protection applied.
-	apiRouter := ui.router.PathPrefix("/").Subrouter()
+	guiRouter := ui.router.PathPrefix("/").Subrouter()
 
 	// sessionMiddleware must be run before rateLimitMiddleware.
-	apiRouter.Use(ui.sessionMiddleware)
-	apiRouter.Use(ui.rateLimitMiddleware)
-	apiRouter.Use(csrf.Protect(ui.cfg.CSRFSecret, csrf.Secure(true)))
+	guiRouter.Use(ui.sessionMiddleware)
+	guiRouter.Use(ui.rateLimitMiddleware)
+	guiRouter.Use(csrf.Protect(ui.cfg.CSRFSecret, csrf.Secure(true)))
 
-	apiRouter.HandleFunc("/", ui.Homepage).Methods("GET")
-	apiRouter.HandleFunc("/account", ui.Account).Methods("GET")
-	apiRouter.HandleFunc("/account_exist", ui.IsPoolAccount).Methods("GET")
-	apiRouter.HandleFunc("/admin", ui.AdminPage).Methods("GET")
-	apiRouter.HandleFunc("/admin", ui.AdminLogin).Methods("POST")
-	apiRouter.HandleFunc("/backup", ui.DownloadDatabaseBackup).Methods("POST")
-	apiRouter.HandleFunc("/logout", ui.AdminLogout).Methods("POST")
+	guiRouter.HandleFunc("/", ui.Homepage).Methods("GET")
+	guiRouter.HandleFunc("/account", ui.Account).Methods("GET")
+	guiRouter.HandleFunc("/account_exist", ui.IsPoolAccount).Methods("GET")
+	guiRouter.HandleFunc("/admin", ui.AdminPage).Methods("GET")
+	guiRouter.HandleFunc("/admin", ui.AdminLogin).Methods("POST")
+	guiRouter.HandleFunc("/backup", ui.DownloadDatabaseBackup).Methods("POST")
+	guiRouter.HandleFunc("/logout", ui.AdminLogout).Methods("POST")
 
 	// Paginated endpoints allow the GUI to request pages of data.
-	apiRouter.HandleFunc("/blocks", ui.PaginatedBlocks).Methods("GET")
-	apiRouter.HandleFunc("/account/{accountID}/blocks", ui.PaginatedBlocksByAccount).Methods("GET")
-	apiRouter.HandleFunc("/account/{accountID}/clients", ui.PaginatedClientsByAccount).Methods("GET")
+	guiRouter.HandleFunc("/blocks", ui.PaginatedBlocks).Methods("GET")
+	guiRouter.HandleFunc("/account/{accountID}/blocks", ui.PaginatedBlocksByAccount).Methods("GET")
+	guiRouter.HandleFunc("/account/{accountID}/clients", ui.PaginatedClientsByAccount).Methods("GET")
 
 	// Websocket endpoint allows the GUI to receive updated values.
-	apiRouter.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")
+	guiRouter.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")
 }
 
 // renderTemplate executes the provided template.

@@ -128,7 +128,7 @@ func (c *Cache) getPoolHash() string {
 // updateClients will refresh the cached list of connected clients, as well as
 // recalculating the total hashrate for all connected clients.
 func (c *Cache) updateClients(clients []*pool.Client) {
-	clientInfo := make(map[string][]client, 0)
+	clientInfo := make(map[string][]client)
 	poolHashRate := new(big.Rat).SetInt64(0)
 	for _, c := range clients {
 		clientHashRate := c.FetchHashRate()

@@ -66,7 +66,11 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get this accounts connected clients (max 10).
 	clients := ui.cache.getClients()[accountID]
+	if len(clients) > 10 {
+		clients = clients[0:10]
+	}
 
 	data := &accountPageData{
 		HeaderData: headerData{
