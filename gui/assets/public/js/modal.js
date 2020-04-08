@@ -48,7 +48,7 @@ $("#account-form").on("submit", function (e) {
         type: $(this).attr('method'),
         data: $(this).serialize(),
         success: function() {
-            window.location.replace("/account/"+address);
+            window.location.replace("/account?address="+address);
         },
         error: function(response) {
             if (response.status === 400 || response.status === 429) {

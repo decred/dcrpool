@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/decred/dcrpool/pool"
+	"github.com/gorilla/mux"
 )
 
 type minedWorkPayload struct {
@@ -21,19 +21,8 @@ type minedWorkPayload struct {
 // parameters pageNumber and pageSize to prepare a json payload describing
 // blocks mined by the pool, as well as the total count of all confirmed blocks.
 func (ui *GUI) PaginatedBlocks(w http.ResponseWriter, r *http.Request) {
-	session, err := getSession(r, ui.cookieStore)
-	if err != nil {
-		log.Errorf("getSession error: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 
-	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
-		w.WriteHeader(http.StatusTooManyRequests)
-		return
-	}
-
-	// Parse request parameters
+	// Parse request parameters.
 	pageNumber, err := strconv.Atoi(r.FormValue("pageNumber"))
 	if err != nil {
 		log.Error(err)
@@ -58,7 +47,7 @@ func (ui *GUI) PaginatedBlocks(w http.ResponseWriter, r *http.Request) {
 	}
 	requestedBlocks := allWork[offset:lastBlock]
 
-	// Prepare json response
+	// Prepare json response.
 	payload := minedWorkPayload{
 		Count:  count,
 		Blocks: requestedBlocks,
@@ -70,29 +59,18 @@ func (ui *GUI) PaginatedBlocks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send json response
+	// Send json response.
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(js)
 }
 
-// PaginatedBlocksByAccount is the handler for "GET /blocks_by_account". It will
-// use parameters pageNumber, pageSize and accountID to prepare a json payload
-// describing blocks mined by the account, as well as the total count of all
-// blocks mined by the account.
+// PaginatedBlocksByAccount is the handler for "GET /account/{accountID}/blocks".
+// It will use parameters pageNumber, pageSize and accountID to prepare a json
+// payload describing blocks mined by the account, as well as the total count of
+// all blocks mined by the account.
 func (ui *GUI) PaginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) {
-	session, err := getSession(r, ui.cookieStore)
-	if err != nil {
-		log.Errorf("getSession error: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 
-	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
-		w.WriteHeader(http.StatusTooManyRequests)
-		return
-	}
-
-	// Parse request parameters
+	// Parse request parameters.
 	pageNumber, err := strconv.Atoi(r.FormValue("pageNumber"))
 	if err != nil {
 		log.Error(err)
@@ -106,12 +84,12 @@ func (ui *GUI) PaginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	accountID := r.FormValue("accountID")
+	accountID := mux.Vars(r)["accountID"]
 
 	offset := (pageNumber - 1) * pageSize
 	lastBlock := offset + pageSize
 
-	// Get all blocks mined by this account
+	// Get all blocks mined by this account.
 	work := make([]minedWork, 0)
 	allWork := ui.cache.getMinedWork()
 	for _, v := range allWork {
@@ -126,7 +104,7 @@ func (ui *GUI) PaginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 	}
 	requestedBlocks := work[offset:lastBlock]
 
-	// Prepare json response
+	// Prepare json response.
 	payload := minedWorkPayload{
 		Count:  count,
 		Blocks: requestedBlocks,
@@ -138,7 +116,7 @@ func (ui *GUI) PaginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Send json response
+	// Send json response.
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(js)
 }

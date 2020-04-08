@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/csrf"
+	"github.com/gorilla/sessions"
 
 	"github.com/decred/dcrpool/pool"
 )
@@ -24,17 +25,7 @@ type adminPageData struct {
 // authenticated as an admin, the admin.html template is rendered, otherwise
 // returns a redirection to the homepage.
 func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
-	session, err := getSession(r, ui.cookieStore)
-	if err != nil {
-		log.Errorf("getSession error: %v", err)
-		http.Error(w, "Session error", http.StatusInternalServerError)
-		return
-	}
-
-	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
-		http.Error(w, "Request limit exceeded", http.StatusTooManyRequests)
-		return
-	}
+	session := r.Context().Value(sessionKey).(*sessions.Session)
 
 	if session.Values["IsAdmin"] != true {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -66,17 +57,7 @@ func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
 // supplied, the session is authenticated and a "200 OK" response is returned,
 // otherwise a "401 Unauthorized" response is returned.
 func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
-	session, err := getSession(r, ui.cookieStore)
-	if err != nil {
-		log.Errorf("getSession error: %v", err)
-		http.Error(w, "Session error", http.StatusInternalServerError)
-		return
-	}
-
-	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
-		http.Error(w, "Request limit exceeded", http.StatusTooManyRequests)
-		return
-	}
+	session := r.Context().Value(sessionKey).(*sessions.Session)
 
 	pass := r.FormValue("password")
 
@@ -87,7 +68,7 @@ func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	session.Values["IsAdmin"] = true
-	err = session.Save(r, w)
+	err := session.Save(r, w)
 	if err != nil {
 		log.Errorf("unable to save session: %v", err)
 		return
@@ -100,15 +81,10 @@ func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
 // removed from the current session and the request is redirected to the
 // homepage handler.
 func (ui *GUI) AdminLogout(w http.ResponseWriter, r *http.Request) {
-	session, err := getSession(r, ui.cookieStore)
-	if err != nil {
-		log.Errorf("getSession error: %v", err)
-		http.Error(w, "Session error", http.StatusInternalServerError)
-		return
-	}
+	session := r.Context().Value(sessionKey).(*sessions.Session)
 
 	session.Values["IsAdmin"] = false
-	err = session.Save(r, w)
+	err := session.Save(r, w)
 	if err != nil {
 		log.Errorf("unable to save session: %v", err)
 		return
@@ -121,24 +97,14 @@ func (ui *GUI) AdminLogout(w http.ResponseWriter, r *http.Request) {
 // session is authenticated as an admin, a binary representation of the whole
 // database is generated and returned to the client.
 func (ui *GUI) DownloadDatabaseBackup(w http.ResponseWriter, r *http.Request) {
-	session, err := getSession(r, ui.cookieStore)
-	if err != nil {
-		log.Errorf("getSession error: %v", err)
-		http.Error(w, "Session error", http.StatusInternalServerError)
-		return
-	}
-
-	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
-		http.Error(w, "Request limit exceeded", http.StatusTooManyRequests)
-		return
-	}
+	session := r.Context().Value(sessionKey).(*sessions.Session)
 
 	if session.Values["IsAdmin"] != true {
 		http.Error(w, "Not authenticated", http.StatusUnauthorized)
 		return
 	}
 
-	err = ui.cfg.BackupDB(w)
+	err := ui.cfg.BackupDB(w)
 	if err != nil {
 		log.Errorf("Error backing up database: %v", err)
 		http.Error(w, "Error backing up database: "+err.Error(),

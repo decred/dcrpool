@@ -25,7 +25,7 @@ if ( $('#blocks-page-select').length ) {
 
 if ( $('#blocks-by-account-page-select').length ) {
     $('#blocks-by-account-page-select').pagination({
-        dataSource: "/blocks_by_account?accountID=" + accountID + "&",
+        dataSource: "/account/" + accountID + "/blocks",
         hideWhenLessThanOnePage: true,
         nextText: '<div class="pagination-arrow pagination-arrow-right"></div>',
         prevText: '<div class="pagination-arrow pagination-arrow-left"></div>',

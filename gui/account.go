@@ -10,7 +10,6 @@ import (
 
 	"github.com/decred/dcrpool/pool"
 	"github.com/gorilla/csrf"
-	"github.com/gorilla/mux"
 )
 
 // accountPageData contains all of the necessary information to render the
@@ -25,24 +24,12 @@ type accountPageData struct {
 	BlockExplorerURL string
 }
 
-// Account is the handler for "GET /account/{address}". Renders the account
-// template if the provided address is valid and has associated account
-// information, otherwise renders the index template with an appopriate error
-// message.
+// Account is the handler for "GET /account". Renders the account template if
+// a valid address with associated account information is provided,
+// otherwise renders the index template with an appropriate error message.
 func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
-	session, err := getSession(r, ui.cookieStore)
-	if err != nil {
-		log.Errorf("getSession error: %v", err)
-		http.Error(w, "Session error", http.StatusInternalServerError)
-		return
-	}
 
-	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
-		http.Error(w, "Request limit exceeded", http.StatusTooManyRequests)
-		return
-	}
-
-	address := mux.Vars(r)["address"]
+	address := r.FormValue("address")
 	if address == "" {
 		ui.renderIndex(w, r, "No address provided")
 		return
@@ -60,7 +47,7 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the most recently mined blocks by this account (max 10)
+	// Get the most recently mined blocks by this account (max 10).
 	allWork := ui.cache.getMinedWork()
 	recentWork := make([]minedWork, 0)
 	for _, v := range allWork {
@@ -100,17 +87,6 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 // address has an account on the server a "200 OK" response is returned,
 // otherwise a "400 Bad Request" is returned.
 func (ui *GUI) IsPoolAccount(w http.ResponseWriter, r *http.Request) {
-	session, err := getSession(r, ui.cookieStore)
-	if err != nil {
-		log.Errorf("getSession error: %v", err)
-		http.Error(w, "Session error", http.StatusInternalServerError)
-		return
-	}
-
-	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
-		http.Error(w, "Request limit exceeded", http.StatusTooManyRequests)
-		return
-	}
 
 	address := r.FormValue("address")
 

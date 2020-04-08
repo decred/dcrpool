@@ -7,7 +7,6 @@ package gui
 import (
 	"net/http"
 
-	"github.com/decred/dcrpool/pool"
 	"github.com/gorilla/csrf"
 )
 
@@ -31,7 +30,7 @@ type indexPageData struct {
 // Javascript enabled.
 func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError string) {
 
-	// Get the most recent confirmed mined blocks (max 10)
+	// Get the most recent confirmed mined blocks (max 10).
 	allWork := ui.cache.getMinedWork()
 	recentWork := make([]minedWork, 0)
 	for _, v := range allWork {
@@ -70,17 +69,5 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 
 // Homepage is the handler for "GET /". It renders the index template.
 func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
-	session, err := getSession(r, ui.cookieStore)
-	if err != nil {
-		log.Errorf("getSession error: %v", err)
-		http.Error(w, "Session error", http.StatusInternalServerError)
-		return
-	}
-
-	if !ui.cfg.WithinLimit(session.ID, pool.APIClient) {
-		http.Error(w, "Request limit exceeded", http.StatusTooManyRequests)
-		return
-	}
-
 	ui.renderIndex(w, r, "")
 }

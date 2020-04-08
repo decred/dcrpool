@@ -125,34 +125,37 @@ type headerData struct {
 // route configures the http router of the user interface.
 func (ui *GUI) route() {
 	ui.router = mux.NewRouter()
-	ui.router.Use(csrf.Protect(ui.cfg.CSRFSecret, csrf.Secure(true)))
 
-	cssDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "assets/public/css"))
-	ui.router.PathPrefix("/css/").Handler(http.StripPrefix("/css/",
-		http.FileServer(cssDir)))
+	// Use a separate router without rate limiting (or other restrictions) for
+	// static assets.
+	assetRouter := ui.router.PathPrefix("/assets").Subrouter()
 
-	imagesDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "assets/public/images"))
-	ui.router.PathPrefix("/images/").Handler(http.StripPrefix("/images/",
-		http.FileServer(imagesDir)))
+	assetsDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "assets/public/"))
+	assetRouter.PathPrefix("/").Handler(http.StripPrefix("/assets",
+		http.FileServer(assetsDir)))
 
-	jsDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "assets/public/js"))
-	ui.router.PathPrefix("/js/").Handler(http.StripPrefix("/js/",
-		http.FileServer(jsDir)))
+	// All other routes have rate limiting and CSRF protection applied.
+	apiRouter := ui.router.PathPrefix("/").Subrouter()
 
-	ui.router.HandleFunc("/", ui.Homepage).Methods("GET")
-	ui.router.HandleFunc("/account/{address}", ui.Account).Methods("GET")
-	ui.router.HandleFunc("/account_exist", ui.IsPoolAccount).Methods("GET")
-	ui.router.HandleFunc("/admin", ui.AdminPage).Methods("GET")
-	ui.router.HandleFunc("/admin", ui.AdminLogin).Methods("POST")
-	ui.router.HandleFunc("/backup", ui.DownloadDatabaseBackup).Methods("POST")
-	ui.router.HandleFunc("/logout", ui.AdminLogout).Methods("POST")
+	// sessionMiddleware must be run before rateLimitMiddleware.
+	apiRouter.Use(ui.sessionMiddleware)
+	apiRouter.Use(ui.rateLimitMiddleware)
+	apiRouter.Use(csrf.Protect(ui.cfg.CSRFSecret, csrf.Secure(true)))
 
-	// Paginated endpoints allow the GUI to request pages of data
-	ui.router.HandleFunc("/blocks", ui.PaginatedBlocks).Methods("GET")
-	ui.router.HandleFunc("/blocks_by_account", ui.PaginatedBlocksByAccount).Methods("GET")
+	apiRouter.HandleFunc("/", ui.Homepage).Methods("GET")
+	apiRouter.HandleFunc("/account", ui.Account).Methods("GET")
+	apiRouter.HandleFunc("/account_exist", ui.IsPoolAccount).Methods("GET")
+	apiRouter.HandleFunc("/admin", ui.AdminPage).Methods("GET")
+	apiRouter.HandleFunc("/admin", ui.AdminLogin).Methods("POST")
+	apiRouter.HandleFunc("/backup", ui.DownloadDatabaseBackup).Methods("POST")
+	apiRouter.HandleFunc("/logout", ui.AdminLogout).Methods("POST")
 
-	// Websocket endpoint allows the GUI to receive updated values
-	ui.router.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")
+	// Paginated endpoints allow the GUI to request pages of data.
+	apiRouter.HandleFunc("/blocks", ui.PaginatedBlocks).Methods("GET")
+	apiRouter.HandleFunc("/account/{accountID}/blocks", ui.PaginatedBlocksByAccount).Methods("GET")
+
+	// Websocket endpoint allows the GUI to receive updated values.
+	apiRouter.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")
 }
 
 // renderTemplate executes the provided template.
@@ -169,20 +172,6 @@ func (ui *GUI) renderTemplate(w http.ResponseWriter, name string, data interface
 	if err != nil {
 		log.Errorf("unable to render template: %v", err)
 	}
-}
-
-func getSession(r *http.Request, cookieStore *sessions.CookieStore) (*sessions.Session, error) {
-	session, err := cookieStore.Get(r, "session")
-	if err != nil {
-		// "value is not valid" occurs if the CSRF secret changes.
-		// This is common during development (eg. when using the test harness)
-		// but it should not occur in production.
-		if strings.Contains(err.Error(), "securecookie: the value is not valid") {
-			log.Warnf("getSession error: CSRF secret has changed. Generating new session.")
-			err = nil
-		}
-	}
-	return session, err
 }
 
 // NewGUI creates an instance of the user interface.

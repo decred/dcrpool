@@ -58,8 +58,8 @@
   background-position: center;
 }
 .paginationjs .pagination-arrow-right {
-  background-image: url(/images/right_arrow.svg);
+  background-image: url('/assets/images/right_arrow.svg');
 }
 .paginationjs .pagination-arrow-left {
-  background-image: url(/images/left_arrow.svg);
+  background-image: url('/assets/images/left_arrow.svg');
 }

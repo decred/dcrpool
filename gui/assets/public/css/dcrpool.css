@@ -8709,7 +8709,7 @@ https://flickity.metafizzy.co
 .icon-warning {
   width: 20px;
   height: 20px;
-  background-image: url(/images/warning-sign.svg);
+  background-image: url('/assets/images/warning-sign.svg');
   background-repeat: no-repeat;
   opacity: 0;
   transition: all 0.25s;
@@ -8868,7 +8868,7 @@ table td {
 .modalbtn {
   width: 24px;
   height: 24px;
-  background: transparent url('/images/dropdown.svg') 0% 0% no-repeat padding-box;
+  background: transparent url('/assets/images/dropdown.svg') 0% 0% no-repeat padding-box;
   opacity: 1;
   cursor: pointer;
 }
