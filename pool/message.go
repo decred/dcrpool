@@ -350,7 +350,8 @@ func ParseSubscribeResponse(resp *Response) (string, string, string, uint64, err
 func SetDifficultyNotification(difficulty *big.Rat) *Request {
 	diff, _ := difficulty.Float64()
 
-	// Convert the diff to a uint64 to ensure it does not get rounded to zero.
+	// Convert the diff to a uint64 and if the result is zero, set it to one
+	// instead. This ensures that a zero difficulty is never sent to the client.
 	roundDiff := uint64(diff)
 	if roundDiff == 0 {
 		roundDiff = 1
