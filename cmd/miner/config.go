@@ -391,6 +391,9 @@ func loadConfig() (*config, []string, error) {
 		cfg.net = chaincfg.TestNet3Params()
 	case chaincfg.MainNetParams().Name:
 		cfg.net = chaincfg.MainNetParams()
+	default:
+		return nil, nil, fmt.Errorf("unknown network provided %v",
+			cfg.ActiveNet)
 	}
 
 	// Validate format of profile, can be an address:port, or just a port.

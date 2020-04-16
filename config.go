@@ -554,7 +554,7 @@ func loadConfig() (*config, []string, error) {
 
 	// Add default ports for the active network if there are no ports specified.
 	cfg.DcrdRPCHost = normalizeAddress(cfg.DcrdRPCHost, cfg.net.DcrdRPCServerPort)
-	cfg.WalletGRPCHost = normalizeAddress(cfg.WalletGRPCHost, cfg.net.WalletRPCServerPort)
+	cfg.WalletGRPCHost = normalizeAddress(cfg.WalletGRPCHost, cfg.net.WalletGRPCServerPort)
 
 	if !cfg.SoloPool {
 		// Ensure a valid payment method is set.
