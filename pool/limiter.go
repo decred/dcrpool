@@ -13,7 +13,7 @@ import (
 
 // Client types.
 const (
-	APIClient = iota
+	GUIClient = iota
 	PoolClient
 )
 
@@ -26,12 +26,13 @@ const (
 	// clientBurst is the maximum token usage allowed per second,
 	// for pool clients.
 	clientBurst = 5
-	// apiTokenRate is the token refill rate for the api request bucket,
+	// guiTokenRate is the token refill rate for the gui request bucket,
 	// per second.
-	apiTokenRate = 3
-	// apiBurst is the maximum token usage allowed per second,
-	// for api clients.
-	apiBurst = 3
+	guiTokenRate = 3
+	// guiBurst is the maximum token usage allowed per second, for gui clients.
+	// This needs to be >= 5 because a single page can make multiple requests,
+	// eg. pagination, establishing a websocket, AJAX form submissions.
+	guiBurst = 5
 )
 
 // RateLimiter keeps connected clients within their allocated request rates.
@@ -52,8 +53,8 @@ func NewRateLimiter() *RateLimiter {
 func (r *RateLimiter) addRequestLimiter(ip string, clientType int) (*rate.Limiter, error) {
 	var limiter *rate.Limiter
 	switch clientType {
-	case APIClient:
-		limiter = rate.NewLimiter(apiTokenRate, apiBurst)
+	case GUIClient:
+		limiter = rate.NewLimiter(guiTokenRate, guiBurst)
 	case PoolClient:
 		limiter = rate.NewLimiter(clientTokenRate, clientBurst)
 	default:

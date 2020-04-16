@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Decred developers
+// Copyright (c) 2020 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -10,13 +10,11 @@ import (
 	"crypto/tls"
 	"fmt"
 	"html/template"
-	"math/big"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/crypto/acme/autocert"
@@ -71,26 +69,19 @@ type Config struct {
 	// AddPaymentRequest creates a payment request from the provided account
 	// if not already requested.
 	AddPaymentRequest func(addr string) error
-	// FetchMinedWork returns all confirmed blocks mined by the pool.
+	// FetchMinedWork returns all blocks mined by the pool.
 	FetchMinedWork func() ([]*pool.AcceptedWork, error)
 	// FetchWorkQuotas returns the reward distribution to pool accounts
 	// based on work contributed per the payment scheme used by the pool.
 	FetchWorkQuotas func() ([]*pool.Quota, error)
-	// FetchPoolHashRate returns the hash rate of the pool.
-	FetchPoolHashRate func() (*big.Rat, map[string][]*pool.ClientInfo)
 	// BackupDB streams a backup of the database over an http response.
 	BackupDB func(w http.ResponseWriter) error
-	// FetchClientInfo returns connection details about all pool clients.
-	FetchClientInfo func() map[string][]*pool.ClientInfo
+	// FetchClients returns all connected pool clients.
+	FetchClients func() []*pool.Client
 	// AccountExists checks if the provided account id references a pool account.
 	AccountExists func(accountID string) bool
-	// FetchMinedWorkByAccount returns a list of mined work by the provided address.
-	FetchMinedWorkByAccount func(id string) ([]*pool.AcceptedWork, error)
 	// FetchPaymentsForAccount returns a list or payments made to the provided address.
 	FetchPaymentsForAccount func(id string) ([]*pool.Payment, error)
-	// FetchAccountClientInfo returns all clients belonging to the provided
-	// account id.
-	FetchAccountClientInfo func(accountID string) []*pool.ClientInfo
 }
 
 // GUI represents the the mining pool user interface.
@@ -102,17 +93,12 @@ type GUI struct {
 	cookieStore *sessions.CookieStore
 	router      *mux.Router
 	server      *http.Server
-
-	// The following fields cache pool data.
-	minedWork     []minedWork
-	minedWorkMtx  sync.RWMutex
-	workQuotas    []workQuota
-	workQuotasMtx sync.RWMutex
-	poolHash      string
-	poolHashMtx   sync.RWMutex
+	cache       *Cache
 }
 
-type poolStats struct {
+// poolStatsData contains all of the necessary information to render the
+// pool-stats template.
+type poolStatsData struct {
 	SoloPool          bool
 	PoolFee           float64
 	Network           string
@@ -122,35 +108,49 @@ type poolStats struct {
 	PoolHashRate      string
 }
 
+// headerData contains all of the necessary information to render the
+// header template.
+type headerData struct {
+	CSRF        template.HTML
+	Designation string
+	ShowMenu    bool
+}
+
 // route configures the http router of the user interface.
 func (ui *GUI) route() {
 	ui.router = mux.NewRouter()
-	ui.router.Use(csrf.Protect(ui.cfg.CSRFSecret, csrf.Secure(true)))
 
-	cssDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "assets/public/css"))
-	ui.router.PathPrefix("/css/").Handler(http.StripPrefix("/css/",
-		http.FileServer(cssDir)))
+	// Use a separate router without rate limiting (or other restrictions) for
+	// static assets.
+	assetsRouter := ui.router.PathPrefix("/assets").Subrouter()
 
-	imagesDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "assets/public/images"))
-	ui.router.PathPrefix("/images/").Handler(http.StripPrefix("/images/",
-		http.FileServer(imagesDir)))
+	assetsDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "assets/public/"))
+	assetsRouter.PathPrefix("/").Handler(http.StripPrefix("/assets",
+		http.FileServer(assetsDir)))
 
-	jsDir := http.Dir(filepath.Join(ui.cfg.GUIDir, "assets/public/js"))
-	ui.router.PathPrefix("/js/").Handler(http.StripPrefix("/js/",
-		http.FileServer(jsDir)))
+	// All other routes have rate limiting and CSRF protection applied.
+	guiRouter := ui.router.PathPrefix("/").Subrouter()
 
-	ui.router.HandleFunc("/", ui.Homepage).Methods("GET")
-	ui.router.HandleFunc("/account", ui.IsPoolAccount).Methods("GET")
-	ui.router.HandleFunc("/admin", ui.AdminPage).Methods("GET")
-	ui.router.HandleFunc("/admin", ui.AdminLogin).Methods("POST")
-	ui.router.HandleFunc("/backup", ui.DownloadDatabaseBackup).Methods("POST")
-	ui.router.HandleFunc("/logout", ui.AdminLogout).Methods("POST")
+	// sessionMiddleware must be run before rateLimitMiddleware.
+	guiRouter.Use(ui.sessionMiddleware)
+	guiRouter.Use(ui.rateLimitMiddleware)
+	guiRouter.Use(csrf.Protect(ui.cfg.CSRFSecret, csrf.Secure(true)))
 
-	// Paginated endpoints allow the GUI to request pages of data
-	ui.router.HandleFunc("/mined_blocks", ui.PaginatedMinedBlocks).Methods("GET")
+	guiRouter.HandleFunc("/", ui.Homepage).Methods("GET")
+	guiRouter.HandleFunc("/account", ui.Account).Methods("GET")
+	guiRouter.HandleFunc("/account", ui.IsPoolAccount).Methods("HEAD")
+	guiRouter.HandleFunc("/admin", ui.AdminPage).Methods("GET")
+	guiRouter.HandleFunc("/admin", ui.AdminLogin).Methods("POST")
+	guiRouter.HandleFunc("/backup", ui.DownloadDatabaseBackup).Methods("POST")
+	guiRouter.HandleFunc("/logout", ui.AdminLogout).Methods("POST")
 
-	// Websocket endpoint allows the GUI to receive updated values
-	ui.router.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")
+	// Paginated endpoints allow the GUI to request pages of data.
+	guiRouter.HandleFunc("/blocks", ui.PaginatedBlocks).Methods("GET")
+	guiRouter.HandleFunc("/account/{accountID}/blocks", ui.PaginatedBlocksByAccount).Methods("GET")
+	guiRouter.HandleFunc("/account/{accountID}/clients", ui.PaginatedClientsByAccount).Methods("GET")
+
+	// Websocket endpoint allows the GUI to receive updated values.
+	guiRouter.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")
 }
 
 // renderTemplate executes the provided template.
@@ -169,27 +169,11 @@ func (ui *GUI) renderTemplate(w http.ResponseWriter, name string, data interface
 	}
 }
 
-func getSession(r *http.Request, cookieStore *sessions.CookieStore) (*sessions.Session, error) {
-	session, err := cookieStore.Get(r, "session")
-	if err != nil {
-		// "value is not valid" occurs if the CSRF secret changes.
-		// This is common during development (eg. when using the test harness)
-		// but it should not occur in production.
-		if strings.Contains(err.Error(), "securecookie: the value is not valid") {
-			log.Warnf("getSession error: CSRF secret has changed. Generating new session.")
-			err = nil
-		}
-	}
-	return session, err
-}
-
 // NewGUI creates an instance of the user interface.
 func NewGUI(cfg *Config) (*GUI, error) {
 	ui := &GUI{
-		cfg:        cfg,
-		limiter:    pool.NewRateLimiter(),
-		minedWork:  make([]minedWork, 0),
-		workQuotas: make([]workQuota, 0),
+		cfg:     cfg,
+		limiter: pool.NewRateLimiter(),
 	}
 
 	switch cfg.ActiveNet.Name {
@@ -234,7 +218,6 @@ func (ui *GUI) loadTemplates() error {
 	}
 
 	httpTemplates := template.New("template").Funcs(template.FuncMap{
-		"hashString":        hashString,
 		"upper":             strings.ToUpper,
 		"ratToPercent":      ratToPercent,
 		"floatToPercent":    floatToPercent,
@@ -331,61 +314,22 @@ func (ui *GUI) Run(ctx context.Context) {
 		}
 	}()
 
-	updateCachedData := func() error {
-		var err error
-		work, err := ui.cfg.FetchMinedWork()
-		if err != nil {
-			return err
-		}
-
-		// Parse and format mined work by the pool.
-		workData := make([]minedWork, 0)
-		for _, work := range work {
-			workData = append(workData, minedWork{
-				BlockHeight: work.Height,
-				BlockURL:    blockURL(ui.cfg.BlockExplorerURL, work.Height),
-				MinedBy:     truncateAccountID(work.MinedBy),
-				Miner:       work.Miner,
-			})
-		}
-
-		// Update mined work cache.
-		ui.minedWorkMtx.Lock()
-		ui.minedWork = workData
-		ui.minedWorkMtx.Unlock()
-
-		quotas, err := ui.cfg.FetchWorkQuotas()
-		if err != nil {
-			return err
-		}
-
-		// Parse and format work quotas of the pool.
-		quotaData := make([]workQuota, 0)
-		for _, quota := range quotas {
-			quotaData = append(quotaData, workQuota{
-				AccountID: truncateAccountID(quota.AccountID),
-				Percent:   ratToPercent(quota.Percentage),
-			})
-		}
-
-		// Update work quotas cache.
-		ui.workQuotasMtx.Lock()
-		ui.workQuotas = quotaData
-		ui.workQuotasMtx.Unlock()
-
-		poolHash, _ := ui.cfg.FetchPoolHashRate()
-
-		// Update pool hash cache.
-		ui.poolHashMtx.Lock()
-		ui.poolHash = hashString(poolHash)
-		ui.poolHashMtx.Unlock()
-		return nil
-	}
-
-	err := updateCachedData()
+	// Initalise the cache.
+	work, err := ui.cfg.FetchMinedWork()
 	if err != nil {
 		log.Error(err)
+		return
 	}
+
+	quotas, err := ui.cfg.FetchWorkQuotas()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	clients := ui.cfg.FetchClients()
+
+	ui.cache = InitCache(work, quotas, clients, ui.cfg.BlockExplorerURL)
 
 	// Use a ticker to periodically update cached data and push updates through
 	// any established websockets
@@ -401,11 +345,25 @@ func (ui *GUI) Run(ctx context.Context) {
 				ticks++
 
 				// After three ticks (15 seconds) update cached pool data.
+				// TODO: Only update cached data when necessary.
 				if ticks == 3 {
-					err := updateCachedData()
+					work, err := ui.cfg.FetchMinedWork()
 					if err != nil {
 						log.Error(err)
+					} else {
+						ui.cache.updateMinedWork(work)
 					}
+
+					quotas, err := ui.cfg.FetchWorkQuotas()
+					if err != nil {
+						log.Error(err)
+					} else {
+						ui.cache.updateQuotas(quotas)
+					}
+
+					clients := ui.cfg.FetchClients()
+					ui.cache.updateClients(clients)
+
 					ticks = 0
 				}
 

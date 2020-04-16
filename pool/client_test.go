@@ -1033,7 +1033,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 	setMiner(CPU)
 	atomic.StoreInt64(&client.submissions, 50)
 	time.Sleep(time.Millisecond * 1200)
-	hash := client.fetchHashRate()
+	hash := client.FetchHashRate()
 	if hash == ZeroRat {
 		t.Fatal("expected a non-nil client hash rate")
 	}

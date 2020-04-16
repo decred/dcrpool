@@ -202,13 +202,10 @@ func newPool(cfg *config) (*miningPool, error) {
 		AddPaymentRequest:       p.hub.AddPaymentRequest,
 		FetchMinedWork:          p.hub.FetchMinedWork,
 		FetchWorkQuotas:         p.hub.FetchWorkQuotas,
-		FetchPoolHashRate:       p.hub.FetchPoolHashRate,
 		BackupDB:                p.hub.BackupDB,
-		FetchClientInfo:         p.hub.FetchClientInfo,
+		FetchClients:            p.hub.FetchClients,
 		AccountExists:           p.hub.AccountExists,
-		FetchMinedWorkByAccount: p.hub.FetchMinedWorkByAccount,
 		FetchPaymentsForAccount: p.hub.FetchPaymentsForAccount,
-		FetchAccountClientInfo:  p.hub.FetchAccountClientInfo,
 	}
 	p.gui, err = gui.NewGUI(gcfg)
 	if err != nil {

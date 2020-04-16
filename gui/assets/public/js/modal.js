@@ -48,14 +48,23 @@ $("#account-form").on("submit", function (e) {
         type: $(this).attr('method'),
         data: $(this).serialize(),
         success: function() {
-            window.location.replace("/?address="+address);
+            window.location.replace("/account?address="+address);
         },
         error: function(response) {
-            if (response.status === 400 || response.status === 429) {
-                showError($("#account-form"), response.responseText);
-            } else {
-                showError($("#account-form"), "An error occurred");
-            }
+            switch(response.status) {
+                case 400:
+                    showError($("#account-form"), "Invalid address");
+                    break;
+                case 404:
+                    showError($("#account-form"), "Nothing found for address");
+                    break;
+                case 429:
+                    showError($("#account-form"), "Request limit exceeded");
+                    break;
+                default:
+                    showError($("#account-form"), "An error occurred");
+                    break;
+            };
         },
     });
 });

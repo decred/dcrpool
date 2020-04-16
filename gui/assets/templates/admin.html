@@ -1,5 +1,5 @@
 {{define "admin"}}
-{{template "header" .}}
+{{template "header" .HeaderData}}
 
 <div class="pool-overview pt-4 pb-3 mb-3">
     <div class="container">
@@ -10,18 +10,18 @@
             
             <div class="row mr-1">
                 <form class="p-2" action="/backup" method="post">
-                    {{.CSRF}}
+                    {{.HeaderData.CSRF}}
                     <button type="submit" class="btn btn-primary" style="padding:6px 6px; font-size: 12px;">Backup</button>
                 </form>
                 
                 <form class="p-2" action="/logout" method="post">
-                    {{.CSRF}}
+                    {{.HeaderData.CSRF}}
                     <button type="submit" class="btn btn-primary" style="padding:6px 6px; font-size: 12px;">Logout</button>
                 </form>
             </div>
         </div>
             
-        {{template "pool-stats" .PoolStats}}
+        {{template "pool-stats" .PoolStatsData}}
 
     </div>
 </div>
@@ -41,13 +41,13 @@
                             <th>Miner</th>
                             <th>Hash Rate</th>
                         </tr>
-                        {{range $accountID, $clients := .Connections}}
+                        {{range $accountID, $clients := .ConnectedClients}}
                         {{range $client := $clients}}
                         <tr>
                             <td><span class="dcr-label">{{$accountID}}</span></td>
                             <td>{{$client.IP}}</td>
                             <td>{{$client.Miner}}</td>
-                            <td>{{hashString $client.HashRate}}</td>
+                            <td>{{$client.HashRate}}</td>
                         </tr>
                         {{end}}
                         {{else}}
@@ -64,7 +64,7 @@
 
 </div>
 
-<script src='/js/socket.js'></script>
+<script src='/assets/js/socket.js'></script>
 
 </body>
 </html>

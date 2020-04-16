@@ -1,13 +1,29 @@
 {{define "index"}}
-{{template "header" .}}
+{{template "header" .HeaderData}}
 
-{{ with .Error }}
-<div class="snackbar snackbar-error">
-    <div class="snackbar-message">
-        <p>{{.}}</p>
+{{ if .ModalError }}
+<div class="modal fade" id="error-modal">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title">Invalid Address</h1>
+                <button type="button" class="modal-close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>{{ .ModalError }}</p>
+                <div class="d-flex flex-row pt-4 align-items-center">
+                    <button class="btn btn-primary ml-auto" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+        
     </div>
 </div>
-{{end}}
+
+<script>
+    $("#error-modal").modal();
+</script>
+{{ end }}
 
 <noscript style="display:inherit;">
     <div class="snackbar snackbar-warning">
@@ -25,7 +41,7 @@
         <p class="pt-1 pb-2">To mine, point your miner to the pool and set the username as described below in the miner
             configuration section.</p>
         
-        {{template "pool-stats" .PoolStats}}
+        {{template "pool-stats" .PoolStatsData}}
         
     </div>
 </div>
@@ -39,12 +55,12 @@
                 <div class="carousel-cell">
                     <div class="row m-0">
                         <div class="col-lg-4 col-12 main-carousel__image-container text-center">
-                            <div class="carousel-image" style="background-image:url('/images/carousel_1.svg');">
+                            <div class="carousel-image" style="background-image:url('/assets/images/carousel_1.svg');">
                             </div>
                         </div>
                         <div class="col-lg-8 col-12 py-3 px-4">
                             <h2>Identify the Miner</h2>
-                            <p>{{.Designation}} pool currently supports:</p>
+                            <p>{{.HeaderData.Designation}} pool currently supports:</p>
                             <div class="d-flex flex-row">
                                 <ul>
                                     <li>Innosilicon&nbsp;D9</li>
@@ -64,7 +80,7 @@
                 <div class="carousel-cell">
                     <div class="row m-0">
                         <div class="col-lg-4 col-12 main-carousel__image-container text-center">
-                            <div class="carousel-image" style="background-image:url('/images/carousel_2.svg');">
+                            <div class="carousel-image" style="background-image:url('/assets/images/carousel_2.svg');">
                             </div>
                         </div>
                         <div class="col-lg-8 col-12 py-3 px-4">
@@ -98,7 +114,7 @@
                 <div class="carousel-cell">
                     <div class="row m-0">
                         <div class="col-lg-4 col-12 main-carousel__image-container text-center">
-                            <div class="carousel-image" style="background-image:url('/images/carousel_3.svg');">
+                            <div class="carousel-image" style="background-image:url('/assets/images/carousel_3.svg');">
                             </div>
                         </div>
                         <div class="col-lg-8 col-12 py-3 px-4">
@@ -125,20 +141,17 @@
                 <table class="table">
                     <thead>
                         <tr>
-                            <th data-sort-method="number" data-sort-default>Height</th>
-                            <th data-sort-method="none">Miner</th>
-                            <th data-sort-method="none">Mined By</th>
+                            <th>Height</th>
+                            <th>Miner</th>
+                            <th>Mined By</th>
                         </tr>
                     </thead>
-                    <tbody id="mined-blocks-table-body">
+                    <tbody id="blocks-table">
                         {{ range .MinedWork }}
-                        <tr data-row-id="{{ .BlockHeight }}">
-                            <td><a href="{{ .BlockURL }}" rel="noopener noreferrer">{{ .BlockHeight }}</a>
-                            </td>
+                        <tr>
+                            <td><a href="{{ .BlockURL }}" rel="noopener noreferrer">{{ .BlockHeight }}</a></td>
                             <td>{{ .Miner }}</td>
-                            <td>
-                                <span class="dcr-label">{{ .MinedBy }}</span>
-                            </td>
+                            <td><span class="dcr-label">{{ .MinedBy }}</span></td>
                         </tr>
                         {{ else }}
                         <tr>
@@ -148,12 +161,12 @@
                     </tbody>
                 </table>
 
-                <div id="mined-blocks-page-select" class="page-select"></div>
+                <div id="blocks-page-select" class="page-select"></div>
 
             </div>
         </div>
 
-        {{ if not .PoolStats.SoloPool}}
+        {{ if not .PoolStatsData.SoloPool}}
         <div class="col-lg-6 col-12 p-3">
             <div class="block__content">
                 <h1>Next Reward Payment</h1>
@@ -185,10 +198,10 @@
     </div>
 </div>
 
-<script src='/js/carousel.js'></script>
-<script src='/js/socket.js'></script>
-<script src='/js/modal.js'></script>
-<script src='/js/pagination.js'></script>
+<script src='/assets/js/carousel.js'></script>
+<script src='/assets/js/socket.js'></script>
+<script src='/assets/js/modal.js'></script>
+<script src='/assets/js/pagination.js'></script>
 
 </body>
 </html>

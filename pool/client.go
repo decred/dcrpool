@@ -888,11 +888,26 @@ func (c *Client) setHashRate(hash *big.Rat) {
 	c.hashRateMtx.Unlock()
 }
 
-// fetchHashRate gets the client's hash rate.
-func (c *Client) fetchHashRate() *big.Rat {
+// FetchHashRate gets the client's hash rate.
+func (c *Client) FetchHashRate() *big.Rat {
 	c.hashRateMtx.Lock()
 	defer c.hashRateMtx.Unlock()
 	return c.hashRate
+}
+
+// FetchIPAddr gets the client's IP address.
+func (c *Client) FetchIPAddr() string {
+	return c.addr.String()
+}
+
+// FetchMinerType gets the client's miner type.
+func (c *Client) FetchMinerType() string {
+	return c.cfg.FetchMiner()
+}
+
+// FetchAccountID gets the client's account ID.
+func (c *Client) FetchAccountID() string {
+	return c.account
 }
 
 func (c *Client) hashMonitor(ctx context.Context) {

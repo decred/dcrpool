@@ -558,70 +558,25 @@ func (h *Hub) Run(ctx context.Context) {
 	h.shutdown()
 }
 
-// ClientInfo represents client miner information.
-type ClientInfo struct {
-	Miner    string
-	IP       string
-	HashRate *big.Rat
-}
-
-// FetchClientInfo returns connection details about all pool clients.
-func (h *Hub) FetchClientInfo() map[string][]*ClientInfo {
-	clientInfo := make(map[string][]*ClientInfo)
+// FetchClients returns all connected pool clients.
+func (h *Hub) FetchClients() []*Client {
+	clients := make([]*Client, 0)
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
-		for _, client := range endpoint.clients {
-			hash := client.fetchHashRate()
-			clientInfo[client.account] = append(clientInfo[client.account],
-				&ClientInfo{
-					Miner:    endpoint.miner,
-					IP:       client.addr.String(),
-					HashRate: hash,
-				})
+		for _, c := range endpoint.clients {
+			clients = append(clients, c)
 		}
 		endpoint.clientsMtx.Unlock()
 	}
-	return clientInfo
+	return clients
 }
 
-// FetchAccountClientInfo returns all clients belonging to the provided
-// account id.
-func (h *Hub) FetchAccountClientInfo(accountID string) []*ClientInfo {
-	info := make([]*ClientInfo, 0)
-	for _, endpoint := range h.endpoints {
-		endpoint.clientsMtx.Lock()
-		for _, client := range endpoint.clients {
-			if client.account == accountID {
-				client.hashRateMtx.RLock()
-				hash := client.hashRate
-				client.hashRateMtx.RUnlock()
-				info = append(info, &ClientInfo{
-					Miner:    endpoint.miner,
-					IP:       client.addr.String(),
-					HashRate: hash,
-				})
-			}
-		}
-		endpoint.clientsMtx.Unlock()
-	}
-	return info
-}
-
-// FetchMinedWork returns all confirmed blocks mined by the pool.
+// FetchMinedWork returns work data associated with all blocks mined by the pool
+// regardless of whether they are confirmed or not.
+//
+// List is ordered, most recent comes first.
 func (h *Hub) FetchMinedWork() ([]*AcceptedWork, error) {
 	return ListMinedWork(h.db)
-}
-
-// FetchPoolHashRate returns the hash rate of the pool.
-func (h *Hub) FetchPoolHashRate() (*big.Rat, map[string][]*ClientInfo) {
-	clientInfo := h.FetchClientInfo()
-	poolHashRate := new(big.Rat).SetInt64(0)
-	for _, clients := range clientInfo {
-		for _, miner := range clients {
-			poolHashRate = poolHashRate.Add(poolHashRate, miner.HashRate)
-		}
-	}
-	return poolHashRate, clientInfo
 }
 
 // Quota details the portion of mining rewrds due an account for work
@@ -657,13 +612,6 @@ func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 		})
 	}
 	return quotas, nil
-}
-
-// FetchMinedWorkByAccount returns a list of mined work by the provided address.
-// List is ordered, most recent comes first.
-func (h *Hub) FetchMinedWorkByAccount(id string) ([]*AcceptedWork, error) {
-	work, err := listMinedWorkByAccount(h.db, id, 10)
-	return work, err
 }
 
 // FetchPaymentsForAccount returns a list or payments made to the provided address.
