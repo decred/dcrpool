@@ -76,7 +76,7 @@ type Config struct {
 	FetchWorkQuotas func() ([]*pool.Quota, error)
 	// BackupDB streams a backup of the database over an http response.
 	BackupDB func(w http.ResponseWriter) error
-	// FetchClients returns details about all connected pool clients.
+	// FetchClients returns all connected pool clients.
 	FetchClients func() []*pool.Client
 	// AccountExists checks if the provided account id references a pool account.
 	AccountExists func(accountID string) bool

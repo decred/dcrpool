@@ -562,7 +562,7 @@ func (h *Hub) Run(ctx context.Context) {
 	h.shutdown()
 }
 
-// FetchClients returns connection details about all pool clients.
+// FetchClients returns all connected pool clients.
 func (h *Hub) FetchClients() []*Client {
 	clients := make([]*Client, 0)
 	for _, endpoint := range h.endpoints {
