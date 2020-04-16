@@ -89,21 +89,21 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 	ui.renderTemplate(w, "account", data)
 }
 
-// IsPoolAccount is the handler for "GET /account_exist". If the provided
+// IsPoolAccount is the handler for "HEAD /account". If the provided
 // address has an account on the server a "200 OK" response is returned,
-// otherwise a "400 Bad Request" is returned.
+// otherwise a "400 Bad Request" or "404 Not Found" are returned.
 func (ui *GUI) IsPoolAccount(w http.ResponseWriter, r *http.Request) {
 
 	address := r.FormValue("address")
 
 	accountID, err := pool.AccountID(address, ui.cfg.ActiveNet)
 	if err != nil {
-		http.Error(w, "Invalid address", http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if !ui.cfg.AccountExists(accountID) {
-		http.Error(w, "Nothing found for address", http.StatusBadRequest)
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 

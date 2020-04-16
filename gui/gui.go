@@ -138,7 +138,7 @@ func (ui *GUI) route() {
 
 	guiRouter.HandleFunc("/", ui.Homepage).Methods("GET")
 	guiRouter.HandleFunc("/account", ui.Account).Methods("GET")
-	guiRouter.HandleFunc("/account_exist", ui.IsPoolAccount).Methods("GET")
+	guiRouter.HandleFunc("/account", ui.IsPoolAccount).Methods("HEAD")
 	guiRouter.HandleFunc("/admin", ui.AdminPage).Methods("GET")
 	guiRouter.HandleFunc("/admin", ui.AdminLogin).Methods("POST")
 	guiRouter.HandleFunc("/backup", ui.DownloadDatabaseBackup).Methods("POST")
