@@ -562,17 +562,17 @@ func (h *Hub) Run(ctx context.Context) {
 	h.shutdown()
 }
 
-// FetchClientInfo returns connection details about all pool clients.
-func (h *Hub) FetchClientInfo() []*Client {
-	allClients := make([]*Client, 0)
+// FetchClients returns connection details about all pool clients.
+func (h *Hub) FetchClients() []*Client {
+	clients := make([]*Client, 0)
 	for _, endpoint := range h.endpoints {
 		endpoint.clientsMtx.Lock()
-		for _, client := range endpoint.clients {
-			allClients = append(allClients, client)
+		for _, c := range endpoint.clients {
+			clients = append(clients, c)
 		}
 		endpoint.clientsMtx.Unlock()
 	}
-	return allClients
+	return clients
 }
 
 // FetchMinedWork returns work data associated with all blocks mined by the pool

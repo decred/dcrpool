@@ -197,9 +197,9 @@ func testHub(t *testing.T, db *bolt.DB) {
 		t.Fatalf("expected 1 client connection from host %s, got %v",
 			host, connections)
 	}
-	cInfo := hub.FetchClientInfo()
+	cInfo := hub.FetchClients()
 	if len(cInfo) != 1 {
-		t.Fatalf("[FetchClientInfo] expected a client info size "+
+		t.Fatalf("[FetchClients] expected a client info size "+
 			"of 1, got %d", len(cInfo))
 	}
 

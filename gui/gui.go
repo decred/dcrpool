@@ -76,8 +76,8 @@ type Config struct {
 	FetchWorkQuotas func() ([]*pool.Quota, error)
 	// BackupDB streams a backup of the database over an http response.
 	BackupDB func(w http.ResponseWriter) error
-	// FetchClientInfo returns details about all connected pool clients.
-	FetchClientInfo func() []*pool.Client
+	// FetchClients returns details about all connected pool clients.
+	FetchClients func() []*pool.Client
 	// AccountExists checks if the provided account id references a pool account.
 	AccountExists func(accountID string) bool
 	// FetchPaymentsForAccount returns a list or payments made to the provided address.
@@ -314,7 +314,7 @@ func (ui *GUI) Run(ctx context.Context) {
 		}
 	}()
 
-	// Initalise the cache
+	// Initalise the cache.
 	work, err := ui.cfg.FetchMinedWork()
 	if err != nil {
 		log.Error(err)
@@ -327,7 +327,7 @@ func (ui *GUI) Run(ctx context.Context) {
 		return
 	}
 
-	clients := ui.cfg.FetchClientInfo()
+	clients := ui.cfg.FetchClients()
 
 	ui.cache = InitCache(work, quotas, clients, ui.cfg.BlockExplorerURL)
 
@@ -361,7 +361,7 @@ func (ui *GUI) Run(ctx context.Context) {
 						ui.cache.updateQuotas(quotas)
 					}
 
-					clients := ui.cfg.FetchClientInfo()
+					clients := ui.cfg.FetchClients()
 					ui.cache.updateClients(clients)
 
 					ticks = 0
