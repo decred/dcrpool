@@ -45,18 +45,14 @@ type workQuota struct {
 // GUI, so the formatting does not need to be repeated.
 type Cache struct {
 	blockExplorerURL string
-
-	minedWork    []minedWork
-	minedWorkMtx sync.RWMutex
-
-	workQuotas    []workQuota
-	workQuotasMtx sync.RWMutex
-
-	poolHash    string
-	poolHashMtx sync.RWMutex
-
-	clients    map[string][]client
-	clientsMtx sync.RWMutex
+	minedWork        []minedWork
+	minedWorkMtx     sync.RWMutex
+	workQuotas       []workQuota
+	workQuotasMtx    sync.RWMutex
+	poolHash         string
+	poolHashMtx      sync.RWMutex
+	clients          map[string][]client
+	clientsMtx       sync.RWMutex
 }
 
 // InitCache initialises and returns a cache for use in the GUI.
