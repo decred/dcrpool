@@ -1,7 +1,9 @@
 package pool
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	bolt "go.etcd.io/bbolt"
@@ -15,6 +17,37 @@ func persistAcceptedWork(db *bolt.DB, blockHash string, prevHash string,
 		return nil, fmt.Errorf("unable to persist accepted work: %v", err)
 	}
 	return acceptedWork, nil
+}
+
+func listMinedWorkByAccount(db *bolt.DB, accountID string) ([]*AcceptedWork, error) {
+	minedWork := make([]*AcceptedWork, 0)
+
+	err := db.View(func(tx *bolt.Tx) error {
+		bkt, err := fetchWorkBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		cursor := bkt.Cursor()
+		for k, v := cursor.Last(); k != nil; k, v = cursor.Prev() {
+			var work AcceptedWork
+			err := json.Unmarshal(v, &work)
+			if err != nil {
+				return err
+			}
+
+			if strings.Compare(work.MinedBy, accountID) == 0 && work.Confirmed {
+				minedWork = append(minedWork, &work)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return minedWork, nil
 }
 
 func testAcceptedWork(t *testing.T, db *bolt.DB) {
@@ -151,6 +184,17 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 
 	if len(minedWork) != 4 {
 		t.Fatalf("expected %v mined work, got %v", 4, len(minedWork))
+	}
+
+	// Ensure account Y has only one associated mined work.
+	minedWork, err = listMinedWorkByAccount(db, yID)
+	if err != nil {
+		t.Fatalf("ListMinedWork error: %v", err)
+	}
+
+	if len(minedWork) != 1 {
+		t.Fatalf("expected %v mined work for account %v, got %v", 1,
+			yID, len(minedWork))
 	}
 
 	// Update work A and B as unconfirmed
