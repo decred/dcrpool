@@ -40,6 +40,8 @@ type PaymentMgrConfig struct {
 	// PublishTransaction generates a transaction from the provided payouts
 	// and publishes it.
 	PublishTransaction func(map[dcrutil.Address]dcrutil.Amount, dcrutil.Amount) (string, error)
+	// SignalCache sends the provided cache update event to the gui cache.
+	SignalCache func(event CacheUpdateEvent)
 }
 
 // PaymentMgr handles generating shares and paying out dividends to
@@ -536,5 +538,14 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 		}
 		return pm.persistLastPaymentPaidOn(tx)
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Signal the gui cache of the paid dividends.
+	if pm.cfg.SignalCache != nil {
+		pm.cfg.SignalCache(DividendsPaid)
+	}
+
+	return nil
 }

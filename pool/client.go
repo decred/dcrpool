@@ -88,6 +88,8 @@ type ClientConfig struct {
 	MaxGenTime time.Duration
 	// ClientTimeout represents the connection read/write timeout.
 	ClientTimeout time.Duration
+	// SignalCache sends the provided cache update event to the gui cache.
+	SignalCache func(event CacheUpdateEvent)
 }
 
 // Client represents a client connection.
@@ -422,6 +424,11 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) error {
 			resp := SubmitWorkResponse(*req.ID, false, sErr)
 			c.ch <- resp
 			return err
+		}
+
+		// Signal the gui cache of the claimed weighted share.
+		if c.cfg.SignalCache != nil {
+			c.cfg.SignalCache(ClaimedShare)
 		}
 	}
 
