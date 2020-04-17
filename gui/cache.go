@@ -6,6 +6,7 @@ package gui
 
 import (
 	"math/big"
+	"sort"
 	"sync"
 
 	"github.com/decred/dcrpool/pool"
@@ -94,6 +95,13 @@ func (c *Cache) getMinedWork() []minedWork {
 
 // updateQuotas refreshes the cached list of pending dividend payments.
 func (c *Cache) updateQuotas(quotas []*pool.Quota) {
+
+	// Sort list so the largest percentages will be shown first.
+	sort.Slice(quotas, func(i, j int) bool {
+		larger := quotas[i].Percentage.Cmp(quotas[j].Percentage) > 0
+		return larger
+	})
+
 	quotaData := make([]workQuota, 0, len(quotas))
 	for _, quota := range quotas {
 		quotaData = append(quotaData, workQuota{
