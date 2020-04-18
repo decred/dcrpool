@@ -17,7 +17,6 @@ type indexPageData struct {
 	PoolStatsData poolStatsData
 	MinerPorts    map[string]uint32
 	MinedWork     []minedWork
-	PoolDomain    string
 	Dividends     []dividend
 	Address       string
 	ModalError    string
@@ -65,7 +64,6 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 		},
 		Dividends:  dividends,
 		MinedWork:  recentWork,
-		PoolDomain: ui.cfg.Domain,
 		MinerPorts: ui.cfg.MinerPorts,
 		ModalError: modalError,
 	}
