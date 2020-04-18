@@ -14,10 +14,9 @@ var upgrader = websocket.Upgrader{}
 
 // payload represents a websocket update message.
 type payload struct {
-	PoolHashRate      string      `json:"poolhashrate"`
-	LastWorkHeight    uint32      `json:"lastworkheight"`
-	LastPaymentHeight uint32      `json:"lastpaymentheight"`
-	WorkQuotas        []workQuota `json:"workquotas"`
+	PoolHashRate      string `json:"poolhashrate"`
+	LastWorkHeight    uint32 `json:"lastworkheight"`
+	LastPaymentHeight uint32 `json:"lastpaymentheight"`
 }
 
 // registerWebSocket is the handler for "GET /ws". It updates the HTTP request
@@ -39,7 +38,6 @@ func (ui *GUI) updateWebSocket() {
 		LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
 		LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
 		PoolHashRate:      ui.cache.getPoolHash(),
-		WorkQuotas:        ui.cache.getQuotas(),
 	}
 	clientsMtx.Lock()
 	for client := range clients {

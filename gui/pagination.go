@@ -12,6 +12,11 @@ import (
 	"github.com/gorilla/mux"
 )
 
+type dividendsPayload struct {
+	Dividends []dividend `json:"dividends"`
+	Count     int        `json:"count"`
+}
+
 type minedWorkPayload struct {
 	Blocks []minedWork `json:"blocks"`
 	Count  int         `json:"count"`
@@ -56,6 +61,53 @@ func (ui *GUI) PaginatedBlocks(w http.ResponseWriter, r *http.Request) {
 	payload := minedWorkPayload{
 		Count:  count,
 		Blocks: requestedBlocks,
+	}
+	js, err := json.Marshal(payload)
+	if err != nil {
+		log.Error(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Send json response.
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
+}
+
+// PaginatedDividends is the handler for "GET /dividends". It uses parameters
+// pageNumber and pageSize to prepare a json payload describing pending dividend
+// payments, as well as the total count of all dividends.
+func (ui *GUI) PaginatedDividends(w http.ResponseWriter, r *http.Request) {
+
+	// Parse request parameters.
+	pageNumber, err := strconv.Atoi(r.FormValue("pageNumber"))
+	if err != nil {
+		log.Error(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	pageSize, err := strconv.Atoi(r.FormValue("pageSize"))
+	if err != nil {
+		log.Error(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	offset := (pageNumber - 1) * pageSize
+	lastDividend := offset + pageSize
+
+	// Get the requested dividends from the cache.
+	allDividends := ui.cache.getDividends()
+	count := len(allDividends)
+	if lastDividend > count {
+		lastDividend = count
+	}
+	requestedDividends := allDividends[offset:lastDividend]
+
+	// Prepare json response.
+	payload := dividendsPayload{
+		Count:     count,
+		Dividends: requestedDividends,
 	}
 	js, err := json.Marshal(payload)
 	if err != nil {

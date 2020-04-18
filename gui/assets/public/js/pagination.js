@@ -72,3 +72,28 @@ if ( $('#account-clients-page-select').length ) {
         }
     });
 };
+
+if ($('#dividends-page-select').length) {
+    $('#dividends-page-select').pagination({
+        dataSource: "/dividends",
+        hideWhenLessThanOnePage: true,
+        nextText: '<div class="pagination-arrow pagination-arrow-right"></div>',
+        prevText: '<div class="pagination-arrow pagination-arrow-left"></div>',
+        locator: "dividends",
+        totalNumberLocator: function (response) {
+            return response.count;
+        },
+        callback: function (data) {
+            var html = '';
+
+            if (data.length > 0) {
+                $.each(data, function (_, item) {
+                    html += '<tr><td>' + item.percent + '</td><td><span class="dcr-label">' + item.accountid + '</span></td></tr>';
+                });
+            } else {
+                html += '<tr><td colspan="100%"><span class="no-data">No reward payments due</span></td></tr>';
+            }
+            $('#dividends-table').html(html);
+        }
+    });
+};

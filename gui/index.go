@@ -18,7 +18,7 @@ type indexPageData struct {
 	MinerPorts    map[string]uint32
 	MinedWork     []minedWork
 	PoolDomain    string
-	WorkQuotas    []workQuota
+	Dividends     []dividend
 	Address       string
 	ModalError    string
 }
@@ -42,6 +42,12 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 		}
 	}
 
+	// Get the next reward payment percentages (max 10).
+	dividends := ui.cache.getDividends()
+	if len(dividends) > 10 {
+		dividends = dividends[0:10]
+	}
+
 	data := indexPageData{
 		HeaderData: headerData{
 			CSRF:        csrf.TemplateField(r),
@@ -57,7 +63,7 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 			PoolFee:           ui.cfg.PoolFee,
 			SoloPool:          ui.cfg.SoloPool,
 		},
-		WorkQuotas: ui.cache.getQuotas(),
+		Dividends:  dividends,
 		MinedWork:  recentWork,
 		PoolDomain: ui.cfg.Domain,
 		MinerPorts: ui.cfg.MinerPorts,

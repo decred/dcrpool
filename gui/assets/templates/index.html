@@ -177,8 +177,8 @@
                             <th>Account</th>
                         </tr>
                     </thead>
-                    <tbody id="work-quota-table">
-                        {{ range .WorkQuotas }}
+                    <tbody id="dividends-table">
+                        {{ range .Dividends }}
                         <tr>
                             <td>{{ .Percent }}</td>
                             <td>
@@ -188,6 +188,9 @@
                         {{end}}
                     </tbody>
                 </table>
+                
+                <div id="dividends-page-select" class="page-select"></div>
+
             </div>
         </div>
 
