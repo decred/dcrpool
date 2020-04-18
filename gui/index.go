@@ -17,7 +17,7 @@ type indexPageData struct {
 	PoolStatsData poolStatsData
 	MinerPorts    map[string]uint32
 	MinedWork     []minedWork
-	Dividends     []dividend
+	RewardQuotas  []rewardQuota
 	Address       string
 	ModalError    string
 }
@@ -42,9 +42,9 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 	}
 
 	// Get the next reward payment percentages (max 10).
-	dividends := ui.cache.getDividends()
-	if len(dividends) > 10 {
-		dividends = dividends[0:10]
+	rewardQuotas := ui.cache.getRewardQuotas()
+	if len(rewardQuotas) > 10 {
+		rewardQuotas = rewardQuotas[0:10]
 	}
 
 	data := indexPageData{
@@ -62,10 +62,10 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 			PoolFee:           ui.cfg.PoolFee,
 			SoloPool:          ui.cfg.SoloPool,
 		},
-		Dividends:  dividends,
-		MinedWork:  recentWork,
-		MinerPorts: ui.cfg.MinerPorts,
-		ModalError: modalError,
+		RewardQuotas: rewardQuotas,
+		MinedWork:    recentWork,
+		MinerPorts:   ui.cfg.MinerPorts,
+		ModalError:   modalError,
 	}
 
 	ui.renderTemplate(w, "index", data)

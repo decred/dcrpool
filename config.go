@@ -571,8 +571,8 @@ func loadConfig() (*config, []string, error) {
 			return nil, nil, err
 		}
 
-		// Ensure the password to unlock the wallet is provided.
-		// Wallet password is required to pay dividends to pool contributors.
+		// Ensure the passphrase to unlock the wallet is provided.
+		// Wallet passphrase is required to pay dividends to pool contributors.
 		if cfg.WalletPass == "" {
 			str := "%s: the walletpass option is not set"
 			err := fmt.Errorf(str, funcName)

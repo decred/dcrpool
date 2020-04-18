@@ -73,13 +73,13 @@ if ( $('#account-clients-page-select').length ) {
     });
 };
 
-if ($('#dividends-page-select').length) {
-    $('#dividends-page-select').pagination({
-        dataSource: "/dividends",
+if ($('#reward-quotas-page-select').length) {
+    $('#reward-quotas-page-select').pagination({
+        dataSource: "/rewardquotas",
         hideWhenLessThanOnePage: true,
         nextText: '<div class="pagination-arrow pagination-arrow-right"></div>',
         prevText: '<div class="pagination-arrow pagination-arrow-left"></div>',
-        locator: "dividends",
+        locator: "rewardquotas",
         totalNumberLocator: function (response) {
             return response.count;
         },
@@ -93,7 +93,7 @@ if ($('#dividends-page-select').length) {
             } else {
                 html += '<tr><td colspan="100%"><span class="no-data">No reward payments due</span></td></tr>';
             }
-            $('#dividends-table').html(html);
+            $('#reward-quotas-table').html(html);
         }
     });
 };

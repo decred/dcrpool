@@ -12,9 +12,9 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type dividendsPayload struct {
-	Dividends []dividend `json:"dividends"`
-	Count     int        `json:"count"`
+type rewardQuotasPayload struct {
+	RewardQuotas []rewardQuota `json:"rewardquotas"`
+	Count        int           `json:"count"`
 }
 
 type minedWorkPayload struct {
@@ -86,10 +86,11 @@ func (ui *GUI) PaginatedBlocks(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PaginatedDividends is the handler for "GET /dividends". It uses parameters
-// pageNumber and pageSize to prepare a json payload describing pending dividend
-// payments, as well as the total count of all dividends.
-func (ui *GUI) PaginatedDividends(w http.ResponseWriter, r *http.Request) {
+// PaginatedRewardQuotas is the handler for "GET /rewardquotas". It uses
+// parameters pageNumber and pageSize to prepare a json payload describing
+// pending reward payment quotas, as well as the total count of all reward
+// quotas.
+func (ui *GUI) PaginatedRewardQuotas(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
 		log.Error(err)
@@ -97,17 +98,17 @@ func (ui *GUI) PaginatedDividends(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the requested dividends from the cache.
-	allDividends := ui.cache.getDividends()
-	count := len(allDividends)
+	// Get the requested rewardQuotas from the cache.
+	allRewardQuotas := ui.cache.getRewardQuotas()
+	count := len(allRewardQuotas)
 	if last > count {
 		last = count
 	}
-	requestedDividends := allDividends[first:last]
+	requestedRewardQuotas := allRewardQuotas[first:last]
 
-	sendJSONResponse(w, dividendsPayload{
-		Count:     count,
-		Dividends: requestedDividends,
+	sendJSONResponse(w, rewardQuotasPayload{
+		Count:        count,
+		RewardQuotas: requestedRewardQuotas,
 	})
 }
 

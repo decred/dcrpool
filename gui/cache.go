@@ -32,10 +32,10 @@ type minedWork struct {
 	AccountID string `json:"-"`
 }
 
-// dividend represents the percentage of reward payment garnered by a pool
+// rewardQuota represents the percentage of reward payment garnered by a pool
 // account through work contributed. It is json annotated so it can easily be
 // encoded and sent over a websocket or pagination request.
-type dividend struct {
+type rewardQuota struct {
 	AccountID string `json:"accountid"`
 	Percent   string `json:"percent"`
 }
@@ -48,8 +48,8 @@ type Cache struct {
 	blockExplorerURL string
 	minedWork        []minedWork
 	minedWorkMtx     sync.RWMutex
-	dividends        []dividend
-	dividendsMtx     sync.RWMutex
+	rewardQuotas     []rewardQuota
+	rewardQuotasMtx  sync.RWMutex
 	poolHash         string
 	poolHashMtx      sync.RWMutex
 	clients          map[string][]client
@@ -62,7 +62,7 @@ func InitCache(work []*pool.AcceptedWork, quotas []*pool.Quota,
 
 	cache := Cache{blockExplorerURL: blockExplorerURL}
 	cache.updateMinedWork(work)
-	cache.updateDividends(quotas)
+	cache.updateRewardQuotas(quotas)
 	cache.updateClients(clients)
 	return &cache
 }
@@ -93,34 +93,33 @@ func (c *Cache) getMinedWork() []minedWork {
 	return c.minedWork
 }
 
-// updateDividends uses a list of work quotas to refresh the cached list of
-// pending dividend payments.
-func (c *Cache) updateDividends(quotas []*pool.Quota) {
+// updateRewardQuotas uses a list of work quotas to refresh the cached list of
+// pending reward payment quotas.
+func (c *Cache) updateRewardQuotas(quotas []*pool.Quota) {
 
 	// Sort list so the largest percentages will be shown first.
 	sort.Slice(quotas, func(i, j int) bool {
-		larger := quotas[i].Percentage.Cmp(quotas[j].Percentage) > 0
-		return larger
+		return quotas[i].Percentage.Cmp(quotas[j].Percentage) > 0
 	})
 
-	quotaData := make([]dividend, 0, len(quotas))
+	quotaData := make([]rewardQuota, 0, len(quotas))
 	for _, q := range quotas {
-		quotaData = append(quotaData, dividend{
+		quotaData = append(quotaData, rewardQuota{
 			AccountID: truncateAccountID(q.AccountID),
 			Percent:   ratToPercent(q.Percentage),
 		})
 	}
 
-	c.dividendsMtx.Lock()
-	c.dividends = quotaData
-	c.dividendsMtx.Unlock()
+	c.rewardQuotasMtx.Lock()
+	c.rewardQuotas = quotaData
+	c.rewardQuotasMtx.Unlock()
 }
 
-// getDividends retrieves the cached list of pending dividend payments.
-func (c *Cache) getDividends() []dividend {
-	c.dividendsMtx.RLock()
-	defer c.dividendsMtx.RUnlock()
-	return c.dividends
+// getRewardQuotas retrieves the cached list of pending reward payment quotas.
+func (c *Cache) getRewardQuotas() []rewardQuota {
+	c.rewardQuotasMtx.RLock()
+	defer c.rewardQuotasMtx.RUnlock()
+	return c.rewardQuotas
 }
 
 // getPoolHash retrieves the total hashrate of all connected mining clients.

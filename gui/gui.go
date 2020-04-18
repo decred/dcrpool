@@ -146,7 +146,7 @@ func (ui *GUI) route() {
 
 	// Paginated endpoints allow the GUI to request pages of data.
 	guiRouter.HandleFunc("/blocks", ui.PaginatedBlocks).Methods("GET")
-	guiRouter.HandleFunc("/dividends", ui.PaginatedDividends).Methods("GET")
+	guiRouter.HandleFunc("/rewardquotas", ui.PaginatedRewardQuotas).Methods("GET")
 	guiRouter.HandleFunc("/account/{accountID}/blocks", ui.PaginatedBlocksByAccount).Methods("GET")
 	guiRouter.HandleFunc("/account/{accountID}/clients", ui.PaginatedClientsByAccount).Methods("GET")
 
@@ -359,7 +359,7 @@ func (ui *GUI) Run(ctx context.Context) {
 					if err != nil {
 						log.Error(err)
 					} else {
-						ui.cache.updateDividends(quotas)
+						ui.cache.updateRewardQuotas(quotas)
 					}
 
 					clients := ui.cfg.FetchClients()
