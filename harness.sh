@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Tmux script that sets up a simnet mining harness.
 set -e
 SESSION="harness"
@@ -18,8 +18,32 @@ GUI_DIR="${NODES_ROOT}/gui"
 CPU_MINING_ADDR="SsiuwSRYvH7pqWmRxFJWR8Vmqc3AWsjmK2Y"
 POOL_MINING_ADDR="SspUvSyDGSzvPz2NfdZ5LW15uq6rmuGZyhL"
 PFEE_ADDR="SsVPfV8yoMu7AvF5fGjxTGmQ57pGkaY6n8z"
-CLIENT_ONE_ADDR="SsZckVrqHRBtvhJA5UqLZ3MDXpZHi5mK6uU"
-CLIENT_TWO_ADDR="Ssn23a3rJaCUxjqXiVSNwU6FxV45sLkiFpz"
+CLIENT_ADDRS=(
+  "SsZckVrqHRBtvhJA5UqLZ3MDXpZHi5mK6uU"
+  "Ssn23a3rJaCUxjqXiVSNwU6FxV45sLkiFpz"
+  "SsgGu2Fz3c2YeoRKZMeXNQBJ324J8uFe2ku"
+  "Ssj65eTTHTvyEyQJBPuqUuueLouf5yMtmJL"
+  "SsZKVJQnN3Hm3A1Ga3WTTZMRceeGTZgsMTQ"
+  "SsivBg41hYAxGf4FDK8swGoxmJMTk8kqaks"
+  "Ssi34kZ7HN9WNHkofWsjKajoYwiAdryfr89"
+  "SsnEdBRWU5zVfo6rQxVkyVikCF2X3p5mVrW"
+  "SskZsGb78uyvkzCF7aqHYa24oWWHLF3XEKe"
+  "SsaJoAxcB3bTGoavzpymrx1q2wa6nkna35g"
+  "SsUpkNXC5824166ASdw72BFE8zeF4i4XaDp"
+  "SsZbyZp62wrEiZQ3iLyfUgpTg4KzNUNmzVP"
+  "SsaYJ3DYpaxquCd2cdD6Zba8p6jTnBFVjck"
+  "SsZpjNR3ZfrRzKGMtRZixoRb2uii43qE2QE"
+  "SsWTW7sgp5Pb1Hede5imKDUP5ymYZTXkzkX"
+  "SssRDNnKvD2bfKvKfC3p8b5UGR78nivxG56"
+  "Ssmc27WaSfizoyvhy6GSht5XtC9DYswKyTD"
+  "SsV83wxme92uY6tDKWxnGer5GBKXDHpknDo"
+  "Sse8V9WrWLSHS5t4WEr2Cy92FGRsxGwXTfo"
+  "SssSxnc6rixXPowbxcdrXg6PccAHFCe4x6K"
+)
+
+# Number of mining clients to create. Maximum is determined by number of client
+# addresses above - currently 20.
+NUMBER_OF_CLIENTS=2
 
 if [ -d "${NODES_ROOT}" ]; then
   rm -R "${NODES_ROOT}"
@@ -32,30 +56,22 @@ mkdir -p "${NODES_ROOT}/mwallet"
 mkdir -p "${NODES_ROOT}/vwallet"
 mkdir -p "${NODES_ROOT}/pool"
 mkdir -p "${NODES_ROOT}/gui"
-mkdir -p "${NODES_ROOT}/c1"
-mkdir -p "${NODES_ROOT}/c2"
 
 cp -r gui/assets ${GUI_DIR}/assets
 
-cat > "${NODES_ROOT}/c1/client.conf" <<EOF
+for ((i = 0; i < $NUMBER_OF_CLIENTS; i++)); do
+PROFILE_PORT=$(($i + 6061))
+mkdir -p "${NODES_ROOT}/c$i"
+cat > "${NODES_ROOT}/c$i/client.conf" <<EOF
 debuglevel=trace
 activenet=simnet
-user=m1
-address=${CLIENT_ONE_ADDR}
+user=m$i
+address=${CLIENT_ADDRS[$i]}
 pool=127.0.0.1:5550
-maxprocs=${MINER_MAX_PROCS}
-profile=:6061
+maxprocs=$MINER_MAX_PROCS
+profile=:$PROFILE_PORT
 EOF
-
-cat > "${NODES_ROOT}/c2/client.conf" <<EOF
-debuglevel=trace
-activenet=simnet
-user=m2
-address=${CLIENT_TWO_ADDR}
-pool=127.0.0.1:5550
-maxprocs=${MINER_MAX_PROCS}
-profile=:6062
-EOF
+done
 
 cat > "${NODES_ROOT}/master/dcrmctl.conf" <<EOF
 rpcuser=${RPC_USER}
@@ -114,6 +130,7 @@ logdir=${NODES_ROOT}/mwallet/log
 appdata=${NODES_ROOT}/mwallet
 simnet=1
 pass=${WALLET_PASS}
+accountgaplimit=25
 EOF
 
 cat > "${NODES_ROOT}/vwallet/vwallet.conf" <<EOF
@@ -143,7 +160,7 @@ dcrctl -C dcrmctl.conf \$*
 EOF
 chmod +x "${NODES_ROOT}/master/ctl"
 
-tmux rename-window -t $SESSION:0 'master'
+tmux rename-window -t $SESSION 'master'
 tmux send-keys "cd ${NODES_ROOT}/master" C-m
 
 echo "Starting simnet master node"
@@ -171,7 +188,7 @@ cat > "${NODES_ROOT}/master/mine" <<EOF
 EOF
 chmod +x "${NODES_ROOT}/master/mine"
 
-tmux new-window -t $SESSION:1 -n 'mctl'
+tmux new-window -t $SESSION -n 'mctl'
 tmux send-keys "cd ${NODES_ROOT}/master" C-m
 
 sleep 3
@@ -191,7 +208,7 @@ dcrctl -C dcrmwctl.conf --wallet \$*
 EOF
 chmod +x "${NODES_ROOT}/mwallet/ctl"
 
-tmux new-window -t $SESSION:2 -n 'mwallet'
+tmux new-window -t $SESSION -n 'mwallet'
 tmux send-keys "cd ${NODES_ROOT}/mwallet" C-m
 tmux send-keys "dcrwallet -C mwallet.conf --create" C-m
 echo "Creating simnet master wallet"
@@ -208,14 +225,17 @@ sleep 10
 # The consensus daemon must be synced for account generation to 
 # work as expected.
 echo "Setting up pool wallet accounts"
-tmux new-window -t $SESSION:3 -n 'mwctl'
+tmux new-window -t $SESSION -n 'mwctl'
 tmux send-keys "cd ${NODES_ROOT}/mwallet" C-m
 tmux send-keys "./ctl createnewaccount pfee" C-m
 tmux send-keys "./ctl getnewaddress pfee" C-m
-tmux send-keys "./ctl createnewaccount c1" C-m
-tmux send-keys "./ctl getnewaddress c1" C-m
-tmux send-keys "./ctl createnewaccount c2" C-m
-tmux send-keys "./ctl getnewaddress c2" C-m
+
+# Create accounts & addresses for mining clients (only needed for debugging).
+for ((i = 0; i < $NUMBER_OF_CLIENTS; i++)); do
+  tmux send-keys "./ctl createnewaccount c$i" C-m
+  tmux send-keys "./ctl getnewaddress c$i" C-m
+done
+
 tmux send-keys "./ctl getnewaddress default" C-m
 tmux send-keys "./ctl getbalance"
 
@@ -228,7 +248,7 @@ dcrctl -C dcrvctl.conf \$*
 EOF
 chmod +x "${NODES_ROOT}/vnode/ctl"
 
-tmux new-window -t $SESSION:4 -n 'vnode'
+tmux new-window -t $SESSION -n 'vnode'
 tmux send-keys "cd ${NODES_ROOT}/vnode" C-m
 
 echo "Starting simnet voting node"
@@ -260,7 +280,7 @@ cat > "${NODES_ROOT}/vnode/mine" <<EOF
 EOF
 chmod +x "${NODES_ROOT}/vnode/mine"
 
-tmux new-window -t $SESSION:5 -n 'vctl'
+tmux new-window -t $SESSION -n 'vctl'
 tmux send-keys "cd ${NODES_ROOT}/vnode" C-m
 
 tmux send-keys "./mine 30" C-m
@@ -287,7 +307,7 @@ esac
 EOF
 chmod +x "${NODES_ROOT}/vwallet/tickets"
 
-tmux new-window -t $SESSION:6 -n 'vwallet'
+tmux new-window -t $SESSION -n 'vwallet'
 tmux send-keys "cd ${NODES_ROOT}/vwallet" C-m
 tmux send-keys "dcrwallet -C vwallet.conf --create" C-m
 echo "Creating simnet voting wallet"
@@ -301,7 +321,7 @@ tmux send-keys "dcrwallet -C vwallet.conf --debuglevel=debug" C-m
 # Setup the voting wallet's dcrctl (vwctl).
 ################################################################################
 sleep 1
-tmux new-window -t $SESSION:7 -n 'vwctl'
+tmux new-window -t $SESSION -n 'vwctl'
 tmux send-keys "cd ${NODES_ROOT}/vwallet" C-m
 
 ################################################################################
@@ -309,26 +329,19 @@ tmux send-keys "cd ${NODES_ROOT}/vwallet" C-m
 ################################################################################
 echo "Starting dcrpool"
 sleep 5
-tmux new-window -t $SESSION:8 -n 'pool'
+tmux new-window -t $SESSION -n 'pool'
 tmux send-keys "cd ${NODES_ROOT}/pool" C-m
 tmux send-keys "dcrpool --configfile=pool.conf --homedir=${NODES_ROOT}/pool" C-m
 
 ################################################################################
-# Setup first mining client. 
+# Setup the mining clients.
 ################################################################################
-echo "Starting mining client 1"
-sleep 1
-tmux new-window -t $SESSION:9 -n 'c1'
-tmux send-keys "cd ${NODES_ROOT}/c1" C-m
-tmux send-keys "miner --configfile=client.conf --homedir=${NODES_ROOT}/c1" C-m
-
-################################################################################
-# Setup another mining client. 
-################################################################################
-echo "Starting mining client 2"
-sleep 1
-tmux new-window -t $SESSION:10 -n 'c2'
-tmux send-keys "cd ${NODES_ROOT}/c2" C-m
-tmux send-keys "miner --configfile=client.conf --homedir=${NODES_ROOT}/c2" C-m
+for ((i = 0; i < $NUMBER_OF_CLIENTS; i++)); do
+  echo "Starting mining client $i"
+  sleep 1
+  tmux new-window -t $SESSION -n c$i
+  tmux send-keys "cd ${NODES_ROOT}/c$i" C-m
+  tmux send-keys "miner --configfile=client.conf --homedir=${NODES_ROOT}/c$i" C-m
+done
 
 tmux attach-session -t $SESSION
