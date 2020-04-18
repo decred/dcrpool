@@ -19,26 +19,26 @@ CPU_MINING_ADDR="SsiuwSRYvH7pqWmRxFJWR8Vmqc3AWsjmK2Y"
 POOL_MINING_ADDR="SspUvSyDGSzvPz2NfdZ5LW15uq6rmuGZyhL"
 PFEE_ADDR="SsVPfV8yoMu7AvF5fGjxTGmQ57pGkaY6n8z"
 CLIENT_ADDRS=(
-	"SsZckVrqHRBtvhJA5UqLZ3MDXpZHi5mK6uU"
-	"Ssn23a3rJaCUxjqXiVSNwU6FxV45sLkiFpz"
-	"Ssb7Peny8omFwicUi8hC6hCALhcEp59p7UK"
-	"Ssc89aSDZpWXgYXptmzQyHaEikgiWhQhejo"
-	"SsUkfDeV74D8TQ1Rr7EJwF2PiHfYoQ6dJmX"
-	"SsXZ7SsV7Mk5UJSxAayFRjwxGSVmurgdgwM"
-	"SscVXEvpU8havFgFyu1GZS9Kc5CSfHU7ajZ"
-	"Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru"
-	"SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy"
-	"Sshfmpt6YhQutEFTEXd4EWr3uQXtUgtcSka"
-	"SspKX9jW5mRj33xNYdzBoXckKZTFh484JeG"
-	"SspdbtJX8h4u6HriPVWyxv9VMxgfbFtvug3"
-	"SssSPTMACV1pGNbNG4ueRgrzcbtqrCeKX7b"
-	"SsmPRqFBqFoBHH58dHGA6yUSiWfUoKWfRQD"
-	"SsVcnoy65By57gH2YFdD5Bt39EpdfvLoxMf"
-	"SskyyHdnfhM8WDPQ6NqSr212QPoMgTwurGC"
-	"SsXR8YkqDfE2Dsmvu39ygbLj5ojNSwimAP9"
-	"Ssg6TcnCSAeRr1pZbEaCEecsr5V16xdyJgn"
-	"SsfPSNgM2Hg7LksXoxsznLkfQrmp9sqffJ3"
-	"SsXiquZP1exsqzC8YeGHZJUL2S9y6w5v6Vr"
+  "SsZckVrqHRBtvhJA5UqLZ3MDXpZHi5mK6uU"
+  "Ssn23a3rJaCUxjqXiVSNwU6FxV45sLkiFpz"
+  "SsgGu2Fz3c2YeoRKZMeXNQBJ324J8uFe2ku"
+  "Ssj65eTTHTvyEyQJBPuqUuueLouf5yMtmJL"
+  "SsZKVJQnN3Hm3A1Ga3WTTZMRceeGTZgsMTQ"
+  "SsivBg41hYAxGf4FDK8swGoxmJMTk8kqaks"
+  "Ssi34kZ7HN9WNHkofWsjKajoYwiAdryfr89"
+  "SsnEdBRWU5zVfo6rQxVkyVikCF2X3p5mVrW"
+  "SskZsGb78uyvkzCF7aqHYa24oWWHLF3XEKe"
+  "SsaJoAxcB3bTGoavzpymrx1q2wa6nkna35g"
+  "SsUpkNXC5824166ASdw72BFE8zeF4i4XaDp"
+  "SsZbyZp62wrEiZQ3iLyfUgpTg4KzNUNmzVP"
+  "SsaYJ3DYpaxquCd2cdD6Zba8p6jTnBFVjck"
+  "SsZpjNR3ZfrRzKGMtRZixoRb2uii43qE2QE"
+  "SsWTW7sgp5Pb1Hede5imKDUP5ymYZTXkzkX"
+  "SssRDNnKvD2bfKvKfC3p8b5UGR78nivxG56"
+  "Ssmc27WaSfizoyvhy6GSht5XtC9DYswKyTD"
+  "SsV83wxme92uY6tDKWxnGer5GBKXDHpknDo"
+  "Sse8V9WrWLSHS5t4WEr2Cy92FGRsxGwXTfo"
+  "SssSxnc6rixXPowbxcdrXg6PccAHFCe4x6K"
 )
 
 # Number of mining clients to create. Maximum is determined by number of client
@@ -130,6 +130,7 @@ logdir=${NODES_ROOT}/mwallet/log
 appdata=${NODES_ROOT}/mwallet
 simnet=1
 pass=${WALLET_PASS}
+accountgaplimit=25
 EOF
 
 cat > "${NODES_ROOT}/vwallet/vwallet.conf" <<EOF
@@ -228,6 +229,13 @@ tmux new-window -t $SESSION -n 'mwctl'
 tmux send-keys "cd ${NODES_ROOT}/mwallet" C-m
 tmux send-keys "./ctl createnewaccount pfee" C-m
 tmux send-keys "./ctl getnewaddress pfee" C-m
+
+# Create accounts & addresses for mining clients (only needed for debugging).
+for ((i = 0; i < $NUMBER_OF_CLIENTS; i++)); do
+  tmux send-keys "./ctl createnewaccount c$i" C-m
+  tmux send-keys "./ctl getnewaddress c$i" C-m
+done
+
 tmux send-keys "./ctl getnewaddress default" C-m
 tmux send-keys "./ctl getbalance"
 
