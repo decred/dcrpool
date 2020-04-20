@@ -71,10 +71,10 @@ func sendJSONResponse(w http.ResponseWriter, payload interface{}) {
 	w.Write(js)
 }
 
-// PaginatedBlocks is the handler for "GET /blocks". It uses parameters
+// paginatedBlocks is the handler for "GET /blocks". It uses parameters
 // pageNumber and pageSize to prepare a json payload describing blocks mined by
 // the pool, as well as the total count of all confirmed blocks.
-func (ui *GUI) PaginatedBlocks(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) paginatedBlocks(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
 		log.Error(err)
@@ -94,11 +94,11 @@ func (ui *GUI) PaginatedBlocks(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PaginatedRewardQuotas is the handler for "GET /rewardquotas". It uses
+// paginatedRewardQuotas is the handler for "GET /rewardquotas". It uses
 // parameters pageNumber and pageSize to prepare a json payload describing
 // pending reward payment quotas, as well as the total count of all reward
 // quotas.
-func (ui *GUI) PaginatedRewardQuotas(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) paginatedRewardQuotas(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
 		log.Error(err)
@@ -118,11 +118,11 @@ func (ui *GUI) PaginatedRewardQuotas(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PaginatedBlocksByAccount is the handler for "GET /account/{accountID}/blocks".
+// paginatedBlocksByAccount is the handler for "GET /account/{accountID}/blocks".
 // It uses parameters pageNumber, pageSize and accountID to prepare a json
 // payload describing blocks mined by the account, as well as the total count of
 // all blocks mined by the account.
-func (ui *GUI) PaginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) paginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
 		log.Error(err)
@@ -152,11 +152,11 @@ func (ui *GUI) PaginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// PaginatedClientsByAccount is the handler for "GET /account/{accountID}/clients".
+// paginatedClientsByAccount is the handler for "GET /account/{accountID}/clients".
 // It uses parameters pageNumber, pageSize and accountID to prepare a json
 // payload describing connected mining clients belonging to the account, as well
 // as the total count of all connected clients.
-func (ui *GUI) PaginatedClientsByAccount(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) paginatedClientsByAccount(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
 		log.Error(err)
@@ -179,11 +179,11 @@ func (ui *GUI) PaginatedClientsByAccount(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// PaginatedPendingPaymentsByAccount is the handler for "GET
+// paginatedPendingPaymentsByAccount is the handler for "GET
 // /account/{accountID}/payments/pending". It uses parameters pageNumber,
 // pageSize and accountID to prepare a json payload describing unpaid payments
 // due to the account, as well as the total count of all unpaid payments.
-func (ui *GUI) PaginatedPendingPaymentsByAccount(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) paginatedPendingPaymentsByAccount(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
 		log.Error(err)
@@ -206,11 +206,11 @@ func (ui *GUI) PaginatedPendingPaymentsByAccount(w http.ResponseWriter, r *http.
 	})
 }
 
-// PaginatedArchivedPaymentsByAccount is the handler for "GET
+// paginatedArchivedPaymentsByAccount is the handler for "GET
 // /account/{accountID}/payments/archived". It uses parameters pageNumber,
 // pageSize and accountID to prepare a json payload describing payments made to
 // the account, as well as the total count of all paid payments.
-func (ui *GUI) PaginatedArchivedPaymentsByAccount(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) paginatedArchivedPaymentsByAccount(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
 		log.Error(err)

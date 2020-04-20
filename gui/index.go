@@ -71,7 +71,7 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 	ui.renderTemplate(w, "index", data)
 }
 
-// Homepage is the handler for "GET /". It renders the index template.
-func (ui *GUI) Homepage(w http.ResponseWriter, r *http.Request) {
+// homepage is the handler for "GET /". It renders the index template.
+func (ui *GUI) homepage(w http.ResponseWriter, r *http.Request) {
 	ui.renderIndex(w, r, "")
 }
