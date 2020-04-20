@@ -12,6 +12,11 @@ import (
 	"github.com/gorilla/mux"
 )
 
+type rewardQuotasPayload struct {
+	RewardQuotas []rewardQuota `json:"rewardquotas"`
+	Count        int           `json:"count"`
+}
+
 type minedWorkPayload struct {
 	Blocks []minedWork `json:"blocks"`
 	Count  int         `json:"count"`
@@ -22,41 +27,29 @@ type clientsPayload struct {
 	Count   int      `json:"count"`
 }
 
-// PaginatedBlocks is the handler for "GET /blocks". It uses parameters
-// pageNumber and pageSize to prepare a json payload describing blocks mined by
-// the pool, as well as the total count of all confirmed blocks.
-func (ui *GUI) PaginatedBlocks(w http.ResponseWriter, r *http.Request) {
-
-	// Parse request parameters.
+// getPaginationParams parses the request parameters to find pageNumber and
+// pageSize which are required for all paginated data requests. Returns first
+// and last, the indices of the first and last items to return.
+func getPaginationParams(r *http.Request) (first, last int, err error) {
 	pageNumber, err := strconv.Atoi(r.FormValue("pageNumber"))
 	if err != nil {
-		log.Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		return 0, 0, err
 	}
 	pageSize, err := strconv.Atoi(r.FormValue("pageSize"))
 	if err != nil {
-		log.Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		return 0, 0, err
 	}
 
-	offset := (pageNumber - 1) * pageSize
-	lastBlock := offset + pageSize
+	first = (pageNumber - 1) * pageSize
+	last = first + pageSize
 
-	// Get the requested blocks from the cache.
-	allWork := ui.cache.getMinedWork()
-	count := len(allWork)
-	if lastBlock > count {
-		lastBlock = count
-	}
-	requestedBlocks := allWork[offset:lastBlock]
+	return first, last, nil
+}
 
-	// Prepare json response.
-	payload := minedWorkPayload{
-		Count:  count,
-		Blocks: requestedBlocks,
-	}
+// sendJSONResponse JSON encodes the provided payload and writes it to the
+// ResponseWriter. Will send a "500 Internal Server Error" if JSON encoding
+// fails.
+func sendJSONResponse(w http.ResponseWriter, payload interface{}) {
 	js, err := json.Marshal(payload)
 	if err != nil {
 		log.Error(err)
@@ -64,9 +57,59 @@ func (ui *GUI) PaginatedBlocks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send json response.
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(js)
+}
+
+// PaginatedBlocks is the handler for "GET /blocks". It uses parameters
+// pageNumber and pageSize to prepare a json payload describing blocks mined by
+// the pool, as well as the total count of all confirmed blocks.
+func (ui *GUI) PaginatedBlocks(w http.ResponseWriter, r *http.Request) {
+	first, last, err := getPaginationParams(r)
+	if err != nil {
+		log.Error(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Get the requested blocks from the cache.
+	allWork := ui.cache.getMinedWork()
+	count := len(allWork)
+	if last > count {
+		last = count
+	}
+	requestedBlocks := allWork[first:last]
+
+	sendJSONResponse(w, minedWorkPayload{
+		Count:  count,
+		Blocks: requestedBlocks,
+	})
+}
+
+// PaginatedRewardQuotas is the handler for "GET /rewardquotas". It uses
+// parameters pageNumber and pageSize to prepare a json payload describing
+// pending reward payment quotas, as well as the total count of all reward
+// quotas.
+func (ui *GUI) PaginatedRewardQuotas(w http.ResponseWriter, r *http.Request) {
+	first, last, err := getPaginationParams(r)
+	if err != nil {
+		log.Error(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Get the requested rewardQuotas from the cache.
+	allRewardQuotas := ui.cache.getRewardQuotas()
+	count := len(allRewardQuotas)
+	if last > count {
+		last = count
+	}
+	requestedRewardQuotas := allRewardQuotas[first:last]
+
+	sendJSONResponse(w, rewardQuotasPayload{
+		Count:        count,
+		RewardQuotas: requestedRewardQuotas,
+	})
 }
 
 // PaginatedBlocksByAccount is the handler for "GET /account/{accountID}/blocks".
@@ -74,15 +117,7 @@ func (ui *GUI) PaginatedBlocks(w http.ResponseWriter, r *http.Request) {
 // payload describing blocks mined by the account, as well as the total count of
 // all blocks mined by the account.
 func (ui *GUI) PaginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) {
-
-	// Parse request parameters.
-	pageNumber, err := strconv.Atoi(r.FormValue("pageNumber"))
-	if err != nil {
-		log.Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	pageSize, err := strconv.Atoi(r.FormValue("pageSize"))
+	first, last, err := getPaginationParams(r)
 	if err != nil {
 		log.Error(err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -90,9 +125,6 @@ func (ui *GUI) PaginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 	}
 
 	accountID := mux.Vars(r)["accountID"]
-
-	offset := (pageNumber - 1) * pageSize
-	lastBlock := offset + pageSize
 
 	// Get all blocks mined by this account.
 	work := make([]minedWork, 0)
@@ -104,26 +136,15 @@ func (ui *GUI) PaginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 	}
 
 	count := len(work)
-	if lastBlock > count {
-		lastBlock = count
+	if last > count {
+		last = count
 	}
-	requestedBlocks := work[offset:lastBlock]
+	requestedBlocks := work[first:last]
 
-	// Prepare json response.
-	payload := minedWorkPayload{
+	sendJSONResponse(w, minedWorkPayload{
 		Count:  count,
 		Blocks: requestedBlocks,
-	}
-	js, err := json.Marshal(payload)
-	if err != nil {
-		log.Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	// Send json response.
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(js)
+	})
 }
 
 // PaginatedClientsByAccount is the handler for "GET /account/{accountID}/clients".
@@ -131,15 +152,7 @@ func (ui *GUI) PaginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 // payload describing connected mining clients belonging to the account, as well
 // as the total count of all connected clients.
 func (ui *GUI) PaginatedClientsByAccount(w http.ResponseWriter, r *http.Request) {
-
-	// Parse request parameters.
-	pageNumber, err := strconv.Atoi(r.FormValue("pageNumber"))
-	if err != nil {
-		log.Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	pageSize, err := strconv.Atoi(r.FormValue("pageSize"))
+	first, last, err := getPaginationParams(r)
 	if err != nil {
 		log.Error(err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -148,30 +161,16 @@ func (ui *GUI) PaginatedClientsByAccount(w http.ResponseWriter, r *http.Request)
 
 	accountID := mux.Vars(r)["accountID"]
 
-	offset := (pageNumber - 1) * pageSize
-	lastClient := offset + pageSize
-
 	// Get all of this accounts clients.
 	allClients := ui.cache.getClients()[accountID]
 
 	count := len(allClients)
-	if lastClient > count {
-		lastClient = count
+	if last > count {
+		last = count
 	}
 
-	// Prepare json response.
-	payload := clientsPayload{
+	sendJSONResponse(w, clientsPayload{
 		Count:   count,
-		Clients: allClients[offset:lastClient],
-	}
-	js, err := json.Marshal(payload)
-	if err != nil {
-		log.Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	// Send json response.
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(js)
+		Clients: allClients[first:last],
+	})
 }
