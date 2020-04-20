@@ -35,43 +35,76 @@
 
 
 <div class="container">
+    
+    <div class="row">
+        <div class="col-12 p-3">
+            <div class="block__content">
+                <h1>Pending Payments</h1>
+                
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Work Height</th>
+                            <th>Created On</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .PendingPayments }}
+                        <tr>
+                            <td><a href="{{ .WorkHeightURL }}"
+                                    rel="noopener noreferrer">{{ .WorkHeight }}</a></td>
+                            <td>{{ .CreatedOn }}</td>
+                            <td>{{ .Amount }}</td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td colspan="100%"><span class="no-data">No pending payments for account</span></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+
+            </div>
+        </div>
+
+    </div>
+
     <div class="row">
         <div class="col-12 p-3">
             <div class="block__content">
                 <h1>Payments Received</h1>
                 
-                <div class="overflow-auto">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Work Height</th>
-                                <th>Payment Height</th>
-                                <th>Created On</th>
-                                <th>Amount</th>
-                                <th>Tx ID</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {{ range .Payments }}
-                            <tr>
-                                <td><a href="{{ blockURL $.BlockExplorerURL .Height}}"
-                                        rel="noopener noreferrer">{{.Height}}</a></td>
-                                <td><a href="{{ blockURL $.BlockExplorerURL .PaidOnHeight}}"
-                                        rel="noopener noreferrer">{{.PaidOnHeight}}</a></td>
-                                <td>{{ time .CreatedOn }}</td>
-                                <td>{{ printf "%.3f" .Amount.ToCoin }}&nbsp;DCR</td>
-                                <td><a href="{{ txURL $.BlockExplorerURL .TransactionID}}"
-                                        rel="noopener noreferrer">{{ printf "%.10s" .TransactionID }}...</a>
-                                </td>
-                            </tr>
-                            {{else}}
-                            <tr>
-                                <td colspan="100%"><span class="no-data">No payments for account</span></td>
-                            </tr>
-                            {{end}}
-                        </tbody>
-                    </table>
-                </div>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Work Height</th>
+                            <th>Payment Height</th>
+                            <th>Created On</th>
+                            <th>Amount</th>
+                            <th>Tx ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .ArchivedPayments }}
+                        <tr>
+                            <td><a href="{{ .WorkHeightURL }}"
+                                    rel="noopener noreferrer">{{ .WorkHeight }}</a></td>
+                            <td><a href="{{ .PaidHeightURL }}"
+                                    rel="noopener noreferrer">{{ .PaidHeight }}</a></td>
+                            <td>{{ .CreatedOn }}</td>
+                            <td>{{ .Amount }}</td>
+                            <td><a href="{{ .TxURL }}"
+                                    rel="noopener noreferrer">{{ .TxID }}</a>
+                            </td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td colspan="100%"><span class="no-data">No payments received by account</span></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
 
             </div>
         </div>

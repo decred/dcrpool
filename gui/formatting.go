@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 	"time"
+
+	"github.com/decred/dcrd/dcrutil/v2"
 )
 
 var (
@@ -30,7 +32,7 @@ var (
 )
 
 func truncateAccountID(accountID string) string {
-	return fmt.Sprintf("%.12s", accountID) + "..."
+	return fmt.Sprintf("%.12s...", accountID)
 }
 
 // HashString formats the provided hashrate per the best-fit unit.
@@ -75,6 +77,10 @@ func txURL(blockExplorerURL string, txID string) string {
 	return blockExplorerURL + "/tx/" + txID
 }
 
+func amount(amt dcrutil.Amount) string {
+	return fmt.Sprintf("%.3f DCR", amt.ToCoin())
+}
+
 // formatUnixTime formats the provided integer as a UTC time string,
 func formatUnixTime(unix int64) string {
 	return time.Unix(0, unix).Format("2-Jan-2006 15:04:05 MST")
@@ -84,8 +90,8 @@ func formatUnixTime(unix int64) string {
 // rounded to the nearest decimal place. eg. "10.5%"
 func floatToPercent(rat float64) string {
 	rat *= 100
-	str := fmt.Sprintf("%.1f", rat)
-	return str + "%"
+	str := fmt.Sprintf("%.1f%%", rat)
+	return str
 }
 
 // ratToPercent formats the provided big.Rat as a percentage,

@@ -99,52 +99,6 @@ func testGeneratePaymentDetails(t *testing.T, db *bolt.DB) {
 	}
 }
 
-func testArchivedPaymentsFiltering(t *testing.T, db *bolt.DB) {
-	count := uint32(2)
-	amt, _ := dcrutil.NewAmount(5)
-	bx := makePaymentBundle(xID, count, amt)
-	bx.UpdateAsPaid(db, 10, "")
-	err := bx.ArchivePayments(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	time.Sleep(time.Millisecond * 10)
-	bx = makePaymentBundle(yID, count, amt)
-	bx.UpdateAsPaid(db, 10, "")
-	err = bx.ArchivePayments(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Fetch archived payments for account X.
-	pmts, err := fetchArchivedPaymentsForAccount(db, xID, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expectedPmts := 2
-	if len(pmts) != expectedPmts {
-		t.Fatalf("expected %v archived payments for account X "+
-			"(per filter criteria), got %v", expectedPmts, len(pmts))
-	}
-
-	// Fetch archived payments for account Y.
-	pmts, err = fetchArchivedPaymentsForAccount(db, yID, 10)
-	if err != nil {
-		t.Error(err)
-	}
-	expectedPmts = 2
-	if len(pmts) != expectedPmts {
-		t.Fatalf("expected %v archived payments for account x"+
-			" (per filter criteria), got %v", expectedPmts, len(pmts))
-	}
-
-	// Empty the payment archive bucket.
-	err = emptyBucket(db, paymentArchiveBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-}
-
 func testAccountPayments(t *testing.T, db *bolt.DB) {
 	count := uint32(2)
 	amt, _ := dcrutil.NewAmount(5)
@@ -166,6 +120,17 @@ func testAccountPayments(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
+	// Check fetching all archived payments.
+	archived, err := fetchArchivedPayments(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(archived) != 2 {
+		t.Fatalf("expected archived payments to be %v, got %v", 2, archived)
+	}
+
+	// Check fetching pending payments at height.
 	pmts, err := fetchPendingPaymentsAtHeight(db, 10)
 	if err != nil {
 		t.Fatal(err)
@@ -176,40 +141,28 @@ func testAccountPayments(t *testing.T, db *bolt.DB) {
 			"height #%d, got %d", 10, len(pmts))
 	}
 
-	pmts, err = fetchPaymentsForAccount(db, xID, 10)
+	// Check fetching all pending payments.
+	pending, err := fetchPendingPayments(db)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Ensure payments for account returns both pending and archived
-	// payments for an account.
-	var pending, paid int
-	for _, p := range pmts {
-		if p.PaidOnHeight == 0 {
-			pending++
-		} else {
-			paid++
-		}
-	}
-
-	if pending != 2 {
+	if len(pending) != 2 {
 		t.Fatalf("expected pending payments to be %v, got %v", 2, pending)
 	}
 
-	if paid != 2 {
-		t.Fatalf("expected archived payments to be %v, got %v", 2, paid)
-	}
-
-	// Make a payment bundle from the payments fetched.
-	bdls := generatePaymentBundles(pmts)
+	// Make a payment bundle from the pending payments.
+	// Two payments for the same account should result in one bundle containing
+	// two payments.
+	bdls := generatePaymentBundles(pending)
 	if len(bdls) != 1 {
 		t.Fatalf("expected 1 payment bundle, got %d", len(bdls))
 	}
 
 	epb := bdls[0]
-	if len(pmts) != len(epb.Payments) {
+	if len(pending) != len(epb.Payments) {
 		t.Fatalf("expected %d payments in bundle, got %d",
-			len(pmts), len(epb.Payments))
+			len(pending), len(epb.Payments))
 	}
 
 	// Ensure fetching a non-existent payment returns an error.
@@ -220,7 +173,7 @@ func testAccountPayments(t *testing.T, db *bolt.DB) {
 	}
 
 	// Fetching an existingpayment.
-	expectedPmt := pmts[0]
+	expectedPmt := pending[0]
 	pmtID = GeneratePaymentID(expectedPmt.CreatedOn,
 		expectedPmt.Height, expectedPmt.Account)
 	pmt, err := GetPayment(db, pmtID)

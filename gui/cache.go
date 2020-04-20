@@ -5,6 +5,7 @@
 package gui
 
 import (
+	"fmt"
 	"math/big"
 	"sort"
 	"sync"
@@ -40,30 +41,58 @@ type rewardQuota struct {
 	Percent   string `json:"percent"`
 }
 
+// pendingPayment represents an unpaid reward payment. It is json annotated so
+// it can easily be encoded and sent over a websocket or pagination request.
+type pendingPayment struct {
+	WorkHeight    string `json:"workheight"`
+	WorkHeightURL string `json:"workheighturl"`
+	Amount        string `json:"amount"`
+	CreatedOn     string `json:"createdon"`
+}
+
+// archivedPayment represents a paid reward payment. It is json annotated so it
+// can easily be encoded and sent over a websocket or pagination request.
+type archivedPayment struct {
+	WorkHeight    string `json:"workheight"`
+	WorkHeightURL string `json:"workheighturl"`
+	Amount        string `json:"amount"`
+	CreatedOn     string `json:"createdon"`
+	PaidHeight    string `json:"paidheight"`
+	PaidHeightURL string `json:"paidheighturl"`
+	TxURL         string `json:"txurl"`
+	TxID          string `json:"txid"`
+}
+
 // Cache stores data which is required for the GUI. Each field has a setter and
 // getter, and they are protected by a mutex so they are safe for concurrent
 // access. Data returned by the getters is already formatted for display in the
 // GUI, so the formatting does not need to be repeated.
 type Cache struct {
-	blockExplorerURL string
-	minedWork        []minedWork
-	minedWorkMtx     sync.RWMutex
-	rewardQuotas     []rewardQuota
-	rewardQuotasMtx  sync.RWMutex
-	poolHash         string
-	poolHashMtx      sync.RWMutex
-	clients          map[string][]client
-	clientsMtx       sync.RWMutex
+	blockExplorerURL    string
+	minedWork           []minedWork
+	minedWorkMtx        sync.RWMutex
+	rewardQuotas        []rewardQuota
+	rewardQuotasMtx     sync.RWMutex
+	poolHash            string
+	poolHashMtx         sync.RWMutex
+	clients             map[string][]client
+	clientsMtx          sync.RWMutex
+	pendingPayments     map[string][]pendingPayment
+	pendingPaymentsMtx  sync.RWMutex
+	archivedPayments    map[string][]archivedPayment
+	archivedPaymentsMtx sync.RWMutex
 }
 
 // InitCache initialises and returns a cache for use in the GUI.
 func InitCache(work []*pool.AcceptedWork, quotas []*pool.Quota,
-	clients []*pool.Client, blockExplorerURL string) *Cache {
+	clients []*pool.Client, pendingPmts []*pool.Payment,
+	archivedPmts []*pool.Payment, blockExplorerURL string) *Cache {
 
 	cache := Cache{blockExplorerURL: blockExplorerURL}
 	cache.updateMinedWork(work)
 	cache.updateRewardQuotas(quotas)
 	cache.updateClients(clients)
+	cache.updatePayments(pendingPmts, archivedPmts)
 	return &cache
 }
 
@@ -159,4 +188,56 @@ func (c *Cache) getClients() map[string][]client {
 	c.clientsMtx.RLock()
 	defer c.clientsMtx.RUnlock()
 	return c.clients
+}
+
+// updatePayments will update the cached lists of both pending and archived
+// payments.
+func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool.Payment) {
+	pendingPayments := make(map[string][]pendingPayment)
+	for _, p := range pendingPmts {
+		accountID := p.Account
+		pendingPayments[accountID] = append(pendingPayments[accountID], pendingPayment{
+			WorkHeight:    fmt.Sprint(p.Height),
+			WorkHeightURL: blockURL(c.blockExplorerURL, p.Height),
+			Amount:        amount(p.Amount),
+			CreatedOn:     formatUnixTime(p.CreatedOn),
+		})
+	}
+
+	c.pendingPaymentsMtx.Lock()
+	c.pendingPayments = pendingPayments
+	c.pendingPaymentsMtx.Unlock()
+
+	archivedPayments := make(map[string][]archivedPayment)
+	for _, p := range archivedPmts {
+		accountID := p.Account
+		archivedPayments[accountID] = append(archivedPayments[accountID], archivedPayment{
+			WorkHeight:    fmt.Sprint(p.Height),
+			WorkHeightURL: blockURL(c.blockExplorerURL, p.Height),
+			Amount:        amount(p.Amount),
+			CreatedOn:     formatUnixTime(p.CreatedOn),
+			PaidHeight:    fmt.Sprint(p.PaidOnHeight),
+			PaidHeightURL: blockURL(c.blockExplorerURL, p.PaidOnHeight),
+			TxURL:         txURL(c.blockExplorerURL, p.TransactionID),
+			TxID:          fmt.Sprintf("%.10s...", p.TransactionID),
+		})
+	}
+
+	c.archivedPaymentsMtx.Lock()
+	c.archivedPayments = archivedPayments
+	c.archivedPaymentsMtx.Unlock()
+}
+
+// getPendingPayments retrieves the cached list of paid payments.
+func (c *Cache) getPendingPayments() map[string][]pendingPayment {
+	c.pendingPaymentsMtx.RLock()
+	defer c.pendingPaymentsMtx.RUnlock()
+	return c.pendingPayments
+}
+
+// getArchivedPayments retrieves the cached list of unpaid payments.
+func (c *Cache) getArchivedPayments() map[string][]archivedPayment {
+	c.archivedPaymentsMtx.RLock()
+	defer c.archivedPaymentsMtx.RUnlock()
+	return c.archivedPayments
 }

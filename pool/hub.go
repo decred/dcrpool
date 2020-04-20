@@ -614,13 +614,6 @@ func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 	return quotas, nil
 }
 
-// FetchPaymentsForAccount returns a list or payments made to the provided address.
-// List is ordered, most recent comes first.
-func (h *Hub) FetchPaymentsForAccount(id string) ([]*Payment, error) {
-	payments, err := fetchPaymentsForAccount(h.db, id, 10)
-	return payments, err
-}
-
 // AccountExists checks if the provided account id references a pool account.
 func (h *Hub) AccountExists(accountID string) bool {
 	_, err := FetchAccount(h.db, []byte(accountID))

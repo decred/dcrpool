@@ -5,7 +5,6 @@
 package gui
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/decred/dcrpool/pool"
@@ -17,7 +16,8 @@ import (
 type accountPageData struct {
 	HeaderData       headerData
 	MinedWork        []minedWork
-	Payments         []*pool.Payment
+	ArchivedPayments []archivedPayment
+	PendingPayments  []pendingPayment
 	ConnectedClients []client
 	AccountID        string
 	Address          string
@@ -59,11 +59,16 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	payments, err := ui.cfg.FetchPaymentsForAccount(accountID)
-	if err != nil {
-		ui.renderIndex(w, r, fmt.Sprintf("FetchPaymentsForAddress error: %v",
-			err.Error()))
-		return
+	// Get this accounts pending payments (max 10).
+	pendingPmts := ui.cache.getPendingPayments()[accountID]
+	if len(pendingPmts) > 10 {
+		pendingPmts = pendingPmts[0:10]
+	}
+
+	// Get this accounts archived payments (max 10).
+	archivedPmts := ui.cache.getArchivedPayments()[accountID]
+	if len(archivedPmts) > 10 {
+		archivedPmts = archivedPmts[0:10]
 	}
 
 	// Get this accounts connected clients (max 10).
@@ -79,7 +84,8 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 			ShowMenu:    true,
 		},
 		MinedWork:        recentWork,
-		Payments:         payments,
+		PendingPayments:  pendingPmts,
+		ArchivedPayments: archivedPmts,
 		ConnectedClients: clients,
 		AccountID:        accountID,
 		Address:          address,

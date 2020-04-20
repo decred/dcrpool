@@ -80,8 +80,10 @@ type Config struct {
 	FetchClients func() []*pool.Client
 	// AccountExists checks if the provided account id references a pool account.
 	AccountExists func(accountID string) bool
-	// FetchPaymentsForAccount returns a list or payments made to the provided address.
-	FetchPaymentsForAccount func(id string) ([]*pool.Payment, error)
+	// FetchArchivedPayments fetches all paid payments.
+	FetchArchivedPayments func() ([]*pool.Payment, error)
+	// FetchPendingPayments fetches all unpaid payments.
+	FetchPendingPayments func() ([]*pool.Payment, error)
 }
 
 // GUI represents the the mining pool user interface.
@@ -219,13 +221,8 @@ func (ui *GUI) loadTemplates() error {
 	}
 
 	httpTemplates := template.New("template").Funcs(template.FuncMap{
-		"upper":             strings.ToUpper,
-		"ratToPercent":      ratToPercent,
-		"floatToPercent":    floatToPercent,
-		"time":              formatUnixTime,
-		"truncateAccountID": truncateAccountID,
-		"blockURL":          blockURL,
-		"txURL":             txURL,
+		"upper":          strings.ToUpper,
+		"floatToPercent": floatToPercent,
 	})
 
 	// Since template.Must panics with non-nil error, it is much more
@@ -330,7 +327,19 @@ func (ui *GUI) Run(ctx context.Context) {
 
 	clients := ui.cfg.FetchClients()
 
-	ui.cache = InitCache(work, quotas, clients, ui.cfg.BlockExplorerURL)
+	pendingPayments, err := ui.cfg.FetchPendingPayments()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	archivedPayments, err := ui.cfg.FetchArchivedPayments()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	ui.cache = InitCache(work, quotas, clients, pendingPayments, archivedPayments, ui.cfg.BlockExplorerURL)
 
 	// Use a ticker to periodically update cached data and push updates through
 	// any established websockets
@@ -364,6 +373,20 @@ func (ui *GUI) Run(ctx context.Context) {
 
 					clients := ui.cfg.FetchClients()
 					ui.cache.updateClients(clients)
+
+					pendingPayments, err := ui.cfg.FetchPendingPayments()
+					if err != nil {
+						log.Error(err)
+						return
+					}
+
+					archivedPayments, err := ui.cfg.FetchArchivedPayments()
+					if err != nil {
+						log.Error(err)
+						return
+					}
+
+					ui.cache.updatePayments(pendingPayments, archivedPayments)
 
 					ticks = 0
 				}
