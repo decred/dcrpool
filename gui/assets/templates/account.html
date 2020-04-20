@@ -49,7 +49,7 @@
                             <th>Amount</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="pending-payments-table">
                         {{ range .PendingPayments }}
                         <tr>
                             <td><a href="{{ .WorkHeightURL }}"
@@ -64,6 +64,8 @@
                         {{end}}
                     </tbody>
                 </table>
+
+                <div id="pending-payments-page-select" class="page-select"></div>
 
             </div>
         </div>
@@ -85,7 +87,7 @@
                             <th>Tx ID</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="archived-payments-table">
                         {{ range .ArchivedPayments }}
                         <tr>
                             <td><a href="{{ .WorkHeightURL }}"
@@ -105,6 +107,8 @@
                         {{end}}
                     </tbody>
                 </table>
+                
+                <div id="archived-payments-page-select" class="page-select"></div>
 
             </div>
         </div>

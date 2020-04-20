@@ -151,6 +151,8 @@ func (ui *GUI) route() {
 	guiRouter.HandleFunc("/rewardquotas", ui.PaginatedRewardQuotas).Methods("GET")
 	guiRouter.HandleFunc("/account/{accountID}/blocks", ui.PaginatedBlocksByAccount).Methods("GET")
 	guiRouter.HandleFunc("/account/{accountID}/clients", ui.PaginatedClientsByAccount).Methods("GET")
+	guiRouter.HandleFunc("/account/{accountID}/payments/pending", ui.PaginatedPendingPaymentsByAccount).Methods("GET")
+	guiRouter.HandleFunc("/account/{accountID}/payments/archived", ui.PaginatedArchivedPaymentsByAccount).Methods("GET")
 
 	// Websocket endpoint allows the GUI to receive updated values.
 	guiRouter.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")
