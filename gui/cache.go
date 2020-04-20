@@ -193,6 +193,12 @@ func (c *Cache) getClients() map[string][]client {
 // updatePayments will update the cached lists of both pending and archived
 // payments.
 func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool.Payment) {
+
+	// Sort list so the most recently earned rewards will be shown first.
+	sort.Slice(pendingPmts, func(i, j int) bool {
+		return pendingPmts[i].Height > pendingPmts[j].Height
+	})
+
 	pendingPayments := make(map[string][]pendingPayment)
 	for _, p := range pendingPmts {
 		accountID := p.Account
@@ -207,6 +213,11 @@ func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool
 	c.pendingPaymentsMtx.Lock()
 	c.pendingPayments = pendingPayments
 	c.pendingPaymentsMtx.Unlock()
+
+	// Sort list so the most recently earned rewards will be shown first.
+	sort.Slice(archivedPmts, func(i, j int) bool {
+		return archivedPmts[i].Height > archivedPmts[j].Height
+	})
 
 	archivedPayments := make(map[string][]archivedPayment)
 	for _, p := range archivedPmts {
