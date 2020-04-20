@@ -12,29 +12,17 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type rewardQuotasPayload struct {
-	RewardQuotas []rewardQuota `json:"rewardquotas"`
-	Count        int           `json:"count"`
+type paginationPayload struct {
+	Data  interface{} `json:"data"`
+	Count int         `json:"count"`
 }
 
-type minedWorkPayload struct {
-	Blocks []minedWork `json:"blocks"`
-	Count  int         `json:"count"`
-}
-
-type clientsPayload struct {
-	Clients []client `json:"clients"`
-	Count   int      `json:"count"`
-}
-
-type pendingPaymentsPayload struct {
-	PendingPayments []pendingPayment `json:"pendingpayments"`
-	Count           int              `json:"count"`
-}
-
-type archivedPaymentsPayload struct {
-	ArchivedPayments []archivedPayment `json:"archivedpayments"`
-	Count            int               `json:"count"`
+// min returns the smallest of the two provided integers.
+func min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
 }
 
 // getPaginationParams parses the request parameters to find pageNumber and
@@ -84,13 +72,11 @@ func (ui *GUI) paginatedBlocks(w http.ResponseWriter, r *http.Request) {
 
 	allWork := ui.cache.getMinedWork()
 	count := len(allWork)
-	if last > count {
-		last = count
-	}
+	last = min(last, count)
 
-	sendJSONResponse(w, minedWorkPayload{
-		Count:  count,
-		Blocks: allWork[first:last],
+	sendJSONResponse(w, paginationPayload{
+		Count: count,
+		Data:  allWork[first:last],
 	})
 }
 
@@ -108,13 +94,11 @@ func (ui *GUI) paginatedRewardQuotas(w http.ResponseWriter, r *http.Request) {
 
 	allRewardQuotas := ui.cache.getRewardQuotas()
 	count := len(allRewardQuotas)
-	if last > count {
-		last = count
-	}
+	last = min(last, count)
 
-	sendJSONResponse(w, rewardQuotasPayload{
-		Count:        count,
-		RewardQuotas: allRewardQuotas[first:last],
+	sendJSONResponse(w, paginationPayload{
+		Count: count,
+		Data:  allRewardQuotas[first:last],
 	})
 }
 
@@ -142,13 +126,11 @@ func (ui *GUI) paginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 	}
 
 	count := len(work)
-	if last > count {
-		last = count
-	}
+	last = min(last, count)
 
-	sendJSONResponse(w, minedWorkPayload{
-		Count:  count,
-		Blocks: work[first:last],
+	sendJSONResponse(w, paginationPayload{
+		Count: count,
+		Data:  work[first:last],
 	})
 }
 
@@ -169,13 +151,11 @@ func (ui *GUI) paginatedClientsByAccount(w http.ResponseWriter, r *http.Request)
 	allClients := ui.cache.getClients()[accountID]
 
 	count := len(allClients)
-	if last > count {
-		last = count
-	}
+	last = min(last, count)
 
-	sendJSONResponse(w, clientsPayload{
-		Count:   count,
-		Clients: allClients[first:last],
+	sendJSONResponse(w, paginationPayload{
+		Count: count,
+		Data:  allClients[first:last],
 	})
 }
 
@@ -196,13 +176,11 @@ func (ui *GUI) paginatedPendingPaymentsByAccount(w http.ResponseWriter, r *http.
 	allPayments := ui.cache.getPendingPayments()[accountID]
 
 	count := len(allPayments)
-	if last > count {
-		last = count
-	}
+	last = min(last, count)
 
-	sendJSONResponse(w, pendingPaymentsPayload{
-		Count:           count,
-		PendingPayments: allPayments[first:last],
+	sendJSONResponse(w, paginationPayload{
+		Count: count,
+		Data:  allPayments[first:last],
 	})
 }
 
@@ -223,12 +201,10 @@ func (ui *GUI) paginatedArchivedPaymentsByAccount(w http.ResponseWriter, r *http
 	allPayments := ui.cache.getArchivedPayments()[accountID]
 
 	count := len(allPayments)
-	if last > count {
-		last = count
-	}
+	last = min(last, count)
 
-	sendJSONResponse(w, archivedPaymentsPayload{
-		Count:            count,
-		ArchivedPayments: allPayments[first:last],
+	sendJSONResponse(w, paginationPayload{
+		Count: count,
+		Data:  allPayments[first:last],
 	})
 }

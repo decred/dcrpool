@@ -1,17 +1,15 @@
+$.fn["pagination"].defaults.locator = "data";
+$.fn["pagination"].defaults.totalNumberLocator = function(response) { return response.count; };
+$.fn["pagination"].defaults.nextText = '<div class="pagination-arrow pagination-arrow-right"></div>';
+$.fn["pagination"].defaults.prevText = '<div class="pagination-arrow pagination-arrow-left"></div>';
+$.fn["pagination"].defaults.hideWhenLessThanOnePage = true;
+
 if ( $('#blocks-page-select').length ) {
     $('#blocks-page-select').pagination({
         dataSource: "/blocks",
-        hideWhenLessThanOnePage: true,
-        nextText: '<div class="pagination-arrow pagination-arrow-right"></div>',
-        prevText: '<div class="pagination-arrow pagination-arrow-left"></div>',
-        locator: "blocks",
-        totalNumberLocator: function(response) {
-            return response.count;
-        },
         callback: function(data) {
             var html = '';
-    
-            if (data.length > 0) {
+                if (data.length > 0) {
                 $.each(data, function(_, item){
                     html += '<tr><td><a href="' + item.blockurl + '" rel="noopener noreferrer">' + item.blockheight + '</a></td><td>' + item.miner + '</td><td><span class="dcr-label">' + item.minedby + '</span></td></tr>';
                 });
@@ -26,16 +24,8 @@ if ( $('#blocks-page-select').length ) {
 if ( $('#blocks-by-account-page-select').length ) {
     $('#blocks-by-account-page-select').pagination({
         dataSource: "/account/" + accountID + "/blocks",
-        hideWhenLessThanOnePage: true,
-        nextText: '<div class="pagination-arrow pagination-arrow-right"></div>',
-        prevText: '<div class="pagination-arrow pagination-arrow-left"></div>',
-        locator: "blocks",
-        totalNumberLocator: function(response) {
-            return response.count;
-        },
         callback: function(data) {
             var html = '';
-
             if (data.length > 0) {
                 $.each(data, function(_, item){
                     html += '<tr><td><a href="' + item.blockurl + '" rel="noopener noreferrer">' + item.blockheight + '</a></td><td>' + item.confirmed + '</td><td>' + item.miner + '</td></tr>';
@@ -51,16 +41,8 @@ if ( $('#blocks-by-account-page-select').length ) {
 if ( $('#account-clients-page-select').length ) {
     $('#account-clients-page-select').pagination({
         dataSource: "/account/" + accountID + "/clients",
-        hideWhenLessThanOnePage: true,
-        nextText: '<div class="pagination-arrow pagination-arrow-right"></div>',
-        prevText: '<div class="pagination-arrow pagination-arrow-left"></div>',
-        locator: "clients",
-        totalNumberLocator: function(response) {
-            return response.count;
-        },
         callback: function(data) {
             var html = '';
-
             if (data.length > 0) {
                 $.each(data, function(_, item){
                     html += '<tr><td>' + item.miner + '</td><td>' + item.hashrate + '</td></tr>';
@@ -76,16 +58,8 @@ if ( $('#account-clients-page-select').length ) {
 if ($('#reward-quotas-page-select').length) {
     $('#reward-quotas-page-select').pagination({
         dataSource: "/rewardquotas",
-        hideWhenLessThanOnePage: true,
-        nextText: '<div class="pagination-arrow pagination-arrow-right"></div>',
-        prevText: '<div class="pagination-arrow pagination-arrow-left"></div>',
-        locator: "rewardquotas",
-        totalNumberLocator: function (response) {
-            return response.count;
-        },
         callback: function (data) {
             var html = '';
-
             if (data.length > 0) {
                 $.each(data, function (_, item) {
                     html += '<tr><td>' + item.percent + '</td><td><span class="dcr-label">' + item.accountid + '</span></td></tr>';
@@ -101,16 +75,8 @@ if ($('#reward-quotas-page-select').length) {
 if ($('#pending-payments-page-select').length) {
     $('#pending-payments-page-select').pagination({
         dataSource: "/account/" + accountID + "/payments/pending",
-        hideWhenLessThanOnePage: true,
-        nextText: '<div class="pagination-arrow pagination-arrow-right"></div>',
-        prevText: '<div class="pagination-arrow pagination-arrow-left"></div>',
-        locator: "pendingpayments",
-        totalNumberLocator: function (response) {
-            return response.count;
-        },
         callback: function (data) {
             var html = '';
-
             if (data.length > 0) {
                 $.each(data, function (_, item) {
                     html += '<tr><td><a href="' +  item.workheighturl + '" rel="noopener noreferrer">' +  item.workheight + '</a></td><td>' +  item.createdon + '</td><td>' +  item.amount + '</td></tr>';
@@ -126,16 +92,8 @@ if ($('#pending-payments-page-select').length) {
 if ($('#archived-payments-page-select').length) {
     $('#archived-payments-page-select').pagination({
         dataSource: "/account/" + accountID + "/payments/archived",
-        hideWhenLessThanOnePage: true,
-        nextText: '<div class="pagination-arrow pagination-arrow-right"></div>',
-        prevText: '<div class="pagination-arrow pagination-arrow-left"></div>',
-        locator: "archivedpayments",
-        totalNumberLocator: function (response) {
-            return response.count;
-        },
         callback: function (data) {
             var html = '';
-
             if (data.length > 0) {
                 $.each(data, function (_, item) {
                     html += '<tr><td><a href="' +  item.workheighturl + '" rel="noopener noreferrer">' +  item.workheight + '</a></td><td><a href="' +  item.paidheighturl + '" rel="noopener noreferrer">' +  item.paidheight + '</a></td><td>' +  item.createdon + '</td><td>' +  item.amount + '</td><td><a href="' +  item.txurl + '" rel="noopener noreferrer">' +  item.txid + '</a></td></tr>';
