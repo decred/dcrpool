@@ -101,6 +101,7 @@ type HubConfig struct {
 	NonceIterations       float64
 	MinerPorts            map[string]uint32
 	MaxConnectionsPerHost uint32
+	WalletAccount         uint32
 }
 
 // Hub maintains the set of active clients and facilitates message broadcasting
@@ -479,7 +480,7 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 	}
 
 	balanceReq := &walletrpc.BalanceRequest{
-		AccountNumber:         0,
+		AccountNumber:         h.cfg.WalletAccount,
 		RequiredConfirmations: 1,
 	}
 
@@ -507,7 +508,7 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 	}
 
 	constructTxReq := &walletrpc.ConstructTransactionRequest{
-		SourceAccount:            0,
+		SourceAccount:            h.cfg.WalletAccount,
 		RequiredConfirmations:    1,
 		OutputSelectionAlgorithm: walletrpc.ConstructTransactionRequest_ALL,
 		NonChangeOutputs:         outs,

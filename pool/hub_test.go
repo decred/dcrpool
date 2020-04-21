@@ -3,6 +3,7 @@ package pool
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -29,14 +30,20 @@ import (
 type tWalletConnection struct {
 }
 
-func (t *tWalletConnection) Balance(ctx context.Context, in *walletrpc.BalanceRequest, opts ...grpc.CallOption) (*walletrpc.BalanceResponse, error) {
+func (t *tWalletConnection) Balance(_ context.Context, in *walletrpc.BalanceRequest, _ ...grpc.CallOption) (*walletrpc.BalanceResponse, error) {
+	if in.AccountNumber != 69 {
+		return nil, errors.New("expected Balance to be called with AccountNumber=69, as defined in hub config")
+	}
 	return &walletrpc.BalanceResponse{
 		Total:     90009989240,
 		Spendable: 90009989240,
 	}, nil
 }
 
-func (t *tWalletConnection) ConstructTransaction(context.Context, *walletrpc.ConstructTransactionRequest, ...grpc.CallOption) (*walletrpc.ConstructTransactionResponse, error) {
+func (t *tWalletConnection) ConstructTransaction(_ context.Context, in *walletrpc.ConstructTransactionRequest, _ ...grpc.CallOption) (*walletrpc.ConstructTransactionResponse, error) {
+	if in.SourceAccount != 69 {
+		return nil, errors.New("expected ConstructTransaction to be called with SourceAccount=69, as defined in hub config")
+	}
 	unsignedTx, err := hex.DecodeString("010000000432e2698697e10772e4e98e994089d" +
 		"bcd444f65638c770419cdbc5ba53d9581c80000000000ffffffff7739bf88638c5f3" +
 		"0cae3423f6052d37d5dccc016d22ee8dc0c889f0c112927f10200000000ffffffffc" +
@@ -238,6 +245,7 @@ func testHub(t *testing.T, db *bolt.DB) {
 			WhatsminerD1:  5555,
 			ObeliskDCR1:   5551,
 		},
+		WalletAccount: 69,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	hub, err := NewHub(cancel, hcfg)

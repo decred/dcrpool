@@ -54,6 +54,7 @@ const (
 	defaultD1Port                = 5555
 	defaultDesignation           = "YourPoolNameHere"
 	defaultMaxConnectionsPerHost = 100 // 100 connected clients per host
+	defaultWalletAccount         = 0
 )
 
 var (
@@ -95,7 +96,8 @@ type config struct {
 	MaxGenTime            time.Duration `long:"maxgentime" ini-name:"maxgentime" description:"The share creation target time for the pool. Valid time units are {s,m,h}. Minimum 2 seconds. This currently should be below 30 seconds to increase the likelihood a work submission for clients between new work distributions by the pool."`
 	PaymentMethod         string        `long:"paymentmethod" ini-name:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
 	LastNPeriod           time.Duration `long:"lastnperiod" ini-name:"lastnperiod" description:"The time period of interest when using PPLNS payment scheme. Valid time units are {s,m,h}. Minimum 60 seconds."`
-	WalletPass            string        `long:"walletpass" ini-name:"walletpass" description:"The wallet passphrase."`
+	WalletPass            string        `long:"walletpass" ini-name:"walletpass" description:"The wallet passphrase to use when paying dividends to pool contributors."`
+	WalletAccount         uint32        `long:"walletaccount" ini-name:"walletaccount" description:"The wallet account to use when paying dividends to pool contributors."`
 	MinPayment            float64       `long:"minpayment" ini-name:"minpayment" description:"The minimum payment to process for an account."`
 	SoloPool              bool          `long:"solopool" ini-name:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
 	AdminPass             string        `long:"adminpass" ini-name:"adminpass" description:"The admin password."`
@@ -345,6 +347,7 @@ func loadConfig() (*config, []string, error) {
 		DR5Port:               defaultDR5Port,
 		D1Port:                defaultD1Port,
 		DCR1Port:              defaultDCR1Port,
+		WalletAccount:         defaultWalletAccount,
 	}
 
 	// Service options which are only added on Windows.

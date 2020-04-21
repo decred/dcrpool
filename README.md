@@ -133,7 +133,7 @@ the pool account and the fee account, for the mining pool. This account structur
 separates revenue earned from pool operations from mining rewards gotten on 
 behalf of participating clients. The pool account's purpose is to receive 
 mining rewards of the pool. The address generated from it should be the mining 
-address (`--miningaddress`) of the mining node. The fee account's purpose is to 
+address (`--miningaddr`) of the mining node. The fee account's purpose is to 
 receive pool fees of the mining pool. The address generated from it should be 
 the address set as the pool fee address (`--poolfeeaddrs`) of the mining pool.
 

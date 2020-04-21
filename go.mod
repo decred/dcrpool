@@ -3,7 +3,6 @@ module github.com/decred/dcrpool
 go 1.12
 
 require (
-	github.com/decred/base58 v1.0.2 // indirect
 	github.com/decred/dcrd/blockchain/standalone v1.1.0
 	github.com/decred/dcrd/certgen v1.1.0
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.2
@@ -24,7 +23,7 @@ require (
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/jrick/logrotate v1.0.0
 	go.etcd.io/bbolt v1.3.4
-	golang.org/x/crypto v0.0.0-20200323165209-0ec3e9974c59
-	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
-	google.golang.org/grpc v1.28.0
+	golang.org/x/crypto v0.0.0-20200420201142-3c4aac89819a
+	golang.org/x/time v0.0.0-20200416051211-89c76fbcd5d1
+	google.golang.org/grpc v1.28.1
 )
