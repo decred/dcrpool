@@ -36,6 +36,7 @@ const (
 	defaultDBFilename            = "dcrpool.kv"
 	defaultTLSCertFilename       = "dcrpool.cert"
 	defaultTLSKeyFilename        = "dcrpool.key"
+	defaultRPCUser               = "dcrp"
 	defaultDcrdRPCHost           = "127.0.0.1"
 	defaultWalletGRPCHost        = "127.0.0.1"
 	defaultMaxGenTime            = time.Second * 15
@@ -503,11 +504,9 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	// Ensure the dcrd rpc username is set.
+	// Set the RPCUser
 	if cfg.RPCUser == "" {
-		str := "%s: the rpcuser option is not set"
-		err := fmt.Errorf(str, funcName)
-		return nil, nil, err
+		cfg.RPCUser = defaultRPCUser
 	}
 
 	// Ensure the dcrd rpc password is set.
