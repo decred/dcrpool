@@ -5,8 +5,13 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"crypto/elliptic"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -19,6 +24,8 @@ import (
 	"time"
 
 	flags "github.com/jessevdk/go-flags"
+	"golang.org/x/crypto/ssh/terminal"
+	te "golang.org/x/crypto/ssh/terminal"
 
 	"github.com/decred/dcrd/certgen"
 	"github.com/decred/dcrd/chaincfg/v2"
@@ -313,7 +320,7 @@ func normalizeAddress(addr, defaultPort string) string {
 // The above results in dcrpool functioning properly without any config settings
 // while still allowing the user to override settings with config files and
 // command line options.  Command line options always take precedence.
-func loadConfig() (*config, []string, error) {
+func loadConfig(ctx context.Context) (*config, []string, error) {
 	// Default config.
 	cfg := config{
 		HomeDir:               dcrpoolHomeDir,
@@ -496,11 +503,20 @@ func loadConfig() (*config, []string, error) {
 	// logger variables may be used.
 	initLogRotator(filepath.Join(cfg.LogDir, defaultLogFilename))
 
-	// Ensure the admin password is set.
+	// Ensure the admin password is set, if not prompt the user.
 	if cfg.AdminPass == "" {
-		str := "%s: the adminpass option is not set"
-		err := fmt.Errorf(str, funcName)
-		return nil, nil, err
+	Loop:
+		for {
+			pass, err := adminPassPrompt(ctx, "Enter the admin pass for your mining pool", true)
+			cfg.AdminPass = string(pass)
+			if err != nil {
+				// prompt for adminpass again if error occurs
+				continue Loop
+			}
+
+			// exit the while loop
+			break
+		}
 	}
 
 	// Ensure the dcrd rpc username is set.
@@ -696,4 +712,67 @@ func loadConfig() (*config, []string, error) {
 	}
 
 	return &cfg, remainingArgs, nil
+}
+
+func adminPassPrompt(ctx context.Context, prefix string, confirm bool) (passphrase []byte, err error) {
+	os.Stdout.Sync()
+	c := make(chan struct{}, 1)
+	go func() {
+		passphrase, err = passPrompt(bufio.NewReader(os.Stdin), prefix, confirm)
+		c <- struct{}{}
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-c:
+		return passphrase, err
+	}
+}
+
+// PassPrompt prompts the user for a passphrase with the given prefix.  The
+// function will ask the user to confirm the passphrase and will repeat the
+// prompts until they enter a matching response.
+func passPrompt(reader *bufio.Reader, prefix string, confirm bool) ([]byte, error) {
+	// Prompt the user until they enter a passphrase.
+	prompt := fmt.Sprintf("%s: ", prefix)
+	for {
+		fmt.Print(prompt)
+		var pass []byte
+		var err error
+		fd := int(os.Stdin.Fd())
+		if terminal.IsTerminal(fd) {
+			pass, err = terminal.ReadPassword(fd)
+		} else {
+			pass, err = reader.ReadBytes('\n')
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
+		fmt.Print("\n")
+		pass = bytes.TrimSpace(pass)
+		if len(pass) == 0 {
+			continue
+		}
+
+		if !confirm {
+			return pass, nil
+		}
+
+		fmt.Print("Confirm passphrase: ")
+		confirm, err := te.ReadPassword(int(os.Stdin.Fd()))
+		if err != nil {
+			return nil, err
+		}
+		fmt.Print("\n")
+		confirm = bytes.TrimSpace(confirm)
+		if !bytes.Equal(pass, confirm) {
+			fmt.Println("The entered passphrases do not match")
+			continue
+		}
+
+		return pass, nil
+	}
 }

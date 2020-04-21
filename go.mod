@@ -26,5 +26,6 @@ require (
 	go.etcd.io/bbolt v1.3.4
 	golang.org/x/crypto v0.0.0-20200323165209-0ec3e9974c59
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
+	google.golang.org/appengine v1.4.0
 	google.golang.org/grpc v1.28.0
 )

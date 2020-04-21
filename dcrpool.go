@@ -220,9 +220,16 @@ func main() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		shutdown := make(chan struct{})
+		<-shutdown
+		cancel()
+	}()
+
 	// Load configuration and parse command line. This also initializes logging
 	// and configures it accordingly.
-	cfg, _, err := loadConfig()
+	cfg, _, err := loadConfig(ctx)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
