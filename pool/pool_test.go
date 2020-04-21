@@ -94,7 +94,6 @@ func TestPool(t *testing.T) {
 	testSharePercentages(t)
 	testCalculatePoolTarget(t)
 	testGeneratePaymentDetails(t, db)
-	testArchivedPaymentsFiltering(t, db)
 	testAccountPayments(t, db)
 	testDifficulty(t)
 	testEndpoint(t, db)

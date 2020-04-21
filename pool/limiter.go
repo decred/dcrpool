@@ -30,9 +30,10 @@ const (
 	// per second.
 	guiTokenRate = 3
 	// guiBurst is the maximum token usage allowed per second, for gui clients.
-	// This needs to be >= 5 because a single page can make multiple requests,
-	// eg. pagination, establishing a websocket, AJAX form submissions.
-	guiBurst = 5
+	// The value of guiBurst should consider that a single page can make
+	// multiple requests, eg. pagination, establishing a websocket, AJAX form
+	// submissions.
+	guiBurst = 7
 )
 
 // RateLimiter keeps connected clients within their allocated request rates.

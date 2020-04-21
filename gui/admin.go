@@ -19,10 +19,10 @@ type adminPageData struct {
 	ConnectedClients map[string][]client
 }
 
-// AdminPage is the handler for "GET /admin". If the current session is
+// adminPage is the handler for "GET /admin". If the current session is
 // authenticated as an admin, the admin.html template is rendered, otherwise
 // returns a redirection to the homepage.
-func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) adminPage(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(sessionKey).(*sessions.Session)
 
 	if session.Values["IsAdmin"] != true {
@@ -53,10 +53,10 @@ func (ui *GUI) AdminPage(w http.ResponseWriter, r *http.Request) {
 	ui.renderTemplate(w, "admin", pageData)
 }
 
-// AdminLogin is the handler for "POST /admin". If proper admin credentials are
+// adminLogin is the handler for "POST /admin". If proper admin credentials are
 // supplied, the session is authenticated and a "200 OK" response is returned,
 // otherwise a "401 Unauthorized" response is returned.
-func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) adminLogin(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(sessionKey).(*sessions.Session)
 
 	pass := r.FormValue("password")
@@ -77,10 +77,10 @@ func (ui *GUI) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// AdminLogout is the handler for "POST /logout". The admin authentication is
+// adminLogout is the handler for "POST /logout". The admin authentication is
 // removed from the current session and the request is redirected to the
 // homepage handler.
-func (ui *GUI) AdminLogout(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) adminLogout(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(sessionKey).(*sessions.Session)
 
 	session.Values["IsAdmin"] = false
@@ -93,10 +93,10 @@ func (ui *GUI) AdminLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// DownloadDatabaseBackup is the handler for "POST /backup". If the current
+// downloadDatabaseBackup is the handler for "POST /backup". If the current
 // session is authenticated as an admin, a binary representation of the whole
 // database is generated and returned to the client.
-func (ui *GUI) DownloadDatabaseBackup(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) downloadDatabaseBackup(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(sessionKey).(*sessions.Session)
 
 	if session.Values["IsAdmin"] != true {

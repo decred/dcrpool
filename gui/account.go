@@ -5,7 +5,6 @@
 package gui
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/decred/dcrpool/pool"
@@ -17,17 +16,18 @@ import (
 type accountPageData struct {
 	HeaderData       headerData
 	MinedWork        []minedWork
-	Payments         []*pool.Payment
+	ArchivedPayments []archivedPayment
+	PendingPayments  []pendingPayment
 	ConnectedClients []client
 	AccountID        string
 	Address          string
 	BlockExplorerURL string
 }
 
-// Account is the handler for "GET /account". Renders the account template if
+// account is the handler for "GET /account". Renders the account template if
 // a valid address with associated account information is provided,
 // otherwise renders the index template with an appropriate error message.
-func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) account(w http.ResponseWriter, r *http.Request) {
 
 	address := r.FormValue("address")
 	if address == "" {
@@ -59,11 +59,16 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	payments, err := ui.cfg.FetchPaymentsForAccount(accountID)
-	if err != nil {
-		ui.renderIndex(w, r, fmt.Sprintf("FetchPaymentsForAddress error: %v",
-			err.Error()))
-		return
+	// Get this accounts pending payments (max 10).
+	pendingPmts := ui.cache.getPendingPayments()[accountID]
+	if len(pendingPmts) > 10 {
+		pendingPmts = pendingPmts[0:10]
+	}
+
+	// Get this accounts archived payments (max 10).
+	archivedPmts := ui.cache.getArchivedPayments()[accountID]
+	if len(archivedPmts) > 10 {
+		archivedPmts = archivedPmts[0:10]
 	}
 
 	// Get this accounts connected clients (max 10).
@@ -79,7 +84,8 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 			ShowMenu:    true,
 		},
 		MinedWork:        recentWork,
-		Payments:         payments,
+		PendingPayments:  pendingPmts,
+		ArchivedPayments: archivedPmts,
 		ConnectedClients: clients,
 		AccountID:        accountID,
 		Address:          address,
@@ -89,10 +95,10 @@ func (ui *GUI) Account(w http.ResponseWriter, r *http.Request) {
 	ui.renderTemplate(w, "account", data)
 }
 
-// IsPoolAccount is the handler for "HEAD /account". If the provided
+// isPoolAccount is the handler for "HEAD /account". If the provided
 // address has an account on the server a "200 OK" response is returned,
 // otherwise a "400 Bad Request" or "404 Not Found" are returned.
-func (ui *GUI) IsPoolAccount(w http.ResponseWriter, r *http.Request) {
+func (ui *GUI) isPoolAccount(w http.ResponseWriter, r *http.Request) {
 
 	address := r.FormValue("address")
 

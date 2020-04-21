@@ -5,7 +5,6 @@
 package pool
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -86,7 +85,7 @@ func GetPayment(db *bolt.DB, id []byte) (*Payment, error) {
 		}
 		v := bkt.Get(id)
 		if v == nil {
-			desc := fmt.Sprintf("no account found for id %s", string(id))
+			desc := fmt.Sprintf("no payment found for id %s", string(id))
 			return MakeError(ErrValueNotFound, desc, nil)
 		}
 		err = json.Unmarshal(v, &payment)
@@ -192,8 +191,8 @@ func (bundle *PaymentBundle) ArchivePayments(db *bolt.DB) error {
 	return err
 }
 
-// generatePaymentBundles creates batched payments from the provided
-// set of payments.
+// generatePaymentBundles creates batched payments from the provided set of
+// payments. Multiple payments for the same account will be bundled together.
 func generatePaymentBundles(payments []*Payment) []*PaymentBundle {
 	bundles := make([]*PaymentBundle, 0)
 	for _, payment := range payments {
@@ -305,14 +304,10 @@ func generatePaymentDetails(db *bolt.DB, poolFeeAddr dcrutil.Address,
 	return pmts, &targetAmt, nil
 }
 
-// fetchArchivedPaymentsForAccount fetches the N most recent archived payments
-// for the provided account.
-// List is ordered, most recent comes first.
-func fetchArchivedPaymentsForAccount(db *bolt.DB, id string, n uint) ([]*Payment, error) {
+// fetchArchivedPayments fetches all archived payments. List is ordered, most
+// recent comes first.
+func fetchArchivedPayments(db *bolt.DB) ([]*Payment, error) {
 	pmts := make([]*Payment, 0)
-	if n == 0 {
-		return pmts, nil
-	}
 	err := db.View(func(tx *bolt.Tx) error {
 		abkt, err := fetchPaymentArchiveBucket(tx)
 		if err != nil {
@@ -320,18 +315,12 @@ func fetchArchivedPaymentsForAccount(db *bolt.DB, id string, n uint) ([]*Payment
 		}
 		c := abkt.Cursor()
 		for k, v := c.Last(); k != nil; k, v = c.Prev() {
-			accountE := k[16:]
-			if bytes.Equal(accountE, []byte(id)) {
-				var payment Payment
-				err := json.Unmarshal(v, &payment)
-				if err != nil {
-					return err
-				}
-				pmts = append(pmts, &payment)
-				if len(pmts) == int(n) {
-					return nil
-				}
+			var payment Payment
+			err := json.Unmarshal(v, &payment)
+			if err != nil {
+				return err
 			}
+			pmts = append(pmts, &payment)
 		}
 		return nil
 	})
@@ -341,60 +330,12 @@ func fetchArchivedPaymentsForAccount(db *bolt.DB, id string, n uint) ([]*Payment
 	return pmts, nil
 }
 
-// fetchPendingPaymentsForAccount fetches the N most recent pending payments for
-// the provided account.
-// List is ordered, most recent comes first.
-func fetchPendingPaymentsForAccount(db *bolt.DB, id string, n uint) ([]*Payment, error) {
-	pmts := make([]*Payment, 0)
-	if n == 0 {
-		return pmts, nil
-	}
-	err := db.View(func(tx *bolt.Tx) error {
-		abkt, err := fetchPaymentBucket(tx)
-		if err != nil {
-			return err
-		}
-		c := abkt.Cursor()
-		for k, v := c.Last(); k != nil; k, v = c.Prev() {
-			accountE := k[16:]
-			if bytes.Equal(accountE, []byte(id)) {
-				var payment Payment
-				err := json.Unmarshal(v, &payment)
-				if err != nil {
-					return err
-				}
-				if payment.PaidOnHeight == 0 {
-					pmts = append(pmts, &payment)
-					if len(pmts) == int(n) {
-						return nil
-					}
-				}
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return pmts, nil
+// FetchPendingPayments fetches all unpaid payments.
+func (h *Hub) FetchPendingPayments() ([]*Payment, error) {
+	return fetchPendingPayments(h.db)
 }
 
-// fetchPaymentsForAccount fetches the N most recent payments (archived or pending)
-// for the provided account.
-// List is ordered, pending payments first, archived payments after.
-func fetchPaymentsForAccount(db *bolt.DB, id string, n uint) ([]*Payment, error) {
-	pmts, err := fetchPendingPaymentsForAccount(db, id, n)
-	if err != nil {
-		return nil, err
-	}
-	size := len(pmts)
-	if uint(size) < n {
-		remainder := n - uint(size)
-		apmts, err := fetchArchivedPaymentsForAccount(db, id, remainder)
-		if err != nil {
-			return nil, err
-		}
-		pmts = append(pmts, apmts...)
-	}
-	return pmts, nil
+// FetchArchivedPayments fetches all paid payments.
+func (h *Hub) FetchArchivedPayments() ([]*Payment, error) {
+	return fetchArchivedPayments(h.db)
 }
