@@ -347,27 +347,18 @@ func (ui *GUI) Run(ctx context.Context) {
 	// Use a ticker to periodically update cached data and push updates through
 	// any established websockets
 	go func(ctx context.Context) {
-		var ticks uint32
 		signalCh := ui.cfg.FetchCacheChannel()
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ticker.C:
-				ticks++
-
-				// Periodically update the connected clients and pool hash rate
-				// after three ticks (15 seconds).
-				if ticks == 3 {
-					clients := ui.cfg.FetchClients()
-					ui.cache.updateClients(clients)
-					ui.updateWebSocket()
-					ticks = 0
-				}
+				clients := ui.cfg.FetchClients()
+				ui.cache.updateClients(clients)
+				ui.updateWebSocket()
 
 			case msg := <-signalCh:
-				// Update the gui based on the cache signal received.
 				switch msg {
 				case pool.Confirmed, pool.Unconfirmed:
 					work, err := ui.cfg.FetchMinedWork()
@@ -379,10 +370,11 @@ func (ui *GUI) Run(ctx context.Context) {
 					ui.cache.updateMinedWork(work)
 					ui.updateWebSocket()
 
-				case pool.ConnectedClient:
+				case pool.ConnectedClient, pool.DisconnectedClient:
+					// Opting to keep connection updates pushed by the ticker
+					// to avoid pushing too much too frequently.
 					clients := ui.cfg.FetchClients()
 					ui.cache.updateClients(clients)
-					ui.updateWebSocket()
 
 				case pool.ClaimedShare:
 					quotas, err := ui.cfg.FetchWorkQuotas()
@@ -398,16 +390,17 @@ func (ui *GUI) Run(ctx context.Context) {
 					pendingPayments, err := ui.cfg.FetchPendingPayments()
 					if err != nil {
 						log.Error(err)
-						return
+						continue
 					}
 
 					archivedPayments, err := ui.cfg.FetchArchivedPayments()
 					if err != nil {
 						log.Error(err)
-						return
+						continue
 					}
 
 					ui.cache.updatePayments(pendingPayments, archivedPayments)
+					ui.updateWebSocket()
 
 				default:
 					log.Errorf("unknown cache signal received: %v", msg)

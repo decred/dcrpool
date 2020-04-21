@@ -57,7 +57,7 @@ const (
 	// because new votes were received.
 	NewVotes = "newvotes"
 	// NewTxns is the reason given when a work notification is generated
-	// new transactions were received
+	// because new transactions were received.
 	NewTxns = "newtxns"
 )
 
@@ -74,8 +74,11 @@ const (
 	// updated to unconfirmed due to a reorg.
 	Unconfirmed
 
-	// ClientUpdate indicates a new client has connected to the pool.
+	// ConnectedClient indicates a new client has connected to the pool.
 	ConnectedClient
+
+	// DisconnectedClient indicates a client has disconnected from the pool.
+	DisconnectedClient
 
 	// ClaimedShare indicates work quotas for participating clients have
 	// been updated.
