@@ -66,6 +66,7 @@ var (
 // WalletConnection defines the functionality needed by a wallet
 // grpc connection for the pool.
 type WalletConnection interface {
+	Balance(ctx context.Context, in *walletrpc.BalanceRequest, opts ...grpc.CallOption) (*walletrpc.BalanceResponse, error)
 	ConstructTransaction(context.Context, *walletrpc.ConstructTransactionRequest, ...grpc.CallOption) (*walletrpc.ConstructTransactionResponse, error)
 	SignTransaction(context.Context, *walletrpc.SignTransactionRequest, ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
 	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
@@ -470,6 +471,28 @@ func (h *Hub) HasClients() bool {
 func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, targetAmt dcrutil.Amount) (string, error) {
 	if h.walletConn == nil {
 		return "", fmt.Errorf("wallet connnection unset")
+	}
+
+	var total dcrutil.Amount
+	for _, amt := range payouts {
+		total += amt
+	}
+
+	balanceReq := &walletrpc.BalanceRequest{
+		AccountNumber:         0,
+		RequiredConfirmations: 1,
+	}
+
+	balanceResp, err := h.walletConn.Balance(context.TODO(), balanceReq)
+	if err != nil {
+		return "", err
+	}
+	spendable := dcrutil.Amount(balanceResp.Spendable)
+
+	if spendable < total {
+		return "", fmt.Errorf("insufficient funds, pool account has only %v "+
+			"to spend, however outgoing transaction will require spending %v",
+			spendable, total)
 	}
 
 	outs := make([]*walletrpc.ConstructTransactionRequest_Output, 0, len(payouts))

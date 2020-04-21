@@ -29,6 +29,13 @@ import (
 type tWalletConnection struct {
 }
 
+func (t *tWalletConnection) Balance(ctx context.Context, in *walletrpc.BalanceRequest, opts ...grpc.CallOption) (*walletrpc.BalanceResponse, error) {
+	return &walletrpc.BalanceResponse{
+		Total:     90009989240,
+		Spendable: 90009989240,
+	}, nil
+}
+
 func (t *tWalletConnection) ConstructTransaction(context.Context, *walletrpc.ConstructTransactionRequest, ...grpc.CallOption) (*walletrpc.ConstructTransactionResponse, error) {
 	unsignedTx, err := hex.DecodeString("010000000432e2698697e10772e4e98e994089d" +
 		"bcd444f65638c770419cdbc5ba53d9581c80000000000ffffffff7739bf88638c5f3" +
