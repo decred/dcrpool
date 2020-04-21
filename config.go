@@ -505,13 +505,13 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 
 	// Ensure the admin password is set, if not prompt the user.
 	if cfg.AdminPass == "" {
-	Loop:
+	PromptAdminPassLoop:
 		for {
-			pass, err := adminPassPrompt(ctx, "Enter the admin pass for your mining pool", true)
+			pass, err := inputPassPrompt(ctx, "Enter the admin pass for your mining pool", true)
 			cfg.AdminPass = string(pass)
 			if err != nil {
 				// prompt for adminpass again if error occurs
-				continue Loop
+				continue PromptAdminPassLoop
 			}
 
 			// exit the while loop
@@ -521,16 +521,33 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 
 	// Ensure the dcrd rpc username is set.
 	if cfg.RPCUser == "" {
-		str := "%s: the rpcuser option is not set"
-		err := fmt.Errorf(str, funcName)
-		return nil, nil, err
+	PromptRPCUserLoop:
+		for {
+			rpcuser, err := textPrompt(ctx, "Enter the rpc user for your mining pool", true)
+			cfg.RPCUser = string(rpcuser)
+			if err != nil {
+				fmt.Printf("%v\n", err)
+				continue PromptRPCUserLoop
+			}
+
+			break
+		}
 	}
 
 	// Ensure the dcrd rpc password is set.
 	if cfg.RPCPass == "" {
-		str := "%s: the rpcpass option is not set"
-		err := fmt.Errorf(str, funcName)
-		return nil, nil, err
+	PromptRPCPass:
+		for {
+			pass, err := inputPassPrompt(ctx, "Enter the rpc pass for your mining pool", true)
+			cfg.RPCPass = string(pass)
+			if err != nil {
+				// prompt for adminpass again if error occurs
+				continue PromptRPCPass
+			}
+
+			// exit the while loop
+			break
+		}
 	}
 
 	// Create the data directory.
@@ -714,7 +731,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 	return &cfg, remainingArgs, nil
 }
 
-func adminPassPrompt(ctx context.Context, prefix string, confirm bool) (passphrase []byte, err error) {
+func inputPassPrompt(ctx context.Context, prefix string, confirm bool) (passphrase []byte, err error) {
 	os.Stdout.Sync()
 	c := make(chan struct{}, 1)
 	go func() {
@@ -727,6 +744,40 @@ func adminPassPrompt(ctx context.Context, prefix string, confirm bool) (passphra
 	case <-c:
 		return passphrase, err
 	}
+}
+
+func textPrompt(ctx context.Context, prefix string, confirm bool) (text string, err error) {
+	os.Stdout.Sync()
+	c := make(chan struct{}, 1)
+	go func() {
+		text, err = getTextPrompt(bufio.NewReader(os.Stdin), prefix, confirm)
+		c <- struct{}{}
+	}()
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-c:
+		return text, err
+	}
+}
+
+func getTextPrompt(reader *bufio.Reader, prefix string, confirm bool) (string, error) {
+	prompt := fmt.Sprintf("%s: ", prefix)
+	text := ""
+	var err error
+	for {
+		fmt.Printf(prompt)
+		text, err = reader.ReadString('\n')
+		fmt.Printf("Received rpcuser: %v\n", text)
+		if err != nil {
+			fmt.Sprintf("Failed to get text rpc pass from terminal")
+			continue
+		}
+
+		break
+	}
+
+	return text, nil
 }
 
 // PassPrompt prompts the user for a passphrase with the given prefix.  The
@@ -767,6 +818,7 @@ func passPrompt(reader *bufio.Reader, prefix string, confirm bool) ([]byte, erro
 			return nil, err
 		}
 		fmt.Print("\n")
+		fmt.Print("Received the passphrase\n\n")
 		confirm = bytes.TrimSpace(confirm)
 		if !bytes.Equal(pass, confirm) {
 			fmt.Println("The entered passphrases do not match")
