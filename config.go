@@ -97,7 +97,7 @@ type config struct {
 	PaymentMethod         string        `long:"paymentmethod" ini-name:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
 	LastNPeriod           time.Duration `long:"lastnperiod" ini-name:"lastnperiod" description:"The time period of interest when using PPLNS payment scheme. Valid time units are {s,m,h}. Minimum 60 seconds."`
 	WalletPass            string        `long:"walletpass" ini-name:"walletpass" description:"The wallet passphrase to use when paying dividends to pool contributors."`
-	WalletAccount         uint32        `long:"walletaccount" ini-name:"walletaccount" description:"The wallet account to use when paying dividends to pool contributors."`
+	WalletAccount         uint32        `long:"walletaccount" ini-name:"walletaccount" description:"The wallet account that will receive mining rewards when not mining as a solo pool."`
 	MinPayment            float64       `long:"minpayment" ini-name:"minpayment" description:"The minimum payment to process for an account."`
 	SoloPool              bool          `long:"solopool" ini-name:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
 	AdminPass             string        `long:"adminpass" ini-name:"adminpass" description:"The admin password."`
