@@ -61,7 +61,7 @@ const (
 	NewTxns = "newtxns"
 )
 
-// CacheupdateEvent represents the a cache update event message.
+// CacheUpdateEvent represents the a cache update event message.
 type CacheUpdateEvent int
 
 // Constants for the type of template regeneration event messages.
@@ -342,7 +342,7 @@ func (h *Hub) FetchLastWorkHeight() uint32 {
 	return h.chainState.fetchLastWorkHeight()
 }
 
-// FetchLastPaymentheight returns the last payment height of the pool.
+// FetchLastPaymentHeight returns the last payment height of the pool.
 func (h *Hub) FetchLastPaymentHeight() uint32 {
 	return h.paymentMgr.fetchLastPaymentHeight()
 }
@@ -350,6 +350,12 @@ func (h *Hub) FetchLastPaymentHeight() uint32 {
 // AddPaymentRequest creates a payment request for the provided address.
 func (h *Hub) AddPaymentRequest(addr string) error {
 	return h.paymentMgr.addPaymentRequest(addr)
+}
+
+// IsPaymentRequested checks if a payment request has already been requested
+// for the account.
+func (h *Hub) IsPaymentRequested(accountID string) bool {
+	return h.paymentMgr.isPaymentRequested(accountID)
 }
 
 // getBlock fetches the blocks associated with the provided block hash.
