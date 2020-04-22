@@ -8,49 +8,57 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var clients = make(map[*websocket.Conn]bool)
-var clientsMtx sync.Mutex
-var upgrader = websocket.Upgrader{}
+// WebsocketServer maintains a list of connected websocket clients (protected by
+// a mutex), and is able to send payloads to them. It is used for sending
+// updated pool stats to connected GUI clients.
+type WebsocketServer struct {
+	clients    map[*websocket.Conn]bool
+	clientsMtx sync.Mutex
+	upgrader   websocket.Upgrader
+}
+
+// NewWebsocketServer returns an initialized websocket server.
+func NewWebsocketServer() *WebsocketServer {
+	return &WebsocketServer{
+		clients:  make(map[*websocket.Conn]bool),
+		upgrader: websocket.Upgrader{},
+	}
+}
 
 // payload represents a websocket update message.
 type payload struct {
-	PoolHashRate      string `json:"poolhashrate"`
-	LastWorkHeight    uint32 `json:"lastworkheight"`
-	LastPaymentHeight uint32 `json:"lastpaymentheight"`
+	PoolHashRate      string `json:"poolhashrate,omitempty"`
+	LastWorkHeight    uint32 `json:"lastworkheight,omitempty"`
+	LastPaymentHeight uint32 `json:"lastpaymentheight,omitempty"`
 }
 
-// registerWebSocket is the handler for "GET /ws". It updates the HTTP request
+// registerClient is the handler for "GET /ws". It updates the HTTP request
 // to a websocket and adds the caller to a list of connected clients.
-func (ui *GUI) registerWebSocket(w http.ResponseWriter, r *http.Request) {
-	ws, err := upgrader.Upgrade(w, r, nil)
+func (s *WebsocketServer) registerClient(w http.ResponseWriter, r *http.Request) {
+	ws, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Errorf("registerWebSocket error: %v", err)
+		log.Errorf("ws.registerClient error: %v", err)
 		return
 	}
-	clientsMtx.Lock()
-	clients[ws] = true
-	clientsMtx.Unlock()
+	s.clientsMtx.Lock()
+	s.clients[ws] = true
+	s.clientsMtx.Unlock()
 }
 
-// updateWebSocket sends updates to all connected websocket clients.
-func (ui *GUI) updateWebSocket() {
-	msg := payload{
-		LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
-		LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
-		PoolHashRate:      ui.cache.getPoolHash(),
-	}
-	clientsMtx.Lock()
-	for client := range clients {
-		err := client.WriteJSON(msg)
+// send sends the provided payload to all connected websocket clients.
+func (s *WebsocketServer) send(payload payload) {
+	s.clientsMtx.Lock()
+	for client := range s.clients {
+		err := client.WriteJSON(payload)
 		if err != nil {
 			// "broken pipe" indicates the client has disconnected.
 			// We don't need to log an error in this case.
 			if !strings.Contains(err.Error(), "write: broken pipe") {
-				log.Errorf("updateWebSocket: error on client %s: %v", client.LocalAddr(), err)
+				log.Errorf("ws.send: error on client %s: %v", client.LocalAddr(), err)
 			}
 			client.Close()
-			delete(clients, client)
+			delete(s.clients, client)
 		}
 	}
-	clientsMtx.Unlock()
+	s.clientsMtx.Unlock()
 }

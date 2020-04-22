@@ -90,13 +90,14 @@ type Config struct {
 
 // GUI represents the the mining pool user interface.
 type GUI struct {
-	cfg         *Config
-	limiter     *pool.RateLimiter
-	templates   *template.Template
-	cookieStore *sessions.CookieStore
-	router      *mux.Router
-	server      *http.Server
-	cache       *Cache
+	cfg             *Config
+	limiter         *pool.RateLimiter
+	templates       *template.Template
+	cookieStore     *sessions.CookieStore
+	router          *mux.Router
+	server          *http.Server
+	cache           *Cache
+	websocketServer *WebsocketServer
 }
 
 // poolStatsData contains all of the necessary information to render the
@@ -156,7 +157,7 @@ func (ui *GUI) route() {
 	guiRouter.HandleFunc("/account/{accountID}/payments/archived", ui.paginatedArchivedPaymentsByAccount).Methods("GET")
 
 	// Websocket endpoint allows the GUI to receive updated values.
-	guiRouter.HandleFunc("/ws", ui.registerWebSocket).Methods("GET")
+	guiRouter.HandleFunc("/ws", ui.websocketServer.registerClient).Methods("GET")
 }
 
 // renderTemplate executes the provided template.
@@ -192,6 +193,7 @@ func NewGUI(cfg *Config) (*GUI, error) {
 	}
 
 	ui.cookieStore = sessions.NewCookieStore(cfg.CSRFSecret)
+	ui.websocketServer = NewWebsocketServer()
 
 	err := ui.loadTemplates()
 	if err != nil {
@@ -356,7 +358,9 @@ func (ui *GUI) Run(ctx context.Context) {
 			case <-ticker.C:
 				clients := ui.cfg.FetchClients()
 				ui.cache.updateClients(clients)
-				ui.updateWebSocket()
+				ui.websocketServer.send(payload{
+					PoolHashRate: ui.cache.getPoolHash(),
+				})
 
 			case msg := <-signalCh:
 				switch msg {
@@ -368,7 +372,9 @@ func (ui *GUI) Run(ctx context.Context) {
 					}
 
 					ui.cache.updateMinedWork(work)
-					ui.updateWebSocket()
+					ui.websocketServer.send(payload{
+						LastWorkHeight: ui.cfg.FetchLastWorkHeight(),
+					})
 
 				case pool.ConnectedClient, pool.DisconnectedClient:
 					// Opting to keep connection updates pushed by the ticker
@@ -384,7 +390,6 @@ func (ui *GUI) Run(ctx context.Context) {
 					}
 
 					ui.cache.updateRewardQuotas(quotas)
-					ui.updateWebSocket()
 
 				case pool.DividendsPaid:
 					pendingPayments, err := ui.cfg.FetchPendingPayments()
@@ -400,7 +405,9 @@ func (ui *GUI) Run(ctx context.Context) {
 					}
 
 					ui.cache.updatePayments(pendingPayments, archivedPayments)
-					ui.updateWebSocket()
+					ui.websocketServer.send(payload{
+						LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
+					})
 
 				default:
 					log.Errorf("unknown cache signal received: %v", msg)
