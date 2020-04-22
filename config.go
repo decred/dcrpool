@@ -514,6 +514,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 				continue PromptAdminPassLoop
 			}
 
+			writeToConfig(cfg.ConfigFile, "AdminPass", cfg.AdminPass)
 			// exit the while loop
 			break
 		}
@@ -530,6 +531,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 				continue PromptRPCUserLoop
 			}
 
+			writeToConfig(cfg.ConfigFile, "RPCUser", cfg.RPCUser)
 			break
 		}
 	}
@@ -545,7 +547,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 				continue PromptRPCPass
 			}
 
-			// exit the while loop
+			writeToConfig(cfg.ConfigFile, "RPCPass", cfg.RPCPass)
 			break
 		}
 	}
@@ -827,4 +829,25 @@ func passPrompt(reader *bufio.Reader, prefix string, confirm bool) ([]byte, erro
 
 		return pass, nil
 	}
+}
+
+func writeToConfig(filePath, keyword, text string) error {
+	config, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	lines := strings.Split(string(config), "\n")
+
+	for i := 0; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], keyword) {
+			lines[i] = lines[i] + ":" + text + "\n"
+		}
+	}
+
+	for i := 0; i < len(lines); i++ {
+		ioutil.WriteFile(filePath, []byte(lines[i]), 0644)
+	}
+
+	return nil
 }
