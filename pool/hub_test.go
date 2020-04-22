@@ -390,23 +390,6 @@ func testHub(t *testing.T, db *bolt.DB) {
 		"8000000100000000000005a0"
 	hub.processWork(workE)
 
-	// Wait for work distribution.
-	time.Sleep(time.Millisecond * 500)
-
-	// Ensure all connected clients received work.
-	for _, endpoint := range hub.endpoints {
-		endpoint.clientsMtx.Lock()
-		for _, client := range endpoint.clients {
-			lastWorkTime := atomic.LoadInt64(&client.lastWorkTime)
-			if lastWorkTime == 0 {
-				t.Fatalf("expected last work time for %s connection "+
-					"to be more than zero, got %d", client.id,
-					client.lastWorkTime)
-			}
-		}
-		endpoint.clientsMtx.Unlock()
-	}
-
 	// Get a block and publish a bogus transaction by confirming the
 	// mined accepted work.
 	hub.chainState.setCurrentWork(workE)
