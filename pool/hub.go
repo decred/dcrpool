@@ -167,7 +167,7 @@ func (h *Hub) SignalCache(event CacheUpdateEvent) {
 	select {
 	case h.cacheCh <- event:
 	default:
-		// Non-breaking send falltrough.
+		// Non-breaking send fallthrough.
 	}
 }
 

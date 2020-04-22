@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function updateElement(elementID, value) {
+    if (value === undefined) return;
     el = document.getElementById(elementID);
     if (el.innerHTML != value) {
         el.innerHTML = value;
