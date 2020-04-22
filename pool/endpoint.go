@@ -47,6 +47,8 @@ type EndpointConfig struct {
 	RemoveConnection func(string)
 	// FetchHostConnections returns the host connection for the provided host.
 	FetchHostConnections func(string) uint32
+	// SignalCache sends the provided cache update event to the gui cache.
+	SignalCache func(event CacheUpdateEvent)
 }
 
 // connection wraps a client connection and a done channel.
@@ -169,6 +171,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 				HashCalcThreshold: hashCalcThreshold,
 				MaxGenTime:        e.cfg.MaxGenTime,
 				ClientTimeout:     clientTimeout,
+				SignalCache:       e.cfg.SignalCache,
 			}
 			client, err := NewClient(msg.Conn, tcpAddr, cCfg)
 			if err != nil {
@@ -182,6 +185,12 @@ func (e *Endpoint) connect(ctx context.Context) {
 			e.clientsMtx.Unlock()
 			e.cfg.AddConnection(host)
 			go client.run(client.ctx)
+
+			// Signal the gui cache of the connected client.
+			if e.cfg.SignalCache != nil {
+				e.cfg.SignalCache(ConnectedClient)
+			}
+
 			close(msg.Done)
 		}
 	}

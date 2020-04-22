@@ -50,9 +50,43 @@ const (
 	getworkDataLen = (1 + ((wire.MaxBlockHeaderPayload*8 + 65) /
 		(chainhash.HashBlockSize * 8))) * chainhash.HashBlockSize
 
+	// NewParent is the reason given when a work notification is generated
+	// because there is a new chain tip.
 	NewParent = "newparent"
-	NewVotes  = "newvotes"
-	NewTxns   = "newtxns"
+	// NewVotes is the reason given when a work notification is generated
+	// because new votes were received.
+	NewVotes = "newvotes"
+	// NewTxns is the reason given when a work notification is generated
+	// because new transactions were received.
+	NewTxns = "newtxns"
+)
+
+// CacheupdateEvent represents the a cache update event message.
+type CacheUpdateEvent int
+
+// Constants for the type of template regeneration event messages.
+const (
+	// Confirmed indicates an accepted work has been updated as
+	// confirmed mined.
+	Confirmed CacheUpdateEvent = iota
+
+	// Unconfirmed indicates a previously confimed mined work has been
+	// updated to unconfirmed due to a reorg.
+	Unconfirmed
+
+	// ConnectedClient indicates a new client has connected to the pool.
+	ConnectedClient
+
+	// DisconnectedClient indicates a client has disconnected from the pool.
+	DisconnectedClient
+
+	// ClaimedShare indicates work quotas for participating clients have
+	// been updated.
+	ClaimedShare
+
+	// DividendsPaid indicates dividends due participating miners have been
+	// paid.
+	DividendsPaid
 )
 
 var (
@@ -125,6 +159,21 @@ type Hub struct {
 	endpoints      []*Endpoint
 	blake256Pad    []byte
 	wg             *sync.WaitGroup
+	cacheCh        chan CacheUpdateEvent
+}
+
+// SignalCache sends the provided cache update event to the gui cache.
+func (h *Hub) SignalCache(event CacheUpdateEvent) {
+	select {
+	case h.cacheCh <- event:
+	default:
+		// Non-breaking send falltrough.
+	}
+}
+
+// FetchCacheChannel returns the gui cache signal chanel.
+func (h *Hub) FetchCacheChannel() chan CacheUpdateEvent {
+	return h.cacheCh
 }
 
 // SetNodeConnection sets the mining node connection.
@@ -184,6 +233,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		limiter:     NewRateLimiter(),
 		wg:          new(sync.WaitGroup),
 		connections: make(map[string]uint32),
+		cacheCh:     make(chan CacheUpdateEvent, bufferSize),
 		cancel:      cancel,
 	}
 	h.blake256Pad = generateBlake256Pad()
@@ -213,6 +263,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		PoolFeeAddrs:       h.cfg.PoolFeeAddrs,
 		MaxTxFeeReserve:    h.cfg.MaxTxFeeReserve,
 		PublishTransaction: h.PublishTransaction,
+		SignalCache:        h.SignalCache,
 	}
 	h.paymentMgr, err = NewPaymentMgr(pCfg)
 	if err != nil {
@@ -229,6 +280,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		PruneAcceptedWork:       h.pruneAcceptedWork,
 		PendingPaymentsAtHeight: h.pendingPaymentsAtHeight,
 		Cancel:                  h.cancel,
+		SignalCache:             h.SignalCache,
 		HubWg:                   h.wg,
 	}
 	h.chainState = NewChainState(sCfg)
@@ -403,6 +455,7 @@ func (h *Hub) Listen() error {
 			RemoveConnection:      h.removeConnection,
 			FetchHostConnections:  h.fetchHostConnections,
 			MaxGenTime:            h.cfg.MaxGenTime,
+			SignalCache:           h.SignalCache,
 		}
 		endpoint, err := NewEndpoint(eCfg, diffInfo, port, miner)
 		if err != nil {

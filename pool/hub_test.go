@@ -390,7 +390,8 @@ func testHub(t *testing.T, db *bolt.DB) {
 		"8000000100000000000005a0"
 	hub.processWork(workE)
 
-	time.Sleep(time.Millisecond * 200)
+	// Wait for work distribution.
+	time.Sleep(time.Millisecond * 500)
 
 	// Ensure all connected clients received work.
 	for _, endpoint := range hub.endpoints {

@@ -213,6 +213,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		AccountExists:          p.hub.AccountExists,
 		FetchArchivedPayments:  p.hub.FetchArchivedPayments,
 		FetchPendingPayments:   p.hub.FetchPendingPayments,
+		FetchCacheChannel:      p.hub.FetchCacheChannel,
 	}
 	p.gui, err = gui.NewGUI(gcfg)
 	if err != nil {

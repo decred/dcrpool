@@ -38,6 +38,8 @@ type ChainStateConfig struct {
 	PendingPaymentsAtHeight func(*bolt.DB, uint32) ([]*Payment, error)
 	// Cancel represents the pool's context cancellation function.
 	Cancel context.CancelFunc
+	// SignalCache sends the provided cache update event to the gui cache.
+	SignalCache func(event CacheUpdateEvent)
 	// HubWg represents the hub's waitgroup.
 	HubWg *sync.WaitGroup
 }
@@ -176,6 +178,12 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 			log.Tracef("Mined work %s confirmed by connected block #%d",
 				header.PrevBlock.String(), header.Height)
+
+			// Signal the gui cache of the confirmed mined work.
+			if cs.cfg.SignalCache != nil {
+				cs.cfg.SignalCache(Confirmed)
+			}
+
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit
 				err = cs.cfg.PruneAcceptedWork(cs.cfg.DB, pruneLimit)
@@ -308,6 +316,12 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 			log.Tracef("Disconnected mined work %s at height #%d",
 				header.BlockHash().String(), header.Height)
+
+			// Signal the gui cache of the unconfirmed (due to a reorg)
+			// mined work.
+			if cs.cfg.SignalCache != nil {
+				cs.cfg.SignalCache(Unconfirmed)
+			}
 
 			if !cs.cfg.SoloPool {
 				// If the disconnected block is an accepted work from the pool,

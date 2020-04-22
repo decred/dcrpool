@@ -84,12 +84,13 @@ type Config struct {
 	FetchArchivedPayments func() ([]*pool.Payment, error)
 	// FetchPendingPayments fetches all unpaid payments.
 	FetchPendingPayments func() ([]*pool.Payment, error)
+	// FetchCacheChannel returns the gui cache signal channel.
+	FetchCacheChannel func() chan pool.CacheUpdateEvent
 }
 
 // GUI represents the the mining pool user interface.
 type GUI struct {
 	cfg         *Config
-	csrfSecret  []byte
 	limiter     *pool.RateLimiter
 	templates   *template.Template
 	cookieStore *sessions.CookieStore
@@ -346,54 +347,64 @@ func (ui *GUI) Run(ctx context.Context) {
 	// Use a ticker to periodically update cached data and push updates through
 	// any established websockets
 	go func(ctx context.Context) {
-
-		var ticks uint32
-		ticker := time.NewTicker(5 * time.Second)
+		signalCh := ui.cfg.FetchCacheChannel()
+		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ticker.C:
-				ticks++
+				clients := ui.cfg.FetchClients()
+				ui.cache.updateClients(clients)
+				ui.updateWebSocket()
 
-				// After three ticks (15 seconds) update cached pool data.
-				// TODO: Only update cached data when necessary.
-				if ticks == 3 {
+			case msg := <-signalCh:
+				switch msg {
+				case pool.Confirmed, pool.Unconfirmed:
 					work, err := ui.cfg.FetchMinedWork()
 					if err != nil {
 						log.Error(err)
-					} else {
-						ui.cache.updateMinedWork(work)
+						continue
 					}
 
-					quotas, err := ui.cfg.FetchWorkQuotas()
-					if err != nil {
-						log.Error(err)
-					} else {
-						ui.cache.updateRewardQuotas(quotas)
-					}
+					ui.cache.updateMinedWork(work)
+					ui.updateWebSocket()
 
+				case pool.ConnectedClient, pool.DisconnectedClient:
+					// Opting to keep connection updates pushed by the ticker
+					// to avoid pushing too much too frequently.
 					clients := ui.cfg.FetchClients()
 					ui.cache.updateClients(clients)
 
+				case pool.ClaimedShare:
+					quotas, err := ui.cfg.FetchWorkQuotas()
+					if err != nil {
+						log.Error(err)
+						continue
+					}
+
+					ui.cache.updateRewardQuotas(quotas)
+					ui.updateWebSocket()
+
+				case pool.DividendsPaid:
 					pendingPayments, err := ui.cfg.FetchPendingPayments()
 					if err != nil {
 						log.Error(err)
-						return
+						continue
 					}
 
 					archivedPayments, err := ui.cfg.FetchArchivedPayments()
 					if err != nil {
 						log.Error(err)
-						return
+						continue
 					}
 
 					ui.cache.updatePayments(pendingPayments, archivedPayments)
+					ui.updateWebSocket()
 
-					ticks = 0
+				default:
+					log.Errorf("unknown cache signal received: %v", msg)
 				}
-
-				ui.updateWebSocket()
 
 			case <-ctx.Done():
 				return
