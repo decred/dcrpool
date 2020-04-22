@@ -118,6 +118,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		NonceIterations:       iterations,
 		MinerPorts:            minerPorts,
 		MaxConnectionsPerHost: cfg.MaxConnectionsPerHost,
+		WalletAccount:         cfg.WalletAccount,
 	}
 	p.hub, err = pool.NewHub(p.cancel, hcfg)
 	if err != nil {
@@ -157,8 +158,13 @@ func newPool(cfg *config) (*miningPool, error) {
 			return nil, err
 		}
 
+		// Perform a Balance request to check connectivity and account
+		// existence.
 		walletConn := walletrpc.NewWalletServiceClient(grpc)
-		req := &walletrpc.BalanceRequest{RequiredConfirmations: 1}
+		req := &walletrpc.BalanceRequest{
+			AccountNumber:         cfg.WalletAccount,
+			RequiredConfirmations: 1,
+		}
 		_, err = walletConn.Balance(context.TODO(), req)
 		if err != nil {
 			return nil, err
