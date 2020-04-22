@@ -538,6 +538,15 @@ func testClient(t *testing.T, db *bolt.DB) {
 	}
 	client.cfg.ActiveNet = chaincfg.SimNetParams()
 
+	// Ensure the last work time of the CPU client was updated
+	// on receiving work.
+	lastWorkTime := atomic.LoadInt64(&client.lastWorkTime)
+	if lastWorkTime == 0 {
+		t.Fatalf("expected last work time for %s connection "+
+			"to be more than zero, got %d", client.id,
+			client.lastWorkTime)
+	}
+
 	// Send a work notification to an Innosilicon D9 client.
 	setMiner(InnosiliconD9)
 	client.ch <- r
