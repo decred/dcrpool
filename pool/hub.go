@@ -528,8 +528,14 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 	}
 
 	var total dcrutil.Amount
-	for _, amt := range payouts {
+	var fees dcrutil.Amount
+	for addr, amt := range payouts {
 		total += amt
+		for _, pAddr := range h.cfg.PoolFeeAddrs {
+			if addr.String() == pAddr.String() {
+				fees += amt
+			}
+		}
 	}
 
 	balanceReq := &walletrpc.BalanceRequest{
@@ -589,6 +595,10 @@ func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, tar
 	if err != nil {
 		return "", err
 	}
+
+	log.Tracef("paid a total of %v in tx %s, including %v in pool fees.",
+		total, txid.String(), fees)
+
 	return txid.String(), nil
 }
 
