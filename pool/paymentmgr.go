@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math/big"
@@ -148,6 +149,29 @@ func (pm *PaymentMgr) persistLastPaymentPaidOn(tx *bolt.Tx) error {
 	}
 	return pbkt.Put(lastPaymentPaidOn,
 		nanoToBigEndianBytes(int64(pm.lastPaymentPaidOn)))
+}
+
+// pruneShares removes invalidated shares from the db.
+func (pm *PaymentMgr) pruneShares(tx *bolt.Tx, minNano int64) error {
+	minBytes := nanoToBigEndianBytes(minNano)
+	bkt, err := fetchShareBucket(tx)
+	if err != nil {
+		return err
+	}
+	toDelete := [][]byte{}
+	cursor := bkt.Cursor()
+	for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
+		if bytes.Compare(minBytes, k) > 0 {
+			toDelete = append(toDelete, k)
+		}
+	}
+	for _, entry := range toDelete {
+		err := bkt.Delete(entry)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // bigEndianBytesToNano returns nanosecond time from the provided
@@ -346,7 +370,7 @@ func (pm *PaymentMgr) payPerShare(coinbase dcrutil.Amount, height uint32) error 
 		if err != nil {
 			return err
 		}
-		return pruneShares(tx, now.UnixNano())
+		return pm.pruneShares(tx, now.UnixNano())
 	})
 	return err
 }
@@ -387,7 +411,7 @@ func (pm *PaymentMgr) payPerLastNShares(coinbase dcrutil.Amount, height uint32) 
 			return err
 		}
 		minNano := time.Now().Add(-pm.cfg.LastNPeriod).UnixNano()
-		return pruneShares(tx, minNano)
+		return pm.pruneShares(tx, minNano)
 	})
 	return err
 }
