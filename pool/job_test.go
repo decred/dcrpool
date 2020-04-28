@@ -67,27 +67,24 @@ func testJob(t *testing.T, db *bolt.DB) {
 		t.Fatal("expected a not supported error")
 	}
 
-	jobB.Height = 57
-
-	// Ensure jobs can be pruned.
-	err = pruneJobs(db, 57)
+	// Delete jobs B and C.
+	err = jobB.Delete(db)
 	if err != nil {
-		t.Fatalf("PruneJobs error: %v", err)
+		t.Fatalf("job delete error: %v", err)
 	}
 
-	// Delete the last remaining job.
 	err = jobC.Delete(db)
 	if err != nil {
 		t.Fatalf("job delete error: %v", err)
 	}
 
-	// Ensure the job was deleted.
-	fetchedJob, err = FetchJob(db, []byte(jobC.UUID))
+	// Ensure the jobs were deleted.
+	_, err = FetchJob(db, []byte(jobB.UUID))
 	if err == nil {
 		t.Fatalf("expected a value not found error: %v", err)
 	}
-
-	if fetchedJob != nil {
-		t.Fatal("expected a non-nil job")
+	_, err = FetchJob(db, []byte(jobC.UUID))
+	if err == nil {
+		t.Fatalf("expected a value not found error: %v", err)
 	}
 }

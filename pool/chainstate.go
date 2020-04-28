@@ -1,7 +1,9 @@
 package pool
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"sync"
 	"sync/atomic"
 
@@ -28,8 +30,6 @@ type ChainStateConfig struct {
 	GeneratePayments func(uint32, dcrutil.Amount) error
 	// GetBlock fetches the block associated with the provided block hash.
 	GetBlock func(*chainhash.Hash) (*wire.MsgBlock, error)
-	// PruneJobs removes all jobs with heights less than the provided height.
-	PruneJobs func(*bolt.DB, uint32) error
 	// PruneAcceptedWork removes all accepted work not confirmed as mined
 	// work with heights less than the provided height.
 	PruneAcceptedWork func(*bolt.DB, uint32) error
@@ -95,6 +95,41 @@ func (cs *ChainState) fetchCurrentWork() string {
 	return work
 }
 
+// pruneJobs removes all jobs with heights less than the provided height.
+func (cs *ChainState) pruneJobs(height uint32) error {
+	heightBE := heightToBigEndianBytes(height)
+	err := cs.cfg.DB.Update(func(tx *bolt.Tx) error {
+		bkt, err := fetchJobBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		toDelete := [][]byte{}
+		c := bkt.Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			height, err := hex.DecodeString(string(k[:8]))
+			if err != nil {
+				return err
+			}
+
+			if bytes.Compare(height, heightBE) < 0 {
+				toDelete = append(toDelete, k)
+			}
+		}
+
+		for _, entry := range toDelete {
+			err := bkt.Delete(entry)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	return err
+}
+
 // handleChainUpdates processes connected and disconnected block
 // notifications from the consensus daemon.
 func (cs *ChainState) handleChainUpdates(ctx context.Context) {
@@ -126,7 +161,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit
-				err := cs.cfg.PruneJobs(cs.cfg.DB, pruneLimit)
+				err := cs.pruneJobs(pruneLimit)
 				if err != nil {
 					// Errors generated pruning invalidated jobs indicate an
 					// underlying issue accessing the database. The chainstate

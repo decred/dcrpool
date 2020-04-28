@@ -197,7 +197,7 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 			yID, len(minedWork))
 	}
 
-	// Update work A and B as unconfirmed
+	// Update work A and B as unconfirmed.
 	workA.Confirmed = false
 	err = workA.Update(db)
 	if err != nil {

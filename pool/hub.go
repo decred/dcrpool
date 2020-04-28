@@ -197,11 +197,6 @@ func (h *Hub) persistPoolMode(tx *bolt.Tx, mode uint32) error {
 	return pbkt.Put(soloPool, b)
 }
 
-// PruneJobs removes all jobs with heights less than the provided height.
-func (h *Hub) pruneJobs(db *bolt.DB, height uint32) error {
-	return pruneJobs(db, height)
-}
-
 // PruneAcceptedWork removes all accepted work not confirmed as mined
 // work with heights less than the provided height.
 func (h *Hub) pruneAcceptedWork(db *bolt.DB, height uint32) error {
@@ -276,7 +271,6 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		PayDividends:            h.paymentMgr.payDividends,
 		GeneratePayments:        h.paymentMgr.generatePayments,
 		GetBlock:                h.getBlock,
-		PruneJobs:               h.pruneJobs,
 		PruneAcceptedWork:       h.pruneAcceptedWork,
 		PendingPaymentsAtHeight: h.pendingPaymentsAtHeight,
 		Cancel:                  h.cancel,

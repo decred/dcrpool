@@ -57,9 +57,6 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		}
 		return block, nil
 	}
-	pruneJobs := func(*bolt.DB, uint32) error {
-		return nil
-	}
 	pruneAcceptedWork := func(*bolt.DB, uint32) error {
 		return nil
 	}
@@ -77,7 +74,6 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		PayDividends:            payDividends,
 		GeneratePayments:        generatePayments,
 		GetBlock:                getBlock,
-		PruneJobs:               pruneJobs,
 		PruneAcceptedWork:       pruneAcceptedWork,
 		PendingPaymentsAtHeight: pendingPaymentsAtHeight,
 		Cancel:                  cancel,
@@ -85,6 +81,44 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 
 	cs := NewChainState(cCfg)
+
+	// Test pruneJobs.
+	jobA, err := persistJob(db, "0700000093bdee7083c6e02147cf76724a685f0148636"+
+		"b2faf96353d1cbf5c0a954100007991153ad03eb0e31ead44b75ebc9f760870098431d4e6"+
+		"aa85e742cbad517ebd853b9bf059e8eeb91591e4a7d4005acc62e92bfd27b17309a5a41dd"+
+		"24016428f0100000000000000000000003c000000dd742920204e00000000000038000000"+
+		"66010000f171cc5d000000000000000000000000000000000000000000000000000000000"+
+		"000000000000000000000008000000100000000000005a0", 56)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	jobB, err := persistJob(db, "0700000047e9425eabcf920eecf0c00c7bc46c6062049"+
+		"071c59edcb0e55c0226690800005695619a600321a8389d1bee5b3a207efc81e05c111d38"+
+		"1e960c8bf05ca336b55b528e9d5044c52aa0c713ae152f3fdb592f6ee82fa1776440ca72a"+
+		"2fc9f77760100000000000000000000003c000000dd742920204e00000000000039000000"+
+		"a6030000f171cc5d000000000000000000000000000000000000000000000000000000000"+
+		"000000000000000000000008000000100000000000005a0", 57)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Prune jobs below height 58.
+	err = cs.pruneJobs(58)
+	if err != nil {
+		t.Fatalf("pruneJobs error: %v", err)
+	}
+
+	// Ensure job A and B have been pruned.
+	_, err = FetchJob(db, []byte(jobA.UUID))
+	if err == nil {
+		t.Fatalf("expected a value not found error: %v", err)
+	}
+	_, err = FetchJob(db, []byte(jobB.UUID))
+	if err == nil {
+		t.Fatalf("expected a value not found error: %v", err)
+	}
+
 	cCfg.HubWg.Add(1)
 	go cs.handleChainUpdates(ctx)
 
@@ -269,28 +303,6 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		cCfg.HubWg.Add(1)
 		go cs.handleChainUpdates(ctx)
 	}
-
-	runChainState()
-
-	// Ensure a prune jobs error terminates the chain state process.
-	minedMsg = &blockNotification{
-		Header: minedHeaderB,
-		Done:   make(chan bool),
-	}
-	cs.connCh <- minedMsg
-	<-minedMsg.Done
-	cs.cfg.PruneJobs = func(*bolt.DB, uint32) error {
-		return fmt.Errorf("unable to prune jobs")
-	}
-
-	confMsg = &blockNotification{
-		Header: confHeaderB,
-		Done:   make(chan bool),
-	}
-	cs.connCh <- confMsg
-	<-confMsg.Done
-	cs.cfg.PruneJobs = pruneJobs
-	cs.cfg.HubWg.Wait()
 
 	runChainState()
 
