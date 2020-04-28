@@ -57,9 +57,6 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		}
 		return block, nil
 	}
-	pruneAcceptedWork := func(*bolt.DB, uint32) error {
-		return nil
-	}
 	pendingPaymentsAtHeight := func(*bolt.DB, uint32) ([]*Payment, error) {
 		return []*Payment{
 			{Account: xID, Amount: dcrutil.Amount(100)},
@@ -74,7 +71,6 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		PayDividends:            payDividends,
 		GeneratePayments:        generatePayments,
 		GetBlock:                getBlock,
-		PruneAcceptedWork:       pruneAcceptedWork,
 		PendingPaymentsAtHeight: pendingPaymentsAtHeight,
 		Cancel:                  cancel,
 		HubWg:                   new(sync.WaitGroup),
@@ -117,6 +113,51 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	_, err = FetchJob(db, []byte(jobB.UUID))
 	if err == nil {
 		t.Fatalf("expected a value not found error: %v", err)
+	}
+
+	// Test pruneAcceptedWork.
+	workA, err := persistAcceptedWork(db,
+		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
+		"000000000000000007301a21efa98033e06f7eba836990394fff9f765f1556b1",
+		396692, yID, "dr3")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	workA.Confirmed = true
+	err = workA.Update(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	workB, err := persistAcceptedWork(db,
+		"000000000000000025aa4a7ba8c3ece4608376bf84a82ec7e025991460097198",
+		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
+		396693, xID, "dr5")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure mined work cannot be pruned.
+	err = cs.pruneAcceptedWork(workB.Height + 1)
+	if err != nil {
+		t.Fatalf("pruneAcceptedWork error: %v", err)
+	}
+
+	// Ensure work A did not get pruned but work B did.
+	_, err = FetchAcceptedWork(db, []byte(workA.UUID))
+	if err != nil {
+		t.Fatalf("expected a valid accepted work, got: %v", err)
+	}
+	_, err = FetchAcceptedWork(db, []byte(workB.UUID))
+	if err == nil {
+		t.Fatalf("expected a no value found error")
+	}
+
+	// Delete work A.
+	err = workA.Delete(db)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 
 	cCfg.HubWg.Add(1)
@@ -324,28 +365,6 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	cs.connCh <- confMsg
 	<-confMsg.Done
 	cs.cfg.GeneratePayments = generatePayments
-	cs.cfg.HubWg.Wait()
-
-	runChainState()
-
-	// Ensure a prune accepted work error terminates the chain state process.
-	minedMsg = &blockNotification{
-		Header: minedHeaderB,
-		Done:   make(chan bool),
-	}
-	cs.connCh <- minedMsg
-	<-minedMsg.Done
-	cs.cfg.PruneAcceptedWork = func(*bolt.DB, uint32) error {
-		return fmt.Errorf("unable to prune accepted work")
-	}
-
-	confMsg = &blockNotification{
-		Header: confHeaderB,
-		Done:   make(chan bool),
-	}
-	cs.connCh <- confMsg
-	<-confMsg.Done
-	cs.cfg.PruneAcceptedWork = pruneAcceptedWork
 	cs.cfg.HubWg.Wait()
 
 	runChainState()

@@ -171,21 +171,6 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 		t.Fatalf("expected %v mined work, got %v", 4, len(minedWork))
 	}
 
-	// Ensure mined work cannot be pruned.
-	err = pruneAcceptedWork(db, workD.Height+1)
-	if err != nil {
-		t.Fatalf("PruneAcceptedWork error: %v", err)
-	}
-
-	minedWork, err = ListMinedWork(db)
-	if err != nil {
-		t.Fatalf("ListMinedWork error: %v", err)
-	}
-
-	if len(minedWork) != 4 {
-		t.Fatalf("expected %v mined work, got %v", 4, len(minedWork))
-	}
-
 	// Ensure account Y has only one associated mined work.
 	minedWork, err = listMinedWorkByAccount(db, yID)
 	if err != nil {
@@ -197,31 +182,16 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 			yID, len(minedWork))
 	}
 
-	// Update work A and B as unconfirmed.
-	workA.Confirmed = false
-	err = workA.Update(db)
+	// Delete all work.
+	err = workA.Delete(db)
 	if err != nil {
-		t.Fatalf("unconfirm workA error: %v ", err)
+		t.Fatalf("delete workA error: %v ", err)
 	}
 
-	workB.Confirmed = false
-	err = workB.Update(db)
+	err = workB.Delete(db)
 	if err != nil {
-		t.Fatalf("unconfirm workB error: %v ", err)
+		t.Fatalf("delete workB error: %v ", err)
 	}
-
-	// Ensure unconfirmed work can be pruned.
-	err = pruneAcceptedWork(db, workD.Height+1)
-	if err != nil {
-		t.Fatalf("PruneAcceptedWork error: %v", err)
-	}
-
-	_, err = FetchAcceptedWork(db, []byte(workA.UUID))
-	if err == nil {
-		t.Fatal("expected a work not found error")
-	}
-
-	// Delete work C and D.
 	err = workC.Delete(db)
 	if err != nil {
 		t.Fatalf("delete workC error: %v ", err)

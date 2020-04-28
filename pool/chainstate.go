@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"sync"
 	"sync/atomic"
 
@@ -30,9 +31,6 @@ type ChainStateConfig struct {
 	GeneratePayments func(uint32, dcrutil.Amount) error
 	// GetBlock fetches the block associated with the provided block hash.
 	GetBlock func(*chainhash.Hash) (*wire.MsgBlock, error)
-	// PruneAcceptedWork removes all accepted work not confirmed as mined
-	// work with heights less than the provided height.
-	PruneAcceptedWork func(*bolt.DB, uint32) error
 	// PendingPaymentsAtHeight fetches all pending payments at
 	// the provided height.
 	PendingPaymentsAtHeight func(*bolt.DB, uint32) ([]*Payment, error)
@@ -93,6 +91,52 @@ func (cs *ChainState) fetchCurrentWork() string {
 	work := cs.currentWork
 	cs.currentWorkMtx.RUnlock()
 	return work
+}
+
+// pruneAcceptedWork removes all accepted work not confirmed as mined work
+// with heights less than the provided height.
+func (cs *ChainState) pruneAcceptedWork(height uint32) error {
+	err := cs.cfg.DB.Update(func(tx *bolt.Tx) error {
+		bkt, err := fetchWorkBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		toDelete := [][]byte{}
+		cursor := bkt.Cursor()
+		workHeightB := make([]byte, 8)
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			_, err := hex.Decode(workHeightB, k[:8])
+			if err != nil {
+				return err
+			}
+
+			workHeight := bigEndianBytesToHeight(workHeightB)
+			if workHeight < height {
+				var work AcceptedWork
+				err := json.Unmarshal(v, &work)
+				if err != nil {
+					return err
+				}
+
+				// Only prune unconfirmed accepted work.
+				if !work.Confirmed {
+					toDelete = append(toDelete, k)
+				}
+			}
+		}
+
+		for _, entry := range toDelete {
+			err := bkt.Delete(entry)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	return err
 }
 
 // pruneJobs removes all jobs with heights less than the provided height.
@@ -221,7 +265,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit
-				err = cs.cfg.PruneAcceptedWork(cs.cfg.DB, pruneLimit)
+				err = cs.pruneAcceptedWork(pruneLimit)
 				if err != nil {
 					// Errors generated pruning invalidated accepted
 					// work indicate an underlying issue accessing
