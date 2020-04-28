@@ -262,26 +262,3 @@ func CalculatePayments(percentages map[string]*big.Rat, total dcrutil.Amount,
 	payments = append(payments, NewPayment(poolFeesK, fee, height, estMaturity))
 	return payments, nil
 }
-
-// pruneShares removes invalidated shares from the db.
-func pruneShares(tx *bolt.Tx, minNano int64) error {
-	minBytes := nanoToBigEndianBytes(minNano)
-	bkt, err := fetchShareBucket(tx)
-	if err != nil {
-		return err
-	}
-	toDelete := [][]byte{}
-	cursor := bkt.Cursor()
-	for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
-		if bytes.Compare(minBytes, k) > 0 {
-			toDelete = append(toDelete, k)
-		}
-	}
-	for _, entry := range toDelete {
-		err := bkt.Delete(entry)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}

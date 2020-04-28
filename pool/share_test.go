@@ -14,10 +14,10 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// persistShare creates a persisted share with the provided account, share
-// weight and creation time.
+// persistShare creates a persisted share with the provided account and share
+// weight.
 func persistShare(db *bolt.DB, account string, weight *big.Rat,
-	createdOnNano int64) error {
+	createdOnNano int64) (*Share, error) {
 	share := &Share{
 		Account:   account,
 		Weight:    weight,
@@ -26,10 +26,10 @@ func persistShare(db *bolt.DB, account string, weight *big.Rat,
 
 	err := share.Create(db)
 	if err != nil {
-		return fmt.Errorf("unable to persist share: %v", err)
+		return nil, fmt.Errorf("unable to persist share: %v", err)
 	}
 
-	return nil
+	return share, nil
 }
 
 func testShares(t *testing.T, db *bolt.DB) {
@@ -44,25 +44,25 @@ func testShares(t *testing.T, db *bolt.DB) {
 	expectedShareCount := 2
 
 	// Create a share below the PPS time range for account x.
-	err := persistShare(db, xID, weight, belowMinimumTime)
+	_, err := persistShare(db, xID, weight, belowMinimumTime)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share at minimum of the PPS time range for account x.
-	err = persistShare(db, xID, weight, minimumTime)
+	_, err = persistShare(db, xID, weight, minimumTime)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share at maximum of the PPS time range for account y.
-	err = persistShare(db, yID, weight, maximumTime)
+	_, err = persistShare(db, yID, weight, maximumTime)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share above maximum of the PPS time range for account y.
-	err = persistShare(db, yID, weight, aboveMaximumTime)
+	_, err = persistShare(db, yID, weight, aboveMaximumTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,37 +119,37 @@ func testShares(t *testing.T, db *bolt.DB) {
 	}
 
 	// Create a share below the minimum exclusive PPLNS time for account x.
-	err = persistShare(db, xID, weight, belowMinimumTime)
+	_, err = persistShare(db, xID, weight, belowMinimumTime)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share below the minimum exxcuive PPLNS time for account y.
-	err = persistShare(db, yID, weight, belowMinimumTime)
+	_, err = persistShare(db, yID, weight, belowMinimumTime)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share at minimum exclusive PPLNS time for account x.
-	err = persistShare(db, xID, weight, minimumTime)
+	_, err = persistShare(db, xID, weight, minimumTime)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share at minimum exclusive PPLNS time for account y.
-	err = persistShare(db, yID, weight, minimumTime)
+	_, err = persistShare(db, yID, weight, minimumTime)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share above minimum exclusive PPLNS time for account x.
-	err = persistShare(db, xID, weight, maximumTime)
+	_, err = persistShare(db, xID, weight, maximumTime)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share above minimum exclusive PPLNS time for account y.
-	err = persistShare(db, yID, weight, aboveMaximumTime)
+	_, err = persistShare(db, yID, weight, aboveMaximumTime)
 	if err != nil {
 		t.Fatal(err)
 	}
