@@ -1,7 +1,9 @@
 package pool
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -15,16 +17,21 @@ const (
 	// transactionId field to the payments struct for payment tracking purposes.
 	transactionIDVersion = 1
 
+	// shareIDVersion is the second version of the database. It updates
+	// the share id key and removes the created on time field.
+	shareIDVersion = 2
+
 	// DBVersion is the latest version of the database that is understood by the
 	// program. Databases with recorded versions higher than this will fail to
 	// open (meaning any upgrades prevent reverting to older software).
-	DBVersion = transactionIDVersion
+	DBVersion = shareIDVersion
 )
 
 // upgrades maps between old database versions and the upgrade function to
 // upgrade the database to the next version.
 var upgrades = [...]func(tx *bolt.Tx) error{
 	transactionIDVersion - 1: transactionIDUpgrade,
+	shareIDVersion - 1:       shareIDUpgrade,
 }
 
 func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
@@ -128,6 +135,74 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 		}
 
 		err = abkt.Put(k, pBytes)
+		if err != nil {
+			return err
+		}
+	}
+
+	return setDBVersion(tx, newVersion)
+}
+
+func shareIDUpgrade(tx *bolt.Tx) error {
+	const oldVersion = 1
+	const newVersion = 2
+
+	dbVersion, err := fetchDBVersion(tx)
+	if err != nil {
+		return err
+	}
+
+	if dbVersion != oldVersion {
+		desc := "shareIDUpgrade inappropriately called"
+		return MakeError(ErrDBUpgrade, desc, nil)
+	}
+
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+		return MakeError(ErrBucketNotFound, desc, nil)
+	}
+
+	sbkt := pbkt.Bucket(shareBkt)
+	if sbkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(shareBkt))
+		return MakeError(ErrBucketNotFound, desc, nil)
+	}
+
+	id := func(account string, createdOn int64) string {
+		buf := bytes.Buffer{}
+		buf.Write(nanoToBigEndianBytes(createdOn))
+		buf.WriteString(account)
+		return hex.EncodeToString(buf.Bytes())
+	}
+
+	toDelete := [][]byte{}
+	c := sbkt.Cursor()
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		var share Share
+		err := json.Unmarshal(v, &share)
+		if err != nil {
+			return err
+		}
+
+		createdOn := bigEndianBytesToNano(k)
+		share.UUID = id(share.Account, int64(createdOn))
+
+		sBytes, err := json.Marshal(share)
+		if err != nil {
+			return err
+		}
+
+		err = sbkt.Put([]byte(share.UUID), sBytes)
+		if err != nil {
+			return err
+		}
+
+		toDelete = append(toDelete, k)
+	}
+
+	for _, entry := range toDelete {
+		err := sbkt.Delete(entry)
 		if err != nil {
 			return err
 		}
