@@ -5,6 +5,8 @@
 package pool
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"testing"
@@ -18,10 +20,15 @@ import (
 // weight.
 func persistShare(db *bolt.DB, account string, weight *big.Rat,
 	createdOnNano int64) (*Share, error) {
+	buf := bytes.Buffer{}
+	buf.Write(nanoToBigEndianBytes(createdOnNano))
+	buf.WriteString(account)
+	id := hex.EncodeToString(buf.Bytes())
+
 	share := &Share{
-		Account:   account,
-		Weight:    weight,
-		CreatedOn: createdOnNano,
+		UUID:    id,
+		Account: account,
+		Weight:  weight,
 	}
 
 	err := share.Create(db)

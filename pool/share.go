@@ -6,6 +6,7 @@ package pool
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -90,19 +91,27 @@ func calculatePoolTarget(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs
 	return target, difficulty, err
 }
 
+// shareID generates a unique share id using the provided account.
+func shareID(account string) string {
+	buf := bytes.Buffer{}
+	buf.Write(nanoToBigEndianBytes(time.Now().UnixNano()))
+	buf.WriteString(account)
+	return hex.EncodeToString(buf.Bytes())
+}
+
 // Share represents verifiable work performed by a pool client.
 type Share struct {
-	Account   string   `json:"account"`
-	Weight    *big.Rat `json:"weight"`
-	CreatedOn int64    `json:"createdOn"`
+	UUID    string   `json:"uuid"`
+	Account string   `json:"account"`
+	Weight  *big.Rat `json:"weight"`
 }
 
 // NewShare creates a share with the provided account and weight.
 func NewShare(account string, weight *big.Rat) *Share {
 	return &Share{
-		Account:   account,
-		Weight:    weight,
-		CreatedOn: time.Now().UnixNano(),
+		UUID:    shareID(account),
+		Account: account,
+		Weight:  weight,
 	}
 }
 
@@ -133,7 +142,7 @@ func (s *Share) Create(db *bolt.DB) error {
 		if err != nil {
 			return err
 		}
-		err = bkt.Put(nanoToBigEndianBytes(s.CreatedOn), sBytes)
+		err = bkt.Put([]byte(s.UUID), sBytes)
 		return err
 	})
 	return err
@@ -171,13 +180,21 @@ func PPSEligibleShares(db *bolt.DB, min []byte, max []byte) ([]*Share, error) {
 			}
 		}
 		if min != nil {
-			for k, v := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, v = c.Next() {
-				var share Share
-				err := json.Unmarshal(v, &share)
+			for k, v := c.Last(); k != nil; k, v = c.Prev() {
+				createdOn, err := hex.DecodeString(string(k[:16]))
 				if err != nil {
 					return err
 				}
-				eligibleShares = append(eligibleShares, &share)
+
+				if bytes.Compare(createdOn, min) >= 0 &&
+					bytes.Compare(createdOn, max) <= 0 {
+					var share Share
+					err := json.Unmarshal(v, &share)
+					if err != nil {
+						return err
+					}
+					eligibleShares = append(eligibleShares, &share)
+				}
 			}
 		}
 		return nil
@@ -198,13 +215,20 @@ func PPLNSEligibleShares(db *bolt.DB, min []byte) ([]*Share, error) {
 			return err
 		}
 		c := bkt.Cursor()
-		for k, v := c.Last(); k != nil && bytes.Compare(k, min) > 0; k, v = c.Prev() {
-			var share Share
-			err := json.Unmarshal(v, &share)
+		for k, v := c.Last(); k != nil; k, v = c.Prev() {
+			createdOn, err := hex.DecodeString(string(k[:16]))
 			if err != nil {
 				return err
 			}
-			eligibleShares = append(eligibleShares, &share)
+
+			if bytes.Compare(createdOn, min) > 0 {
+				var share Share
+				err := json.Unmarshal(v, &share)
+				if err != nil {
+					return err
+				}
+				eligibleShares = append(eligibleShares, &share)
+			}
 		}
 		return nil
 	})

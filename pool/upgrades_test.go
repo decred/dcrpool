@@ -2,6 +2,7 @@ package pool
 
 import (
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -17,6 +18,7 @@ var dbUpgradeTests = [...]struct {
 	filename string // in testdata directory
 }{
 	// No upgrade test for V1, it is a backwards-compatible upgrade
+	{verifyV2Upgrade, "v1.db.gz"},
 }
 
 func TestUpgrades(t *testing.T) {
@@ -67,4 +69,39 @@ func TestUpgrades(t *testing.T) {
 	})
 
 	os.RemoveAll(d)
+}
+
+func verifyV2Upgrade(t *testing.T, db *bolt.DB) {
+	err := db.View(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(poolBkt)
+		if pbkt == nil {
+			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+			return MakeError(ErrBucketNotFound, desc, nil)
+		}
+
+		sbkt := pbkt.Bucket(shareBkt)
+		if sbkt == nil {
+			desc := fmt.Sprintf("bucket %s not found", string(shareBkt))
+			return MakeError(ErrBucketNotFound, desc, nil)
+		}
+
+		c := sbkt.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var share Share
+			err := json.Unmarshal(v, &share)
+			if err != nil {
+				return err
+			}
+
+			if string(k) != share.UUID {
+				return fmt.Errorf("expected share id (%s) to be the same as "+
+					"its key (%x)", share.UUID, k)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
 }
