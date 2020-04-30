@@ -8,15 +8,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v2"
 	bolt "go.etcd.io/bbolt"
 )
 
 // makePaymentBundle creates a new payment bundle.
 func makePaymentBundle(account string, count uint32, paymentAmount dcrutil.Amount) *PaymentBundle {
+	source := &PaymentSource{
+		BlockHash: chainhash.Hash{0}.String(),
+		Coinbase:  chainhash.Hash{0}.String(),
+	}
+
 	bundle := newPaymentBundle(account)
 	for idx := uint32(0); idx < count; idx++ {
-		payment := NewPayment(account, paymentAmount, 0, 0)
+		payment := NewPayment(account, source, paymentAmount, 0, 0)
 		bundle.Payments = append(bundle.Payments, payment)
 	}
 	return bundle
@@ -166,7 +172,7 @@ func testAccountPayments(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure fetching a non-existent payment returns an error.
-	pmtID := GeneratePaymentID(time.Now().UnixNano(), 300, xID)
+	pmtID := paymentID(300, time.Now().UnixNano(), xID)
 	_, err = GetPayment(db, pmtID)
 	if err == nil {
 		t.Fatal("[GetPayment] expected a value not found error")
@@ -174,8 +180,8 @@ func testAccountPayments(t *testing.T, db *bolt.DB) {
 
 	// Fetching an existingpayment.
 	expectedPmt := pending[0]
-	pmtID = GeneratePaymentID(expectedPmt.CreatedOn,
-		expectedPmt.Height, expectedPmt.Account)
+	pmtID = paymentID(expectedPmt.Height, expectedPmt.CreatedOn,
+		expectedPmt.Account)
 	pmt, err := GetPayment(db, pmtID)
 	if err != nil {
 		t.Fatalf("[GetPayment] unexpected error: %v", err)

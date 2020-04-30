@@ -5,6 +5,7 @@
 package pool
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -14,11 +15,18 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// Payment represents an outstanding payment for a pool account.
+// PaymentSource represents the payment's source of funds.
+type PaymentSource struct {
+	BlockHash string `json:"blockhash"`
+	Coinbase  string `json:"coinbase"`
+}
+
+// Payment represents value paid to a pool account or collected fees.
 type Payment struct {
 	Account           string         `json:"account"`
 	EstimatedMaturity uint32         `json:"estimatedmaturity"`
 	Height            uint32         `json:"height"`
+	Source            *PaymentSource `json:"source"`
 	Amount            dcrutil.Amount `json:"amount"`
 	CreatedOn         int64          `json:"createdon"`
 	PaidOnHeight      uint32         `json:"paidonheight"`
@@ -26,22 +34,25 @@ type Payment struct {
 }
 
 // NewPayment creates a payment instance.
-func NewPayment(account string, amount dcrutil.Amount, height uint32, estMaturity uint32) *Payment {
+func NewPayment(account string, source *PaymentSource, amount dcrutil.Amount,
+	height uint32, estMaturity uint32) *Payment {
 	return &Payment{
 		Account:           account,
 		Amount:            amount,
 		Height:            height,
+		Source:            source,
 		EstimatedMaturity: estMaturity,
 		CreatedOn:         time.Now().UnixNano(),
 	}
 }
 
-// GeneratePaymentID generates a unique id using the provided account and the
-// created on nano time.
-func GeneratePaymentID(createdOnNano int64, height uint32, account string) []byte {
-	BECreatedOnNano := hex.EncodeToString(nanoToBigEndianBytes(createdOnNano))
-	id := fmt.Sprintf("%v%v", BECreatedOnNano, account)
-	return []byte(id)
+// paymentID generates a unique id using the provided payment details.
+func paymentID(height uint32, createdOnNano int64, account string) []byte {
+	buf := bytes.Buffer{}
+	buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(height)))
+	buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOnNano)))
+	buf.WriteString(account)
+	return buf.Bytes()
 }
 
 // fetchPaymentBucket is a helper function for getting the payment bucket.
@@ -108,7 +119,7 @@ func (pmt *Payment) Create(db *bolt.DB) error {
 		if err != nil {
 			return err
 		}
-		id := GeneratePaymentID(pmt.CreatedOn, pmt.Height, pmt.Account)
+		id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
 		return bkt.Put(id, b)
 	})
 	return err
@@ -119,9 +130,10 @@ func (pmt *Payment) Update(db *bolt.DB) error {
 	return pmt.Create(db)
 }
 
-// Delete purges the referenced pending payment from the database.
+// Delete purges the referenced payment from the database. Note that
+// archived payments cannot be deleted.
 func (pmt *Payment) Delete(db *bolt.DB) error {
-	id := GeneratePaymentID(pmt.CreatedOn, pmt.Height, pmt.Account)
+	id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
 	return deleteEntry(db, paymentBkt, id)
 }
 
@@ -170,7 +182,7 @@ func (bundle *PaymentBundle) ArchivePayments(db *bolt.DB) error {
 			return err
 		}
 		for _, pmt := range bundle.Payments {
-			id := GeneratePaymentID(pmt.CreatedOn, pmt.Height, pmt.Account)
+			id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
 			err := pbkt.Delete(id)
 			if err != nil {
 				return err
@@ -180,7 +192,7 @@ func (bundle *PaymentBundle) ArchivePayments(db *bolt.DB) error {
 			if err != nil {
 				return err
 			}
-			id = GeneratePaymentID(pmt.CreatedOn, pmt.Height, pmt.Account)
+			id = paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
 			err = abkt.Put(id, pmtBytes)
 			if err != nil {
 				return err

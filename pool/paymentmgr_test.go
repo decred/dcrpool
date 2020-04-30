@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/dcrutil/v2"
 	bolt "go.etcd.io/bbolt"
@@ -310,6 +311,10 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		}
 	}
 
+	zeroSource := &PaymentSource{
+		BlockHash: chainhash.Hash{0}.String(),
+		Coinbase:  chainhash.Hash{0}.String(),
+	}
 	coinbase, err := dcrutil.NewAmount(float64(coinbaseValue))
 	if err != nil {
 		t.Fatal(err)
@@ -317,7 +322,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure the last payment created on time was updated.
 	previousPaymentCreatedOn := int64(mgr.fetchLastPaymentCreatedOn())
-	err = mgr.generatePayments(height, coinbase)
+	err = mgr.generatePayments(height, zeroSource, coinbase)
 	if err != nil {
 		t.Fatalf("[PPS] unable to generate payments: %v", err)
 	}
@@ -443,7 +448,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure the last payment created on time was updated.
 	previousPaymentCreatedOn = int64(mgr.fetchLastPaymentCreatedOn())
-	err = mgr.generatePayments(height, coinbase)
+	err = mgr.generatePayments(height, zeroSource, coinbase)
 	if err != nil {
 		t.Fatalf("[PPLNS] unable to generate payments: %v", err)
 	}
@@ -566,7 +571,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Generate payments.
-	err = mgr.generatePayments(height, coinbase)
+	err = mgr.generatePayments(height, zeroSource, coinbase)
 	if err != nil {
 		t.Fatalf("unable to generate payments: %v", err)
 	}
@@ -642,7 +647,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Generate readily available payments.
-	err = mgr.generatePayments(height, coinbase)
+	err = mgr.generatePayments(height, zeroSource, coinbase)
 	if err != nil {
 		t.Fatalf("unable to generate payments: %v", err)
 	}
@@ -727,7 +732,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		}
 	}
 
-	err = mgr.generatePayments(height, coinbase)
+	err = mgr.generatePayments(height, zeroSource, coinbase)
 	if err != nil {
 		t.Fatalf("unable to generate payments: %v", err)
 	}

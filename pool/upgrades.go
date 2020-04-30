@@ -21,10 +21,14 @@ const (
 	// the share id key and removes the created on time field.
 	shareIDVersion = 2
 
+	// paymentSourceVersion is the third version of the database. It adds
+	// payment source tracking to payments.
+	paymentSourceVersion = 3
+
 	// DBVersion is the latest version of the database that is understood by the
 	// program. Databases with recorded versions higher than this will fail to
 	// open (meaning any upgrades prevent reverting to older software).
-	DBVersion = shareIDVersion
+	DBVersion = paymentSourceVersion
 )
 
 // upgrades maps between old database versions and the upgrade function to
@@ -32,6 +36,7 @@ const (
 var upgrades = [...]func(tx *bolt.Tx) error{
 	transactionIDVersion - 1: transactionIDUpgrade,
 	shareIDVersion - 1:       shareIDUpgrade,
+	paymentSourceVersion - 1: paymentSourceUpgrade,
 }
 
 func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
@@ -203,6 +208,113 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 
 	for _, entry := range toDelete {
 		err := sbkt.Delete(entry)
+		if err != nil {
+			return err
+		}
+	}
+
+	return setDBVersion(tx, newVersion)
+}
+
+func paymentSourceUpgrade(tx *bolt.Tx) error {
+	const oldVersion = 2
+	const newVersion = 3
+
+	dbVersion, err := fetchDBVersion(tx)
+	if err != nil {
+		return err
+	}
+
+	if dbVersion != oldVersion {
+		desc := "paymentSourceUpgrade inappropriately called"
+		return MakeError(ErrDBUpgrade, desc, nil)
+	}
+
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+		return MakeError(ErrBucketNotFound, desc, nil)
+	}
+
+	// Update all entries in the payment and payment archive buckets.
+	//
+	// Payment sources for payments before the upgrade will have an empty
+	// string for coinbase and block hash fields.
+
+	pmtbkt := pbkt.Bucket(paymentBkt)
+	if pmtbkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(paymentBkt))
+		return MakeError(ErrBucketNotFound, desc, nil)
+	}
+
+	zeroSource := &PaymentSource{}
+	toDelete := [][]byte{}
+
+	c := pmtbkt.Cursor()
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		var payment Payment
+		err := json.Unmarshal(v, &payment)
+		if err != nil {
+			return err
+		}
+
+		payment.Source = zeroSource
+
+		pBytes, err := json.Marshal(payment)
+		if err != nil {
+			return err
+		}
+
+		key := paymentID(payment.Height, payment.CreatedOn, payment.Account)
+		err = pmtbkt.Put(key, pBytes)
+		if err != nil {
+			return err
+		}
+
+		toDelete = append(toDelete, k)
+	}
+
+	for _, entry := range toDelete {
+		err := pmtbkt.Delete(entry)
+		if err != nil {
+			return err
+		}
+	}
+
+	abkt := pbkt.Bucket(paymentArchiveBkt)
+	if abkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(paymentArchiveBkt))
+		return MakeError(ErrBucketNotFound, desc, nil)
+	}
+
+	toDelete = [][]byte{}
+
+	c = abkt.Cursor()
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		var payment Payment
+		err := json.Unmarshal(v, &payment)
+		if err != nil {
+			return err
+		}
+
+		payment.Source = zeroSource
+
+		pBytes, err := json.Marshal(payment)
+		if err != nil {
+			return err
+		}
+
+		key := paymentID(payment.Height, payment.CreatedOn, payment.Account)
+		err = abkt.Put(key, pBytes)
+		if err != nil {
+			return err
+		}
+
+		toDelete = append(toDelete, k)
+	}
+
+	for _, entry := range toDelete {
+		err := abkt.Delete(entry)
 		if err != nil {
 			return err
 		}
