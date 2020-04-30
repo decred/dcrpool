@@ -345,14 +345,15 @@ func (pm *PaymentMgr) PPLNSSharePercentages() (map[string]*big.Rat, error) {
 // PayPerShare generates a payment bundle comprised of payments to all
 // participating accounts. Payments are calculated based on work contributed
 // to the pool since the last payment batch.
-func (pm *PaymentMgr) payPerShare(coinbase dcrutil.Amount, height uint32) error {
+func (pm *PaymentMgr) payPerShare(source *PaymentSource, amt dcrutil.Amount, height uint32) error {
 	now := time.Now()
 	percentages, err := pm.PPSSharePercentages()
 	if err != nil {
 		return err
 	}
 	estMaturity := height + uint32(pm.cfg.ActiveNet.CoinbaseMaturity)
-	payments, err := CalculatePayments(percentages, coinbase, pm.cfg.PoolFee, height, estMaturity)
+	payments, err := CalculatePayments(percentages, source, amt, pm.cfg.PoolFee,
+		height, estMaturity)
 	if err != nil {
 		return err
 	}
@@ -377,7 +378,7 @@ func (pm *PaymentMgr) payPerShare(coinbase dcrutil.Amount, height uint32) error 
 
 // payPerLastNShares generates a payment bundle comprised of payments to all
 // participating accounts within the lastNPeriod of the pool.
-func (pm *PaymentMgr) payPerLastNShares(coinbase dcrutil.Amount, height uint32) error {
+func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amount, height uint32) error {
 	percentages, err := pm.PPLNSSharePercentages()
 	if err != nil {
 		return err
@@ -391,7 +392,7 @@ func (pm *PaymentMgr) payPerLastNShares(coinbase dcrutil.Amount, height uint32) 
 	if coinbaseMaturity > 0 {
 		estMaturity = height + uint32(coinbaseMaturity)
 	}
-	payments, err := CalculatePayments(percentages, coinbase, pm.cfg.PoolFee,
+	payments, err := CalculatePayments(percentages, source, amt, pm.cfg.PoolFee,
 		height, estMaturity)
 	if err != nil {
 		return err
@@ -418,14 +419,14 @@ func (pm *PaymentMgr) payPerLastNShares(coinbase dcrutil.Amount, height uint32) 
 
 // generatePayments creates payments for participating accounts. This should
 // only be called when a block is confirmed mined, in pool mining mode.
-func (pm *PaymentMgr) generatePayments(height uint32, coinbase dcrutil.Amount) error {
+func (pm *PaymentMgr) generatePayments(height uint32, source *PaymentSource, amt dcrutil.Amount) error {
 	cfg := pm.cfg
 	switch cfg.PaymentMethod {
 	case PPS:
-		return pm.payPerShare(coinbase, height)
+		return pm.payPerShare(source, amt, height)
 
 	case PPLNS:
-		return pm.payPerLastNShares(coinbase, height)
+		return pm.payPerLastNShares(source, amt, height)
 
 	default:
 		return fmt.Errorf("unknown payment method provided %v", cfg.PaymentMethod)

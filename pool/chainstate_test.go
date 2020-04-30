@@ -40,7 +40,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	payDividends := func(uint32) error {
 		return nil
 	}
-	generatePayments := func(uint32, dcrutil.Amount) error {
+	generatePayments := func(uint32, *PaymentSource, dcrutil.Amount) error {
 		return nil
 	}
 	getBlock := func(*chainhash.Hash) (*wire.MsgBlock, error) {
@@ -354,7 +354,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 	cs.connCh <- minedMsg
 	<-minedMsg.Done
-	cs.cfg.GeneratePayments = func(uint32, dcrutil.Amount) error {
+	cs.cfg.GeneratePayments = func(uint32, *PaymentSource, dcrutil.Amount) error {
 		return fmt.Errorf("unable to generate payments")
 	}
 

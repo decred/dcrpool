@@ -197,7 +197,6 @@ func (h *Hub) persistPoolMode(tx *bolt.Tx, mode uint32) error {
 	return pbkt.Put(soloPool, b)
 }
 
-
 // pendingPaymentsAtHeight fetches all pending payments at
 // the provided height.
 func (h *Hub) pendingPaymentsAtHeight(db *bolt.DB, height uint32) ([]*Payment, error) {
