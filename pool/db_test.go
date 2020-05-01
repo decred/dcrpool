@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrpool/pool/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -15,7 +16,7 @@ func initBlankDB(dbFile string) (*bolt.DB, error) {
 	os.Remove(dbFile)
 	db, err := openDB(dbFile)
 	if err != nil {
-		return nil, MakeError(ErrDBOpen, "unable to open db file", err)
+		return nil, errors.MakeError(errors.ErrDBOpen, "unable to open db file", err)
 	}
 
 	return db, nil
@@ -134,7 +135,7 @@ func testFetchBucketHelpers(t *testing.T) {
 			pbkt, err = tx.CreateBucketIfNotExists(poolBkt)
 			if err != nil {
 				desc := fmt.Sprintf("failed to create %s bucket", string(poolBkt))
-				return MakeError(ErrBucketCreate, desc, err)
+				return errors.MakeError(errors.ErrBucketCreate, desc, err)
 			}
 			vbytes := make([]byte, 4)
 			binary.LittleEndian.PutUint32(vbytes, uint32(DBVersion))

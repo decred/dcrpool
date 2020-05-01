@@ -11,6 +11,7 @@ import (
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrpool/pool/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -353,7 +354,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			if err != nil {
 				// If the parent of the connected block is not an accepted
 				// work of the the pool, ignore it.
-				if IsError(err, ErrValueNotFound) {
+				if errors.IsError(err, errors.ErrValueNotFound) {
 					log.Tracef("Block %d (%s) not an accepted work of the pool",
 						parentHeight, parentHash)
 					close(msg.Done)
@@ -476,7 +477,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				// looking up accepted work indicates an underlying issue
 				// accessing the database. The chainstate process will be
 				// terminated as a result.
-				if !IsError(err, ErrValueNotFound) {
+				if !errors.IsError(err, errors.ErrValueNotFound) {
 					log.Errorf("unable to fetch accepted work for block #%d's "+
 						"parent %s : %v", header.Height, parentHash, err)
 					close(msg.Done)
@@ -514,7 +515,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			if err != nil {
 				// If the disconnected block is not an accepted
 				// work of the the pool, ignore it.
-				if IsError(err, ErrValueNotFound) {
+				if errors.IsError(err, errors.ErrValueNotFound) {
 					close(msg.Done)
 					continue
 				}

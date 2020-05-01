@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/decred/dcrpool/pool/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -46,11 +47,11 @@ func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
 	pbkt := tx.Bucket(poolBkt)
 	if poolBkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return 0, MakeError(ErrBucketNotFound, desc, nil)
+		return 0, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 	v := pbkt.Get(versionK)
 	if v == nil {
-		return 0, MakeError(ErrValueNotFound, "db version not set", nil)
+		return 0, errors.MakeError(errors.ErrValueNotFound, "db version not set", nil)
 	}
 
 	return binary.LittleEndian.Uint32(v), nil
@@ -60,7 +61,7 @@ func setDBVersion(tx *bolt.Tx, newVersion uint32) error {
 	pbkt := tx.Bucket(poolBkt)
 	if poolBkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	vBytes := make([]byte, 4)
@@ -84,13 +85,13 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 
 	if dbVersion != oldVersion {
 		desc := "transactionIDUpgrade inappropriately called"
-		return MakeError(ErrDBUpgrade, desc, nil)
+		return errors.MakeError(errors.ErrDBUpgrade, desc, nil)
 	}
 
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	// Update all entries in the payment and payment archive buckets.
@@ -101,7 +102,7 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 	pmtbkt := pbkt.Bucket(paymentBkt)
 	if pmtbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(paymentBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	pmtCursor := pmtbkt.Cursor()
@@ -126,7 +127,7 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 	abkt := pbkt.Bucket(paymentArchiveBkt)
 	if abkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(paymentArchiveBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	aCursor := abkt.Cursor()
@@ -162,19 +163,19 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 
 	if dbVersion != oldVersion {
 		desc := "shareIDUpgrade inappropriately called"
-		return MakeError(ErrDBUpgrade, desc, nil)
+		return errors.MakeError(errors.ErrDBUpgrade, desc, nil)
 	}
 
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	sbkt := pbkt.Bucket(shareBkt)
 	if sbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(shareBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	toDelete := [][]byte{}
@@ -223,13 +224,13 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 
 	if dbVersion != oldVersion {
 		desc := "paymentSourceUpgrade inappropriately called"
-		return MakeError(ErrDBUpgrade, desc, nil)
+		return errors.MakeError(errors.ErrDBUpgrade, desc, nil)
 	}
 
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	// Update all entries in the payment and payment archive buckets.
@@ -240,7 +241,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 	pmtbkt := pbkt.Bucket(paymentBkt)
 	if pmtbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(paymentBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	zeroSource := &PaymentSource{}
@@ -280,7 +281,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 	abkt := pbkt.Bucket(paymentArchiveBkt)
 	if abkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(paymentArchiveBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	toDelete = [][]byte{}
@@ -330,18 +331,18 @@ func removeTxFeeReserveUpgrade(tx *bolt.Tx) error {
 
 	if dbVersion != oldVersion {
 		desc := "removeTxFeeReserveTxUpgrade inappropriately called"
-		return MakeError(ErrDBUpgrade, desc, nil)
+		return errors.MakeError(errors.ErrDBUpgrade, desc, nil)
 	}
 
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	err = pbkt.Delete([]byte("txfeereserve"))
 	if err != nil {
-		return MakeError(ErrDBUpgrade, "", err)
+		return errors.MakeError(errors.ErrDBUpgrade, "", err)
 	}
 
 	return setDBVersion(tx, newVersion)
@@ -355,11 +356,11 @@ func upgradeDB(db *bolt.DB) error {
 		pbkt := tx.Bucket(poolBkt)
 		if poolBkt == nil {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return MakeError(ErrBucketNotFound, desc, nil)
+			return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 		}
 		v := pbkt.Get(versionK)
 		if v == nil {
-			return MakeError(ErrValueNotFound, "db version not set", nil)
+			return errors.MakeError(errors.ErrValueNotFound, "db version not set", nil)
 		}
 
 		version = binary.LittleEndian.Uint32(v)

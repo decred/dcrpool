@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/decred/dcrpool/pool/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -58,12 +59,12 @@ func fetchShareBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 	bkt := pbkt.Bucket(shareBkt)
 	if bkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(shareBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	return bkt, nil
@@ -89,11 +90,11 @@ func (s *Share) Create(db *bolt.DB) error {
 // Update is not supported for shares.
 func (s *Share) Update(db *bolt.DB) error {
 	desc := "share update not supported"
-	return MakeError(ErrNotSupported, desc, nil)
+	return errors.MakeError(errors.ErrNotSupported, desc, nil)
 }
 
 // Delete is not supported for shares.
 func (s *Share) Delete(db *bolt.DB) error {
 	desc := "share deletion not supported"
-	return MakeError(ErrNotSupported, desc, nil)
+	return errors.MakeError(errors.ErrNotSupported, desc, nil)
 }

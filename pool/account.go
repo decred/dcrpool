@@ -13,6 +13,7 @@ import (
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrpool/pool/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -63,12 +64,12 @@ func fetchAccountBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 	bkt := pbkt.Bucket(accountBkt)
 	if bkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(accountBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	return bkt, nil
@@ -86,7 +87,7 @@ func FetchAccount(db *bolt.DB, id []byte) (*Account, error) {
 		v := bkt.Get(id)
 		if v == nil {
 			desc := fmt.Sprintf("no account found for id %s", string(id))
-			return MakeError(ErrValueNotFound, desc, nil)
+			return errors.MakeError(errors.ErrValueNotFound, desc, nil)
 		}
 
 		err = json.Unmarshal(v, &account)
@@ -120,7 +121,7 @@ func (acc *Account) Create(db *bolt.DB) error {
 // Update is not supported for accounts.
 func (acc *Account) Update(db *bolt.DB) error {
 	desc := "account update not supported"
-	return MakeError(ErrNotSupported, desc, nil)
+	return errors.MakeError(errors.ErrNotSupported, desc, nil)
 }
 
 // Delete purges the referenced account from the database.

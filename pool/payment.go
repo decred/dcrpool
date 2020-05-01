@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrpool/pool/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -63,12 +64,12 @@ func fetchPaymentBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 	bkt := pbkt.Bucket(paymentBkt)
 	if bkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(paymentBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 	return bkt, nil
 }
@@ -79,12 +80,12 @@ func fetchPaymentArchiveBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 	bkt := pbkt.Bucket(paymentArchiveBkt)
 	if bkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(paymentArchiveBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 	return bkt, nil
 }
@@ -100,7 +101,7 @@ func FetchPayment(db *bolt.DB, id []byte) (*Payment, error) {
 		v := bkt.Get(id)
 		if v == nil {
 			desc := fmt.Sprintf("no payment found for id %s", string(id))
-			return MakeError(ErrValueNotFound, desc, nil)
+			return errors.MakeError(errors.ErrValueNotFound, desc, nil)
 		}
 		err = json.Unmarshal(v, &payment)
 		return err

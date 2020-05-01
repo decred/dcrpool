@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/decred/dcrpool/pool/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -61,7 +62,7 @@ func openDB(storage string) (*bolt.DB, error) {
 	db, err := bolt.Open(storage, 0600,
 		&bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
-		return nil, MakeError(ErrDBOpen, "", err)
+		return nil, errors.MakeError(errors.ErrDBOpen, "", err)
 	}
 	return db, nil
 }
@@ -71,7 +72,7 @@ func createNestedBucket(parent *bolt.Bucket, child []byte) error {
 	_, err := parent.CreateBucketIfNotExists(child)
 	if err != nil {
 		desc := fmt.Sprintf("failed to create %s bucket", string(child))
-		return MakeError(ErrBucketCreate, desc, err)
+		return errors.MakeError(errors.ErrBucketCreate, desc, err)
 	}
 	return nil
 }
@@ -85,7 +86,7 @@ func createBuckets(db *bolt.DB) error {
 			pbkt, err = tx.CreateBucketIfNotExists(poolBkt)
 			if err != nil {
 				desc := fmt.Sprintf("failed to create %s bucket", string(poolBkt))
-				return MakeError(ErrBucketCreate, desc, err)
+				return errors.MakeError(errors.ErrBucketCreate, desc, err)
 			}
 			vbytes := make([]byte, 4)
 			binary.LittleEndian.PutUint32(vbytes, uint32(DBVersion))
@@ -135,7 +136,7 @@ func purge(db *bolt.DB) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return MakeError(ErrBucketNotFound, desc, nil)
+			return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 		}
 		err := pbkt.DeleteBucket(accountBkt)
 		if err != nil {
@@ -189,7 +190,7 @@ func purge(db *bolt.DB) error {
 func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 	db, err := openDB(dbFile)
 	if err != nil {
-		return nil, MakeError(ErrDBOpen, "unable to open db file", err)
+		return nil, errors.MakeError(errors.ErrDBOpen, "unable to open db file", err)
 	}
 	err = createBuckets(db)
 	if err != nil {
@@ -244,7 +245,7 @@ func deleteEntry(db *bolt.DB, bucket, key []byte) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return MakeError(ErrBucketNotFound, desc, nil)
+			return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 		}
 		b := pbkt.Bucket(bucket)
 		return b.Delete(key)
@@ -258,7 +259,7 @@ func emptyBucket(db *bolt.DB, bucket []byte) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return MakeError(ErrBucketNotFound, desc, nil)
+			return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 		}
 		b := pbkt.Bucket(bucket)
 		toDelete := [][]byte{}

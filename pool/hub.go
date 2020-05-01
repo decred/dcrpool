@@ -26,6 +26,7 @@ import (
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/rpcclient/v6"
 	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrpool/pool/errors"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 )
@@ -295,7 +296,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 // submitWork sends solved block data to the consensus daemon for evaluation.
 func (h *Hub) submitWork(ctx context.Context, data *string) (bool, error) {
 	if h.nodeConn == nil {
-		return false, MakeError(ErrOther, "node connection unset", nil)
+		return false, errors.MakeError(errors.ErrOther, "node connection unset", nil)
 	}
 
 	return h.nodeConn.GetWorkSubmit(ctx, *data)
@@ -304,7 +305,7 @@ func (h *Hub) submitWork(ctx context.Context, data *string) (bool, error) {
 // getWork fetches available work from the consensus daemon.
 func (h *Hub) getWork(ctx context.Context) (string, string, error) {
 	if h.nodeConn == nil {
-		return "", "", MakeError(ErrOther, "node connection unset", nil)
+		return "", "", errors.MakeError(errors.ErrOther, "node connection unset", nil)
 	}
 
 	work, err := h.nodeConn.GetWork(ctx)
@@ -363,7 +364,7 @@ func (h *Hub) FetchLastPaymentHeight() uint32 {
 // getBlock fetches the blocks associated with the provided block hash.
 func (h *Hub) getBlock(ctx context.Context, blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
 	if h.nodeConn == nil {
-		return nil, MakeError(ErrOther, "node connection unset", nil)
+		return nil, errors.MakeError(errors.ErrOther, "node connection unset", nil)
 	}
 
 	return h.nodeConn.GetBlock(ctx, blockHash)
@@ -465,7 +466,7 @@ func (h *Hub) Listen() error {
 		endpoint, err := NewEndpoint(eCfg, diffInfo, port, miner)
 		if err != nil {
 			desc := fmt.Sprintf("unable to create %s listener", miner)
-			return MakeError(ErrOther, desc, err)
+			return errors.MakeError(errors.ErrOther, desc, err)
 		}
 		h.endpoints = append(h.endpoints, endpoint)
 	}
@@ -515,7 +516,7 @@ func (h *Hub) FetchWork(ctx context.Context) error {
 	work, _, err := h.getWork(ctx)
 	if err != nil {
 		desc := "unable to fetch current work"
-		return MakeError(ErrOther, desc, err)
+		return errors.MakeError(errors.ErrOther, desc, err)
 	}
 	h.chainState.setCurrentWork(work)
 	return nil
@@ -653,7 +654,7 @@ func (h *Hub) CSRFSecret() ([]byte, error) {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return MakeError(ErrBucketNotFound, desc, nil)
+			return errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 		}
 		v := pbkt.Get(csrfSecret)
 		if v != nil {

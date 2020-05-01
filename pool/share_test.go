@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrpool/pool/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -72,5 +74,131 @@ func testShares(t *testing.T, db *bolt.DB) {
 	err = emptyBucket(db, shareBkt)
 	if err != nil {
 		t.Fatalf("emptyBucket error: %v", err)
+	}
+}
+
+func testSharePercentages(t *testing.T) {
+	set := map[string]struct {
+		input  []*Share
+		output map[string]*big.Rat
+		err    error
+	}{
+		"equal shares": {
+			input: []*Share{
+				NewShare("a", new(big.Rat).SetInt64(5)),
+				NewShare("b", new(big.Rat).SetInt64(5)),
+				NewShare("c", new(big.Rat).SetInt64(5)),
+				NewShare("d", new(big.Rat).SetInt64(5)),
+				NewShare("e", new(big.Rat).SetInt64(5)),
+			},
+			output: map[string]*big.Rat{
+				"a": new(big.Rat).SetFrac64(5, 25),
+				"b": new(big.Rat).SetFrac64(5, 25),
+				"c": new(big.Rat).SetFrac64(5, 25),
+				"d": new(big.Rat).SetFrac64(5, 25),
+				"e": new(big.Rat).SetFrac64(5, 25),
+			},
+			err: nil,
+		},
+		"inequal shares": {
+			input: []*Share{
+				NewShare("a", new(big.Rat).SetInt64(5)),
+				NewShare("b", new(big.Rat).SetInt64(10)),
+				NewShare("c", new(big.Rat).SetInt64(15)),
+				NewShare("d", new(big.Rat).SetInt64(20.0)),
+				NewShare("e", new(big.Rat).SetInt64(25.0)),
+			},
+			output: map[string]*big.Rat{
+				"a": new(big.Rat).SetFrac64(5, 75),
+				"b": new(big.Rat).SetFrac64(10, 75),
+				"c": new(big.Rat).SetFrac64(15, 75),
+				"d": new(big.Rat).SetFrac64(20, 75),
+				"e": new(big.Rat).SetFrac64(25, 75),
+			},
+			err: nil,
+		},
+		"zero shares": {
+			input: []*Share{
+				NewShare("a", new(big.Rat)),
+				NewShare("b", new(big.Rat)),
+				NewShare("c", new(big.Rat)),
+				NewShare("d", new(big.Rat)),
+				NewShare("e", new(big.Rat)),
+			},
+			output: nil,
+			err:    errors.MakeError(errors.ErrDivideByZero, "division by zero", nil),
+		},
+	}
+
+	for name, test := range set {
+		actual, err := sharePercentages(test.input)
+		if err != test.err {
+			var errCode errors.ErrorCode
+			var expectedCode errors.ErrorCode
+
+			if err != nil {
+				e, ok := err.(errors.Error)
+				if ok {
+					errCode = e.ErrorCode
+				}
+			}
+
+			if test.err != nil {
+				e, ok := test.err.(errors.Error)
+				if ok {
+					expectedCode = e.ErrorCode
+				}
+			}
+
+			if errCode.String() != expectedCode.String() {
+				t.Fatalf("%s: error generated was %v, expected %v.",
+					name, errCode.String(), expectedCode.String())
+			}
+		}
+
+		for account, dividend := range test.output {
+			if actual[account].Cmp(dividend) != 0 {
+				t.Fatalf("%s: account %v dividend was %v, "+
+					"expected %v.", name, account, actual[account], dividend)
+			}
+		}
+	}
+}
+
+func testCalculatePoolTarget(t *testing.T) {
+	set := []struct {
+		hashRate   *big.Int
+		targetTime *big.Int
+		expected   string
+	}{
+		{
+			new(big.Int).SetInt64(1.2e12),
+			new(big.Int).SetInt64(15),
+			"942318434548471642444425333729556541774658078333663444331523307356028928/146484375",
+		},
+		{
+			new(big.Int).SetInt64(1.2e12),
+			new(big.Int).SetInt64(10),
+			"471159217274235821222212666864778270887329039166831722165761653678014464/48828125",
+		},
+	}
+
+	for _, test := range set {
+		target, _, err := calculatePoolTarget(chaincfg.MainNetParams(),
+			test.hashRate, test.targetTime)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expected, success := new(big.Rat).SetString(test.expected)
+		if !success {
+			t.Fatalf("failed to parse %v as a big.Int", test.expected)
+		}
+
+		if target.Cmp(expected) != 0 {
+			t.Fatalf("for a hashrate of %v and a target time of %v the "+
+				"expected target is %v, got %v", test.hashRate,
+				test.targetTime, expected, target)
+		}
 	}
 }

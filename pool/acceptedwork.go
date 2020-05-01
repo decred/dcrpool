@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/decred/dcrpool/pool/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -71,12 +72,12 @@ func fetchWorkBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 	bkt := pbkt.Bucket(workBkt)
 	if bkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(workBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 	return bkt, nil
 }
@@ -93,7 +94,7 @@ func FetchAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
 		v := bkt.Get(id)
 		if v == nil {
 			desc := fmt.Sprintf("no value for key %s", string(id))
-			return MakeError(ErrValueNotFound, desc, nil)
+			return errors.MakeError(errors.ErrValueNotFound, desc, nil)
 		}
 
 		err = json.Unmarshal(v, &work)
@@ -119,7 +120,7 @@ func (work *AcceptedWork) Create(db *bolt.DB) error {
 		v := bkt.Get(id)
 		if v != nil {
 			desc := fmt.Sprintf("work %s already exists", work.UUID)
-			return MakeError(ErrWorkExists, desc, nil)
+			return errors.MakeError(errors.ErrWorkExists, desc, nil)
 		}
 
 		workBytes, err := json.Marshal(work)
@@ -145,7 +146,7 @@ func (work *AcceptedWork) Update(db *bolt.DB) error {
 		v := bkt.Get(id)
 		if v == nil {
 			desc := fmt.Sprintf("work %s not found", work.UUID)
-			return MakeError(ErrWorkNotFound, desc, nil)
+			return errors.MakeError(errors.ErrWorkNotFound, desc, nil)
 		}
 
 		workBytes, err := json.Marshal(work)

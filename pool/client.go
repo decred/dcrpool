@@ -24,6 +24,7 @@ import (
 	"github.com/decred/dcrd/blockchain/standalone"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrpool/pool/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -60,8 +61,10 @@ type readPayload struct {
 type ClientConfig struct {
 	// ActiveNet represents the active network being mined on.
 	ActiveNet *chaincfg.Params
+
 	// DB represents the pool database.
 	DB *bolt.DB
+
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
 	// Blake256Pad represents the extra padding needed for work
@@ -148,6 +151,7 @@ func NewClient(conn net.Conn, addr *net.TCPAddr, cCfg *ClientConfig) (*Client, e
 		reader:   bufio.NewReaderSize(conn, maxMessageSize),
 		hashRate: ZeroRat,
 	}
+
 	err := c.generateExtraNonce1()
 	if err != nil {
 		return nil, err
@@ -226,7 +230,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 		}
 		_, err = FetchAccount(c.cfg.DB, []byte(id))
 		if err != nil {
-			if !IsError(err, ErrValueNotFound) {
+			if !errors.IsError(err, errors.ErrValueNotFound) {
 				err := fmt.Errorf("unable to fetch account: %v", err)
 				sErr := NewStratumError(Unknown, err)
 				resp := AuthorizeResponse(*req.ID, false, sErr)
@@ -477,7 +481,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	if err != nil {
 		// If the submitted accepted work already exists, ignore the
 		// submission.
-		if IsError(err, ErrWorkExists) {
+		if errors.IsError(err, errors.ErrWorkExists) {
 			err := fmt.Errorf("work %s already exists, ignoring", hash.String())
 			sErr := NewStratumError(DuplicateShare, err)
 			resp := SubmitWorkResponse(*req.ID, false, sErr)
@@ -735,7 +739,7 @@ func reversePrevBlockWords(hashE string) string {
 func hexReversed(in string) (string, error) {
 	if len(in)%2 != 0 {
 		desc := fmt.Sprintf("expected even hex input length, got %d", len(in))
-		return "", MakeError(ErrWrongInputLength, desc, nil)
+		return "", errors.MakeError(errors.ErrWrongInputLength, desc, nil)
 	}
 	buf := bytes.NewBufferString("")
 	for i := len(in) - 1; i > -1; i -= 2 {

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/decred/dcrpool/pool/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -57,12 +58,12 @@ func fetchJobBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 	bkt := pbkt.Bucket(jobBkt)
 	if bkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(jobBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, errors.MakeError(errors.ErrBucketNotFound, desc, nil)
 	}
 
 	return bkt, nil
@@ -80,7 +81,7 @@ func FetchJob(db *bolt.DB, id []byte) (*Job, error) {
 		v := bkt.Get(id)
 		if v == nil {
 			desc := fmt.Sprintf("no value found for job id %s", string(id))
-			return MakeError(ErrValueNotFound, desc, nil)
+			return errors.MakeError(errors.ErrValueNotFound, desc, nil)
 		}
 		err = json.Unmarshal(v, &job)
 		return err
@@ -113,7 +114,7 @@ func (job *Job) Create(db *bolt.DB) error {
 // Update is not supported for jobs.
 func (job *Job) Update(db *bolt.DB) error {
 	desc := "job update not supported"
-	return MakeError(ErrNotSupported, desc, nil)
+	return errors.MakeError(errors.ErrNotSupported, desc, nil)
 }
 
 // Delete removes the associated job from the database.
