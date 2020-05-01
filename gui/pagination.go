@@ -60,8 +60,8 @@ func sendJSONResponse(w http.ResponseWriter, payload interface{}) {
 }
 
 // paginatedBlocks is the handler for "GET /blocks". It uses parameters
-// pageNumber and pageSize to prepare a json payload describing blocks mined by
-// the pool, as well as the total count of all confirmed blocks.
+// pageNumber and pageSize to prepare a json payload describing confirmed blocks
+// mined by the pool, as well as the total count of all confirmed blocks.
 func (ui *GUI) paginatedBlocks(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
@@ -71,12 +71,19 @@ func (ui *GUI) paginatedBlocks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	allWork := ui.cache.getMinedWork()
-	count := len(allWork)
+	confirmedWork := make([]minedWork, 0)
+	for _, v := range allWork {
+		if v.Confirmed {
+			confirmedWork = append(confirmedWork, v)
+		}
+	}
+
+	count := len(confirmedWork)
 	last = min(last, count)
 
 	sendJSONResponse(w, paginationPayload{
 		Count: count,
-		Data:  allWork[first:last],
+		Data:  confirmedWork[first:last],
 	})
 }
 
