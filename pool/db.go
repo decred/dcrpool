@@ -32,7 +32,7 @@ var (
 	// archived periodically.
 	paymentBkt = []byte("paymentbkt")
 	// paymentArchiveBkt stores all processed payments for auditing purposes.
-	// Confirmed processed payements are sourced from the payment bucket and
+	// Confirmed processed payments are sourced from the payment bucket and
 	// archived.
 	paymentArchiveBkt = []byte("paymentarchivebkt")
 	// versionK is the key of the current version of the database.
