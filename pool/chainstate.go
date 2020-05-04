@@ -33,7 +33,7 @@ type ChainStateConfig struct {
 	GetBlock func(*chainhash.Hash) (*wire.MsgBlock, error)
 	// PendingPaymentsAtHeight fetches all pending payments at
 	// the provided height.
-	PendingPaymentsAtHeight func(*bolt.DB, uint32) ([]*Payment, error)
+	PendingPaymentsAtHeight func(uint32) ([]*Payment, error)
 	// Cancel represents the pool's context cancellation function.
 	Cancel context.CancelFunc
 	// SignalCache sends the provided cache update event to the gui cache.
@@ -409,8 +409,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			if !cs.cfg.SoloPool {
 				// If the disconnected block is an accepted work from the pool,
 				// delete all associated payments.
-				payments, err := cs.cfg.PendingPaymentsAtHeight(cs.cfg.DB,
-					header.Height)
+				payments, err := cs.cfg.PendingPaymentsAtHeight(header.Height)
 				if err != nil {
 					// Errors generated looking up pending payments
 					// indicates an underlying issue accessing the database.

@@ -174,6 +174,16 @@ func (pm *PaymentMgr) pruneShares(tx *bolt.Tx, minNano int64) error {
 	return nil
 }
 
+// fetchPoolBucket is a helper function for getting the pool bucket.
+func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+		return nil, MakeError(ErrBucketNotFound, desc, nil)
+	}
+	return pbkt, nil
+}
+
 // bigEndianBytesToNano returns nanosecond time from the provided
 // big endian bytes.
 func bigEndianBytesToNano(b []byte) uint64 {
@@ -182,10 +192,9 @@ func bigEndianBytesToNano(b []byte) uint64 {
 
 // loadLastPaymentPaidOn fetches the last payment paid on time from the db.
 func (pm *PaymentMgr) loadLastPaymentPaidOn(tx *bolt.Tx) error {
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+	pbkt, err := fetchPoolBucket(tx)
+	if err != nil {
+		return err
 	}
 	lastPaymentPaidOnB := pbkt.Get(lastPaymentPaidOn)
 	if lastPaymentPaidOnB == nil {
@@ -210,10 +219,9 @@ func (pm *PaymentMgr) fetchLastPaymentCreatedOn() uint64 {
 
 // persistLastPaymentCreatedOn saves the last payment created on time to the db.
 func (pm *PaymentMgr) persistLastPaymentCreatedOn(tx *bolt.Tx) error {
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+	pbkt, err := fetchPoolBucket(tx)
+	if err != nil {
+		return err
 	}
 	return pbkt.Put(lastPaymentCreatedOn,
 		nanoToBigEndianBytes(int64(pm.lastPaymentCreatedOn)))
@@ -221,10 +229,9 @@ func (pm *PaymentMgr) persistLastPaymentCreatedOn(tx *bolt.Tx) error {
 
 // loadLastPaymentCreaedOn fetches the last payment created on time from the db.
 func (pm *PaymentMgr) loadLastPaymentCreatedOn(tx *bolt.Tx) error {
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+	pbkt, err := fetchPoolBucket(tx)
+	if err != nil {
+		return err
 	}
 	lastPaymentCreatedOnB := pbkt.Get(lastPaymentCreatedOn)
 	if lastPaymentCreatedOnB == nil {
@@ -383,15 +390,7 @@ func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amoun
 	if err != nil {
 		return err
 	}
-	var estMaturity uint32
-	coinbaseMaturity := pm.cfg.ActiveNet.CoinbaseMaturity
-	if coinbaseMaturity == 0 {
-		// Allow immediately mature payments for testing purposes.
-		estMaturity = height
-	}
-	if coinbaseMaturity > 0 {
-		estMaturity = height + uint32(coinbaseMaturity)
-	}
+	estMaturity := height + uint32(pm.cfg.ActiveNet.CoinbaseMaturity)
 	payments, err := CalculatePayments(percentages, source, amt, pm.cfg.PoolFee,
 		height, estMaturity)
 	if err != nil {
@@ -420,8 +419,7 @@ func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amoun
 // generatePayments creates payments for participating accounts. This should
 // only be called when a block is confirmed mined, in pool mining mode.
 func (pm *PaymentMgr) generatePayments(height uint32, source *PaymentSource, amt dcrutil.Amount) error {
-	cfg := pm.cfg
-	switch cfg.PaymentMethod {
+	switch pm.cfg.PaymentMethod {
 	case PPS:
 		return pm.payPerShare(source, amt, height)
 
@@ -429,7 +427,7 @@ func (pm *PaymentMgr) generatePayments(height uint32, source *PaymentSource, amt
 		return pm.payPerLastNShares(source, amt, height)
 
 	default:
-		return fmt.Errorf("unknown payment method provided %v", cfg.PaymentMethod)
+		return fmt.Errorf("unknown payment method provided %v", pm.cfg.PaymentMethod)
 	}
 }
 
@@ -459,34 +457,140 @@ func (pm *PaymentMgr) addPaymentRequest(addr string) error {
 	return nil
 }
 
-// fetchEligiblePaymentBundles fetches payment bundles greater than the
-// configured minimum payment.
-func (pm *PaymentMgr) fetchEligiblePaymentBundles(height uint32) ([]*PaymentBundle, error) {
-	maturePayments, err := fetchMaturePendingPayments(pm.cfg.DB, height)
+// pendingPayments fetches all unpaid payments.
+func (pm *PaymentMgr) pendingPayments() ([]*Payment, error) {
+	payments := make([]*Payment, 0)
+	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
+		bkt, err := fetchPaymentBucket(tx)
+		if err != nil {
+			return err
+		}
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			var payment Payment
+			err := json.Unmarshal(v, &payment)
+			if err != nil {
+				return err
+			}
+
+			if payment.PaidOnHeight == 0 {
+				payments = append(payments, &payment)
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	bundles := generatePaymentBundles(maturePayments)
+	return payments, nil
+}
 
-	// Iterating the bundles backwards implicitly handles decrementing the
-	// slice index when a bundle entry in the slice is removed.
-	for idx := len(bundles) - 1; idx >= 0; idx-- {
-		if bundles[idx].Total() < pm.cfg.MinPayment {
-			// Remove payments below the minimum payment if they have not been
-			// requested for by the user.
-			if !pm.isPaymentRequested(bundles[idx].Account) {
-				bundles = append(bundles[:idx], bundles[idx+1:]...)
-				continue
+// pendingPaymentsAtHeight fetches all pending payments at the provided height.
+func (pm *PaymentMgr) pendingPaymentsAtHeight(height uint32) ([]*Payment, error) {
+	payments := make([]*Payment, 0)
+	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
+		bkt, err := fetchPaymentBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		heightBE := heightToBigEndianBytes(height)
+		paymentHeightB := make([]byte, 8)
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			_, err := hex.Decode(paymentHeightB, k[:8])
+			if err != nil {
+				return err
 			}
-			if txrules.IsDustAmount(
-				bundles[idx].Total(),
-				25, // P2PKHScriptSize
-				mempool.DefaultMinRelayTxFee) {
-				bundles = append(bundles[:idx], bundles[idx+1:]...)
+
+			if bytes.Compare(heightBE, paymentHeightB) > 0 {
+				var payment Payment
+				err := json.Unmarshal(v, &payment)
+				if err != nil {
+					return err
+				}
+
+				if payment.PaidOnHeight == 0 {
+					payments = append(payments, &payment)
+				}
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	return bundles, nil
+	return payments, nil
+}
+
+// archivedPayments fetches all archived payments. List is ordered, most
+// recent comes first.
+func (pm *PaymentMgr) archivedPayments() ([]*Payment, error) {
+	pmts := make([]*Payment, 0)
+	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
+		abkt, err := fetchPaymentArchiveBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		c := abkt.Cursor()
+		for k, v := c.Last(); k != nil; k, v = c.Prev() {
+			var payment Payment
+			err := json.Unmarshal(v, &payment)
+			if err != nil {
+				return err
+			}
+			pmts = append(pmts, &payment)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return pmts, nil
+}
+
+// maturePendingPayments fetches all mature pending payments at the
+// provided height.
+func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[uint32][]*Payment, error) {
+	payments := make([]*Payment, 0)
+	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
+		bkt, err := fetchPaymentBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			var payment Payment
+			err := json.Unmarshal(v, &payment)
+			if err != nil {
+				return err
+			}
+
+			spendableHeight := payment.EstimatedMaturity + 1
+			if payment.PaidOnHeight == 0 && spendableHeight <= height {
+				payments = append(payments, &payment)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	pmts := make(map[uint32][]*Payment)
+	for _, pmt := range payments {
+		set, ok := pmts[pmt.Height]
+		if !ok {
+			set = make([]*Payment, 0)
+		}
+
+		set = append(set, pmt)
+		pmts[pmt.Height] = set
+	}
+
+	return pmts, nil
 }
 
 // PayDividends pays mature mining rewards to participating accounts.
