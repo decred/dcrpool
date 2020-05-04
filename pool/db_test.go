@@ -55,10 +55,6 @@ func testFetchBucketHelpers(t *testing.T) {
 		if err == nil {
 			return expectedNotFoundErr
 		}
-		err = pmtMgr.loadTxFeeReserve(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
 		err = pmtMgr.persistLastPaymentCreatedOn(tx)
 		if err == nil {
 			return expectedNotFoundErr
@@ -68,10 +64,6 @@ func testFetchBucketHelpers(t *testing.T) {
 			return expectedNotFoundErr
 		}
 		err = pmtMgr.persistLastPaymentPaidOn(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		err = pmtMgr.persistTxFeeReserve(tx)
 		if err == nil {
 			return expectedNotFoundErr
 		}

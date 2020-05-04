@@ -23,18 +23,23 @@ const (
 	// payment source tracking to payments.
 	paymentSourceVersion = 3
 
+	// removeTxfeeReserveVersion is the fourth version of the database.
+	// It removes the tx fee reserve from the database.
+	removeTxFeeReserveVersion = 4
+
 	// DBVersion is the latest version of the database that is understood by the
 	// program. Databases with recorded versions higher than this will fail to
 	// open (meaning any upgrades prevent reverting to older software).
-	DBVersion = paymentSourceVersion
+	DBVersion = removeTxFeeReserveVersion
 )
 
 // upgrades maps between old database versions and the upgrade function to
 // upgrade the database to the next version.
 var upgrades = [...]func(tx *bolt.Tx) error{
-	transactionIDVersion - 1: transactionIDUpgrade,
-	shareIDVersion - 1:       shareIDUpgrade,
-	paymentSourceVersion - 1: paymentSourceUpgrade,
+	transactionIDVersion - 1:      transactionIDUpgrade,
+	shareIDVersion - 1:            shareIDUpgrade,
+	paymentSourceVersion - 1:      paymentSourceUpgrade,
+	removeTxFeeReserveVersion - 1: removeTxFeeReserveUpgrade,
 }
 
 func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
@@ -309,6 +314,34 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	return setDBVersion(tx, newVersion)
+}
+
+func removeTxFeeReserveUpgrade(tx *bolt.Tx) error {
+	const oldVersion = 3
+	const newVersion = 4
+
+	dbVersion, err := fetchDBVersion(tx)
+	if err != nil {
+		return err
+	}
+
+	if dbVersion != oldVersion {
+		desc := "removeTxFeeReserveTxUpgrade inappropriately called"
+		return MakeError(ErrDBUpgrade, desc, nil)
+	}
+
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+		return MakeError(ErrBucketNotFound, desc, nil)
+	}
+
+	err = pbkt.Delete([]byte("txfeereserve"))
+	if err != nil {
+		return MakeError(ErrDBUpgrade, "", err)
 	}
 
 	return setDBVersion(tx, newVersion)

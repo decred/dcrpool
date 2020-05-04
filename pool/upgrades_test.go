@@ -21,6 +21,7 @@ var dbUpgradeTests = [...]struct {
 	// No upgrade test for V1, it is a backwards-compatible upgrade
 	{verifyV2Upgrade, "v1.db.gz"},
 	{verifyV3Upgrade, "v2.db.gz"},
+	{verifyV4Upgrade, "v2.db.gz"},
 }
 
 func TestUpgrades(t *testing.T) {
@@ -164,6 +165,26 @@ func verifyV3Upgrade(t *testing.T, db *bolt.DB) {
 			if payment.Source == nil {
 				return fmt.Errorf("expected a non-nil payment source")
 			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func verifyV4Upgrade(t *testing.T, db *bolt.DB) {
+	err := db.View(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(poolBkt)
+		if pbkt == nil {
+			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+			return MakeError(ErrBucketNotFound, desc, nil)
+		}
+
+		v := pbkt.Get([]byte("txfeereserve"))
+		if v != nil {
+			return fmt.Errorf("unexpected value found for txfeereserve")
 		}
 
 		return nil

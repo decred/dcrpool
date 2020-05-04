@@ -124,7 +124,6 @@ type HubConfig struct {
 	ActiveNet             *chaincfg.Params
 	DB                    *bolt.DB
 	PoolFee               float64
-	MaxTxFeeReserve       dcrutil.Amount
 	MaxGenTime            time.Duration
 	PaymentMethod         string
 	LastNPeriod           time.Duration
