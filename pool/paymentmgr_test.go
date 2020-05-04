@@ -40,21 +40,16 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[NewAmount] unexpected error: %v", err)
 	}
-	maxTxFeeReserve, err := dcrutil.NewAmount(0.1)
-	if err != nil {
-		t.Fatalf("[NewAmount] unexpected error: %v", err)
-	}
 	activeNet := chaincfg.SimNetParams()
 	pCfg := &PaymentMgrConfig{
-		DB:              db,
-		ActiveNet:       activeNet,
-		PoolFee:         0.1,
-		LastNPeriod:     time.Second * 120,
-		SoloPool:        false,
-		PaymentMethod:   PPS,
-		MinPayment:      minPayment,
-		PoolFeeAddrs:    []dcrutil.Address{poolFeeAddrs},
-		MaxTxFeeReserve: maxTxFeeReserve,
+		DB:            db,
+		ActiveNet:     activeNet,
+		PoolFee:       0.1,
+		LastNPeriod:   time.Second * 120,
+		SoloPool:      false,
+		PaymentMethod: PPS,
+		MinPayment:    minPayment,
+		PoolFeeAddrs:  []dcrutil.Address{poolFeeAddrs},
 	}
 	mgr, err := NewPaymentMgr(pCfg)
 	if err != nil {
@@ -249,15 +244,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		if err != nil {
 			return fmt.Errorf("unable to load last payment created on: %v", err)
 		}
-		err = mgr.loadLastPaymentPaidOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to load last payment paid on: %v", err)
-		}
-		err = mgr.loadTxFeeReserve(tx)
-		if err != nil {
-			return fmt.Errorf("unable to load tx fee reserve: %v", err)
-		}
-		return nil
+		return mgr.loadLastPaymentPaidOn(tx)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -265,8 +252,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	initialLastPaymentHeight := mgr.fetchLastPaymentHeight()
 	initialLastPaymentPaidOn := mgr.fetchLastPaymentPaidOn()
 	initialLastPaymentCreatedOn := mgr.fetchLastPaymentCreatedOn()
-	initialTxFeeReserve := mgr.fetchTxFeeReserve()
-	zeroAmount := dcrutil.Amount(0)
 	if initialLastPaymentHeight != 0 {
 		t.Fatalf("[fetchLastPaymentHeight] expected last payment height of "+
 			" %d, got %d", 0, initialLastPaymentHeight)
@@ -279,10 +264,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("[fetchLastPaymentCreatedOn] expected last payment created "+
 			"on of %d, got %d", 0, initialLastPaymentCreatedOn)
 	}
-	if initialTxFeeReserve != zeroAmount {
-		t.Fatalf("[fetchTxFeeReserve] expected last payment height of "+
-			" %d, got %d", initialTxFeeReserve, zeroAmount)
-	}
 
 	lastPaymentHeight := uint32(1)
 	mgr.setLastPaymentHeight(lastPaymentHeight)
@@ -290,11 +271,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mgr.setLastPaymentPaidOn(lastPaymentPaidOn)
 	lastPaymentCreatedOn := uint64(time.Now().UnixNano())
 	mgr.setLastPaymentCreatedOn(lastPaymentCreatedOn)
-	feeReserve, err := dcrutil.NewAmount(0.02)
-	if err != nil {
-		t.Fatalf("[NewAmount] unexpected error: %v", err)
-	}
-	mgr.setTxFeeReserve(feeReserve)
 	err = db.Update(func(tx *bolt.Tx) error {
 		err := mgr.persistLastPaymentHeight(tx)
 		if err != nil {
@@ -304,13 +280,9 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		if err != nil {
 			return fmt.Errorf("[persistLastPaymentPaidOn] unable to persist last payment paid on: %v", err)
 		}
-		err = mgr.persistLastPaymentCreatedOn(tx)
+		return mgr.persistLastPaymentCreatedOn(tx)
 		if err != nil {
 			return fmt.Errorf("[persistLastPaymentCreatedOn] unable to persist last payment created on: %v", err)
-		}
-		err = mgr.persistTxFeeReserve(tx)
-		if err != nil {
-			return fmt.Errorf("[persistTxFeeReserve] unable to persist tx fee reserve: %v", err)
 		}
 		return nil
 	})
@@ -330,10 +302,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		err = mgr.loadLastPaymentCreatedOn(tx)
 		if err != nil {
 			return fmt.Errorf("[loadLastPaymentCreatedOn] unable to load last payment created on: %v", err)
-		}
-		err = mgr.loadTxFeeReserve(tx)
-		if err != nil {
-			return fmt.Errorf("[loadTxFeeReserve] unable to load tx fee reserve: %v", err)
 		}
 		return nil
 	})
@@ -356,49 +324,11 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("[fetchLastPaymentCreatedOn] expected last payment created on to be %d, got %d",
 			lastPaymentCreatedOn, paymentCreatedOn)
 	}
-	txFeeReserve := mgr.fetchTxFeeReserve()
-	if feeReserve != txFeeReserve {
-		t.Fatalf("[fetchTxFeeReserve] expected tx fee reserve to be %d, got %d",
-			feeReserve, txFeeReserve)
-	}
-
-	// Ensure the tx fee reserve can be replenished partially and fully.
-	feeA, err := dcrutil.NewAmount(0.05)
-	if err != nil {
-		t.Fatalf("[NewAmount] unexpected error: %v", err)
-	}
-	updatedFeeA := mgr.replenishTxFeeReserve(feeA)
-	if updatedFeeA != zeroAmount {
-		t.Fatalf("[replenishTxFeeReserve] expected fees after replenishing "+
-			"with feeA to be %d, got %d", zeroAmount, updatedFeeA)
-	}
-	updatedTFR := mgr.fetchTxFeeReserve()
-	if updatedTFR != feeReserve+feeA {
-		t.Fatalf("[replenishTxFeeReserve] expected updated tx fee reserve "+
-			"after feeA replenish to be %d, got %d", feeReserve+feeA, updatedTFR)
-	}
-
-	txFeeReserve = mgr.fetchTxFeeReserve()
-	feeB, err := dcrutil.NewAmount(2)
-	if err != nil {
-		t.Fatalf("[NewAmount] unexpected error: %v", err)
-	}
-	updatedFeeB := mgr.replenishTxFeeReserve(feeB)
-	if updatedFeeB >= feeB {
-		t.Fatalf("[replenishTxFeeReserve] expected fees after replenishing "+
-			" with feeB to be %d, got %d", feeB-(maxTxFeeReserve-txFeeReserve), updatedFeeB)
-	}
-	updatedTFR = mgr.fetchTxFeeReserve()
-	if updatedTFR != maxTxFeeReserve {
-		t.Fatalf("[replenishTxFeeReserve] expected updated tx fee reserve "+
-			"after feeB replenish to be %d, got %d", maxTxFeeReserve, updatedTFR)
-	}
 
 	// Reset backed up values to their defaults.
 	mgr.setLastPaymentHeight(0)
 	mgr.setLastPaymentPaidOn(0)
 	mgr.setLastPaymentCreatedOn(0)
-	mgr.setTxFeeReserve(zeroAmount)
 	err = db.Update(func(tx *bolt.Tx) error {
 		err := mgr.persistLastPaymentHeight(tx)
 		if err != nil {
@@ -411,10 +341,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		err = mgr.persistLastPaymentCreatedOn(tx)
 		if err != nil {
 			return fmt.Errorf("unable to persist default last payment created on: %v", err)
-		}
-		err = mgr.persistTxFeeReserve(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default tx fee reserve: %v", err)
 		}
 		return nil
 	})
@@ -521,7 +447,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mgr.setLastPaymentHeight(0)
 	mgr.setLastPaymentPaidOn(0)
 	mgr.setLastPaymentCreatedOn(0)
-	mgr.setTxFeeReserve(zeroAmount)
 	err = db.Update(func(tx *bolt.Tx) error {
 		err := mgr.persistLastPaymentHeight(tx)
 		if err != nil {
@@ -534,10 +459,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		err = mgr.persistLastPaymentCreatedOn(tx)
 		if err != nil {
 			return fmt.Errorf("unable to persist default last payment created on: %v", err)
-		}
-		err = mgr.persistTxFeeReserve(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default tx fee reserve: %v", err)
 		}
 		return nil
 	})
@@ -643,7 +564,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mgr.setLastPaymentHeight(0)
 	mgr.setLastPaymentPaidOn(0)
 	mgr.setLastPaymentCreatedOn(0)
-	mgr.setTxFeeReserve(zeroAmount)
 	err = db.Update(func(tx *bolt.Tx) error {
 		err := mgr.persistLastPaymentHeight(tx)
 		if err != nil {
@@ -656,10 +576,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		err = mgr.persistLastPaymentCreatedOn(tx)
 		if err != nil {
 			return fmt.Errorf("unable to persist default last payment created on: %v", err)
-		}
-		err = mgr.persistTxFeeReserve(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default tx fee reserve: %v", err)
 		}
 		return nil
 	})
@@ -752,7 +668,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mgr.setLastPaymentHeight(0)
 	mgr.setLastPaymentPaidOn(0)
 	mgr.setLastPaymentCreatedOn(0)
-	mgr.setTxFeeReserve(zeroAmount)
 	err = db.Update(func(tx *bolt.Tx) error {
 		err := mgr.persistLastPaymentHeight(tx)
 		if err != nil {
@@ -765,10 +680,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		err = mgr.persistLastPaymentCreatedOn(tx)
 		if err != nil {
 			return fmt.Errorf("unable to persist default last payment created on: %v", err)
-		}
-		err = mgr.persistTxFeeReserve(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default tx fee reserve: %v", err)
 		}
 		return nil
 	})

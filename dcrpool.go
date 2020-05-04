@@ -48,10 +48,6 @@ func newPool(cfg *config) (*miningPool, error) {
 	if err != nil {
 		return nil, err
 	}
-	maxTxFeeReserve, err := dcrutil.NewAmount(cfg.MaxTxFeeReserve)
-	if err != nil {
-		return nil, err
-	}
 
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 	powLimit := cfg.net.PowLimit
@@ -107,7 +103,6 @@ func newPool(cfg *config) (*miningPool, error) {
 		DB:                    db,
 		ActiveNet:             cfg.net.Params,
 		PoolFee:               cfg.PoolFee,
-		MaxTxFeeReserve:       maxTxFeeReserve,
 		MaxGenTime:            cfg.MaxGenTime,
 		PaymentMethod:         cfg.PaymentMethod,
 		LastNPeriod:           cfg.LastNPeriod,

@@ -228,10 +228,6 @@ func testHub(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[NewAmount] unexpected error: %v", err)
 	}
-	maxTxFeeReserve, err := dcrutil.NewAmount(0.1)
-	if err != nil {
-		t.Fatalf("[NewAmount] unexpected error: %v", err)
-	}
 	activeNet := chaincfg.SimNetParams()
 	powLimit := chaincfg.SimNetParams().PowLimit
 	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
@@ -246,7 +242,6 @@ func testHub(t *testing.T, db *bolt.DB) {
 		MinPayment:            minPayment,
 		MaxGenTime:            time.Second * 20,
 		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
-		MaxTxFeeReserve:       maxTxFeeReserve,
 		MaxConnectionsPerHost: 10,
 		NonceIterations:       iterations,
 		MinerPorts: map[string]uint32{

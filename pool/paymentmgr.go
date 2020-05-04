@@ -75,8 +75,6 @@ type PaymentMgrConfig struct {
 	MinPayment dcrutil.Amount
 	// PoolFeeAddrs represents the pool fee addresses of the pool.
 	PoolFeeAddrs []dcrutil.Address
-	// MaxTxFeeReserve represents the maximum value the tx free reserve can be.
-	MaxTxFeeReserve dcrutil.Amount
 	// WalletAccount represents the wallet account to process payments from.
 	WalletAccount uint32
 	// WalletPass represents the passphrase to unlock the wallet with.
@@ -101,19 +99,16 @@ type PaymentMgr struct {
 	lastPaymentPaidOn    uint64 // update atomically.
 	lastPaymentCreatedOn uint64 // update atomically.
 
-	cfg             *PaymentMgrConfig
-	txFeeReserve    dcrutil.Amount
-	txFeeReserveMtx sync.RWMutex
-	paymentReqs     map[string]struct{}
-	paymentReqsMtx  sync.RWMutex
+	cfg            *PaymentMgrConfig
+	paymentReqs    map[string]struct{}
+	paymentReqsMtx sync.RWMutex
 }
 
 // NewPaymentMgr creates a new payment manager.
 func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	pm := &PaymentMgr{
-		cfg:          pCfg,
-		txFeeReserve: dcrutil.Amount(0),
-		paymentReqs:  make(map[string]struct{}),
+		cfg:         pCfg,
+		paymentReqs: make(map[string]struct{}),
 	}
 	rand.Seed(time.Now().UnixNano())
 	err := pm.cfg.DB.Update(func(tx *bolt.Tx) error {
@@ -125,11 +120,7 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 		if err != nil {
 			return err
 		}
-		err = pm.loadLastPaymentCreatedOn(tx)
-		if err != nil {
-			return err
-		}
-		return pm.loadTxFeeReserve(tx)
+		return pm.loadLastPaymentCreatedOn(tx)
 	})
 	if err != nil {
 		return nil, err
@@ -291,68 +282,6 @@ func (pm *PaymentMgr) loadLastPaymentCreatedOn(tx *bolt.Tx) error {
 	}
 	pm.setLastPaymentCreatedOn(bigEndianBytesToNano(lastPaymentCreatedOnB))
 	return nil
-}
-
-// setTxFeeReserve updates the tx fee reserve.
-func (pm *PaymentMgr) setTxFeeReserve(amt dcrutil.Amount) {
-	pm.txFeeReserveMtx.Lock()
-	pm.txFeeReserve = amt
-	pm.txFeeReserveMtx.Unlock()
-}
-
-// fetchTxFeeReserve fetches the tx fee reserves.
-func (pm *PaymentMgr) fetchTxFeeReserve() dcrutil.Amount {
-	pm.txFeeReserveMtx.RLock()
-	defer pm.txFeeReserveMtx.RUnlock()
-	return pm.txFeeReserve
-}
-
-// persistTxFeeReserve saves the tx fee reserve to the db.
-func (pm *PaymentMgr) persistTxFeeReserve(tx *bolt.Tx) error {
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
-	}
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, uint32(pm.txFeeReserve))
-	return pbkt.Put(txFeeReserve, b)
-}
-
-// loadTxFeeReserve fetches the tx fee reserve from the db.
-func (pm *PaymentMgr) loadTxFeeReserve(tx *bolt.Tx) error {
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
-	}
-	txFeeReserveB := pbkt.Get(txFeeReserve)
-	if txFeeReserveB == nil {
-		pm.setTxFeeReserve(dcrutil.Amount(0))
-		b := make([]byte, 4)
-		binary.LittleEndian.PutUint32(b, 0)
-		return pbkt.Put(txFeeReserve, b)
-	}
-	amt := dcrutil.Amount(binary.LittleEndian.Uint32(txFeeReserveB))
-	pm.setTxFeeReserve(amt)
-	return nil
-}
-
-// replenishTxFeeReserve uses collected pool fees to replenish the
-// pool's tx fee reserve. The remaining pool fee amount after replenishing
-// the fee reserve is returned.
-func (pm *PaymentMgr) replenishTxFeeReserve(poolFee dcrutil.Amount) dcrutil.Amount {
-	txFeeReserve := pm.fetchTxFeeReserve()
-	if txFeeReserve < pm.cfg.MaxTxFeeReserve {
-		diff := pm.cfg.MaxTxFeeReserve - txFeeReserve
-		if poolFee > diff {
-			pm.setTxFeeReserve(txFeeReserve + diff)
-			return poolFee - diff
-		}
-		pm.setTxFeeReserve(txFeeReserve + poolFee)
-		return dcrutil.Amount(0)
-	}
-	return poolFee
 }
 
 // PPLNSSharePercentages calculates the current mining reward percentages

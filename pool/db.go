@@ -45,8 +45,6 @@ var (
 	lastPaymentPaidOn = []byte("lastpaymentpaidon")
 	// lastPaymentHeight is the key of the last payment height.
 	lastPaymentHeight = []byte("lastpaymentheight")
-	// txFeeReserve is the key of the tx fee reserve.
-	txFeeReserve = []byte("txfeereserve")
 	// soloPool is the solo pool mode key.
 	soloPool = []byte("solopool")
 	// csrfSecret is the CSRF secret key.
@@ -160,10 +158,6 @@ func purge(db *bolt.DB) error {
 			return err
 		}
 		err = pbkt.DeleteBucket(paymentArchiveBkt)
-		if err != nil {
-			return err
-		}
-		err = pbkt.Delete(txFeeReserve)
 		if err != nil {
 			return err
 		}
