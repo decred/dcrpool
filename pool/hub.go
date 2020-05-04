@@ -101,7 +101,7 @@ var (
 // grpc connection for the pool.
 type WalletConnection interface {
 	Balance(ctx context.Context, in *walletrpc.BalanceRequest, opts ...grpc.CallOption) (*walletrpc.BalanceResponse, error)
-	ConstructTransaction(context.Context, *walletrpc.ConstructTransactionRequest, ...grpc.CallOption) (*walletrpc.ConstructTransactionResponse, error)
+	BestBlock(ctx context.Context, in *walletrpc.BestBlockRequest, opts ...grpc.CallOption) (*walletrpc.BestBlockResponse, error)
 	SignTransaction(context.Context, *walletrpc.SignTransactionRequest, ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
 	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
 }
@@ -109,6 +109,8 @@ type WalletConnection interface {
 // NodeConnection defines the functionality needed by a mining node
 // connection for the pool.
 type NodeConnection interface {
+	GetTxOut(*chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error)
+	CreateRawTransaction([]chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
 	GetWorkSubmit(string) (bool, error)
 	GetWork() (*chainjson.GetWorkResult, error)
 	GetBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, error)
@@ -147,7 +149,6 @@ type Hub struct {
 	cfg            *HubConfig
 	limiter        *RateLimiter
 	nodeConn       NodeConnection
-	nodeConnMtx    sync.Mutex
 	walletClose    func() error
 	walletConn     WalletConnection
 	poolDiffs      *DifficultySet
@@ -178,9 +179,7 @@ func (h *Hub) FetchCacheChannel() chan CacheUpdateEvent {
 
 // SetNodeConnection sets the mining node connection.
 func (h *Hub) SetNodeConnection(conn NodeConnection) {
-	h.nodeConnMtx.Lock()
 	h.nodeConn = conn
-	h.nodeConnMtx.Unlock()
 }
 
 // SetWalletConnection sets the wallet connection and it's associated close.
@@ -195,12 +194,6 @@ func (h *Hub) persistPoolMode(tx *bolt.Tx, mode uint32) error {
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint32(b, mode)
 	return pbkt.Put(soloPool, b)
-}
-
-// pendingPaymentsAtHeight fetches all pending payments at
-// the provided height.
-func (h *Hub) pendingPaymentsAtHeight(db *bolt.DB, height uint32) ([]*Payment, error) {
-	return fetchPendingPaymentsAtHeight(db, height)
 }
 
 // generateBlake256Pad creates the extra padding needed for work
@@ -250,8 +243,11 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		PaymentMethod:      h.cfg.PaymentMethod,
 		MinPayment:         h.cfg.MinPayment,
 		PoolFeeAddrs:       h.cfg.PoolFeeAddrs,
-		MaxTxFeeReserve:    h.cfg.MaxTxFeeReserve,
-		PublishTransaction: h.PublishTransaction,
+		WalletAccount:      h.cfg.WalletAccount,
+		WalletPass:         h.cfg.WalletPass,
+		WalletBestHeight:   h.walletBestHeight,
+		FetchTxCreator:     func() TxCreator { return h.nodeConn },
+		FetchTxBroadcaster: func() TxBroadcaster { return h.walletConn },
 		SignalCache:        h.SignalCache,
 	}
 	h.paymentMgr, err = NewPaymentMgr(pCfg)
@@ -263,9 +259,9 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		DB:                      h.db,
 		SoloPool:                h.cfg.SoloPool,
 		PayDividends:            h.paymentMgr.payDividends,
+		PendingPaymentsAtHeight: h.paymentMgr.pendingPaymentsAtHeight,
 		GeneratePayments:        h.paymentMgr.generatePayments,
 		GetBlock:                h.getBlock,
-		PendingPaymentsAtHeight: h.pendingPaymentsAtHeight,
 		Cancel:                  h.cancel,
 		SignalCache:             h.SignalCache,
 		HubWg:                   h.wg,
@@ -293,9 +289,6 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 
 // submitWork sends solved block data to the consensus daemon for evaluation.
 func (h *Hub) submitWork(data *string) (bool, error) {
-	h.nodeConnMtx.Lock()
-	defer h.nodeConnMtx.Unlock()
-
 	if h.nodeConn == nil {
 		return false, MakeError(ErrOther, "node connection unset", nil)
 	}
@@ -305,9 +298,6 @@ func (h *Hub) submitWork(data *string) (bool, error) {
 
 // getWork fetches available work from the consensus daemon.
 func (h *Hub) getWork() (string, string, error) {
-	h.nodeConnMtx.Lock()
-	defer h.nodeConnMtx.Unlock()
-
 	if h.nodeConn == nil {
 		return "", "", MakeError(ErrOther, "node connection unset", nil)
 	}
@@ -317,6 +307,16 @@ func (h *Hub) getWork() (string, string, error) {
 		return "", "", err
 	}
 	return work.Data, work.Target, err
+}
+
+// walletBestHeight fetches the height at which the pool wallet has synced to.
+func (h *Hub) walletBestHeight() (uint32, error) {
+	bestReq := &walletrpc.BestBlockRequest{}
+	bestResp, err := h.walletConn.BestBlock(context.TODO(), bestReq)
+	if err != nil {
+		return 0, err
+	}
+	return bestResp.Height, nil
 }
 
 // WithinLimit returns if a client is within its request limits.
@@ -347,9 +347,6 @@ func (h *Hub) IsPaymentRequested(accountID string) bool {
 
 // getBlock fetches the blocks associated with the provided block hash.
 func (h *Hub) getBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
-	h.nodeConnMtx.Lock()
-	defer h.nodeConnMtx.Unlock()
-
 	if h.nodeConn == nil {
 		return nil, MakeError(ErrOther, "node connection unset", nil)
 	}
@@ -514,87 +511,6 @@ func (h *Hub) HasClients() bool {
 	return atomic.LoadInt32(&h.clients) > 0
 }
 
-// PublishTransaction creates a transaction paying pool accounts for work done.
-func (h *Hub) PublishTransaction(payouts map[dcrutil.Address]dcrutil.Amount, targetAmt dcrutil.Amount) (string, error) {
-	if h.walletConn == nil {
-		return "", fmt.Errorf("wallet connnection unset")
-	}
-
-	var total dcrutil.Amount
-	var fees dcrutil.Amount
-	for addr, amt := range payouts {
-		total += amt
-		for _, pAddr := range h.cfg.PoolFeeAddrs {
-			if addr.String() == pAddr.String() {
-				fees += amt
-			}
-		}
-	}
-
-	balanceReq := &walletrpc.BalanceRequest{
-		AccountNumber:         h.cfg.WalletAccount,
-		RequiredConfirmations: 1,
-	}
-
-	balanceResp, err := h.walletConn.Balance(context.TODO(), balanceReq)
-	if err != nil {
-		return "", err
-	}
-	spendable := dcrutil.Amount(balanceResp.Spendable)
-
-	if spendable < total {
-		return "", fmt.Errorf("insufficient funds, pool account has only %v "+
-			"to spend, however outgoing transaction will require spending %v",
-			spendable, total)
-	}
-
-	outs := make([]*walletrpc.ConstructTransactionRequest_Output, 0, len(payouts))
-	for addr, amt := range payouts {
-		out := &walletrpc.ConstructTransactionRequest_Output{
-			Destination: &walletrpc.ConstructTransactionRequest_OutputDestination{
-				Address: addr.String(),
-			},
-			Amount: int64(amt),
-		}
-		outs = append(outs, out)
-	}
-
-	constructTxReq := &walletrpc.ConstructTransactionRequest{
-		SourceAccount:            h.cfg.WalletAccount,
-		RequiredConfirmations:    1,
-		OutputSelectionAlgorithm: walletrpc.ConstructTransactionRequest_ALL,
-		NonChangeOutputs:         outs,
-	}
-	constructTxResp, err := h.walletConn.ConstructTransaction(context.TODO(), constructTxReq)
-	if err != nil {
-		return "", err
-	}
-	signTxReq := &walletrpc.SignTransactionRequest{
-		SerializedTransaction: constructTxResp.UnsignedTransaction,
-		Passphrase:            []byte(h.cfg.WalletPass),
-	}
-	signedTxResp, err := h.walletConn.SignTransaction(context.TODO(), signTxReq)
-	if err != nil {
-		return "", err
-	}
-	pubTxReq := &walletrpc.PublishTransactionRequest{
-		SignedTransaction: signedTxResp.Transaction,
-	}
-	pubTxResp, err := h.walletConn.PublishTransaction(context.TODO(), pubTxReq)
-	if err != nil {
-		return "", err
-	}
-	txid, err := chainhash.NewHash(pubTxResp.TransactionHash)
-	if err != nil {
-		return "", err
-	}
-
-	log.Tracef("paid a total of %v in tx %s, including %v in pool fees.",
-		total, txid.String(), fees)
-
-	return txid.String(), nil
-}
-
 // backup persists a copy of the database to file  on shutdown.
 func (h *Hub) backup(ctx context.Context) {
 	<-ctx.Done()
@@ -614,11 +530,9 @@ func (h *Hub) shutdown() {
 			h.walletClose()
 		}
 	}
-	h.nodeConnMtx.Lock()
 	if h.nodeConn != nil {
 		h.nodeConn.Shutdown()
 	}
-	h.nodeConnMtx.Unlock()
 	h.db.Close()
 }
 
@@ -649,6 +563,16 @@ func (h *Hub) FetchClients() []*Client {
 		endpoint.clientsMtx.Unlock()
 	}
 	return clients
+}
+
+// FetchPendingPayments fetches all unpaid payments.
+func (h *Hub) FetchPendingPayments() ([]*Payment, error) {
+	return h.paymentMgr.pendingPayments()
+}
+
+// FetchArchivedPayments fetches all paid payments.
+func (h *Hub) FetchArchivedPayments() ([]*Payment, error) {
+	return h.paymentMgr.archivedPayments()
 }
 
 // FetchMinedWork returns work data associated with all blocks mined by the pool

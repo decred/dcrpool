@@ -100,6 +100,10 @@ func (t *tWalletConnection) SignTransaction(context.Context, *walletrpc.SignTran
 	}, nil
 }
 
+func (t *tWalletConnection) BestBlock(ctx context.Context, in *walletrpc.BestBlockRequest, opts ...grpc.CallOption) (*walletrpc.BestBlockResponse, error) {
+	return nil, nil
+}
+
 func (t *tWalletConnection) PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
 	txHash, err := hex.DecodeString("d2a667e0f1643c3deb2de87ef9af3252679459f62" +
 		"5451a351b1510b5090abe23")
@@ -112,6 +116,14 @@ func (t *tWalletConnection) PublishTransaction(context.Context, *walletrpc.Publi
 }
 
 type tNodeConnection struct{}
+
+func (t *tNodeConnection) CreateRawTransaction([]chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error) {
+	return nil, nil
+}
+
+func (t *tNodeConnection) GetTxOut(*chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error) {
+	return nil, nil
+}
 
 func (t *tNodeConnection) GetWorkSubmit(sub string) (bool, error) {
 	return false, nil
@@ -288,20 +300,6 @@ func testHub(t *testing.T, db *bolt.DB) {
 	err = work.Create(db)
 	if err != nil {
 		t.Fatalf("[Create] unexpected error: %v", err)
-	}
-
-	// Create pending payments for account X.
-	amt, err := dcrutil.NewAmount(5)
-	if err != nil {
-		t.Fatalf("[Create] unexpected error: %v", err)
-	}
-
-	pbx := makePaymentBundle(xID, 2, amt)
-	for _, pmt := range pbx.Payments {
-		err := pmt.Create(db)
-		if err != nil {
-			t.Fatal(err)
-		}
 	}
 
 	port := uint32(5030)

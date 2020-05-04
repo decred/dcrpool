@@ -2,7 +2,10 @@ package pool
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -10,12 +13,48 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v2"
 	"github.com/decred/dcrd/dcrutil/v2"
-	"github.com/decred/dcrd/mempool/v3"
+	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
+	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrwallet/rpc/walletrpc"
 	txrules "github.com/decred/dcrwallet/wallet/v3/txrules"
+	"github.com/decred/dcrwallet/wallet/v3/txsizes"
 	bolt "go.etcd.io/bbolt"
+	"google.golang.org/grpc"
 )
+
+const (
+	// maxValueDifference is the maximum difference in value allowed between
+	// input and outputs of a transaction. This difference occurs due to
+	// percentage conversions and rounding.
+	maxValueDifference = dcrutil.Amount(10)
+
+	// zeroAmount is the zero value of an amount.
+	zeroAmount = dcrutil.Amount(0)
+)
+
+// TxCreator defines the functionality needed by a transaction creator for the
+// pool.
+type TxCreator interface {
+	// GetTxOut fetches the ouput referenced by the provided txHash and index.
+	GetTxOut(*chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error)
+	// CreateRawTransaction generates a transaction from the provided
+	// inputs and payouts.
+	CreateRawTransaction([]chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
+}
+
+// TxBroadcaster defines the functionality needed by a transaction broadcaster
+// for the pool.
+type TxBroadcaster interface {
+	// SignTransaction signs transaction inputs, unlocking them for use.
+	SignTransaction(context.Context, *walletrpc.SignTransactionRequest, ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
+	// PublishTransaction broadcasts the transaction unto the network.
+	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
+	// Balance returns the account balance details of the wallet.
+	Balance(context.Context, *walletrpc.BalanceRequest, ...grpc.CallOption) (*walletrpc.BalanceResponse, error)
+}
 
 type PaymentMgrConfig struct {
 	// DB represents the pool database.
@@ -38,9 +77,19 @@ type PaymentMgrConfig struct {
 	PoolFeeAddrs []dcrutil.Address
 	// MaxTxFeeReserve represents the maximum value the tx free reserve can be.
 	MaxTxFeeReserve dcrutil.Amount
-	// PublishTransaction generates a transaction from the provided payouts
-	// and publishes it.
-	PublishTransaction func(map[dcrutil.Address]dcrutil.Amount, dcrutil.Amount) (string, error)
+	// WalletAccount represents the wallet account to process payments from.
+	WalletAccount uint32
+	// WalletPass represents the passphrase to unlock the wallet with.
+	WalletPass string
+	// WalletBestHeight fetches the height at which the pool wallet
+	// has synced to.
+	WalletBestHeight func() (uint32, error)
+	// FetchTxCreator returns a transaction creator that allows coinbase lookups
+	// and payment transaction creation.
+	FetchTxCreator func() TxCreator
+	// FetchTxBroadcaster returns a transaction broadcaster that allows signing
+	// and publishing of transactions.
+	FetchTxBroadcaster func() TxBroadcaster
 	// SignalCache sends the provided cache update event to the gui cache.
 	SignalCache func(event CacheUpdateEvent)
 }
@@ -595,71 +644,237 @@ func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[uint32][]*Paymen
 
 // PayDividends pays mature mining rewards to participating accounts.
 func (pm *PaymentMgr) payDividends(height uint32) error {
-	// Waiting two blocks after a successful payment before proceeding with
-	// the next one because the reserved amount for transaction fees becomes
-	// change after a successful transaction. Change matures after the next
-	// block is processed. The second block is as a result of trying to
-	// maximize the transaction fee usage by processing mature payments
-	// after the transaction fees reserve has matured and ready for another
-	// transaction.
-	lastPaymentHeight := pm.fetchLastPaymentHeight()
-	if lastPaymentHeight != 0 && (height-lastPaymentHeight) < 3 {
-		return nil
-	}
-	eligiblePmts, err := pm.fetchEligiblePaymentBundles(height)
+	pmts, err := pm.maturePendingPayments(height)
 	if err != nil {
 		return err
 	}
-	pm.paymentReqsMtx.Lock()
-	for accountID := range pm.paymentReqs {
-		delete(pm.paymentReqs, accountID)
-	}
-	pm.paymentReqsMtx.Unlock()
 
-	if len(eligiblePmts) == 0 {
+	if len(pmts) == 0 {
 		return nil
 	}
 
-	addr := pm.cfg.PoolFeeAddrs[rand.Intn(len(pm.cfg.PoolFeeAddrs))]
-	pmtDetails, targetAmt, err := generatePaymentDetails(pm.cfg.DB, addr, eligiblePmts)
-	if err != nil {
-		return err
-	}
-	poolFee, ok := pmtDetails[addr.String()]
-	if ok {
-		// Replenish the tx fee reserve if a pool fee bundle entry exists.
-		updatedFee := pm.replenishTxFeeReserve(poolFee)
-		if updatedFee == 0 {
-			delete(pmtDetails, addr.String())
-		} else {
-			pmtDetails[addr.String()] = updatedFee
-		}
-	}
-	pmts := make(map[dcrutil.Address]dcrutil.Amount, len(pmtDetails))
-	for dest, amt := range pmtDetails {
-		addr, err := dcrutil.DecodeAddress(dest, pm.cfg.ActiveNet)
-		if err != nil {
-			return err
-		}
-		pmts[addr] = amt
+	// Create the payout transaction.
+	feeAddr := pm.cfg.PoolFeeAddrs[rand.Intn(len(pm.cfg.PoolFeeAddrs))]
+	inputs := make([]chainjson.TransactionInput, 0)
+	outputs := make(map[string]dcrutil.Amount)
+	var tIn dcrutil.Amount
+	var tOut dcrutil.Amount
+
+	txCreator := pm.cfg.FetchTxCreator()
+	if txCreator == nil {
+		return fmt.Errorf("tx creator unset")
 	}
 
-	txid, err := pm.cfg.PublishTransaction(pmts, *targetAmt)
-	if err != nil {
-		return err
-	}
-	for _, bundle := range eligiblePmts {
-		bundle.UpdateAsPaid(pm.cfg.DB, height, txid)
-		err = bundle.ArchivePayments(pm.cfg.DB)
+	for _, set := range pmts {
+		index := uint32(2)
+		txHash, err := chainhash.NewHashFromStr(set[0].Source.Coinbase)
 		if err != nil {
 			return err
 		}
+
+		txOutResult, err := txCreator.GetTxOut(txHash, index, false)
+		if err != nil {
+			return fmt.Errorf("unable to find tx output: %v", err)
+		}
+
+		// Ensure the referenced prevout to be spent is a coinbase and
+		// spendable at the current height.
+		if !txOutResult.Coinbase {
+			return fmt.Errorf("expected the referenced output at index %d "+
+				"for tx %v to be a coinbase", index, txHash.String())
+		}
+
+		if txOutResult.Confirmations < int64(pm.cfg.ActiveNet.CoinbaseMaturity+1) {
+			return fmt.Errorf("expected the referenced coinbase at index %d "+
+				"for tx %v to be spendable", index, txHash.String())
+		}
+
+		in := chainjson.TransactionInput{
+			Amount: txOutResult.Value,
+			Txid:   txHash.String(),
+			Vout:   index,
+			Tree:   wire.TxTreeRegular,
+		}
+		inputs = append(inputs, in)
+
+		outV, err := dcrutil.NewAmount(txOutResult.Value)
+		if err != nil {
+			return err
+		}
+		tIn += outV
+
+		// Generate the outputs paying dividends and fees.
+		for _, pmt := range set {
+			if pmt.Account == poolFeesK {
+				_, ok := outputs[feeAddr.String()]
+				if !ok {
+					outputs[feeAddr.String()] = pmt.Amount
+					tOut += pmt.Amount
+					continue
+				}
+				outputs[feeAddr.String()] += pmt.Amount
+				tOut += pmt.Amount
+				continue
+			}
+
+			acc, err := FetchAccount(pm.cfg.DB, []byte(pmt.Account))
+			if err != nil {
+				return err
+			}
+
+			_, ok := outputs[acc.Address]
+			if !ok {
+				outputs[acc.Address] = pmt.Amount
+				tOut += pmt.Amount
+				continue
+			}
+			outputs[acc.Address] += pmt.Amount
+			tOut += pmt.Amount
+		}
 	}
+
+	var diff dcrutil.Amount
+	if tOut > tIn {
+		diff = tOut - tIn
+	} else {
+		diff = tIn - tOut
+	}
+
+	// Ensure the generated outputs are equal to the inputs being spent.
+	if diff != zeroAmount && diff > maxValueDifference {
+		return fmt.Errorf("total input %s and output %s value mismatch",
+			tIn, tOut)
+	}
+
+	inSizes := make([]int, len(inputs))
+	for range inputs {
+		inSizes = append(inSizes, txsizes.RedeemP2PKHSigScriptSize)
+	}
+
+	outSizes := make([]int, len(outputs))
+	for range outputs {
+		inSizes = append(inSizes, txsizes.P2PKHOutputSize)
+	}
+
+	estSize := txsizes.EstimateSerializeSizeFromScriptSizes(inSizes, outSizes,
+		txsizes.P2PKHOutputSize)
+	estFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, estSize)
+
+	// Deduct the transaction fees from the pool fees being paid out.
+	fees := outputs[feeAddr.String()]
+	fees = fees - estFee
+
+	// Deduct any percentage rounding value differences from the pool
+	// fees being paid out.
+	if diff != zeroAmount {
+		fees = fees - diff
+	}
+
+	outputs[feeAddr.String()] = fees
+
+	// Generate the output set with decoded addresses.
+	outs := make(map[dcrutil.Address]dcrutil.Amount, len(outputs))
+	for sAddr, amt := range outputs {
+		addr, err := dcrutil.DecodeAddress(sAddr, pm.cfg.ActiveNet)
+		if err != nil {
+			return fmt.Errorf("unable to decode address: %v", err)
+		}
+
+		outs[addr] = amt
+	}
+
+	tx, err := txCreator.CreateRawTransaction(inputs, outs, nil, nil)
+	if err != nil {
+		return fmt.Errorf("unable to create raw transaction: %v", err)
+	}
+
+	txB, err := tx.Bytes()
+	if err != nil {
+		return err
+	}
+
+	for {
+		// Ensure the wallet is synced to the current chain height before
+		// proceeding with payments.
+		walletHeight, err := pm.cfg.WalletBestHeight()
+		if err != nil {
+			return fmt.Errorf("unable to fetch best wallet height: %v", err)
+		}
+
+		if height == walletHeight {
+			break
+		}
+	}
+
+	txBroadcaster := pm.cfg.FetchTxBroadcaster()
+	if txBroadcaster == nil {
+		return fmt.Errorf("tx broadcastor unset")
+	}
+
+	balanceReq := &walletrpc.BalanceRequest{
+		AccountNumber:         pm.cfg.WalletAccount,
+		RequiredConfirmations: int32(pm.cfg.ActiveNet.CoinbaseMaturity + 1),
+	}
+	balanceResp, err := txBroadcaster.Balance(context.TODO(), balanceReq)
+	if err != nil {
+		return fmt.Errorf("unable to get account balance: %v", err)
+	}
+
+	spendable := dcrutil.Amount(balanceResp.Spendable)
+
+	if spendable < tOut {
+		return fmt.Errorf("insufficient account funds, pool account "+
+			"has only %v to spend, however outgoing transaction will "+
+			"require spending %v", spendable, tOut)
+	}
+
+	// Sign the transaction.
+	signTxReq := &walletrpc.SignTransactionRequest{
+		SerializedTransaction: txB,
+		Passphrase:            []byte(pm.cfg.WalletPass),
+	}
+	signedTxResp, err := txBroadcaster.SignTransaction(context.TODO(),
+		signTxReq)
+	if err != nil {
+		return fmt.Errorf("unable to sign transaction: %v", err)
+	}
+
+	// Publish the transaction.
+	pubTxReq := &walletrpc.PublishTransactionRequest{
+		SignedTransaction: signedTxResp.Transaction,
+	}
+	pubTxResp, err := txBroadcaster.PublishTransaction(context.TODO(),
+		pubTxReq)
+	if err != nil {
+		return fmt.Errorf("unable to publish transaction: %v", err)
+	}
+
+	txid, err := chainhash.NewHash(pubTxResp.TransactionHash)
+	if err != nil {
+		return err
+	}
+
+	log.Tracef("paid a total of %v in tx %s, including %v in pool fees.",
+		tOut, txid.String(), fees)
+
+	// Update all associated payments as paid and archive them.
+	for _, set := range pmts {
+		for _, pmt := range set {
+			pmt.PaidOnHeight = height
+			err := pmt.Update(pm.cfg.DB)
+			if err != nil {
+				return fmt.Errorf("unable to update payment: %v", err)
+			}
+
+			err = pmt.Archive(pm.cfg.DB)
+			if err != nil {
+				return fmt.Errorf("unable to archive payment: %v", err)
+			}
+		}
+	}
+
+	// Update payments metadata.
 	err = pm.cfg.DB.Update(func(tx *bolt.Tx) error {
-		err = pm.persistTxFeeReserve(tx)
-		if err != nil {
-			return err
-		}
 		pm.setLastPaymentHeight(height)
 		err = pm.persistLastPaymentHeight(tx)
 		if err != nil {

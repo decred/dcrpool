@@ -55,9 +55,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		MinPayment:      minPayment,
 		PoolFeeAddrs:    []dcrutil.Address{poolFeeAddrs},
 		MaxTxFeeReserve: maxTxFeeReserve,
-		PublishTransaction: func(map[dcrutil.Address]dcrutil.Amount, dcrutil.Amount) (string, error) {
-			return "", nil
-		},
 	}
 	mgr, err := NewPaymentMgr(pCfg)
 	if err != nil {
@@ -431,8 +428,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
 	shareCount := 10
 	coinbaseValue := 80
-	height := uint32(20)
-	paymentMaturity := height + uint32(activeNet.CoinbaseMaturity)
+	height = uint32(20)
 
 	// Create shares for account x and y.
 	for i := 0; i < shareCount; i++ {
@@ -446,10 +442,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		}
 	}
 
-	zeroSource := &PaymentSource{
-		BlockHash: chainhash.Hash{0}.String(),
-		Coinbase:  chainhash.Hash{0}.String(),
-	}
 	coinbase, err := dcrutil.NewAmount(float64(coinbaseValue))
 	if err != nil {
 		t.Fatal(err)
@@ -474,49 +466,43 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure the payments created are for accounts x, y and a fee
 	// payment entry.
-	pmts, err := fetchPendingPayments(db)
+	pmts, err = mgr.pendingPayments()
 	if err != nil {
 		t.Error(err)
 	}
-	expectedBundleCount := 3
-	bundles := generatePaymentBundles(pmts)
-	if len(bundles) != expectedBundleCount {
-		t.Fatalf("[PPS] expected %v payment bundles, got %v.",
-			expectedBundleCount, len(bundles))
-	}
 
-	var xb, yb, fb *PaymentBundle
-	for idx := 0; idx < len(bundles); idx++ {
-		if bundles[idx].Account == xID {
-			xb = bundles[idx]
+	var xt, yt, ft dcrutil.Amount
+	for _, pmt := range pmts {
+		if pmt.Account == xID {
+			xt += pmt.Amount
 		}
-		if bundles[idx].Account == yID {
-			yb = bundles[idx]
+		if pmt.Account == yID {
+			yt += pmt.Amount
 		}
-		if bundles[idx].Account == poolFeesK {
-			fb = bundles[idx]
+		if pmt.Account == poolFeesK {
+			ft += pmt.Amount
 		}
 	}
 
-	// Ensure the two account payment bundles have the same payments since
+	// Ensure the two account payments have the same payments since
 	// they have the same share weights.
-	if xb.Total() != yb.Total() {
-		t.Fatalf("[PPS] expected equal account amounts, %v != %v",
-			xb.Total(), yb.Total())
+	if xt != yt {
+		t.Fatalf("[PPS] expected equal account amounts, %v != %v", xt, yt)
 	}
 
 	// Ensure the fee payment is the exact fee percentage of the total amount.
 	expectedFeeAmt := coinbase.MulF64(mgr.cfg.PoolFee)
-	if fb.Total() != expectedFeeAmt {
-		t.Fatalf("[PPS]expected %v fee payment amount, got %v",
-			fb.Total(), expectedFeeAmt)
+	if ft != expectedFeeAmt {
+		t.Fatalf("[PPS] expected %v fee payment amount, got %v",
+			ft, expectedFeeAmt)
 	}
 
-	// Ensure the sum of all payment bundle amounts is equal to the initial
+	// Ensure the sum of all payment amounts is equal to the initial
 	// coinbase amount.
-	sum := xb.Total() + yb.Total() + fb.Total()
+	sum := xt + yt + ft
 	if sum != coinbase {
-		t.Fatalf("[PPS] expected the sum of all payments to be %v, got %v", coinbase, sum)
+		t.Fatalf("[PPS] expected the sum of all payments to be %v, got %v",
+			coinbase, sum)
 	}
 
 	// Empty the share bucket.
@@ -600,50 +586,45 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure the payments created are for accounts x, y and a fee
 	// payment entry.
-	pmts, err = fetchPendingPayments(db)
+	pmts, err = mgr.pendingPayments()
 	if err != nil {
 		t.Fatalf("[PPLNS] fetchPendingPayments error: %v", err)
 	}
-	bundles = generatePaymentBundles(pmts)
-	if len(bundles) != expectedBundleCount {
-		t.Fatalf("[PPLNS] expected %v payment bundles, got %v.",
-			expectedBundleCount, len(bundles))
-	}
 
-	xb = nil
-	yb = nil
-	fb = nil
-	for idx := 0; idx < len(bundles); idx++ {
-		if bundles[idx].Account == xID {
-			xb = bundles[idx]
+	xt = dcrutil.Amount(0)
+	yt = dcrutil.Amount(0)
+	ft = dcrutil.Amount(0)
+	for _, pmt := range pmts {
+		if pmt.Account == xID {
+			xt += pmt.Amount
 		}
-		if bundles[idx].Account == yID {
-			yb = bundles[idx]
+		if pmt.Account == yID {
+			yt += pmt.Amount
 		}
-		if bundles[idx].Account == poolFeesK {
-			fb = bundles[idx]
+		if pmt.Account == poolFeesK {
+			ft += pmt.Amount
 		}
 	}
 
-	// Ensure the two account payment bundles have the same payments since
+	// Ensure the two account payments have the same payments since
 	// they have the same share weights.
-	if xb.Total() != yb.Total() {
-		t.Fatalf("[PPLNS] expected equal account amounts, %v != %v",
-			xb.Total(), yb.Total())
+	if xt != yt {
+		t.Fatalf("[PPLNS] expected equal account amounts, %v != %v", xt, yt)
 	}
 
 	// Ensure the fee payment is the exact fee percentage of the total amount.
 	expectedFeeAmt = coinbase.MulF64(mgr.cfg.PoolFee)
-	if fb.Total() != expectedFeeAmt {
+	if ft != expectedFeeAmt {
 		t.Fatalf("[PPLNS] expected %v fee payment amount, got %v",
-			fb.Total(), expectedFeeAmt)
+			ft, expectedFeeAmt)
 	}
 
-	// Ensure the sum of all payment bundle amounts is equal to the initial
+	// Ensure the sum of all payment amounts is equal to the initial
 	// amount.
-	sum = xb.Total() + yb.Total() + fb.Total()
+	sum = xt + yt + ft
 	if sum != coinbase {
-		t.Fatalf("[PPLNS] expected the sum of all payments to be %v, got %v", coinbase, sum)
+		t.Fatalf("[PPLNS] expected the sum of all payments to be %v, got %v",
+			coinbase, sum)
 	}
 
 	// Empty the share bucket.
@@ -686,171 +667,9 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
-	// Ensure minimum processing payment amount is enforced.
-	pCfg.PaymentMethod = PPS
-	xShareCount := 10
-	yShareCount := 5
-
-	// Create shares for account x and Y.
-	for i := 0; i < xShareCount; i++ {
-		err := persistShare(db, xID, weight, sixtyBefore+int64(i))
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	for i := 0; i < yShareCount; i++ {
-		err := persistShare(db, yID, weight, thirtyBefore+int64(i))
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// Generate payments.
-	err = mgr.generatePayments(height, zeroSource, coinbase)
-	if err != nil {
-		t.Fatalf("unable to generate payments: %v", err)
-	}
-
-	// Make minimum payment greater than account Y's payment.
-	ratio := (float64(yShareCount) / float64(xShareCount+yShareCount))
-	pCfg.MinPayment = coinbase.MulF64(ratio)
-	if err != nil {
-		t.Fatalf("[MulF64] unexpected error: %v", err)
-	}
-	bundles, err = mgr.fetchEligiblePaymentBundles(paymentMaturity)
-	if err != nil {
-		t.Fatalf("[fetchEligiblePaymentBundles] unexpected error: %v", err)
-	}
-	expectedBundleCount = 1
-	if len(bundles) != expectedBundleCount {
-		t.Fatalf("expected %v payment bundles, got %v", expectedBundleCount, len(bundles))
-	}
-
-	// Empty the share bucket.
-	err = emptyBucket(db, shareBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Empty the payment bucket.
-	err = emptyBucket(db, paymentBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Reset backed up values to their defaults.
-	mgr.setLastPaymentHeight(0)
-	mgr.setLastPaymentPaidOn(0)
-	mgr.setLastPaymentCreatedOn(0)
-	mgr.setTxFeeReserve(zeroAmount)
-	err = db.Update(func(tx *bolt.Tx) error {
-		err := mgr.persistLastPaymentHeight(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment height: %v", err)
-		}
-		err = mgr.persistLastPaymentPaidOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment paid on: %v", err)
-		}
-		err = mgr.persistLastPaymentCreatedOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment created on: %v", err)
-		}
-		err = mgr.persistTxFeeReserve(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default tx fee reserve: %v", err)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Ensure payment requests work as expected.
-	for i := 0; i < xShareCount; i++ {
-		// Create shares for account x and Y.
-		err := persistShare(db, xID, weight, sixtyBefore+int64(i))
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	for i := 0; i < yShareCount; i++ {
-		err := persistShare(db, yID, weight, thirtyBefore+int64(i))
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// Generate readily available payments.
-	err = mgr.generatePayments(height, zeroSource, coinbase)
-	if err != nil {
-		t.Fatalf("unable to generate payments: %v", err)
-	}
-
-	// Ensure minimum payment allowed is greater than account Y's payment.
-	pCfg.MinPayment = coinbase.MulF64(ratio)
-	if err != nil {
-		t.Fatalf("[MulF64] unexpected error: %v", err)
-	}
-
-	// Create a payment request for account Y.
-	err = mgr.addPaymentRequest(yAddr)
-	if err != nil {
-		t.Fatalf("[AddPaymentRequest] unexpected error: %v", err)
-	}
-
-	// Ensure the requested payment for account Y is returned as eligible.
-	bundles, err = mgr.fetchEligiblePaymentBundles(paymentMaturity)
-	if err != nil {
-		t.Fatalf("[fetchEligiblePaymentBundles] unexpected error: %v", err)
-	}
-	expectedBundleCount = 2
-	if len(bundles) != expectedBundleCount {
-		t.Fatalf("expected %v payment bundles, got %v", expectedBundleCount, len(bundles))
-	}
-
-	// Empty the share bucket.
-	err = emptyBucket(db, shareBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Empty the payment bucket.
-	err = emptyBucket(db, paymentBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Reset backed up values to their defaults.
-	mgr.setLastPaymentHeight(0)
-	mgr.setLastPaymentPaidOn(0)
-	mgr.setLastPaymentCreatedOn(0)
-	mgr.setTxFeeReserve(zeroAmount)
-	err = db.Update(func(tx *bolt.Tx) error {
-		err := mgr.persistLastPaymentHeight(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment height: %v", err)
-		}
-		err = mgr.persistLastPaymentPaidOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment paid on: %v", err)
-		}
-		err = mgr.persistLastPaymentCreatedOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment created on: %v", err)
-		}
-		err = mgr.persistTxFeeReserve(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default tx fee reserve: %v", err)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	paymentMaturity := height + uint32(activeNet.CoinbaseMaturity+1)
 
 	// Ensure payment maturity works as expected.
-	pCfg.MinPayment = minPayment
 	for i := 0; i < shareCount; i++ {
 		// Create readily available shares for account X.
 		err = persistShare(db, xID, weight, thirtyBefore)
@@ -872,62 +691,50 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("unable to generate payments: %v", err)
 	}
 
-	// Ensure only bundles for account x and fees were created.
-	bundles, err = mgr.fetchEligiblePaymentBundles(paymentMaturity)
+	// Ensure payments for  for account x, y and fees were created.
+	pmtSets, err := mgr.maturePendingPayments(paymentMaturity)
 	if err != nil {
-		t.Fatalf("[fetchEligiblePaymentBundles] unexpected error: %v", err)
-	}
-	expectedBundleCount = 2
-	if len(bundles) != expectedBundleCount {
-		t.Fatalf("expected %v payment bundles, got %v", expectedBundleCount, len(bundles))
+		t.Fatalf("[maturePendingPayments] unexpected error: %v", err)
 	}
 
-	xb = nil
-	yb = nil
-	fb = nil
-	for idx := 0; idx < len(bundles); idx++ {
-		if bundles[idx].Account == xID {
-			xb = bundles[idx]
+	if len(pmtSets) == 0 {
+		t.Fatal("[maturePendingPayments] expected mature payments")
+	}
+
+	_, ok = pmtSets[height]
+	if !ok {
+		t.Fatalf("[maturePendingPayments] expected mature payments "+
+			"at height %d", height)
+	}
+
+	xt = dcrutil.Amount(0)
+	yt = dcrutil.Amount(0)
+	ft = dcrutil.Amount(0)
+	for _, pmt := range pmts {
+		if pmt.Account == xID {
+			xt += pmt.Amount
 		}
-		if bundles[idx].Account == yID {
-			yb = bundles[idx]
+		if pmt.Account == yID {
+			yt += pmt.Amount
 		}
-		if bundles[idx].Account == poolFeesK {
-			fb = bundles[idx]
+		if pmt.Account == poolFeesK {
+			ft += pmt.Amount
 		}
 	}
 
-	// Ensure there are no bundles for account Y.
-	if yb != nil {
-		t.Fatalf("expected no payment bundles for account Y")
-	}
-
-	// Ensure the bundle amounts are as expected.
-	expectedXAmt := coinbase - coinbase.MulF64(mgr.cfg.PoolFee)
-	if xb.Total() != expectedXAmt {
-		t.Fatalf("expected account X's bundle to have %v, got %v",
-			expectedXAmt, xb.Total())
+	// Ensure the two account payments have the same payments since
+	// they have the same share weights.
+	if xt != yt {
+		t.Fatalf("[PPLNS] expected equal account amounts, %v != %v", xt, yt)
 	}
 
 	expectedFeeAmt = coinbase.MulF64(mgr.cfg.PoolFee)
-	if fb.Total() != expectedFeeAmt {
-		t.Fatalf("expected pool fee bundle to have %v, got %v",
-			expectedFeeAmt, fb.Total())
+	if ft != expectedFeeAmt {
+		t.Fatalf("expected pool fee payment total to have %v, got %v",
+			expectedFeeAmt, ft)
 	}
 
-	// Ensure dividend payments work as expected.
-	lastPaymentHeight = mgr.fetchLastPaymentHeight()
-	err = mgr.payDividends(paymentMaturity)
-	if err != nil {
-		t.Fatalf("[payDividends] unexpected error: %v", err)
-	}
-
-	// Ensure the last payment height changed because
-	// dividends were paid.
-	currentPaymentHeight := mgr.fetchLastPaymentHeight()
-	if lastPaymentHeight == currentPaymentHeight {
-		t.Fatal("expected an updated payment height")
-	}
+	// TODO: Add tests for payDividend.
 
 	// Empty the share bucket.
 	err = emptyBucket(db, shareBkt)
