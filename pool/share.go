@@ -91,10 +91,11 @@ func calculatePoolTarget(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs
 	return target, difficulty, err
 }
 
-// shareID generates a unique share id using the provided account.
-func shareID(account string) string {
+// shareID generates a unique share id using the provided account and time
+// created.
+func shareID(account string, createdOn int64) string {
 	buf := bytes.Buffer{}
-	buf.Write(nanoToBigEndianBytes(time.Now().UnixNano()))
+	buf.Write(nanoToBigEndianBytes(createdOn))
 	buf.WriteString(account)
 	return hex.EncodeToString(buf.Bytes())
 }
@@ -109,7 +110,7 @@ type Share struct {
 // NewShare creates a share with the provided account and weight.
 func NewShare(account string, weight *big.Rat) *Share {
 	return &Share{
-		UUID:    shareID(account),
+		UUID:    shareID(account, time.Now().UnixNano()),
 		Account: account,
 		Weight:  weight,
 	}

@@ -1,9 +1,7 @@
 package pool
 
 import (
-	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -174,13 +172,6 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 		return MakeError(ErrBucketNotFound, desc, nil)
 	}
 
-	id := func(account string, createdOn int64) string {
-		buf := bytes.Buffer{}
-		buf.Write(nanoToBigEndianBytes(createdOn))
-		buf.WriteString(account)
-		return hex.EncodeToString(buf.Bytes())
-	}
-
 	toDelete := [][]byte{}
 	c := sbkt.Cursor()
 	for k, v := c.First(); k != nil; k, v = c.Next() {
@@ -191,7 +182,7 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 		}
 
 		createdOn := bigEndianBytesToNano(k)
-		share.UUID = id(share.Account, int64(createdOn))
+		share.UUID = shareID(share.Account, int64(createdOn))
 
 		sBytes, err := json.Marshal(share)
 		if err != nil {

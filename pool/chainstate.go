@@ -96,6 +96,7 @@ func (cs *ChainState) fetchCurrentWork() string {
 // pruneAcceptedWork removes all accepted work not confirmed as mined work
 // with heights less than the provided height.
 func (cs *ChainState) pruneAcceptedWork(height uint32) error {
+	heightBE := heightToBigEndianBytes(height)
 	err := cs.cfg.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
 		if err != nil {
@@ -104,15 +105,13 @@ func (cs *ChainState) pruneAcceptedWork(height uint32) error {
 
 		toDelete := [][]byte{}
 		cursor := bkt.Cursor()
-		workHeightB := make([]byte, 8)
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			_, err := hex.Decode(workHeightB, k[:8])
+			height, err := hex.DecodeString(string(k[:8]))
 			if err != nil {
 				return err
 			}
 
-			workHeight := bigEndianBytesToHeight(workHeightB)
-			if workHeight < height {
+			if bytes.Compare(heightBE, height) > 0 {
 				var work AcceptedWork
 				err := json.Unmarshal(v, &work)
 				if err != nil {
