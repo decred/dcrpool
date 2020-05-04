@@ -16,8 +16,8 @@ type indexPageData struct {
 	HeaderData    headerData
 	PoolStatsData poolStatsData
 	MinerPorts    map[string]uint32
-	MinedWork     []minedWork
-	RewardQuotas  []rewardQuota
+	MinedWork     *[]minedWork
+	RewardQuotas  *[]rewardQuota
 	Address       string
 	ModalError    string
 }
@@ -29,23 +29,11 @@ type indexPageData struct {
 // Javascript enabled.
 func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError string) {
 
-	// Get the most recent confirmed mined blocks (max 10).
-	allWork := ui.cache.getMinedWork()
-	recentWork := make([]minedWork, 0)
-	for _, v := range allWork {
-		if v.Confirmed {
-			recentWork = append(recentWork, v)
-			if len(recentWork) >= 10 {
-				break
-			}
-		}
-	}
+	// Get the 10 most recent confirmed mined blocks.
+	_, confirmedWork := ui.cache.getConfirmedMinedWork(0, 9)
 
-	// Get the next reward payment percentages (max 10).
-	rewardQuotas := ui.cache.getRewardQuotas()
-	if len(rewardQuotas) > 10 {
-		rewardQuotas = rewardQuotas[0:10]
-	}
+	// Get the first 10 next reward payment percentages.
+	_, rewardQuotas := ui.cache.getRewardQuotas(0, 9)
 
 	data := indexPageData{
 		HeaderData: headerData{
@@ -63,7 +51,7 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 			SoloPool:          ui.cfg.SoloPool,
 		},
 		RewardQuotas: rewardQuotas,
-		MinedWork:    recentWork,
+		MinedWork:    confirmedWork,
 		MinerPorts:   ui.cfg.MinerPorts,
 		ModalError:   modalError,
 	}

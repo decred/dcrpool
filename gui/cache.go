@@ -96,6 +96,14 @@ func InitCache(work []*pool.AcceptedWork, quotas []*pool.Quota,
 	return &cache
 }
 
+// min returns the smaller of the two provided integers.
+func min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
 // updateMinedWork refreshes the cached list of blocks mined by the pool.
 func (c *Cache) updateMinedWork(work []*pool.AcceptedWork) {
 	workData := make([]minedWork, 0, len(work))
@@ -115,11 +123,42 @@ func (c *Cache) updateMinedWork(work []*pool.AcceptedWork) {
 	c.minedWorkMtx.Unlock()
 }
 
-// getMinedWork retrieves the cached list of blocks mined by the pool.
-func (c *Cache) getMinedWork() []minedWork {
+// getConfirmedMinedWork retrieves the cached list of confirmed blocks mined by
+// the pool.
+func (c *Cache) getConfirmedMinedWork(first, last int) (int, *[]minedWork) {
 	c.minedWorkMtx.RLock()
 	defer c.minedWorkMtx.RUnlock()
-	return c.minedWork
+
+	allWork := make([]minedWork, 0)
+	for _, v := range c.minedWork {
+		if v.Confirmed {
+			allWork = append(allWork, v)
+		}
+	}
+
+	count := len(allWork)
+	requestedWork := allWork[first:min(last, count)]
+
+	return count, &requestedWork
+}
+
+// getMinedWorkByAccount retrieves the cached list of blocks mined by
+// an account. Returns both confirmed and unconfirmed blocks.
+func (c *Cache) getMinedWorkByAccount(first, last int, accountID string) (int, *[]minedWork) {
+	c.minedWorkMtx.RLock()
+	defer c.minedWorkMtx.RUnlock()
+
+	allWork := make([]minedWork, 0)
+	for _, v := range c.minedWork {
+		if v.AccountID == accountID {
+			allWork = append(allWork, v)
+		}
+	}
+
+	count := len(allWork)
+	requestedWork := allWork[first:min(last, count)]
+
+	return count, &requestedWork
 }
 
 // updateRewardQuotas uses a list of work quotas to refresh the cached list of
@@ -145,10 +184,14 @@ func (c *Cache) updateRewardQuotas(quotas []*pool.Quota) {
 }
 
 // getRewardQuotas retrieves the cached list of pending reward payment quotas.
-func (c *Cache) getRewardQuotas() []rewardQuota {
+func (c *Cache) getRewardQuotas(first, last int) (int, *[]rewardQuota) {
 	c.rewardQuotasMtx.RLock()
 	defer c.rewardQuotasMtx.RUnlock()
-	return c.rewardQuotas
+
+	count := len(c.rewardQuotas)
+	requestedQuotas := c.rewardQuotas[first:min(last, count)]
+
+	return count, &requestedQuotas
 }
 
 // getPoolHash retrieves the total hashrate of all connected mining clients.
@@ -183,7 +226,21 @@ func (c *Cache) updateClients(clients []*pool.Client) {
 	c.clientsMtx.Unlock()
 }
 
-// getClients retrieves the cached list of connected clients.
+// getClientsForAccount retrieves the cached list of connected clients for a
+// given account ID.
+func (c *Cache) getClientsForAccount(first, last int, accountID string) (int, *[]client) {
+	c.clientsMtx.RLock()
+	defer c.clientsMtx.RUnlock()
+
+	accountClients := c.clients[accountID]
+
+	count := len(accountClients)
+	requestedClients := accountClients[first:min(last, count)]
+
+	return count, &requestedClients
+}
+
+// getClients retrieves the cached list of all clients connected to the pool.
 func (c *Cache) getClients() map[string][]client {
 	c.clientsMtx.RLock()
 	defer c.clientsMtx.RUnlock()
@@ -239,16 +296,30 @@ func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool
 	c.archivedPaymentsMtx.Unlock()
 }
 
-// getPendingPayments retrieves the cached list of paid payments.
-func (c *Cache) getPendingPayments() map[string][]pendingPayment {
+// getPendingPayments retrieves the cached list of unpaid payments for a given
+// account ID.
+func (c *Cache) getPendingPayments(first, last int, accountID string) (int, *[]pendingPayment) {
 	c.pendingPaymentsMtx.RLock()
 	defer c.pendingPaymentsMtx.RUnlock()
-	return c.pendingPayments
+
+	accountPayments := c.pendingPayments[accountID]
+
+	count := len(accountPayments)
+	requestedPayments := accountPayments[first:min(last, count)]
+
+	return count, &requestedPayments
 }
 
-// getArchivedPayments retrieves the cached list of unpaid payments.
-func (c *Cache) getArchivedPayments() map[string][]archivedPayment {
+// getArchivedPayments retrieves the cached list of paid payments for a given
+// account ID.
+func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, *[]archivedPayment) {
 	c.archivedPaymentsMtx.RLock()
 	defer c.archivedPaymentsMtx.RUnlock()
-	return c.archivedPayments
+
+	accountPayments := c.archivedPayments[accountID]
+
+	count := len(accountPayments)
+	requestedPayments := accountPayments[first:min(last, count)]
+
+	return count, &requestedPayments
 }

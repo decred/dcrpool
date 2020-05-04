@@ -15,11 +15,11 @@ import (
 // account template.
 type accountPageData struct {
 	HeaderData       headerData
-	MinedWork        []minedWork
-	ArchivedPayments []archivedPayment
-	PendingPayments  []pendingPayment
+	MinedWork        *[]minedWork
+	ArchivedPayments *[]archivedPayment
+	PendingPayments  *[]pendingPayment
 	PaymentRequested bool
-	ConnectedClients []client
+	ConnectedClients *[]client
 	AccountID        string
 	Address          string
 	BlockExplorerURL string
@@ -48,35 +48,17 @@ func (ui *GUI) account(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the most recently mined blocks by this account (max 10).
-	allWork := ui.cache.getMinedWork()
-	recentWork := make([]minedWork, 0)
-	for _, v := range allWork {
-		if v.AccountID == accountID {
-			recentWork = append(recentWork, v)
-			if len(recentWork) >= 10 {
-				break
-			}
-		}
-	}
+	// Get the 10 most recently mined blocks by this account.
+	_, recentWork := ui.cache.getMinedWorkByAccount(0, 9, accountID)
 
-	// Get this accounts pending payments (max 10).
-	pendingPmts := ui.cache.getPendingPayments()[accountID]
-	if len(pendingPmts) > 10 {
-		pendingPmts = pendingPmts[0:10]
-	}
+	// Get the 10 most recent pending payments for this account.
+	_, pendingPmts := ui.cache.getPendingPayments(0, 9, accountID)
 
-	// Get this accounts archived payments (max 10).
-	archivedPmts := ui.cache.getArchivedPayments()[accountID]
-	if len(archivedPmts) > 10 {
-		archivedPmts = archivedPmts[0:10]
-	}
+	// Get the 10 most recent archived payments for this account.
+	_, archivedPmts := ui.cache.getArchivedPayments(0, 9, accountID)
 
-	// Get this accounts connected clients (max 10).
-	clients := ui.cache.getClients()[accountID]
-	if len(clients) > 10 {
-		clients = clients[0:10]
-	}
+	// Get 10 of this accounts connected clients.
+	_, clients := ui.cache.getClientsForAccount(0, 9, accountID)
 
 	data := &accountPageData{
 		HeaderData: headerData{
