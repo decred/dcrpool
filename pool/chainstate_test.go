@@ -99,20 +99,26 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
-	// Prune jobs below height 58.
-	err = cs.pruneJobs(58)
+	// Prune jobs below height 57.
+	err = cs.pruneJobs(57)
 	if err != nil {
 		t.Fatalf("pruneJobs error: %v", err)
 	}
 
-	// Ensure job A and B have been pruned.
+	// Ensure job A has been pruned with job B remaining.
 	_, err = FetchJob(db, []byte(jobA.UUID))
 	if err == nil {
-		t.Fatalf("expected a value not found error: %v", err)
+		t.Fatal("expected a value not found error")
 	}
 	_, err = FetchJob(db, []byte(jobB.UUID))
-	if err == nil {
-		t.Fatalf("expected a value not found error: %v", err)
+	if err != nil {
+		t.Fatalf("unexpected error fetching job B: %v", err)
+	}
+
+	// Delete job B.
+	err = jobB.Delete(db)
+	if err != nil {
+		t.Fatalf("unexpected error deleting job B: %v", err)
 	}
 
 	// Test pruneAcceptedWork.

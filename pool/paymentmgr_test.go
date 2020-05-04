@@ -71,12 +71,12 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	aboveMaximumTime := now.Add(time.Second * 10).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
 
-	_, err = persistShare(db, xID, weight, minimumTime)
+	err = persistShare(db, xID, weight, minimumTime) // Share A
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = persistShare(db, yID, weight, maximumTime)
+	err = persistShare(db, yID, weight, maximumTime) // Share B
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,10 +88,15 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
-	// Ensure share A got pruned.
+	// Ensure share A got pruned with share B remaining.
 	_, err = fetchShare(db, nanoToBigEndianBytes(minimumTime))
 	if err == nil {
-		t.Fatalf("expected value not found error")
+		t.Fatal("expected value not found error")
+	}
+
+	_, err = fetchShare(db, nanoToBigEndianBytes(maximumTime))
+	if err == nil {
+		t.Fatalf("unexpected error fetching share B: %v", err)
 	}
 
 	err = mgr.cfg.DB.Update(func(tx *bolt.Tx) error {
@@ -301,11 +306,11 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Create shares for account x and y.
 	for i := 0; i < shareCount; i++ {
-		_, err := persistShare(db, xID, weight, sixtyBefore+int64(i))
+		err := persistShare(db, xID, weight, sixtyBefore+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = persistShare(db, yID, weight, thirtyBefore+int64(i))
+		err = persistShare(db, yID, weight, thirtyBefore+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -431,11 +436,11 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Create shares for account x and y.
 	for i := 0; i < shareCount; i++ {
-		_, err := persistShare(db, xID, weight, sixtyBefore+int64(i))
+		err := persistShare(db, xID, weight, sixtyBefore+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = persistShare(db, yID, weight, thirtyBefore+int64(i))
+		err = persistShare(db, yID, weight, thirtyBefore+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -558,13 +563,13 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Create shares for account x and Y.
 	for i := 0; i < xShareCount; i++ {
-		_, err := persistShare(db, xID, weight, sixtyBefore+int64(i))
+		err := persistShare(db, xID, weight, sixtyBefore+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 	for i := 0; i < yShareCount; i++ {
-		_, err := persistShare(db, yID, weight, thirtyBefore+int64(i))
+		err := persistShare(db, yID, weight, thirtyBefore+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -634,13 +639,13 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	// Ensure payment requests work as expected.
 	for i := 0; i < xShareCount; i++ {
 		// Create shares for account x and Y.
-		_, err := persistShare(db, xID, weight, sixtyBefore+int64(i))
+		err := persistShare(db, xID, weight, sixtyBefore+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 	for i := 0; i < yShareCount; i++ {
-		_, err := persistShare(db, yID, weight, thirtyBefore+int64(i))
+		err := persistShare(db, yID, weight, thirtyBefore+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -718,7 +723,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	pCfg.MinPayment = minPayment
 	for i := 0; i < shareCount; i++ {
 		// Create readily available shares for account X.
-		_, err = persistShare(db, xID, weight, thirtyBefore)
+		err = persistShare(db, xID, weight, thirtyBefore)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -726,7 +731,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	sixtyAfter := time.Now().Add((time.Second * 60)).UnixNano()
 	for i := 0; i < shareCount; i++ {
 		// Create future shares for account Y.
-		_, err = persistShare(db, yID, weight, sixtyAfter)
+		err = persistShare(db, yID, weight, sixtyAfter)
 		if err != nil {
 			t.Fatal(err)
 		}

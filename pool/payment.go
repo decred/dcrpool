@@ -26,11 +26,14 @@ type Payment struct {
 	Account           string         `json:"account"`
 	EstimatedMaturity uint32         `json:"estimatedmaturity"`
 	Height            uint32         `json:"height"`
-	Source            *PaymentSource `json:"source"`
 	Amount            dcrutil.Amount `json:"amount"`
 	CreatedOn         int64          `json:"createdon"`
 	PaidOnHeight      uint32         `json:"paidonheight"`
 	TransactionID     string         `json:"transactionid"`
+
+	// The source could be empty if the payment was
+	// created before the version 3 db upgrade.
+	Source *PaymentSource `json:"source"`
 }
 
 // NewPayment creates a payment instance.

@@ -178,7 +178,7 @@ func testAccountPayments(t *testing.T, db *bolt.DB) {
 		t.Fatal("[GetPayment] expected a value not found error")
 	}
 
-	// Fetching an existingpayment.
+	// Fetching an existing payment.
 	expectedPmt := pending[0]
 	pmtID = paymentID(expectedPmt.Height, expectedPmt.CreatedOn,
 		expectedPmt.Account)

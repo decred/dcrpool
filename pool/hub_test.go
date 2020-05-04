@@ -453,15 +453,15 @@ func testHub(t *testing.T, db *bolt.DB) {
 	lastPaymentCreatedOn := atomic.LoadUint64(&hub.paymentMgr.lastPaymentCreatedOn)
 	xWeight := new(big.Rat).SetFloat64(1.0)
 	yWeight := new(big.Rat).SetFloat64(4.0)
-	_, err = persistShare(db, xID, xWeight, outOfRange)
+	err = persistShare(db, xID, xWeight, outOfRange)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = persistShare(db, xID, xWeight, int64(lastPaymentCreatedOn))
+	err = persistShare(db, xID, xWeight, int64(lastPaymentCreatedOn))
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = persistShare(db, yID, yWeight, now.UnixNano())
+	err = persistShare(db, yID, yWeight, now.UnixNano())
 	if err != nil {
 		t.Fatal(err)
 	}
