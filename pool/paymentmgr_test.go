@@ -66,6 +66,10 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Test pruneShares.
 	now := time.Now()
+	zeroSource := &PaymentSource{
+		BlockHash: chainhash.Hash{0}.String(),
+		Coinbase:  chainhash.Hash{0}.String(),
+	}
 	minimumTime := now.Add(-(time.Second * 60)).UnixNano()
 	maximumTime := now.UnixNano()
 	aboveMaximumTime := now.Add(time.Second * 10).UnixNano()
@@ -110,6 +114,132 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	_, err = fetchShare(db, nanoToBigEndianBytes(maximumTime))
 	if err == nil {
 		t.Fatalf("expected value not found error")
+	}
+
+	// Test pendingPayments, pendingPaymentsAtHeight,
+	// maturePendingPayments and archivedPayments.
+	height := uint32(10)
+	estMaturity := uint32(26)
+	amt, _ := dcrutil.NewAmount(5)
+	_, err = persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pmtC, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pmtC.PaidOnHeight = estMaturity + 1
+	pmtC.TransactionID = chainhash.Hash{0}.String()
+	err = pmtC.Update(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = pmtC.Archive(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pmtD, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pmtD.PaidOnHeight = estMaturity + 1
+	pmtD.TransactionID = chainhash.Hash{0}.String()
+	err = pmtD.Update(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = pmtD.Archive(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure there are two pending payments.
+	pmts, err := mgr.pendingPayments()
+	if err != nil {
+		t.Fatalf("pendingPayments error: %v", err)
+	}
+
+	if len(pmts) != 2 {
+		t.Fatalf("expected 2 pending payments, got %d", len(pmts))
+	}
+
+	// Ensure there are two pending payments at height 15.
+	pmts, err = mgr.pendingPaymentsAtHeight(15)
+	if err != nil {
+		t.Fatalf("pendingPaymentsAtHeight error: %v", err)
+	}
+
+	if len(pmts) != 2 {
+		t.Fatalf("expected 2 pending payments at height 15, got %d", len(pmts))
+	}
+
+	// Ensure there are no pending payments at height 8.
+	pmts, err = mgr.pendingPaymentsAtHeight(8)
+	if err != nil {
+		t.Fatalf("pendingPaymentsAtHeight error: %v", err)
+	}
+
+	if len(pmts) != 0 {
+		t.Fatalf("expected no pending payments at height 8, got %d", len(pmts))
+	}
+
+	// Ensure there are two archived payments (payment C and D).
+	pmts, err = mgr.archivedPayments()
+	if err != nil {
+		t.Fatalf("archivedPayments error: %v", err)
+	}
+
+	if len(pmts) != 2 {
+		t.Fatalf("expected 2 archived payments, got %d", len(pmts))
+	}
+
+	// Ensure there are two mature payments at height 28 (payment A and B).
+	pmtSet, err := mgr.maturePendingPayments(28)
+	if err != nil {
+		t.Fatalf("maturePendingPayments error: %v", err)
+	}
+
+	if len(pmtSet) != 1 {
+		t.Fatalf("expected 1 payment set, got %d", len(pmtSet))
+	}
+
+	set, ok := pmtSet[height+1]
+	if !ok {
+		t.Fatalf("expected pending payments at height %d to be "+
+			"mature at height %d", height+1, 28)
+	}
+
+	if len(set) != 2 {
+		t.Fatalf("expected 2 mature pending payments from "+
+			"height %d, got %d", height, len(set))
+	}
+
+	// Ensure there are no mature payments at height 27 (payment A and B).
+	pmtSet, err = mgr.maturePendingPayments(27)
+	if err != nil {
+		t.Fatalf("maturePendingPayments error: %v", err)
+	}
+
+	if len(pmtSet) != 0 {
+		t.Fatalf("expected no payment sets, got %d", len(pmtSet))
+	}
+
+	// Empty the paymnts and archived payment buckets.
+	err = emptyBucket(db, paymentArchiveBkt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = emptyBucket(db, paymentBkt)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Ensure backed up values to the database persist and load as expected.

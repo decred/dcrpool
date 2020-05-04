@@ -57,7 +57,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		}
 		return block, nil
 	}
-	pendingPaymentsAtHeight := func(*bolt.DB, uint32) ([]*Payment, error) {
+	pendingPaymentsAtHeight := func(uint32) ([]*Payment, error) {
 		return []*Payment{
 			{Account: xID, Amount: dcrutil.Amount(100)},
 		}, nil
@@ -383,7 +383,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 	cs.connCh <- minedMsg
 	<-minedMsg.Done
-	cs.cfg.PendingPaymentsAtHeight = func(*bolt.DB, uint32) ([]*Payment, error) {
+	cs.cfg.PendingPaymentsAtHeight = func(uint32) ([]*Payment, error) {
 		return nil, fmt.Errorf("unable to fetch pending payments")
 	}
 
