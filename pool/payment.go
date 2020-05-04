@@ -89,8 +89,8 @@ func fetchPaymentArchiveBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	return bkt, nil
 }
 
-// GetPayment fetches the payment referenced by the provided id.
-func GetPayment(db *bolt.DB, id []byte) (*Payment, error) {
+// FetchPayment fetches the payment referenced by the provided id.
+func FetchPayment(db *bolt.DB, id []byte) (*Payment, error) {
 	var payment Payment
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchPaymentBucket(tx)
@@ -140,42 +140,9 @@ func (pmt *Payment) Delete(db *bolt.DB) error {
 	return deleteEntry(db, paymentBkt, id)
 }
 
-// PaymentBundle is a convenience type for grouping payments for an account.
-type PaymentBundle struct {
-	Account  string
-	Payments []*Payment
-}
-
-// NewPaymentBundle initializes a payment bundle instance.
-func newPaymentBundle(account string) *PaymentBundle {
-	return &PaymentBundle{
-		Account:  account,
-		Payments: make([]*Payment, 0),
-	}
-}
-
-// Total returns the sum of all payments amount for the account.
-func (bundle *PaymentBundle) Total() dcrutil.Amount {
-	total := dcrutil.Amount(0)
-	for _, payment := range bundle.Payments {
-		total += payment.Amount
-	}
-	return total
-}
-
-// UpdateAsPaid updates all associated payments referenced by a payment bundle
-// as paid.
-func (bundle *PaymentBundle) UpdateAsPaid(db *bolt.DB, height uint32, txid string) {
-	for idx := 0; idx < len(bundle.Payments); idx++ {
-		bundle.Payments[idx].TransactionID = txid
-		bundle.Payments[idx].PaidOnHeight = height
-	}
-}
-
-// ArchivePayments removes all payments included in the payment bundle from the
-// payment bucket and archives them.
-func (bundle *PaymentBundle) ArchivePayments(db *bolt.DB) error {
-	err := db.Update(func(tx *bolt.Tx) error {
+// Archive removes the associated payment from active payments and archives it.
+func (pmt *Payment) Archive(db *bolt.DB) error {
+	return db.Update(func(tx *bolt.Tx) error {
 		pbkt, err := fetchPaymentBucket(tx)
 		if err != nil {
 			return err
@@ -184,48 +151,24 @@ func (bundle *PaymentBundle) ArchivePayments(db *bolt.DB) error {
 		if err != nil {
 			return err
 		}
-		for _, pmt := range bundle.Payments {
-			id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
-			err := pbkt.Delete(id)
-			if err != nil {
-				return err
-			}
-			pmt.CreatedOn = time.Now().UnixNano()
-			pmtBytes, err := json.Marshal(pmt)
-			if err != nil {
-				return err
-			}
-			id = paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
-			err = abkt.Put(id, pmtBytes)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	return err
-}
 
-// generatePaymentBundles creates batched payments from the provided set of
-// payments. Multiple payments for the same account will be bundled together.
-func generatePaymentBundles(payments []*Payment) []*PaymentBundle {
-	bundles := make([]*PaymentBundle, 0)
-	for _, payment := range payments {
-		match := false
-		for _, bdl := range bundles {
-			if payment.Account == bdl.Account {
-				bdl.Payments = append(bdl.Payments, payment)
-				match = true
-				break
-			}
+		// Remove the active payment record.
+		id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
+		err = pbkt.Delete(id)
+		if err != nil {
+			return err
 		}
-		if !match {
-			bdl := newPaymentBundle(payment.Account)
-			bdl.Payments = append(bdl.Payments, payment)
-			bundles = append(bundles, bdl)
+
+		// Archive the payment.
+		pmt.CreatedOn = time.Now().UnixNano()
+		pmtB, err := json.Marshal(pmt)
+		if err != nil {
+			return err
 		}
-	}
-	return bundles
+
+		id = paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
+		return abkt.Put(id, pmtB)
+	})
 }
 
 // filterPayments iterates the payments bucket, the result set is generated
@@ -293,30 +236,6 @@ func fetchPendingPaymentsAtHeight(db *bolt.DB, height uint32) ([]*Payment, error
 		return nil, err
 	}
 	return payments, nil
-}
-
-// generatePaymentDetails generates kv pair of addresses and payment amounts
-// from the provided eligible payments.
-func generatePaymentDetails(db *bolt.DB, poolFeeAddr dcrutil.Address,
-	eligiblePmts []*PaymentBundle) (map[string]dcrutil.Amount, *dcrutil.Amount, error) {
-	var targetAmt dcrutil.Amount
-	pmts := make(map[string]dcrutil.Amount)
-	for _, p := range eligiblePmts {
-		if p.Account == poolFeesK {
-			bundleAmt := p.Total()
-			pmts[poolFeeAddr.String()] = bundleAmt
-			targetAmt += bundleAmt
-			continue
-		}
-		acc, err := FetchAccount(db, []byte(p.Account))
-		if err != nil {
-			return nil, nil, err
-		}
-		bundleAmt := p.Total()
-		pmts[acc.Address] = bundleAmt
-		targetAmt += bundleAmt
-	}
-	return pmts, &targetAmt, nil
 }
 
 // fetchArchivedPayments fetches all archived payments. List is ordered, most
