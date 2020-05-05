@@ -15,7 +15,6 @@ import (
 	"os/signal"
 	"runtime"
 
-	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/rpcclient/v5"
 	"github.com/decred/dcrpool/gui"
 	"github.com/decred/dcrpool/pool"
@@ -44,11 +43,6 @@ func newPool(cfg *config) (*miningPool, error) {
 		Pass:         cfg.RPCPass,
 		Certificates: cfg.dcrdRPCCerts,
 	}
-	minPmt, err := dcrutil.NewAmount(cfg.MinPayment)
-	if err != nil {
-		return nil, err
-	}
-
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 	powLimit := cfg.net.PowLimit
 	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
@@ -73,7 +67,7 @@ func newPool(cfg *config) (*miningPool, error) {
 	// Ensure provided miner ports are unique.
 	minerPorts := make(map[string]uint32)
 	_ = addPort(minerPorts, pool.CPU, cfg.CPUPort)
-	err = addPort(minerPorts, pool.InnosiliconD9, cfg.D9Port)
+	err := addPort(minerPorts, pool.InnosiliconD9, cfg.D9Port)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +101,6 @@ func newPool(cfg *config) (*miningPool, error) {
 		PaymentMethod:         cfg.PaymentMethod,
 		LastNPeriod:           cfg.LastNPeriod,
 		WalletPass:            cfg.WalletPass,
-		MinPayment:            minPmt,
 		PoolFeeAddrs:          cfg.poolFeeAddrs,
 		SoloPool:              cfg.SoloPool,
 		NonceIterations:       iterations,
@@ -200,8 +193,6 @@ func newPool(cfg *config) (*miningPool, error) {
 		WithinLimit:            p.hub.WithinLimit,
 		FetchLastWorkHeight:    p.hub.FetchLastWorkHeight,
 		FetchLastPaymentHeight: p.hub.FetchLastPaymentHeight,
-		AddPaymentRequest:      p.hub.AddPaymentRequest,
-		IsPaymentRequested:     p.hub.IsPaymentRequested,
 		FetchMinedWork:         p.hub.FetchMinedWork,
 		FetchWorkQuotas:        p.hub.FetchWorkQuotas,
 		BackupDB:               p.hub.BackupDB,

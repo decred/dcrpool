@@ -128,7 +128,6 @@ type HubConfig struct {
 	PaymentMethod         string
 	LastNPeriod           time.Duration
 	WalletPass            string
-	MinPayment            dcrutil.Amount
 	SoloPool              bool
 	PoolFeeAddrs          []dcrutil.Address
 	AdminPass             string
@@ -240,7 +239,6 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		LastNPeriod:        h.cfg.LastNPeriod,
 		SoloPool:           h.cfg.SoloPool,
 		PaymentMethod:      h.cfg.PaymentMethod,
-		MinPayment:         h.cfg.MinPayment,
 		PoolFeeAddrs:       h.cfg.PoolFeeAddrs,
 		WalletAccount:      h.cfg.WalletAccount,
 		WalletPass:         h.cfg.WalletPass,
@@ -331,17 +329,6 @@ func (h *Hub) FetchLastWorkHeight() uint32 {
 // FetchLastPaymentHeight returns the last payment height of the pool.
 func (h *Hub) FetchLastPaymentHeight() uint32 {
 	return h.paymentMgr.fetchLastPaymentHeight()
-}
-
-// AddPaymentRequest creates a payment request for the provided address.
-func (h *Hub) AddPaymentRequest(addr string) error {
-	return h.paymentMgr.addPaymentRequest(addr)
-}
-
-// IsPaymentRequested checks if a payment request has already been requested
-// for the account.
-func (h *Hub) IsPaymentRequested(accountID string) bool {
-	return h.paymentMgr.isPaymentRequested(accountID)
 }
 
 // getBlock fetches the blocks associated with the provided block hash.
