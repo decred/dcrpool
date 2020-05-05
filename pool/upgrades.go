@@ -187,7 +187,7 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 		}
 
 		createdOn := bigEndianBytesToNano(k)
-		share.UUID = shareID(share.Account, int64(createdOn))
+		share.UUID = string(shareID(share.Account, int64(createdOn)))
 
 		sBytes, err := json.Marshal(share)
 		if err != nil {
