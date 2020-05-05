@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -70,9 +69,6 @@ type PaymentMgrConfig struct {
 	SoloPool bool
 	// PaymentMethod represents the payment scheme of the pool.
 	PaymentMethod string
-	// MinPayment represents the minimum payment eligible for processing by the
-	// pool.
-	MinPayment dcrutil.Amount
 	// PoolFeeAddrs represents the pool fee addresses of the pool.
 	PoolFeeAddrs []dcrutil.Address
 	// WalletAccount represents the wallet account to process payments from.
@@ -99,16 +95,13 @@ type PaymentMgr struct {
 	lastPaymentPaidOn    uint64 // update atomically.
 	lastPaymentCreatedOn uint64 // update atomically.
 
-	cfg            *PaymentMgrConfig
-	paymentReqs    map[string]struct{}
-	paymentReqsMtx sync.RWMutex
+	cfg *PaymentMgrConfig
 }
 
 // NewPaymentMgr creates a new payment manager.
 func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	pm := &PaymentMgr{
-		cfg:         pCfg,
-		paymentReqs: make(map[string]struct{}),
+		cfg: pCfg,
 	}
 	rand.Seed(time.Now().UnixNano())
 	err := pm.cfg.DB.Update(func(tx *bolt.Tx) error {
@@ -407,32 +400,6 @@ func (pm *PaymentMgr) generatePayments(height uint32, source *PaymentSource, amt
 	default:
 		return fmt.Errorf("unknown payment method provided %v", pm.cfg.PaymentMethod)
 	}
-}
-
-// isPaymentRequested checks if a payment request exists for the
-// provided account.
-func (pm *PaymentMgr) isPaymentRequested(accountID string) bool {
-	pm.paymentReqsMtx.RLock()
-	defer pm.paymentReqsMtx.RUnlock()
-	_, ok := pm.paymentReqs[accountID]
-	return ok
-}
-
-// addPaymentRequest creates a payment request from the provided account
-// if not already requested.
-func (pm *PaymentMgr) addPaymentRequest(addr string) error {
-	id, err := AccountID(addr, pm.cfg.ActiveNet)
-	if err != nil {
-		return err
-	}
-	if pm.isPaymentRequested(id) {
-		return fmt.Errorf("payment already requested for account"+
-			" with id %s", id)
-	}
-	pm.paymentReqsMtx.Lock()
-	pm.paymentReqs[id] = struct{}{}
-	pm.paymentReqsMtx.Unlock()
-	return nil
 }
 
 // pendingPayments fetches all unpaid payments.

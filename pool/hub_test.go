@@ -224,10 +224,6 @@ func (t *tNodeConnection) NotifyBlocks() error {
 func (t *tNodeConnection) Shutdown() {}
 
 func testHub(t *testing.T, db *bolt.DB) {
-	minPayment, err := dcrutil.NewAmount(2.0)
-	if err != nil {
-		t.Fatalf("[NewAmount] unexpected error: %v", err)
-	}
 	activeNet := chaincfg.SimNetParams()
 	powLimit := chaincfg.SimNetParams().PowLimit
 	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
@@ -239,7 +235,6 @@ func testHub(t *testing.T, db *bolt.DB) {
 		LastNPeriod:           time.Second * 120,
 		SoloPool:              false,
 		PaymentMethod:         PPS,
-		MinPayment:            minPayment,
 		MaxGenTime:            time.Second * 20,
 		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
 		MaxConnectionsPerHost: 10,

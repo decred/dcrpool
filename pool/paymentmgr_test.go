@@ -36,10 +36,6 @@ func fetchShare(db *bolt.DB, id []byte) (*Share, error) {
 }
 
 func testPaymentMgr(t *testing.T, db *bolt.DB) {
-	minPayment, err := dcrutil.NewAmount(2.0)
-	if err != nil {
-		t.Fatalf("[NewAmount] unexpected error: %v", err)
-	}
 	activeNet := chaincfg.SimNetParams()
 	pCfg := &PaymentMgrConfig{
 		DB:            db,
@@ -48,7 +44,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		LastNPeriod:   time.Second * 120,
 		SoloPool:      false,
 		PaymentMethod: PPS,
-		MinPayment:    minPayment,
 		PoolFeeAddrs:  []dcrutil.Address{poolFeeAddrs},
 	}
 	mgr, err := NewPaymentMgr(pCfg)
@@ -280,7 +275,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		if err != nil {
 			return fmt.Errorf("[persistLastPaymentPaidOn] unable to persist last payment paid on: %v", err)
 		}
-		return mgr.persistLastPaymentCreatedOn(tx)
+		err = mgr.persistLastPaymentCreatedOn(tx)
 		if err != nil {
 			return fmt.Errorf("[persistLastPaymentCreatedOn] unable to persist last payment created on: %v", err)
 		}
