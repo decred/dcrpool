@@ -3,7 +3,6 @@ package pool
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"sync"
 	"testing"
 
@@ -294,17 +293,6 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	cs.discCh <- malformedMsg
 	<-malformedMsg.Done
 
-	// Ensure a dividend payment error does not teminate the chain state process.
-	minedMsg = &blockNotification{
-		Header: minedHeaderB,
-		Done:   make(chan bool),
-	}
-	cs.connCh <- minedMsg
-	<-minedMsg.Done
-	cs.cfg.PayDividends = func(uint32) error {
-		return fmt.Errorf("unable to publish dividend transaction")
-	}
-
 	confMsg = &blockNotification{
 		Header: confHeaderB,
 		Done:   make(chan bool),
@@ -340,81 +328,5 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 
 	cancel()
-	cs.cfg.HubWg.Wait()
-
-	runChainState := func() {
-		ctx, cancel = context.WithCancel(context.Background())
-		cs = NewChainState(cCfg)
-		cCfg.HubWg = new(sync.WaitGroup)
-		cCfg.Cancel = cancel
-		cCfg.HubWg.Add(1)
-		go cs.handleChainUpdates(ctx)
-	}
-
-	runChainState()
-
-	// Ensure a generate payment error terminates the chain state process.
-	minedMsg = &blockNotification{
-		Header: minedHeaderB,
-		Done:   make(chan bool),
-	}
-	cs.connCh <- minedMsg
-	<-minedMsg.Done
-	cs.cfg.GeneratePayments = func(uint32, *PaymentSource, dcrutil.Amount) error {
-		return fmt.Errorf("unable to generate payments")
-	}
-
-	confMsg = &blockNotification{
-		Header: confHeaderB,
-		Done:   make(chan bool),
-	}
-	cs.connCh <- confMsg
-	<-confMsg.Done
-	cs.cfg.GeneratePayments = generatePayments
-	cs.cfg.HubWg.Wait()
-
-	runChainState()
-
-	// Ensure a pending payments at height error terminates the chain
-	// state process.
-	minedMsg = &blockNotification{
-		Header: minedHeaderB,
-		Done:   make(chan bool),
-	}
-	cs.connCh <- minedMsg
-	<-minedMsg.Done
-	cs.cfg.PendingPaymentsAtHeight = func(uint32) ([]*Payment, error) {
-		return nil, fmt.Errorf("unable to fetch pending payments")
-	}
-
-	discMinedMsg = &blockNotification{
-		Header: minedHeaderB,
-		Done:   make(chan bool),
-	}
-	cs.discCh <- discMinedMsg
-	<-discMinedMsg.Done
-	cs.cfg.PendingPaymentsAtHeight = pendingPaymentsAtHeight
-	cs.cfg.HubWg.Wait()
-
-	runChainState()
-
-	// Ensure a get block error terminates the chain state process.
-	minedMsg = &blockNotification{
-		Header: minedHeaderB,
-		Done:   make(chan bool),
-	}
-	cs.connCh <- minedMsg
-	<-minedMsg.Done
-	cs.cfg.GetBlock = func(*chainhash.Hash) (*wire.MsgBlock, error) {
-		return nil, fmt.Errorf("unable to get block")
-	}
-
-	confMsg = &blockNotification{
-		Header: confHeaderB,
-		Done:   make(chan bool),
-	}
-	cs.connCh <- confMsg
-	<-confMsg.Done
-	cs.cfg.GetBlock = getBlock
 	cs.cfg.HubWg.Wait()
 }
