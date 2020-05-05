@@ -30,8 +30,8 @@ func nanoToBigEndianBytes(nano int64) []byte {
 	return b
 }
 
-// GenerateJobID generates a unique job id of the provided block height.
-func GenerateJobID(height uint32) (string, error) {
+// jobID generates a unique job id of the provided block height.
+func jobID(height uint32) (string, error) {
 	buf := bytes.Buffer{}
 	buf.Write(heightToBigEndianBytes(height))
 	buf.Write(nanoToBigEndianBytes(time.Now().UnixNano()))
@@ -40,7 +40,7 @@ func GenerateJobID(height uint32) (string, error) {
 
 // NewJob creates a job instance.
 func NewJob(header string, height uint32) (*Job, error) {
-	id, err := GenerateJobID(height)
+	id, err := jobID(height)
 	if err != nil {
 		return nil, err
 	}

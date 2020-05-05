@@ -5,6 +5,7 @@
 package pool
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -45,9 +46,10 @@ func bigEndianBytesToHeight(b []byte) uint32 {
 
 // AcceptedWorkID generates a unique id for work accepted by the network.
 func AcceptedWorkID(blockHash string, blockHeight uint32) []byte {
-	heightE := hex.EncodeToString(heightToBigEndianBytes(blockHeight))
-	id := fmt.Sprintf("%v%v", heightE, blockHash)
-	return []byte(id)
+	buf := bytes.Buffer{}
+	buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(blockHeight)))
+	buf.WriteString(blockHash)
+	return buf.Bytes()
 }
 
 // NewAcceptedWork creates an accepted work.

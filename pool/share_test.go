@@ -19,7 +19,7 @@ import (
 func persistShare(db *bolt.DB, account string, weight *big.Rat,
 	createdOnNano int64) error {
 	share := &Share{
-		UUID:    shareID(account, createdOnNano),
+		UUID:    string(shareID(account, createdOnNano)),
 		Account: account,
 		Weight:  weight,
 	}
