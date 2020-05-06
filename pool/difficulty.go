@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	// Supported mining clients
+	// Supported mining clients.
 	CPU           = "cpu"
 	InnosiliconD9 = "innosilicond9"
 	AntminerDR3   = "antminerdr3"
@@ -35,7 +35,7 @@ var (
 
 // DifficultyToTarget converts the provided difficulty to a target based on the
 // active network.
-func DifficultyToTarget(net *chaincfg.Params, difficulty *big.Rat) (*big.Rat, error) {
+func DifficultyToTarget(net *chaincfg.Params, difficulty *big.Rat) *big.Rat {
 	powLimit := new(big.Rat).SetInt(net.PowLimit)
 
 	// The corresponding target is calculated as:
@@ -47,7 +47,7 @@ func DifficultyToTarget(net *chaincfg.Params, difficulty *big.Rat) (*big.Rat, er
 	if target.Cmp(powLimit) > 0 {
 		target = powLimit
 	}
-	return target, nil
+	return target
 }
 
 // calculatePoolDifficulty determines the difficulty at which the provided
@@ -70,19 +70,19 @@ func calculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTime
 		new(big.Rat).SetFloat64(iterations))
 
 	// Clamp the difficulty to 1 if needed.
-	if difficulty.Cmp(ZeroRat) == 0 || difficulty.Cmp(ZeroRat) < 0 {
-		difficulty = new(big.Rat).SetInt64(1)
+	oneRat := new(big.Rat).SetInt64(1)
+	if difficulty.Cmp(oneRat) < 0 {
+		difficulty = oneRat
 	}
 	return difficulty
 }
 
 // calculatePoolTarget determines the target difficulty at which the provided
 // hashrate can generate a pool share by the provided target time.
-func calculatePoolTarget(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) (*big.Rat, *big.Rat, error) {
+func calculatePoolTarget(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) (*big.Rat, *big.Rat) {
 	difficulty := calculatePoolDifficulty(net, hashRate, targetTimeSecs)
-	target, err := DifficultyToTarget(net, difficulty)
-
-	return target, difficulty, err
+	target := DifficultyToTarget(net, difficulty)
+	return target, difficulty
 }
 
 // DifficultyInfo represents the difficulty related info for a mining client.
@@ -105,11 +105,7 @@ func NewDifficultySet(net *chaincfg.Params, powLimit *big.Rat, maxGenTime time.D
 		diffs: make(map[string]*DifficultyInfo),
 	}
 	for miner, hashrate := range minerHashes {
-		target, difficulty, err := calculatePoolTarget(net, hashrate, genTime)
-		if err != nil {
-			desc := fmt.Sprintf("failed to calculate pool target for %s", miner)
-			return nil, MakeError(ErrCalcPoolTarget, desc, err)
-		}
+		target, difficulty := calculatePoolTarget(net, hashrate, genTime)
 		set.diffs[miner] = &DifficultyInfo{
 			target:     target,
 			difficulty: difficulty,

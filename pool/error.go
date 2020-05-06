@@ -35,9 +35,6 @@ const (
 	// ErrDifficultyNotFound indicates a non-existent miner pool difficulty.
 	ErrDifficultyNotFound
 
-	// ErrCalcPoolTarget indicates a pool target calculation error.
-	ErrCalcPoolTarget
-
 	// ErrParse indicates a message parsing error.
 	ErrParse
 
@@ -67,7 +64,6 @@ var errorCodeStrings = map[ErrorCode]string{
 	ErrWorkNotFound:       "ErrWorkNotfound",
 	ErrWrongInputLength:   "ErrWrongInputLength",
 	ErrDifficultyNotFound: "ErrDifficultyNotFound",
-	ErrCalcPoolTarget:     "ErrCalcPoolTarget",
 	ErrParse:              "ErrParse",
 	ErrDecode:             "ErrDecode",
 	ErrNotSupported:       "ErrNotSupported",
