@@ -319,6 +319,8 @@ func (pm *PaymentMgr) sharePercentages(shares []*Share) (map[string]*big.Rat, er
 }
 
 // PPSEligibleShares fetches all shares within the provided inclusive bounds.
+//
+// The entire share range is iterated if the provided range start (min) is nil.
 func (pm *PaymentMgr) PPSEligibleShares(min []byte, max []byte) ([]*Share, error) {
 	eligibleShares := make([]*Share, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
@@ -641,7 +643,7 @@ func (pm *PaymentMgr) archivedPayments() ([]*Payment, error) {
 
 // maturePendingPayments fetches all mature pending payments at the
 // provided height.
-func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[uint32][]*Payment, error) {
+func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[string][]*Payment, error) {
 	payments := make([]*Payment, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchPaymentBucket(tx)
@@ -668,15 +670,15 @@ func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[uint32][]*Paymen
 		return nil, err
 	}
 
-	pmts := make(map[uint32][]*Payment)
+	pmts := make(map[string][]*Payment)
 	for _, pmt := range payments {
-		set, ok := pmts[pmt.Height]
+		set, ok := pmts[pmt.Source.BlockHash]
 		if !ok {
 			set = make([]*Payment, 0)
 		}
 
 		set = append(set, pmt)
-		pmts[pmt.Height] = set
+		pmts[pmt.Source.BlockHash] = set
 	}
 
 	return pmts, nil
@@ -793,7 +795,7 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 
 	outSizes := make([]int, len(outputs))
 	for range outputs {
-		inSizes = append(inSizes, txsizes.P2PKHOutputSize)
+		outSizes = append(outSizes, txsizes.P2PKHOutputSize)
 	}
 
 	estSize := txsizes.EstimateSerializeSizeFromScriptSizes(inSizes, outSizes,
@@ -841,14 +843,14 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 			return fmt.Errorf("unable to fetch best wallet height: %v", err)
 		}
 
-		if height == walletHeight {
+		if walletHeight >= height {
 			break
 		}
 	}
 
 	txBroadcaster := pm.cfg.FetchTxBroadcaster()
 	if txBroadcaster == nil {
-		return fmt.Errorf("tx broadcastor unset")
+		return fmt.Errorf("tx broadcaster unset")
 	}
 
 	balanceReq := &walletrpc.BalanceRequest{
@@ -894,7 +896,7 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 		return err
 	}
 
-	log.Tracef("paid a total of %v in tx %s, including %v in pool fees.",
+	log.Infof("paid a total of %v in tx %s, including %v in pool fees.",
 		tOut, txid.String(), fees)
 
 	// Update all associated payments as paid and archive them.

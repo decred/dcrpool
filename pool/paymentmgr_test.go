@@ -284,7 +284,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
-	// Create a share below the minimum exxcuive PPLNS time for account y.
+	// Create a share below the minimum excluive PPLNS time for account y.
 	err = persistShare(db, yID, weight, belowMinimumTime)
 	if err != nil {
 		t.Fatal(err)
@@ -323,6 +323,18 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	if len(shares) != expectedShareCount {
 		t.Fatalf("PPLNS error: expected %v eligible PPLNS shares, got %v",
 			expectedShareCount, len(shares))
+	}
+
+	forAccX = 0
+	forAccY = 0
+	for _, share := range shares {
+		if share.Account == xID {
+			forAccX++
+		}
+
+		if share.Account == yID {
+			forAccY++
+		}
 	}
 
 	// Ensure account x and account y both have shares returned.
@@ -444,7 +456,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("expected 1 payment set, got %d", len(pmtSet))
 	}
 
-	set, ok := pmtSet[height+1]
+	set, ok := pmtSet[zeroSource.BlockHash]
 	if !ok {
 		t.Fatalf("expected pending payments at height %d to be "+
 			"mature at height %d", height+1, 28)
@@ -452,7 +464,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	if len(set) != 2 {
 		t.Fatalf("expected 2 mature pending payments from "+
-			"height %d, got %d", height, len(set))
+			"height %d, got %d", height+1, len(set))
 	}
 
 	// Ensure there are no mature payments at height 27 (payment A and B).
@@ -465,7 +477,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("expected no payment sets, got %d", len(pmtSet))
 	}
 
-	// Empty the paymnts and archived payment buckets.
+	// Empty the payments and archived payment buckets.
 	err = emptyBucket(db, paymentArchiveBkt)
 	if err != nil {
 		t.Fatal(err)
@@ -848,7 +860,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("unable to generate payments: %v", err)
 	}
 
-	// Ensure payments for  for account x, y and fees were created.
+	// Ensure payments for account x, y and fees were created.
 	pmtSets, err := mgr.maturePendingPayments(paymentMaturity)
 	if err != nil {
 		t.Fatalf("[maturePendingPayments] unexpected error: %v", err)
@@ -858,7 +870,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatal("[maturePendingPayments] expected mature payments")
 	}
 
-	_, ok = pmtSets[height]
+	_, ok = pmtSets[zeroSource.BlockHash]
 	if !ok {
 		t.Fatalf("[maturePendingPayments] expected mature payments "+
 			"at height %d", height)
