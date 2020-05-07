@@ -3,10 +3,12 @@ package pool
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"sync"
 	"testing"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/wire"
 	bolt "go.etcd.io/bbolt"
@@ -169,6 +171,77 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	// Test prunePayments.
+	cs.cfg.GetBlock = func(hash *chainhash.Hash) (*wire.MsgBlock, error) {
+		return nil, &dcrjson.RPCError{
+			Code:    dcrjson.ErrRPCBlockNotFound,
+			Message: fmt.Sprintf("no block found with hash: %v", hash.String()),
+		}
+	}
+	height := uint32(10)
+	estMaturity := uint32(26)
+	amt, _ := dcrutil.NewAmount(5)
+	zeroSource := &PaymentSource{
+		BlockHash: chainhash.Hash{0}.String(),
+		Coinbase:  chainhash.Hash{0}.String(),
+	}
+	paymentA, err := persistPayment(db, xID, zeroSource, amt, height, estMaturity)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	paymentB, err := persistPayment(db, yID, zeroSource, amt, height+1, estMaturity+1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure payment A and B do not get pruned at height 27.
+	err = cs.prunePayments(27)
+	if err != nil {
+		t.Fatalf("prunePayments error: %v", err)
+	}
+
+	aID := paymentID(paymentA.Height, paymentA.CreatedOn, paymentA.Account)
+	_, err = FetchPayment(db, aID)
+	if err != nil {
+		t.Fatalf("unexpected error fetching payment A: %v", err)
+	}
+
+	bID := paymentID(paymentB.Height, paymentB.CreatedOn, paymentB.Account)
+	_, err = FetchPayment(db, bID)
+	if err != nil {
+		t.Fatalf("unexpected error fetching payment B: %v", err)
+	}
+
+	// Ensure payment A gets pruned with payment B remaining at height 28.
+	err = cs.prunePayments(28)
+	if err != nil {
+		t.Fatalf("prunePayments error: %v", err)
+	}
+
+	_, err = FetchPayment(db, aID)
+	if err == nil {
+		t.Fatalf("expected payment A to be pruned at height %d", 28)
+	}
+
+	_, err = FetchPayment(db, bID)
+	if err != nil {
+		t.Fatalf("unexpected error fetching payment B: %v", err)
+	}
+
+	// Ensure payment B gets pruned at height 29.
+	err = cs.prunePayments(29)
+	if err != nil {
+		t.Fatalf("prunePayments error: %v", err)
+	}
+
+	_, err = FetchPayment(db, bID)
+	if err == nil {
+		t.Fatalf("expected payment B to be pruned at height %d", 29)
+	}
+
+	cs.cfg.GetBlock = getBlock
 
 	cCfg.HubWg.Add(1)
 	go cs.handleChainUpdates(ctx)
