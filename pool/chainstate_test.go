@@ -62,17 +62,22 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		}, nil
 	}
 
+	pendingPaymentsForBlockHash := func(string) (uint32, []*Payment, error) {
+		return 0, []*Payment{}, nil
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	var confHeader wire.BlockHeader
 	cCfg := &ChainStateConfig{
-		DB:                      db,
-		SoloPool:                false,
-		PayDividends:            payDividends,
-		GeneratePayments:        generatePayments,
-		GetBlock:                getBlock,
-		PendingPaymentsAtHeight: pendingPaymentsAtHeight,
-		Cancel:                  cancel,
-		HubWg:                   new(sync.WaitGroup),
+		DB:                          db,
+		SoloPool:                    false,
+		PayDividends:                payDividends,
+		GeneratePayments:            generatePayments,
+		GetBlock:                    getBlock,
+		PendingPaymentsAtHeight:     pendingPaymentsAtHeight,
+		PendingPaymentsForBlockHash: pendingPaymentsForBlockHash,
+		Cancel:                      cancel,
+		HubWg:                       new(sync.WaitGroup),
 	}
 
 	cs := NewChainState(cCfg)
