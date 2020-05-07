@@ -614,6 +614,42 @@ func (pm *PaymentMgr) pendingPaymentsAtHeight(height uint32) ([]*Payment, error)
 	return payments, nil
 }
 
+// pendingPaymentsForBlockHash fetches all pending payments with the provided
+// bloch hash as their source.
+func (pm *PaymentMgr) pendingPaymentsForBlockHash(blockHash string) (uint32, []*Payment, error) {
+	payments := make([]*Payment, 0)
+	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
+		bkt, err := fetchPaymentBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			var payment Payment
+			err := json.Unmarshal(v, &payment)
+			if err != nil {
+				return err
+			}
+
+			if payment.PaidOnHeight == 0 {
+				if payment.Source == nil {
+					continue
+				}
+
+				if payment.Source.BlockHash == blockHash {
+					payments = append(payments, &payment)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, nil, err
+	}
+	return uint32(len(payments)), payments, nil
+}
+
 // archivedPayments fetches all archived payments. List is ordered, most
 // recent comes first.
 func (pm *PaymentMgr) archivedPayments() ([]*Payment, error) {
@@ -895,6 +931,8 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 	if err != nil {
 		return err
 	}
+
+	fees := outputs[feeAddr.String()]
 
 	log.Infof("paid a total of %v in tx %s, including %v in pool fees.",
 		tOut, txid.String(), fees)

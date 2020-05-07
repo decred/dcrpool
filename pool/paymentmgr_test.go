@@ -362,7 +362,8 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Test pendingPayments, pendingPaymentsAtHeight,
-	// maturePendingPayments and archivedPayments.
+	// maturePendingPayments, archivedPayments and
+	// pendingPaymentsForBlockHash.
 	height := uint32(10)
 	estMaturity := uint32(26)
 	amt, _ := dcrutil.NewAmount(5)
@@ -475,6 +476,17 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	if len(pmtSet) != 0 {
 		t.Fatalf("expected no payment sets, got %d", len(pmtSet))
+	}
+
+	// Ensure there are two pending payments for the zero hash.
+	size, _, err := mgr.pendingPaymentsForBlockHash(zeroSource.BlockHash)
+	if err != nil {
+		t.Fatalf("pendingPaymentsForBlockHash error: %v", err)
+	}
+
+	if size != 2 {
+		t.Fatalf("expected 2 mature pending payments with "+
+			"block hash %s, got %d", zeroSource, size)
 	}
 
 	// Empty the payments and archived payment buckets.

@@ -34,6 +34,9 @@ type ChainStateConfig struct {
 	// PendingPaymentsAtHeight fetches all pending payments at
 	// the provided height.
 	PendingPaymentsAtHeight func(uint32) ([]*Payment, error)
+	// PendingPaymentsForBlockHash fetches all pending payments with the
+	// provided block hash as their source.
+	PendingPaymentsForBlockHash func(blockHash string) (uint32, []*Payment, error)
 	// Cancel represents the pool's context cancellation function.
 	Cancel context.CancelFunc
 	// SignalCache sends the provided cache update event to the gui cache.
