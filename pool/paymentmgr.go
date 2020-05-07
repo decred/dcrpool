@@ -14,6 +14,7 @@ import (
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/dcrjson/v3"
 	"github.com/decred/dcrd/dcrutil/v2"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
@@ -48,6 +49,8 @@ type TxCreator interface {
 	// CreateRawTransaction generates a transaction from the provided
 	// inputs and payouts.
 	CreateRawTransaction([]chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
+	// GetBlock fetches the block associated with the provided block hash.
+	GetBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, error)
 }
 
 // TxBroadcaster defines the functionality needed by a transaction broadcaster
@@ -743,6 +746,32 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 		return fmt.Errorf("tx creator unset")
 	}
 
+	toDelete := make([]string, 0)
+	for key := range pmts {
+		blockHash, err := chainhash.NewHashFromStr(key)
+		if err != nil {
+			return err
+		}
+
+		_, err = txCreator.GetBlock(blockHash)
+		if err != nil {
+			if rpcErr, ok := err.(*dcrjson.RPCError); ok {
+				if rpcErr.Code != dcrjson.ErrRPCBlockNotFound {
+					return err
+				}
+
+				// Since the block referenced is not part of the best chain
+				// remove the payments associated with it.
+				toDelete = append(toDelete, key)
+			}
+		}
+	}
+
+	// Delete payments sourced from orphaned blocks.
+	for _, k := range toDelete {
+		delete(pmts, k)
+	}
+
 	for _, set := range pmts {
 		index := uint32(2)
 		txHash, err := chainhash.NewHashFromStr(set[0].Source.Coinbase)
@@ -834,21 +863,31 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 		outSizes = append(outSizes, txsizes.P2PKHOutputSize)
 	}
 
-	estSize := txsizes.EstimateSerializeSizeFromScriptSizes(inSizes, outSizes,
-		txsizes.P2PKHOutputSize)
+	estSize := txsizes.EstimateSerializeSizeFromScriptSizes(inSizes, outSizes, 0)
 	estFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, estSize)
+	sansFees := tOut - estFee
 
-	// Deduct the transaction fees from the pool fees being paid out.
-	fees := outputs[feeAddr.String()]
-	fees = fees - estFee
-
-	// Deduct any percentage rounding value differences from the pool
-	// fees being paid out.
+	// Add any percentage rounding value differences to estimated
+	// transaction fee.
 	if diff != zeroAmount {
-		fees = fees - diff
+		estFee = estFee + diff
 	}
 
-	outputs[feeAddr.String()] = fees
+	// Deduct the portion of the transaction fees being paid for by
+	// the participating accounts from the outputs being paid to them.
+	//
+	// The portion is calculated as the percentage of the fees based
+	// on the ratio of the amount being paid to the total transaction
+	// output minus the pool fees.
+	for addr, v := range outputs {
+		if addr == feeAddr.String() {
+			continue
+		}
+
+		ratio := float64(int64(sansFees)) / float64(int64(v))
+		outFee := estFee.MulF64(ratio)
+		outputs[addr] -= outFee
+	}
 
 	// Generate the output set with decoded addresses.
 	outs := make(map[dcrutil.Address]dcrutil.Amount, len(outputs))
