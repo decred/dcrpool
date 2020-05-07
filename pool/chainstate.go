@@ -107,6 +107,7 @@ func (cs *ChainState) pruneAcceptedWork(height uint32) error {
 		}
 
 		toDelete := [][]byte{}
+		heightBE := heightToBigEndianBytes(height)
 		cursor := bkt.Cursor()
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
 			height, err := hex.DecodeString(string(k[:8]))
@@ -133,6 +134,64 @@ func (cs *ChainState) pruneAcceptedWork(height uint32) error {
 			if err != nil {
 				return err
 			}
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+// prunePayments removes all spendabe payments sourcing from
+// orphaned blocks at the provided height.
+func (cs *ChainState) prunePayments(height uint32) error {
+	err := cs.cfg.DB.Update(func(tx *bolt.Tx) error {
+		bkt, err := fetchPaymentBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		toDelete := make(map[string]*chainhash.Hash)
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			var payment Payment
+			err := json.Unmarshal(v, &payment)
+			if err != nil {
+				return err
+			}
+
+			if payment.PaidOnHeight == 0 {
+				// If a payment is spendable but does not get processed it
+				// becomes eligible for pruning.
+				spendableHeight := payment.EstimatedMaturity + 1
+				if height > spendableHeight {
+					hash, err := chainhash.NewHashFromStr(payment.Source.BlockHash)
+					if err != nil {
+						return err
+					}
+
+					toDelete[string(k)] = hash
+				}
+			}
+
+		}
+
+		for k, hash := range toDelete {
+			// Delete the payment if it is sourcing from an orphaned block.
+			_, err := cs.cfg.GetBlock(hash)
+			if err != nil {
+				if rpcErr, ok := err.(*dcrjson.RPCError); ok {
+					if rpcErr.Code != dcrjson.ErrRPCBlockNotFound {
+						return err
+					}
+
+					err := bkt.Delete([]byte(k))
+					if err != nil {
+						return err
+					}
+				}
+			}
+
 		}
 
 		return nil
