@@ -316,14 +316,7 @@ func (m *Miner) process(ctx context.Context) {
 					log.Tracef("Difficulty is %v", difficulty)
 
 					diff := new(big.Rat).SetUint64(difficulty)
-					target, err := pool.DifficultyToTarget(m.config.net, diff)
-					if err != nil {
-						log.Errorf("Difficulty to target conversion error: %v", err)
-						m.cancel()
-						continue
-					}
-
-					log.Tracef("Target is %v", target.FloatString(4))
+					target := pool.DifficultyToTarget(m.config.net, diff)
 
 					m.workMtx.Lock()
 					m.work.target = target
