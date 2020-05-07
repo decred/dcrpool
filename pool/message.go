@@ -350,6 +350,9 @@ func ParseSubscribeResponse(resp *Response) (string, string, string, uint64, err
 func SetDifficultyNotification(difficulty *big.Rat) *Request {
 	diff, _ := difficulty.Float64()
 
+	// TODO: do we still need to clamp the difficulty here considering it is
+	// being done when the diff is generated?
+	//
 	// Convert the diff to a uint64 and if the result is zero, set it to one
 	// instead. This ensures that a zero difficulty is never sent to the client.
 	roundDiff := uint64(diff)
