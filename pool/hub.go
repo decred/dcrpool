@@ -113,6 +113,7 @@ type NodeConnection interface {
 	CreateRawTransaction([]chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
 	GetWorkSubmit(string) (bool, error)
 	GetWork() (*chainjson.GetWorkResult, error)
+	GetBlockVerbose(*chainhash.Hash, bool) (*chainjson.GetBlockVerboseResult, error)
 	GetBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, error)
 	NotifyWork() error
 	NotifyBlocks() error
@@ -233,19 +234,19 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	}
 
 	pCfg := &PaymentMgrConfig{
-		DB:                 h.db,
-		ActiveNet:          h.cfg.ActiveNet,
-		PoolFee:            h.cfg.PoolFee,
-		LastNPeriod:        h.cfg.LastNPeriod,
-		SoloPool:           h.cfg.SoloPool,
-		PaymentMethod:      h.cfg.PaymentMethod,
-		PoolFeeAddrs:       h.cfg.PoolFeeAddrs,
-		WalletAccount:      h.cfg.WalletAccount,
-		WalletPass:         h.cfg.WalletPass,
-		WalletBestHeight:   h.walletBestHeight,
-		FetchTxCreator:     func() TxCreator { return h.nodeConn },
-		FetchTxBroadcaster: func() TxBroadcaster { return h.walletConn },
-		SignalCache:        h.SignalCache,
+		DB:                    h.db,
+		ActiveNet:             h.cfg.ActiveNet,
+		PoolFee:               h.cfg.PoolFee,
+		LastNPeriod:           h.cfg.LastNPeriod,
+		SoloPool:              h.cfg.SoloPool,
+		PaymentMethod:         h.cfg.PaymentMethod,
+		PoolFeeAddrs:          h.cfg.PoolFeeAddrs,
+		WalletAccount:         h.cfg.WalletAccount,
+		WalletPass:            h.cfg.WalletPass,
+		WalletBestHeight:      h.walletBestHeight,
+		GetBlockConfirmations: h.getBlockConfirmations,
+		FetchTxCreator:        func() TxCreator { return h.nodeConn },
+		FetchTxBroadcaster:    func() TxBroadcaster { return h.walletConn },
 	}
 	h.paymentMgr, err = NewPaymentMgr(pCfg)
 	if err != nil {
@@ -260,6 +261,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		PendingPaymentsForBlockHash: h.paymentMgr.pendingPaymentsForBlockHash,
 		GeneratePayments:            h.paymentMgr.generatePayments,
 		GetBlock:                    h.getBlock,
+		GetBlockConfirmations:       h.getBlockConfirmations,
 		Cancel:                      h.cancel,
 		SignalCache:                 h.SignalCache,
 		HubWg:                       h.wg,
@@ -315,6 +317,16 @@ func (h *Hub) walletBestHeight() (uint32, error) {
 		return 0, err
 	}
 	return bestResp.Height, nil
+}
+
+// getBlockConfirmation returns the number of block confirmations for the
+// provided block height.
+func (h *Hub) getBlockConfirmations(hash *chainhash.Hash) (int64, error) {
+	info, err := h.nodeConn.GetBlockVerbose(hash, false)
+	if err != nil {
+		return 0, err
+	}
+	return info.Confirmations, nil
 }
 
 // WithinLimit returns if a client is within its request limits.

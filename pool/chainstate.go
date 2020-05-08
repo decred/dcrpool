@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrjson/v3"
 	"github.com/decred/dcrd/dcrutil/v2"
 	"github.com/decred/dcrd/wire"
 	bolt "go.etcd.io/bbolt"
@@ -32,12 +31,15 @@ type ChainStateConfig struct {
 	GeneratePayments func(uint32, *PaymentSource, dcrutil.Amount) error
 	// GetBlock fetches the block associated with the provided block hash.
 	GetBlock func(*chainhash.Hash) (*wire.MsgBlock, error)
+	// GetBlockConfirmations fetches the block confirmations with the provided
+	// block hash.
+	GetBlockConfirmations func(*chainhash.Hash) (int64, error)
 	// PendingPaymentsAtHeight fetches all pending payments at
 	// the provided height.
 	PendingPaymentsAtHeight func(uint32) ([]*Payment, error)
-	// PendingPaymentsForBlockHash fetches all pending payments with the
-	// provided block hash as their source.
-	PendingPaymentsForBlockHash func(blockHash string) (uint32, []*Payment, error)
+	// PendingPaymentsForBlockHash returns the  number of pending payments
+	// with the provided block hash as their source.
+	PendingPaymentsForBlockHash func(blockHash string) (uint32, error)
 	// Cancel represents the pool's context cancellation function.
 	Cancel context.CancelFunc
 	// SignalCache sends the provided cache update event to the gui cache.
@@ -177,21 +179,19 @@ func (cs *ChainState) prunePayments(height uint32) error {
 		}
 
 		for k, hash := range toDelete {
-			// Delete the payment if it is sourcing from an orphaned block.
-			_, err := cs.cfg.GetBlock(hash)
+			confs, err := cs.cfg.GetBlockConfirmations(hash)
 			if err != nil {
-				if rpcErr, ok := err.(*dcrjson.RPCError); ok {
-					if rpcErr.Code != dcrjson.ErrRPCBlockNotFound {
-						return err
-					}
-
-					err := bkt.Delete([]byte(k))
-					if err != nil {
-						return err
-					}
-				}
+				return err
 			}
 
+			// If the block has no confirmations at the current height,
+			// it is an orphan. Delete the payments associated with it.
+			if confs <= 0 {
+				err := bkt.Delete([]byte(k))
+				if err != nil {
+					return err
+				}
+			}
 		}
 
 		return nil
@@ -287,12 +287,12 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 
 				err = cs.prunePayments(header.Height)
 				if err != nil {
-					// Errors generated pruning invalidated accepted
-					// work indicate an underlying issue accessing
-					// the database. The chainstate process will be
+					// Errors generated pruning invalidated payments
+					// indicate an underlying issue accessing the
+					// database. The chainstate process will be
 					// terminated as a result.
-					log.Errorf("unable to prune accepted work below "+
-						"height #%d: %v", pruneLimit, err)
+					log.Errorf("unable to prune orphaned payments at "+
+						"height #%d: %v", header.Height, err)
 					close(msg.Done)
 					cs.cfg.Cancel()
 					continue
@@ -334,7 +334,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 
 			if !cs.cfg.SoloPool {
-				count, _, err := cs.cfg.PendingPaymentsForBlockHash(parentHash)
+				count, err := cs.cfg.PendingPaymentsForBlockHash(parentHash)
 				if err != nil {
 					// Errors generated looking up pending payments
 					// indicates an underlying issue accessing the database.
@@ -415,6 +415,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					cs.cfg.Cancel()
 					continue
 				}
+
+				// Signal the gui cache of the paid dividends.
+				cs.cfg.SignalCache(DividendsPaid)
 			}
 
 			close(msg.Done)

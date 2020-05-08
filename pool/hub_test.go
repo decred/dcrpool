@@ -213,6 +213,11 @@ func (t *tNodeConnection) GetBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, e
 	return &b, nil
 }
 
+func (t *tNodeConnection) GetBlockVerbose(*chainhash.Hash, bool) (*chainjson.GetBlockVerboseResult, error) {
+	return &chainjson.GetBlockVerboseResult{
+		Confirmations: -1,
+	}, nil
+}
 func (t *tNodeConnection) NotifyWork() error {
 	return nil
 }

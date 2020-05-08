@@ -14,7 +14,6 @@ import (
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrd/dcrjson/v3"
 	"github.com/decred/dcrd/dcrutil/v2"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
@@ -87,14 +86,15 @@ type PaymentMgrConfig struct {
 	// WalletBestHeight fetches the height at which the pool wallet
 	// has synced to.
 	WalletBestHeight func() (uint32, error)
+	// GetBlockConfirmations returns the number of block confirmations for the
+	// provided block hash.
+	GetBlockConfirmations func(*chainhash.Hash) (int64, error)
 	// FetchTxCreator returns a transaction creator that allows coinbase lookups
 	// and payment transaction creation.
 	FetchTxCreator func() TxCreator
 	// FetchTxBroadcaster returns a transaction broadcaster that allows signing
 	// and publishing of transactions.
 	FetchTxBroadcaster func() TxBroadcaster
-	// SignalCache sends the provided cache update event to the gui cache.
-	SignalCache func(event CacheUpdateEvent)
 }
 
 // PaymentMgr handles generating shares and paying out dividends to
@@ -617,10 +617,10 @@ func (pm *PaymentMgr) pendingPaymentsAtHeight(height uint32) ([]*Payment, error)
 	return payments, nil
 }
 
-// pendingPaymentsForBlockHash fetches all pending payments with the provided
-// bloch hash as their source.
-func (pm *PaymentMgr) pendingPaymentsForBlockHash(blockHash string) (uint32, []*Payment, error) {
-	payments := make([]*Payment, 0)
+// pendingPaymentsForBlockHash returns the number of  pending payments with
+// the provided block hash as their source.
+func (pm *PaymentMgr) pendingPaymentsForBlockHash(blockHash string) (uint32, error) {
+	var count uint32
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchPaymentBucket(tx)
 		if err != nil {
@@ -636,21 +636,17 @@ func (pm *PaymentMgr) pendingPaymentsForBlockHash(blockHash string) (uint32, []*
 			}
 
 			if payment.PaidOnHeight == 0 {
-				if payment.Source == nil {
-					continue
-				}
-
 				if payment.Source.BlockHash == blockHash {
-					payments = append(payments, &payment)
+					count++
 				}
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		return 0, nil, err
+		return 0, err
 	}
-	return uint32(len(payments)), payments, nil
+	return count, nil
 }
 
 // archivedPayments fetches all archived payments. List is ordered, most
@@ -753,17 +749,15 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 			return err
 		}
 
-		_, err = txCreator.GetBlock(blockHash)
+		confs, err := pm.cfg.GetBlockConfirmations(blockHash)
 		if err != nil {
-			if rpcErr, ok := err.(*dcrjson.RPCError); ok {
-				if rpcErr.Code != dcrjson.ErrRPCBlockNotFound {
-					return err
-				}
+			return err
+		}
 
-				// Since the block referenced is not part of the best chain
-				// remove the payments associated with it.
-				toDelete = append(toDelete, key)
-			}
+		// If the block has no confirmations at the current height,
+		// it is an orphan. Remove the payments associated with it.
+		if confs <= 0 {
+			toDelete = append(toDelete, key)
 		}
 	}
 
@@ -980,6 +974,7 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 	for _, set := range pmts {
 		for _, pmt := range set {
 			pmt.PaidOnHeight = height
+			pmt.TransactionID = txid.String()
 			err := pmt.Update(pm.cfg.DB)
 			if err != nil {
 				return fmt.Errorf("unable to update payment: %v", err)
@@ -999,15 +994,12 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 		if err != nil {
 			return err
 		}
+
+		pm.setLastPaymentPaidOn(uint64(time.Now().UnixNano()))
 		return pm.persistLastPaymentPaidOn(tx)
 	})
 	if err != nil {
 		return err
-	}
-
-	// Signal the gui cache of the paid dividends.
-	if pm.cfg.SignalCache != nil {
-		pm.cfg.SignalCache(DividendsPaid)
 	}
 
 	return nil
