@@ -41,7 +41,6 @@ const (
 	defaultMaxGenTime            = time.Second * 15
 	defaultPoolFee               = 0.01
 	defaultLastNPeriod           = time.Hour * 24
-	defaultMaxTxFeeReserve       = 0.1
 	defaultSoloPool              = false
 	defaultGUIPort               = 8080
 	defaultGUIDir                = "gui"
@@ -60,7 +59,6 @@ const (
 var (
 	defaultActiveNet     = chaincfg.SimNetParams().Name
 	defaultPaymentMethod = pool.PPLNS
-	defaultMinPayment    = 0.2
 	dcrpoolHomeDir       = dcrutil.AppDataDir("dcrpool", false)
 	defaultConfigFile    = filepath.Join(dcrpoolHomeDir, defaultConfigFilename)
 	defaultDataDir       = filepath.Join(dcrpoolHomeDir, defaultDataDirname)
@@ -327,12 +325,10 @@ func loadConfig() (*config, []string, error) {
 		DcrdRPCHost:           defaultDcrdRPCHost,
 		WalletGRPCHost:        defaultWalletGRPCHost,
 		PoolFee:               defaultPoolFee,
-		MaxTxFeeReserve:       defaultMaxTxFeeReserve,
 		MaxGenTime:            defaultMaxGenTime,
 		ActiveNet:             defaultActiveNet,
 		PaymentMethod:         defaultPaymentMethod,
 		LastNPeriod:           defaultLastNPeriod,
-		MinPayment:            defaultMinPayment,
 		SoloPool:              defaultSoloPool,
 		GUIPort:               defaultGUIPort,
 		GUIDir:                defaultGUIDir,
@@ -696,6 +692,19 @@ func loadConfig() (*config, []string, error) {
 				fmt.Errorf("wallet RPC certificate (%v) not found",
 					cfg.WalletRPCCert)
 		}
+	}
+
+	// Warn about deprecated config options if they have been set.
+	if cfg.MaxTxFeeReserve > 0 {
+		str := "%s: MaxTxFeeReserve has been deprecated, " +
+			"please remove from your config file."
+		mpLog.Warnf(str, funcName)
+	}
+
+	if cfg.MinPayment > 0 {
+		str := "%s: MinPayment has been deprecated, " +
+			"please remove from your config file."
+		mpLog.Warnf(str, funcName)
 	}
 
 	return &cfg, remainingArgs, nil
