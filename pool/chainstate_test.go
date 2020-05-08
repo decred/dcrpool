@@ -58,14 +58,23 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		}
 		return block, nil
 	}
+
+	getBlockConfirmations := func(*chainhash.Hash) (int64, error) {
+		return -1, nil
+	}
+
 	pendingPaymentsAtHeight := func(uint32) ([]*Payment, error) {
 		return []*Payment{
 			{Account: xID, Amount: dcrutil.Amount(100)},
 		}, nil
 	}
 
-	pendingPaymentsForBlockHash := func(string) (uint32, []*Payment, error) {
-		return 0, []*Payment{}, nil
+	pendingPaymentsForBlockHash := func(string) (uint32, error) {
+		return 0, nil
+	}
+
+	signalCache := func(_ CacheUpdateEvent) {
+		// Do nothing.
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -76,8 +85,10 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		PayDividends:                payDividends,
 		GeneratePayments:            generatePayments,
 		GetBlock:                    getBlock,
+		GetBlockConfirmations:       getBlockConfirmations,
 		PendingPaymentsAtHeight:     pendingPaymentsAtHeight,
 		PendingPaymentsForBlockHash: pendingPaymentsForBlockHash,
+		SignalCache:                 signalCache,
 		Cancel:                      cancel,
 		HubWg:                       new(sync.WaitGroup),
 	}

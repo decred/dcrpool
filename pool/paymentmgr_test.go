@@ -37,14 +37,30 @@ func fetchShare(db *bolt.DB, id []byte) (*Share, error) {
 
 func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	activeNet := chaincfg.SimNetParams()
+
+	getBlockConfirmations := func(*chainhash.Hash) (int64, error) {
+		return -1, nil
+	}
+
+	fetchTxCreator := func() TxCreator {
+		return nil
+	}
+
+	fetchTxBroadcaster := func() TxBroadcaster {
+		return nil
+	}
+
 	pCfg := &PaymentMgrConfig{
-		DB:            db,
-		ActiveNet:     activeNet,
-		PoolFee:       0.1,
-		LastNPeriod:   time.Second * 120,
-		SoloPool:      false,
-		PaymentMethod: PPS,
-		PoolFeeAddrs:  []dcrutil.Address{poolFeeAddrs},
+		DB:                    db,
+		ActiveNet:             activeNet,
+		PoolFee:               0.1,
+		LastNPeriod:           time.Second * 120,
+		SoloPool:              false,
+		PaymentMethod:         PPS,
+		GetBlockConfirmations: getBlockConfirmations,
+		FetchTxCreator:        fetchTxCreator,
+		FetchTxBroadcaster:    fetchTxBroadcaster,
+		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
 	}
 	mgr, err := NewPaymentMgr(pCfg)
 	if err != nil {
@@ -284,7 +300,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
-	// Create a share below the minimum excluive PPLNS time for account y.
+	// Create a share below the minimum exclusive PPLNS time for account y.
 	err = persistShare(db, yID, weight, belowMinimumTime)
 	if err != nil {
 		t.Fatal(err)
@@ -479,14 +495,14 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure there are two pending payments for the zero hash.
-	size, _, err := mgr.pendingPaymentsForBlockHash(zeroSource.BlockHash)
+	count, err := mgr.pendingPaymentsForBlockHash(zeroSource.BlockHash)
 	if err != nil {
 		t.Fatalf("pendingPaymentsForBlockHash error: %v", err)
 	}
 
-	if size != 2 {
+	if count != 2 {
 		t.Fatalf("expected 2 mature pending payments with "+
-			"block hash %s, got %d", zeroSource, size)
+			"block hash %s, got %d", zeroSource.BlockHash, count)
 	}
 
 	// Empty the payments and archived payment buckets.
