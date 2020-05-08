@@ -125,7 +125,7 @@ func (c *Cache) updateMinedWork(work []*pool.AcceptedWork) {
 
 // getConfirmedMinedWork retrieves the cached list of confirmed blocks mined by
 // the pool.
-func (c *Cache) getConfirmedMinedWork(first, last int) (int, *[]minedWork) {
+func (c *Cache) getConfirmedMinedWork(first, last int) (int, []minedWork) {
 	c.minedWorkMtx.RLock()
 	defer c.minedWorkMtx.RUnlock()
 
@@ -139,12 +139,12 @@ func (c *Cache) getConfirmedMinedWork(first, last int) (int, *[]minedWork) {
 	count := len(allWork)
 	requestedWork := allWork[first:min(last, count)]
 
-	return count, &requestedWork
+	return count, requestedWork
 }
 
 // getMinedWorkByAccount retrieves the cached list of blocks mined by
 // an account. Returns both confirmed and unconfirmed blocks.
-func (c *Cache) getMinedWorkByAccount(first, last int, accountID string) (int, *[]minedWork) {
+func (c *Cache) getMinedWorkByAccount(first, last int, accountID string) (int, []minedWork) {
 	c.minedWorkMtx.RLock()
 	defer c.minedWorkMtx.RUnlock()
 
@@ -158,7 +158,7 @@ func (c *Cache) getMinedWorkByAccount(first, last int, accountID string) (int, *
 	count := len(allWork)
 	requestedWork := allWork[first:min(last, count)]
 
-	return count, &requestedWork
+	return count, requestedWork
 }
 
 // updateRewardQuotas uses a list of work quotas to refresh the cached list of
@@ -184,14 +184,14 @@ func (c *Cache) updateRewardQuotas(quotas []*pool.Quota) {
 }
 
 // getRewardQuotas retrieves the cached list of pending reward payment quotas.
-func (c *Cache) getRewardQuotas(first, last int) (int, *[]rewardQuota) {
+func (c *Cache) getRewardQuotas(first, last int) (int, []rewardQuota) {
 	c.rewardQuotasMtx.RLock()
 	defer c.rewardQuotasMtx.RUnlock()
 
 	count := len(c.rewardQuotas)
 	requestedQuotas := c.rewardQuotas[first:min(last, count)]
 
-	return count, &requestedQuotas
+	return count, requestedQuotas
 }
 
 // getPoolHash retrieves the total hashrate of all connected mining clients.
@@ -228,7 +228,7 @@ func (c *Cache) updateClients(clients []*pool.Client) {
 
 // getClientsForAccount retrieves the cached list of connected clients for a
 // given account ID.
-func (c *Cache) getClientsForAccount(first, last int, accountID string) (int, *[]client) {
+func (c *Cache) getClientsForAccount(first, last int, accountID string) (int, []client) {
 	c.clientsMtx.RLock()
 	defer c.clientsMtx.RUnlock()
 
@@ -237,7 +237,7 @@ func (c *Cache) getClientsForAccount(first, last int, accountID string) (int, *[
 	count := len(accountClients)
 	requestedClients := accountClients[first:min(last, count)]
 
-	return count, &requestedClients
+	return count, requestedClients
 }
 
 // getClients retrieves the cached list of all clients connected to the pool.
@@ -298,7 +298,7 @@ func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool
 
 // getPendingPayments retrieves the cached list of unpaid payments for a given
 // account ID.
-func (c *Cache) getPendingPayments(first, last int, accountID string) (int, *[]pendingPayment) {
+func (c *Cache) getPendingPayments(first, last int, accountID string) (int, []pendingPayment) {
 	c.pendingPaymentsMtx.RLock()
 	defer c.pendingPaymentsMtx.RUnlock()
 
@@ -307,12 +307,12 @@ func (c *Cache) getPendingPayments(first, last int, accountID string) (int, *[]p
 	count := len(accountPayments)
 	requestedPayments := accountPayments[first:min(last, count)]
 
-	return count, &requestedPayments
+	return count, requestedPayments
 }
 
 // getArchivedPayments retrieves the cached list of paid payments for a given
 // account ID.
-func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, *[]archivedPayment) {
+func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, []archivedPayment) {
 	c.archivedPaymentsMtx.RLock()
 	defer c.archivedPaymentsMtx.RUnlock()
 
@@ -321,5 +321,5 @@ func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, *[]
 	count := len(accountPayments)
 	requestedPayments := accountPayments[first:min(last, count)]
 
-	return count, &requestedPayments
+	return count, requestedPayments
 }

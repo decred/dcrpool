@@ -16,8 +16,8 @@ type indexPageData struct {
 	HeaderData    headerData
 	PoolStatsData poolStatsData
 	MinerPorts    map[string]uint32
-	MinedWork     *[]minedWork
-	RewardQuotas  *[]rewardQuota
+	MinedWork     []minedWork
+	RewardQuotas  []rewardQuota
 	Address       string
 	ModalError    string
 }
