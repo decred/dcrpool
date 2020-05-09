@@ -87,7 +87,9 @@ func (ui *GUI) account(w http.ResponseWriter, r *http.Request) {
 		MinedWork:        recentWork,
 		PendingPayments:  pendingPmts,
 		ArchivedPayments: archivedPmts,
-		PaymentRequested: ui.cfg.IsPaymentRequested(accountID),
+		// This is a workaround to hide the process payments feature, it will
+		// be removed completely in a separate PR>
+		PaymentRequested: true,
 		ConnectedClients: clients,
 		AccountID:        accountID,
 		Address:          address,
