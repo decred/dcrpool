@@ -108,7 +108,7 @@ func (cs *ChainState) pruneAcceptedWork(height uint32) error {
 			return err
 		}
 
-		toDelete := [][]byte{}
+		toDelete := make(map[string]*AcceptedWork)
 		heightBE := heightToBigEndianBytes(height)
 		cursor := bkt.Cursor()
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
@@ -124,15 +124,40 @@ func (cs *ChainState) pruneAcceptedWork(height uint32) error {
 					return err
 				}
 
-				// Only prune unconfirmed accepted work.
 				if !work.Confirmed {
-					toDelete = append(toDelete, k)
+					toDelete[string(k)] = &work
 				}
 			}
 		}
 
-		for _, entry := range toDelete {
-			err := bkt.Delete(entry)
+		// It is possible to miss mined block confirmations if the pool is
+		// restarted, accepted work pruning candidates must be checked to
+		// ensure there are not part of the chain before being pruned as a
+		// result.
+		for k, work := range toDelete {
+			hash, err := chainhash.NewHashFromStr(work.BlockHash)
+			if err != nil {
+				return err
+			}
+			confs, err := cs.cfg.GetBlockConfirmations(hash)
+			if err != nil {
+				return err
+			}
+
+			// If the block has no confirmations at the current height,
+			// it is an orphan. Prune it.
+			if confs <= 0 {
+				err := bkt.Delete([]byte(k))
+				if err != nil {
+					return err
+				}
+
+				continue
+			}
+
+			// Mark the accepted work as confirmed if it has confirmations.
+			work.Confirmed = true
+			err = work.Update(cs.cfg.DB)
 			if err != nil {
 				return err
 			}
