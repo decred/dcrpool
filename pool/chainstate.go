@@ -102,22 +102,22 @@ func (cs *ChainState) fetchCurrentWork() string {
 // pruneAcceptedWork removes all accepted work not confirmed as mined work
 // with heights less than the provided height.
 func (cs *ChainState) pruneAcceptedWork(height uint32) error {
-	err := cs.cfg.DB.Update(func(tx *bolt.Tx) error {
+	toDelete := make([]*AcceptedWork, 0)
+	err := cs.cfg.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
 		if err != nil {
 			return err
 		}
 
-		toDelete := make(map[string]*AcceptedWork)
 		heightBE := heightToBigEndianBytes(height)
 		cursor := bkt.Cursor()
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			height, err := hex.DecodeString(string(k[:8]))
+			heightB, err := hex.DecodeString(string(k[:8]))
 			if err != nil {
 				return err
 			}
 
-			if bytes.Compare(heightBE, height) > 0 {
+			if bytes.Compare(heightBE, heightB) > 0 {
 				var work AcceptedWork
 				err := json.Unmarshal(v, &work)
 				if err != nil {
@@ -125,60 +125,64 @@ func (cs *ChainState) pruneAcceptedWork(height uint32) error {
 				}
 
 				if !work.Confirmed {
-					toDelete[string(k)] = &work
+					toDelete = append(toDelete, &work)
 				}
-			}
-		}
-
-		// It is possible to miss mined block confirmations if the pool is
-		// restarted, accepted work pruning candidates must be checked to
-		// ensure there are not part of the chain before being pruned as a
-		// result.
-		for k, work := range toDelete {
-			hash, err := chainhash.NewHashFromStr(work.BlockHash)
-			if err != nil {
-				return err
-			}
-			confs, err := cs.cfg.GetBlockConfirmations(hash)
-			if err != nil {
-				return err
-			}
-
-			// If the block has no confirmations at the current height,
-			// it is an orphan. Prune it.
-			if confs <= 0 {
-				err := bkt.Delete([]byte(k))
-				if err != nil {
-					return err
-				}
-
-				continue
-			}
-
-			// Mark the accepted work as confirmed if it has confirmations.
-			work.Confirmed = true
-			err = work.Update(cs.cfg.DB)
-			if err != nil {
-				return err
 			}
 		}
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 
-	return err
+	// It is possible to miss mined block confirmations if the pool is
+	// restarted, accepted work pruning candidates must be checked to
+	// ensure there are not part of the chain before being pruned as a
+	// result.
+	for _, work := range toDelete {
+		hash, err := chainhash.NewHashFromStr(work.BlockHash)
+		if err != nil {
+			return err
+		}
+		confs, err := cs.cfg.GetBlockConfirmations(hash)
+		if err != nil {
+			return err
+		}
+
+		// If the block has no confirmations at the current height,
+		// it is an orphan. Prune it.
+		if confs <= 0 {
+			err = work.Delete(cs.cfg.DB)
+			if err != nil {
+				return err
+			}
+
+			continue
+		}
+
+		// If the block has confirmations mark the accepted work as
+		// confirmed.
+		work.Confirmed = true
+		err = work.Update(cs.cfg.DB)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // prunePayments removes all spendabe payments sourcing from
 // orphaned blocks at the provided height.
 func (cs *ChainState) prunePayments(height uint32) error {
+	toDelete := make([]*Payment, 0)
 	err := cs.cfg.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchPaymentBucket(tx)
 		if err != nil {
 			return err
 		}
 
-		toDelete := make(map[string]*chainhash.Hash)
 		cursor := bkt.Cursor()
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
 			var payment Payment
@@ -192,57 +196,59 @@ func (cs *ChainState) prunePayments(height uint32) error {
 				// becomes eligible for pruning.
 				spendableHeight := payment.EstimatedMaturity + 1
 				if height > spendableHeight {
-					hash, err := chainhash.NewHashFromStr(payment.Source.BlockHash)
-					if err != nil {
-						return err
-					}
-
-					toDelete[string(k)] = hash
-				}
-			}
-
-		}
-
-		for k, hash := range toDelete {
-			confs, err := cs.cfg.GetBlockConfirmations(hash)
-			if err != nil {
-				return err
-			}
-
-			// If the block has no confirmations at the current height,
-			// it is an orphan. Delete the payments associated with it.
-			if confs <= 0 {
-				err := bkt.Delete([]byte(k))
-				if err != nil {
-					return err
+					toDelete = append(toDelete, &payment)
 				}
 			}
 		}
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 
-	return err
+	for _, payment := range toDelete {
+		hash, err := chainhash.NewHashFromStr(payment.Source.BlockHash)
+		if err != nil {
+			return err
+		}
+
+		confs, err := cs.cfg.GetBlockConfirmations(hash)
+		if err != nil {
+			return err
+		}
+
+		// If the block has no confirmations at the current height,
+		// it is an orphan. Delete the payments associated with it.
+		if confs <= 0 {
+			err = payment.Delete(cs.cfg.DB)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // pruneJobs removes all jobs with heights less than the provided height.
 func (cs *ChainState) pruneJobs(height uint32) error {
-	heightBE := heightToBigEndianBytes(height)
 	err := cs.cfg.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchJobBucket(tx)
 		if err != nil {
 			return err
 		}
 
+		heightBE := heightToBigEndianBytes(height)
 		toDelete := [][]byte{}
 		c := bkt.Cursor()
 		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			height, err := hex.DecodeString(string(k[:8]))
+			heightB, err := hex.DecodeString(string(k[:8]))
 			if err != nil {
 				return err
 			}
 
-			if bytes.Compare(height, heightBE) < 0 {
+			if bytes.Compare(heightB, heightBE) < 0 {
 				toDelete = append(toDelete, k)
 			}
 		}
@@ -324,6 +330,18 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				}
 			}
 
+			// Process mature payments.
+			err = cs.cfg.PayDividends(header.Height)
+			if err != nil {
+				log.Errorf("unable to process payments: %v", err)
+				close(msg.Done)
+				cs.cfg.Cancel()
+				continue
+			}
+
+			// Signal the gui cache of the paid dividends.
+			cs.cfg.SignalCache(DividendsPaid)
+
 			// Check if the parent of the connected block is an accepted work
 			// of the pool.
 			parentHeight := header.Height - 1
@@ -351,7 +369,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				continue
 			}
 
-			//  If the parent block is already confirmed as mined by the pool,
+			// If the parent block is already confirmed as mined by the pool,
 			// ignore it.
 			if work.Confirmed {
 				close(msg.Done)
@@ -431,18 +449,6 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				if cs.cfg.SignalCache != nil {
 					cs.cfg.SignalCache(Confirmed)
 				}
-
-				// Process mature payments.
-				err = cs.cfg.PayDividends(header.Height)
-				if err != nil {
-					log.Errorf("unable to process payments: %v", err)
-					close(msg.Done)
-					cs.cfg.Cancel()
-					continue
-				}
-
-				// Signal the gui cache of the paid dividends.
-				cs.cfg.SignalCache(DividendsPaid)
 			}
 
 			close(msg.Done)
