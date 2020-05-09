@@ -174,7 +174,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 	_, err = FetchAcceptedWork(db, []byte(workB.UUID))
 	if err == nil {
-		t.Fatalf("expected a no value found error")
+		t.Fatal("expected a no value found error")
 	}
 
 	// Delete work A.

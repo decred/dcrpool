@@ -497,6 +497,12 @@ func testHub(t *testing.T, db *bolt.DB) {
 		t.Fatalf("emptyBucket error: %v", err)
 	}
 
+	// Empty the accepted work bucket.
+	err = emptyBucket(db, workBkt)
+	if err != nil {
+		t.Fatalf("emptyBucket error: %v", err)
+	}
+
 	// Empty the payment bucket.
 	err = emptyBucket(db, paymentBkt)
 	if err != nil {

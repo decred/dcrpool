@@ -100,8 +100,8 @@ var (
 // WalletConnection defines the functionality needed by a wallet
 // grpc connection for the pool.
 type WalletConnection interface {
-	Balance(ctx context.Context, in *walletrpc.BalanceRequest, opts ...grpc.CallOption) (*walletrpc.BalanceResponse, error)
-	BestBlock(ctx context.Context, in *walletrpc.BestBlockRequest, opts ...grpc.CallOption) (*walletrpc.BestBlockResponse, error)
+	Balance(context.Context, *walletrpc.BalanceRequest, ...grpc.CallOption) (*walletrpc.BalanceResponse, error)
+	BestBlock(context.Context, *walletrpc.BestBlockRequest, ...grpc.CallOption) (*walletrpc.BestBlockResponse, error)
 	SignTransaction(context.Context, *walletrpc.SignTransactionRequest, ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
 	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
 }
@@ -114,7 +114,7 @@ type NodeConnection interface {
 	GetWorkSubmit(string) (bool, error)
 	GetWork() (*chainjson.GetWorkResult, error)
 	GetBlockVerbose(*chainhash.Hash, bool) (*chainjson.GetBlockVerboseResult, error)
-	GetBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, error)
+	GetBlock(*chainhash.Hash) (*wire.MsgBlock, error)
 	NotifyWork() error
 	NotifyBlocks() error
 	Shutdown()
