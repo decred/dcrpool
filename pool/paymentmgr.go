@@ -30,14 +30,6 @@ const (
 
 	// PPLNS represents the pay per last n shares payment method.
 	PPLNS = "pplns"
-
-	// maxValueDifference is the maximum difference in value allowed between
-	// input and outputs of a transaction. This difference occurs due to
-	// percentage conversions and rounding.
-	maxValueDifference = dcrutil.Amount(10)
-
-	// zeroAmount is the zero value of an amount.
-	zeroAmount = dcrutil.Amount(0)
 )
 
 // TxCreator defines the functionality needed by a transaction creator for the
@@ -447,19 +439,37 @@ func (pm *PaymentMgr) PPLNSSharePercentages() (map[string]*big.Rat, error) {
 }
 
 // calculatePayments creates the payments due participating accounts.
-func (pm *PaymentMgr) calculatePayments(percentages map[string]*big.Rat, source *PaymentSource,
+func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *PaymentSource,
 	total dcrutil.Amount, poolFee float64, height uint32, estMaturity uint32) ([]*Payment, error) {
 	// Deduct pool fee from the amount to be shared.
 	fee := total.MulF64(poolFee)
 	amtSansFees := total - fee
+	sansFees := new(big.Rat).SetInt64(int64(amtSansFees))
+	paymentTotal := dcrutil.Amount(0)
 
 	// Calculate each participating account's portion of the amount after fees.
 	payments := make([]*Payment, 0)
-	for account, percentage := range percentages {
-		percent, _ := percentage.Float64()
-		amt := amtSansFees.MulF64(percent)
+	for account, ratio := range ratios {
+		amtRat := new(big.Rat).Mul(sansFees, ratio)
+		amtI, accuracy := new(big.Float).SetRat(amtRat).Int64()
+		amt := dcrutil.Amount(amtI)
+
+		// Reduce the amount by an atom if float conversion accuracy was
+		// above the actual value.
+		if accuracy > 0 {
+			amt -= dcrutil.Amount(1)
+		}
+
+		paymentTotal += amt
 		payments = append(payments, NewPayment(account, source, amt, height,
 			estMaturity))
+	}
+
+	if amtSansFees < paymentTotal {
+		diff := paymentTotal - amtSansFees
+		return nil, fmt.Errorf("difference of %s between total payments (%s) "+
+			"and remaining coinbase amount after fees (%s)", diff,
+			paymentTotal, amtSansFees)
 	}
 
 	// Add a payout entry for pool fees.
@@ -834,17 +844,11 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 		}
 	}
 
-	var diff dcrutil.Amount
+	// Add any percentage rounding value differences to estimated
+	// transaction fee.
 	if tOut > tIn {
-		diff = tOut - tIn
-	} else {
-		diff = tIn - tOut
-	}
-
-	// Ensure the generated outputs are equal to the inputs being spent.
-	if diff != zeroAmount && diff > maxValueDifference {
-		return fmt.Errorf("total input %s and output %s value mismatch",
-			tIn, tOut)
+		return fmt.Errorf("total output valus for the transaction (%s) "+
+			"is greater than the provided input %s", tIn, tOut)
 	}
 
 	inSizes := make([]int, len(inputs))
@@ -860,12 +864,6 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 	estSize := txsizes.EstimateSerializeSizeFromScriptSizes(inSizes, outSizes, 0)
 	estFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, estSize)
 	sansFees := tOut - estFee
-
-	// Add any percentage rounding value differences to estimated
-	// transaction fee.
-	if diff != zeroAmount {
-		estFee = estFee + diff
-	}
 
 	// Deduct the portion of the transaction fees being paid for by
 	// the participating accounts from the outputs being paid to them.
