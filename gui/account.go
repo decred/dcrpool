@@ -49,16 +49,16 @@ func (ui *GUI) account(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the 10 most recently mined blocks by this account.
-	_, recentWork := ui.cache.getMinedWorkByAccount(0, 9, accountID)
+	_, recentWork, _ := ui.cache.getMinedWorkByAccount(0, 9, accountID)
 
 	// Get the 10 most recent pending payments for this account.
-	_, pendingPmts := ui.cache.getPendingPayments(0, 9, accountID)
+	_, pendingPmts, _ := ui.cache.getPendingPayments(0, 9, accountID)
 
 	// Get the 10 most recent archived payments for this account.
-	_, archivedPmts := ui.cache.getArchivedPayments(0, 9, accountID)
+	_, archivedPmts, _ := ui.cache.getArchivedPayments(0, 9, accountID)
 
 	// Get 10 of this accounts connected clients.
-	_, clients := ui.cache.getClientsForAccount(0, 9, accountID)
+	_, clients, _ := ui.cache.getClientsForAccount(0, 9, accountID)
 
 	data := &accountPageData{
 		HeaderData: headerData{
