@@ -30,6 +30,11 @@ const (
 
 	// PPLNS represents the pay per last n shares payment method.
 	PPLNS = "pplns"
+
+	// maxRoundingDiff is the maximum amount of atoms the total
+	// output value of a transaction is allowed to be short of the
+	// provided input due to rounding errors.
+	maxRoundingDiff = dcrutil.Amount(500)
 )
 
 // TxCreator defines the functionality needed by a transaction creator for the
@@ -467,9 +472,9 @@ func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *Paym
 
 	if amtSansFees < paymentTotal {
 		diff := paymentTotal - amtSansFees
-		return nil, fmt.Errorf("difference of %s between total payments (%s) "+
-			"and remaining coinbase amount after fees (%s)", diff,
-			paymentTotal, amtSansFees)
+		return nil, fmt.Errorf("total payments (%s) is greater than "+
+			"the remaining coinbase amount after fees (%s). Difference is %s",
+			paymentTotal, amtSansFees, diff)
 	}
 
 	// Add a payout entry for pool fees.
@@ -844,11 +849,16 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 		}
 	}
 
-	// Add any percentage rounding value differences to estimated
-	// transaction fee.
 	if tOut > tIn {
-		return fmt.Errorf("total output valus for the transaction (%s) "+
-			"is greater than the provided input %s", tIn, tOut)
+		return fmt.Errorf("total output values for the transaction (%s) "+
+			"is greater than the provided inputs %s", tIn, tOut)
+	}
+
+	diff := tIn - tOut
+	if diff > maxRoundingDiff {
+		return fmt.Errorf("difference between total output values and "+
+			"the provided inputs (%s) exceeds the maximum allowed "+
+			"for rounding errors (%s)", diff, maxRoundingDiff)
 	}
 
 	inSizes := make([]int, len(inputs))
@@ -902,6 +912,9 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 		return err
 	}
 
+	// TODO: With dcrwallet notifications on the coinbase tx like jholdstock
+	// suggested we would not need to be watching the wallet like this or even
+	// make balance queries.
 	for {
 		// Ensure the wallet is synced to the current chain height before
 		// proceeding with payments.
@@ -911,6 +924,7 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 		}
 
 		if walletHeight >= height {
+			time.Sleep(time.Second * 3)
 			break
 		}
 	}
