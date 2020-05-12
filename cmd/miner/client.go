@@ -294,7 +294,7 @@ func (m *Miner) process(ctx context.Context) {
 
 					if sErr != nil {
 						log.Errorf("Stratum mining.submit error: [%d, %s, %s]",
-							sErr.Code, sErr.Message, sErr.Traceback)
+							sErr.Code, sErr.Message, *sErr.Traceback)
 						continue
 					}
 
