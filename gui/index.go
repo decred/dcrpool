@@ -30,10 +30,10 @@ type indexPageData struct {
 func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError string) {
 
 	// Get the 10 most recent confirmed mined blocks.
-	_, confirmedWork := ui.cache.getConfirmedMinedWork(0, 9)
+	_, confirmedWork, _ := ui.cache.getConfirmedMinedWork(0, 9)
 
 	// Get the first 10 next reward payment percentages.
-	_, rewardQuotas := ui.cache.getRewardQuotas(0, 9)
+	_, rewardQuotas, _ := ui.cache.getRewardQuotas(0, 9)
 
 	data := indexPageData{
 		HeaderData: headerData{

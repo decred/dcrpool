@@ -125,7 +125,7 @@ func (c *Cache) updateMinedWork(work []*pool.AcceptedWork) {
 
 // getConfirmedMinedWork retrieves the cached list of confirmed blocks mined by
 // the pool.
-func (c *Cache) getConfirmedMinedWork(first, last int) (int, []minedWork) {
+func (c *Cache) getConfirmedMinedWork(first, last int) (int, []minedWork, error) {
 	c.minedWorkMtx.RLock()
 	defer c.minedWorkMtx.RUnlock()
 
@@ -137,14 +137,19 @@ func (c *Cache) getConfirmedMinedWork(first, last int) (int, []minedWork) {
 	}
 
 	count := len(allWork)
+
+	if last >= count+(last-first) {
+		return 0, allWork[0:0], fmt.Errorf("Blocks request is out of range. Maximum %v, Requested %v", count, last)
+	}
+
 	requestedWork := allWork[first:min(last, count)]
 
-	return count, requestedWork
+	return count, requestedWork, nil
 }
 
 // getMinedWorkByAccount retrieves the cached list of blocks mined by
 // an account. Returns both confirmed and unconfirmed blocks.
-func (c *Cache) getMinedWorkByAccount(first, last int, accountID string) (int, []minedWork) {
+func (c *Cache) getMinedWorkByAccount(first, last int, accountID string) (int, []minedWork, error) {
 	c.minedWorkMtx.RLock()
 	defer c.minedWorkMtx.RUnlock()
 
@@ -156,9 +161,14 @@ func (c *Cache) getMinedWorkByAccount(first, last int, accountID string) (int, [
 	}
 
 	count := len(allWork)
+
+	if last >= count+(last-first) {
+		return 0, allWork[0:0], fmt.Errorf("Blocks by account request is out of range. Maximum %v, Requested %v", count, last)
+	}
+
 	requestedWork := allWork[first:min(last, count)]
 
-	return count, requestedWork
+	return count, requestedWork, nil
 }
 
 // updateRewardQuotas uses a list of work quotas to refresh the cached list of
@@ -184,14 +194,19 @@ func (c *Cache) updateRewardQuotas(quotas []*pool.Quota) {
 }
 
 // getRewardQuotas retrieves the cached list of pending reward payment quotas.
-func (c *Cache) getRewardQuotas(first, last int) (int, []rewardQuota) {
+func (c *Cache) getRewardQuotas(first, last int) (int, []rewardQuota, error) {
 	c.rewardQuotasMtx.RLock()
 	defer c.rewardQuotasMtx.RUnlock()
 
 	count := len(c.rewardQuotas)
+
+	if last >= count+(last-first) {
+		return 0, c.rewardQuotas[0:0], fmt.Errorf("Reward Quotas request is out of range. Maximum %v, Requested %v", count, last)
+	}
+
 	requestedQuotas := c.rewardQuotas[first:min(last, count)]
 
-	return count, requestedQuotas
+	return count, requestedQuotas, nil
 }
 
 // getPoolHash retrieves the total hashrate of all connected mining clients.
@@ -228,16 +243,21 @@ func (c *Cache) updateClients(clients []*pool.Client) {
 
 // getClientsForAccount retrieves the cached list of connected clients for a
 // given account ID.
-func (c *Cache) getClientsForAccount(first, last int, accountID string) (int, []client) {
+func (c *Cache) getClientsForAccount(first, last int, accountID string) (int, []client, error) {
 	c.clientsMtx.RLock()
 	defer c.clientsMtx.RUnlock()
 
 	accountClients := c.clients[accountID]
 
 	count := len(accountClients)
+
+	if last >= count+(last-first) {
+		return 0, accountClients[0:0], fmt.Errorf("Clients by account request is out of range. Maximum %v, Requested %v", count, last)
+	}
+
 	requestedClients := accountClients[first:min(last, count)]
 
-	return count, requestedClients
+	return count, requestedClients, nil
 }
 
 // getClients retrieves the cached list of all clients connected to the pool.
@@ -298,28 +318,38 @@ func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool
 
 // getPendingPayments retrieves the cached list of unpaid payments for a given
 // account ID.
-func (c *Cache) getPendingPayments(first, last int, accountID string) (int, []pendingPayment) {
+func (c *Cache) getPendingPayments(first, last int, accountID string) (int, []pendingPayment, error) {
 	c.pendingPaymentsMtx.RLock()
 	defer c.pendingPaymentsMtx.RUnlock()
 
 	accountPayments := c.pendingPayments[accountID]
 
 	count := len(accountPayments)
+
+	if last >= count+(last-first) {
+		return 0, accountPayments[0:0], fmt.Errorf("Pending payments by account request is out of range. Maximum %v, Requested %v", count, last)
+	}
+
 	requestedPayments := accountPayments[first:min(last, count)]
 
-	return count, requestedPayments
+	return count, requestedPayments, nil
 }
 
 // getArchivedPayments retrieves the cached list of paid payments for a given
 // account ID.
-func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, []archivedPayment) {
+func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, []archivedPayment, error) {
 	c.archivedPaymentsMtx.RLock()
 	defer c.archivedPaymentsMtx.RUnlock()
 
 	accountPayments := c.archivedPayments[accountID]
 
 	count := len(accountPayments)
+
+	if last >= count+(last-first) {
+		return 0, accountPayments[0:0], fmt.Errorf("Archived payments by account request is out of range. Maximum %v, Requested %v", count, last)
+	}
+
 	requestedPayments := accountPayments[first:min(last, count)]
 
-	return count, requestedPayments
+	return count, requestedPayments, nil
 }

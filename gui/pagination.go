@@ -6,6 +6,7 @@ package gui
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -28,6 +29,10 @@ func getPaginationParams(r *http.Request) (first, last int, err error) {
 	pageSize, err := strconv.Atoi(r.FormValue("pageSize"))
 	if err != nil {
 		return 0, 0, err
+	}
+
+	if pageNumber < 1 || pageSize < 1 {
+		return 0, 0, errors.New("Invalid number given for pageNumber or PageSize")
 	}
 
 	first = (pageNumber - 1) * pageSize
@@ -62,7 +67,13 @@ func (ui *GUI) paginatedBlocks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, confirmedWork := ui.cache.getConfirmedMinedWork(first, last)
+	count, confirmedWork, err := ui.cache.getConfirmedMinedWork(first, last)
+
+	if err != nil {
+		log.Error(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	sendJSONResponse(w, paginationPayload{
 		Count: count,
@@ -82,7 +93,13 @@ func (ui *GUI) paginatedRewardQuotas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, quotas := ui.cache.getRewardQuotas(first, last)
+	count, quotas, err := ui.cache.getRewardQuotas(first, last)
+
+	if err != nil {
+		log.Error(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	sendJSONResponse(w, paginationPayload{
 		Count: count,
@@ -104,7 +121,13 @@ func (ui *GUI) paginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 
 	accountID := mux.Vars(r)["accountID"]
 
-	count, work := ui.cache.getMinedWorkByAccount(first, last, accountID)
+	count, work, err := ui.cache.getMinedWorkByAccount(first, last, accountID)
+
+	if err != nil {
+		log.Error(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	sendJSONResponse(w, paginationPayload{
 		Count: count,
@@ -126,7 +149,13 @@ func (ui *GUI) paginatedClientsByAccount(w http.ResponseWriter, r *http.Request)
 
 	accountID := mux.Vars(r)["accountID"]
 
-	count, clients := ui.cache.getClientsForAccount(first, last, accountID)
+	count, clients, err := ui.cache.getClientsForAccount(first, last, accountID)
+
+	if err != nil {
+		log.Error(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	sendJSONResponse(w, paginationPayload{
 		Count: count,
@@ -148,7 +177,13 @@ func (ui *GUI) paginatedPendingPaymentsByAccount(w http.ResponseWriter, r *http.
 
 	accountID := mux.Vars(r)["accountID"]
 
-	count, payments := ui.cache.getPendingPayments(first, last, accountID)
+	count, payments, err := ui.cache.getPendingPayments(first, last, accountID)
+
+	if err != nil {
+		log.Error(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	sendJSONResponse(w, paginationPayload{
 		Count: count,
@@ -170,7 +205,13 @@ func (ui *GUI) paginatedArchivedPaymentsByAccount(w http.ResponseWriter, r *http
 
 	accountID := mux.Vars(r)["accountID"]
 
-	count, payments := ui.cache.getArchivedPayments(first, last, accountID)
+	count, payments, err := ui.cache.getArchivedPayments(first, last, accountID)
+
+	if err != nil {
+		log.Error(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	sendJSONResponse(w, paginationPayload{
 		Count: count,
