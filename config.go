@@ -565,7 +565,7 @@ func loadConfig() (*config, []string, error) {
 
 		// Ensure pool fee is valid.
 		if cfg.PoolFee < 0.002 || cfg.PoolFee > 0.05 {
-			str := "%s: poolfee should be between 0.002 and 0.05"
+			str := "%s: poolfee should be between 0.002 (0.2%) and 0.05 (5%)"
 			err := fmt.Errorf(str, funcName)
 			return nil, nil, err
 		}
