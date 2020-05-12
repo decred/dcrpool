@@ -89,7 +89,7 @@ type config struct {
 	RPCUser               string        `long:"rpcuser" ini-name:"rpcuser" description:"Username for RPC connections."`
 	RPCPass               string        `long:"rpcpass" ini-name:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
 	PoolFeeAddrs          []string      `long:"poolfeeaddrs" ini-name:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
-	PoolFee               float64       `long:"poolfee" ini-name:"poolfee" description:"The fee charged for pool participation. eg. 0.01 (1%), 0.05 (5%)."`
+	PoolFee               float64       `long:"poolfee" ini-name:"poolfee" description:"The fee charged for pool participation. Minimum 0.002 (0.2%), maximum 0.05 (5%)."`
 	MaxTxFeeReserve       float64       `long:"maxtxfeereserve" ini-name:"maxtxfeereserve" description:"DEPRECATED -- The maximum amount reserved for transaction fees, in DCR."`
 	MaxGenTime            time.Duration `long:"maxgentime" ini-name:"maxgentime" description:"The share creation target time for the pool. Valid time units are {s,m,h}. Minimum 2 seconds. This currently should be below 30 seconds to increase the likelihood a work submission for clients between new work distributions by the pool."`
 	PaymentMethod         string        `long:"paymentmethod" ini-name:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
@@ -564,8 +564,8 @@ func loadConfig() (*config, []string, error) {
 		}
 
 		// Ensure pool fee is valid.
-		if cfg.PoolFee < 0 || cfg.PoolFee > 1 {
-			str := "%s: poolfee should be between 0 and 1"
+		if cfg.PoolFee < 0.002 || cfg.PoolFee > 0.05 {
+			str := "%s: poolfee should be between 0.002 and 0.05"
 			err := fmt.Errorf(str, funcName)
 			return nil, nil, err
 		}
