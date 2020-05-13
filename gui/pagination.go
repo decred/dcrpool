@@ -32,7 +32,7 @@ func getPaginationParams(r *http.Request) (first, last int, err error) {
 	}
 
 	if pageNumber < 1 || pageSize < 1 {
-		return 0, 0, errors.New("Invalid number given for pageNumber or PageSize")
+		return 0, 0, errors.New("Invalid number given for pageNumber or pageSize")
 	}
 
 	first = (pageNumber - 1) * pageSize
