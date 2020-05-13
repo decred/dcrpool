@@ -19,6 +19,8 @@ var (
 	bufferSize = 128
 )
 
+// ChainStateConfig contains all of the configuration values which should be
+// provided when creating a new instance of ChainState.
 type ChainStateConfig struct {
 	// DB represents the pool database.
 	DB *bolt.DB
@@ -37,7 +39,7 @@ type ChainStateConfig struct {
 	// PendingPaymentsAtHeight fetches all pending payments at
 	// the provided height.
 	PendingPaymentsAtHeight func(uint32) ([]*Payment, error)
-	// PendingPaymentsForBlockHash returns the  number of pending payments
+	// PendingPaymentsForBlockHash returns the number of pending payments
 	// with the provided block hash as their source.
 	PendingPaymentsForBlockHash func(blockHash string) (uint32, error)
 	// Cancel represents the pool's context cancellation function.
@@ -446,9 +448,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					header.PrevBlock.String(), header.Height)
 
 				// Signal the gui cache of the confirmed mined work.
-				if cs.cfg.SignalCache != nil {
-					cs.cfg.SignalCache(Confirmed)
-				}
+				cs.cfg.SignalCache(Confirmed)
 			}
 
 			close(msg.Done)
@@ -547,9 +547,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 
 			// Signal the gui cache of the unconfirmed (due to a reorg)
 			// mined work.
-			if cs.cfg.SignalCache != nil {
-				cs.cfg.SignalCache(Unconfirmed)
-			}
+			cs.cfg.SignalCache(Unconfirmed)
 
 			close(msg.Done)
 		}

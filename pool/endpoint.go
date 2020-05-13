@@ -16,6 +16,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+// EndpointConfig contains all of the configuration values which should be
+// provided when creating a new instance of Endpoint.
 type EndpointConfig struct {
 	// ActiveNet represents the active network being mined on.
 	ActiveNet *chaincfg.Params
@@ -187,9 +189,9 @@ func (e *Endpoint) connect(ctx context.Context) {
 			go client.run(client.ctx)
 
 			// Signal the gui cache of the connected client.
-			if e.cfg.SignalCache != nil {
-				e.cfg.SignalCache(ConnectedClient)
-			}
+			e.cfg.SignalCache(ConnectedClient)
+
+			log.Debugf("Mining client connected. id=%s, addr=%s", client.id, client.addr)
 
 			close(msg.Done)
 		}

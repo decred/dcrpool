@@ -40,7 +40,7 @@ const (
 // TxCreator defines the functionality needed by a transaction creator for the
 // pool.
 type TxCreator interface {
-	// GetTxOut fetches the ouput referenced by the provided txHash and index.
+	// GetTxOut fetches the output referenced by the provided txHash and index.
 	GetTxOut(*chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error)
 	// CreateRawTransaction generates a transaction from the provided
 	// inputs and payouts.
@@ -60,6 +60,8 @@ type TxBroadcaster interface {
 	Balance(context.Context, *walletrpc.BalanceRequest, ...grpc.CallOption) (*walletrpc.BalanceResponse, error)
 }
 
+// PaymentMgrConfig contains all of the configuration values which should be
+// provided when creating a new instance of PaymentMgr.
 type PaymentMgrConfig struct {
 	// DB represents the pool database.
 	DB *bolt.DB
