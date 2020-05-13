@@ -69,7 +69,7 @@ user=m$i
 address=${CLIENT_ADDRS[$i]}
 pool=127.0.0.1:5550
 maxprocs=$MINER_MAX_PROCS
-profile=:$PROFILE_PORT
+profile=$PROFILE_PORT
 EOF
 done
 
