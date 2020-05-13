@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/dcrutil/v3"
 )
 
 var (

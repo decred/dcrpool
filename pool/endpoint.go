@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/chaincfg/v3"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -38,7 +38,7 @@ type EndpointConfig struct {
 	// HubWg represents the hub's waitgroup.
 	HubWg *sync.WaitGroup
 	// SubmitWork sends solved block data to the consensus daemon.
-	SubmitWork func(*string) (bool, error)
+	SubmitWork func(context.Context, *string) (bool, error)
 	// FetchCurrentWork returns the current work of the pool.
 	FetchCurrentWork func() string
 	// WithinLimit returns if a client is within its request limits.

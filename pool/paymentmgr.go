@@ -12,14 +12,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"decred.org/dcrwallet/rpc/walletrpc"
+	txrules "decred.org/dcrwallet/wallet/txrules"
+	"decred.org/dcrwallet/wallet/txsizes"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrutil/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/rpc/walletrpc"
-	txrules "github.com/decred/dcrwallet/wallet/v3/txrules"
-	"github.com/decred/dcrwallet/wallet/v3/txsizes"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 )
@@ -41,12 +41,12 @@ const (
 // pool.
 type TxCreator interface {
 	// GetTxOut fetches the output referenced by the provided txHash and index.
-	GetTxOut(*chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error)
+	GetTxOut(context.Context, *chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error)
 	// CreateRawTransaction generates a transaction from the provided
 	// inputs and payouts.
-	CreateRawTransaction([]chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
+	CreateRawTransaction(context.Context, []chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
 	// GetBlock fetches the block associated with the provided block hash.
-	GetBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, error)
+	GetBlock(ctx context.Context, blockHash *chainhash.Hash) (*wire.MsgBlock, error)
 }
 
 // TxBroadcaster defines the functionality needed by a transaction broadcaster
@@ -84,10 +84,10 @@ type PaymentMgrConfig struct {
 	WalletPass string
 	// WalletBestHeight fetches the height at which the pool wallet
 	// has synced to.
-	WalletBestHeight func() (uint32, error)
+	WalletBestHeight func(context.Context) (uint32, error)
 	// GetBlockConfirmations returns the number of block confirmations for the
 	// provided block hash.
-	GetBlockConfirmations func(*chainhash.Hash) (int64, error)
+	GetBlockConfirmations func(context.Context, *chainhash.Hash) (int64, error)
 	// FetchTxCreator returns a transaction creator that allows coinbase lookups
 	// and payment transaction creation.
 	FetchTxCreator func() TxCreator
@@ -737,7 +737,7 @@ func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[string][]*Paymen
 }
 
 // PayDividends pays mature mining rewards to participating accounts.
-func (pm *PaymentMgr) payDividends(height uint32) error {
+func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 	pmts, err := pm.maturePendingPayments(height)
 	if err != nil {
 		return err
@@ -766,7 +766,7 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 			return err
 		}
 
-		confs, err := pm.cfg.GetBlockConfirmations(blockHash)
+		confs, err := pm.cfg.GetBlockConfirmations(ctx, blockHash)
 		if err != nil {
 			return err
 		}
@@ -790,7 +790,7 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 			return err
 		}
 
-		txOutResult, err := txCreator.GetTxOut(txHash, index, false)
+		txOutResult, err := txCreator.GetTxOut(ctx, txHash, index, false)
 		if err != nil {
 			return fmt.Errorf("unable to find tx output: %v", err)
 		}
@@ -904,7 +904,7 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 		outs[addr] = amt
 	}
 
-	tx, err := txCreator.CreateRawTransaction(inputs, outs, nil, nil)
+	tx, err := txCreator.CreateRawTransaction(ctx, inputs, outs, nil, nil)
 	if err != nil {
 		return fmt.Errorf("unable to create raw transaction: %v", err)
 	}
@@ -920,7 +920,7 @@ func (pm *PaymentMgr) payDividends(height uint32) error {
 	for {
 		// Ensure the wallet is synced to the current chain height before
 		// proceeding with payments.
-		walletHeight, err := pm.cfg.WalletBestHeight()
+		walletHeight, err := pm.cfg.WalletBestHeight(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to fetch best wallet height: %v", err)
 		}

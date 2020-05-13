@@ -15,10 +15,10 @@ import (
 	"os/signal"
 	"runtime"
 
-	"github.com/decred/dcrd/rpcclient/v5"
+	"decred.org/dcrwallet/rpc/walletrpc"
+	"github.com/decred/dcrd/rpcclient/v6"
 	"github.com/decred/dcrpool/gui"
 	"github.com/decred/dcrpool/pool"
-	"github.com/decred/dcrwallet/rpc/walletrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -120,11 +120,11 @@ func newPool(cfg *config) (*miningPool, error) {
 		return nil, err
 	}
 
-	if err := nodeConn.NotifyWork(); err != nil {
+	if err := nodeConn.NotifyWork(p.ctx); err != nil {
 		nodeConn.Shutdown()
 		return nil, err
 	}
-	if err := nodeConn.NotifyBlocks(); err != nil {
+	if err := nodeConn.NotifyBlocks(p.ctx); err != nil {
 		nodeConn.Shutdown()
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		p.hub.SetWalletConnection(walletConn, grpc.Close)
 	}
 
-	err = p.hub.FetchWork()
+	err = p.hub.FetchWork(p.ctx)
 	if err != nil {
 		return nil, err
 	}

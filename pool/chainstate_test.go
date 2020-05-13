@@ -9,7 +9,7 @@ import (
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrjson/v3"
-	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
 	bolt "go.etcd.io/bbolt"
 )
@@ -38,13 +38,13 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		t.Fatalf("unexpected serialization error: %v", err)
 	}
 
-	payDividends := func(uint32) error {
+	payDividends := func(context.Context, uint32) error {
 		return nil
 	}
 	generatePayments := func(uint32, *PaymentSource, dcrutil.Amount) error {
 		return nil
 	}
-	getBlock := func(*chainhash.Hash) (*wire.MsgBlock, error) {
+	getBlock := func(context.Context, *chainhash.Hash) (*wire.MsgBlock, error) {
 		// Return a fake block.
 		coinbase := wire.NewMsgTx()
 		coinbase.AddTxOut(wire.NewTxOut(0, []byte{}))
@@ -59,7 +59,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		return block, nil
 	}
 
-	getBlockConfirmations := func(*chainhash.Hash) (int64, error) {
+	getBlockConfirmations := func(context.Context, *chainhash.Hash) (int64, error) {
 		return -1, nil
 	}
 
@@ -162,7 +162,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure mined work cannot be pruned.
-	err = cs.pruneAcceptedWork(workB.Height + 1)
+	err = cs.pruneAcceptedWork(ctx, workB.Height+1)
 	if err != nil {
 		t.Fatalf("pruneAcceptedWork error: %v", err)
 	}
@@ -184,7 +184,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 
 	// Test prunePayments.
-	cs.cfg.GetBlock = func(hash *chainhash.Hash) (*wire.MsgBlock, error) {
+	cs.cfg.GetBlock = func(ctx context.Context, hash *chainhash.Hash) (*wire.MsgBlock, error) {
 		return nil, &dcrjson.RPCError{
 			Code:    dcrjson.ErrRPCBlockNotFound,
 			Message: fmt.Sprintf("no block found with hash: %v", hash.String()),
@@ -208,7 +208,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure payment A and B do not get pruned at height 27.
-	err = cs.prunePayments(27)
+	err = cs.prunePayments(ctx, 27)
 	if err != nil {
 		t.Fatalf("prunePayments error: %v", err)
 	}
@@ -226,7 +226,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure payment A gets pruned with payment B remaining at height 28.
-	err = cs.prunePayments(28)
+	err = cs.prunePayments(ctx, 28)
 	if err != nil {
 		t.Fatalf("prunePayments error: %v", err)
 	}
@@ -242,7 +242,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure payment B gets pruned at height 29.
-	err = cs.prunePayments(29)
+	err = cs.prunePayments(ctx, 29)
 	if err != nil {
 		t.Fatalf("prunePayments error: %v", err)
 	}

@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/chaincfg/v3"
 )
 
 func testDifficulty(t *testing.T) {

@@ -3,6 +3,7 @@ package pool
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/chaincfg/v3"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -108,7 +109,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 		DifficultyInfo: diffInfo,
 		EndpointWg:     new(sync.WaitGroup),
 		RemoveClient:   func(c *Client) {},
-		SubmitWork: func(submission *string) (bool, error) {
+		SubmitWork: func(_ context.Context, submission *string) (bool, error) {
 			return false, nil
 		},
 		FetchCurrentWork: func() string {
@@ -772,7 +773,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 	// Ensure a CPU client receives an error response if it cannot
 	// submit work.
 	setMiner(CPU)
-	client.cfg.SubmitWork = func(submission *string) (bool, error) {
+	client.cfg.SubmitWork = func(_ context.Context, submission *string) (bool, error) {
 		return false, fmt.Errorf("unable to submit work")
 	}
 	id++
@@ -799,7 +800,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if resp.Error == nil {
 		t.Fatalf("expected a submit work error")
 	}
-	client.cfg.SubmitWork = func(submission *string) (bool, error) {
+	client.cfg.SubmitWork = func(_ context.Context, submission *string) (bool, error) {
 		return true, nil
 	}
 
@@ -856,7 +857,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if resp.Error == nil {
 		t.Fatal("expected a work exists work submission error")
 	}
-	client.cfg.SubmitWork = func(submission *string) (bool, error) {
+	client.cfg.SubmitWork = func(_ context.Context, submission *string) (bool, error) {
 		return false, nil
 	}
 

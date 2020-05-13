@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
 	bolt "go.etcd.io/bbolt"
 )
@@ -27,15 +27,15 @@ type ChainStateConfig struct {
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
 	// PayDividends pays mature mining rewards to participating accounts.
-	PayDividends func(uint32) error
+	PayDividends func(context.Context, uint32) error
 	// GeneratePayments creates payments for participating accounts in pool
 	// mining mode based on the configured payment scheme.
 	GeneratePayments func(uint32, *PaymentSource, dcrutil.Amount) error
 	// GetBlock fetches the block associated with the provided block hash.
-	GetBlock func(*chainhash.Hash) (*wire.MsgBlock, error)
+	GetBlock func(context.Context, *chainhash.Hash) (*wire.MsgBlock, error)
 	// GetBlockConfirmations fetches the block confirmations with the provided
 	// block hash.
-	GetBlockConfirmations func(*chainhash.Hash) (int64, error)
+	GetBlockConfirmations func(context.Context, *chainhash.Hash) (int64, error)
 	// PendingPaymentsAtHeight fetches all pending payments at
 	// the provided height.
 	PendingPaymentsAtHeight func(uint32) ([]*Payment, error)
@@ -103,7 +103,7 @@ func (cs *ChainState) fetchCurrentWork() string {
 
 // pruneAcceptedWork removes all accepted work not confirmed as mined work
 // with heights less than the provided height.
-func (cs *ChainState) pruneAcceptedWork(height uint32) error {
+func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) error {
 	toDelete := make([]*AcceptedWork, 0)
 	err := cs.cfg.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
@@ -147,7 +147,7 @@ func (cs *ChainState) pruneAcceptedWork(height uint32) error {
 		if err != nil {
 			return err
 		}
-		confs, err := cs.cfg.GetBlockConfirmations(hash)
+		confs, err := cs.cfg.GetBlockConfirmations(ctx, hash)
 		if err != nil {
 			return err
 		}
@@ -177,7 +177,7 @@ func (cs *ChainState) pruneAcceptedWork(height uint32) error {
 
 // prunePayments removes all spendabe payments sourcing from
 // orphaned blocks at the provided height.
-func (cs *ChainState) prunePayments(height uint32) error {
+func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
 	toDelete := make([]*Payment, 0)
 	err := cs.cfg.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchPaymentBucket(tx)
@@ -215,7 +215,7 @@ func (cs *ChainState) prunePayments(height uint32) error {
 			return err
 		}
 
-		confs, err := cs.cfg.GetBlockConfirmations(hash)
+		confs, err := cs.cfg.GetBlockConfirmations(ctx, hash)
 		if err != nil {
 			return err
 		}
@@ -305,7 +305,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					continue
 				}
 
-				err = cs.pruneAcceptedWork(pruneLimit)
+				err = cs.pruneAcceptedWork(ctx, pruneLimit)
 				if err != nil {
 					// Errors generated pruning invalidated accepted
 					// work indicate an underlying issue accessing
@@ -318,7 +318,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					continue
 				}
 
-				err = cs.prunePayments(header.Height)
+				err = cs.prunePayments(ctx, header.Height)
 				if err != nil {
 					// Errors generated pruning invalidated payments
 					// indicate an underlying issue accessing the
@@ -333,7 +333,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 
 			// Process mature payments.
-			err = cs.cfg.PayDividends(header.Height)
+			err = cs.cfg.PayDividends(ctx, header.Height)
 			if err != nil {
 				log.Errorf("unable to process payments: %v", err)
 				close(msg.Done)
@@ -401,7 +401,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				// TODO: look into keeping track of payment processing for
 				// confirmed mined work to facilitate recovery when the
 				// getblock calls err.
-				block, err := cs.cfg.GetBlock(&header.PrevBlock)
+				block, err := cs.cfg.GetBlock(ctx, &header.PrevBlock)
 				if err != nil {
 					// Errors generated fetching blocks of confirmed mined
 					// work are curently fatal because payments are
