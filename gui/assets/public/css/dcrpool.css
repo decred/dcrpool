@@ -7579,9 +7579,9 @@ h2 {
     @media (min-width: 768px) {
       .main-carousel__image-container {
         min-height: 190px; } }
-    @media (min-width: 992px) {
-      .main-carousel__image-container {
-        min-height: 300px; } }
+        @media (min-width: 992px) {
+          .main-carousel__image-container {
+            min-height: 300px; } }
     .main-carousel__image-container img {
       -o-object-fit: cover;
          object-fit: cover; }
@@ -7591,12 +7591,12 @@ h2 {
     margin-right: 20px; }
     @media (max-width: 991.98px) {
       .main-carousel .carousel-cell {
-        height: 520px;
+        height: 500px;
         background-color: #fff;
        } }
     @media (max-width: 767.98px) {
       .main-carousel .carousel-cell {
-        height: 600px;
+        height: 580px;        
       font-size: 15px; } }
   .main-carousel .flickity-page-dots {
     left: 22%;
@@ -7654,24 +7654,24 @@ h2 {
   display: none !important; }
 
 .carousel-nav {
-  position: absolute;
-  bottom: 20px;
-  right: 0;
   text-align: center;
   list-style: none;
+  background-color: white;
+  padding-top: 14px;
+  padding-bottom: 14px;
   /* white circles */ }
   @media (max-width: 991.98px) {
     .carousel-nav {
-  bottom: 55px;
       display: -webkit-box;
       display: -ms-flexbox;
       display: flex;
       -webkit-box-align: center;
-          -ms-flex-align: center;
-              align-items: center; } }
+         -ms-flex-align: center;
+            align-items: center; } }
   @media (min-width: 992px) {
     .carousel-nav {
-      height: 30px; } }
+      padding-top: 10px;
+      padding-bottom: 10px; } }
   .carousel-nav li {
     display: inline-block;
     cursor: pointer;
