@@ -18,7 +18,6 @@ type accountPageData struct {
 	MinedWork        []minedWork
 	ArchivedPayments []archivedPayment
 	PendingPayments  []pendingPayment
-	PaymentRequested bool
 	ConnectedClients []client
 	AccountID        string
 	Address          string
@@ -69,9 +68,6 @@ func (ui *GUI) account(w http.ResponseWriter, r *http.Request) {
 		MinedWork:        recentWork,
 		PendingPayments:  pendingPmts,
 		ArchivedPayments: archivedPmts,
-		// This is a workaround to hide the process payments feature, it will
-		// be removed completely in a separate PR>
-		PaymentRequested: true,
 		ConnectedClients: clients,
 		AccountID:        accountID,
 		Address:          address,
@@ -96,21 +92,6 @@ func (ui *GUI) isPoolAccount(w http.ResponseWriter, r *http.Request) {
 
 	if !ui.cfg.AccountExists(accountID) {
 		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
-// requestPayment is the handler for "POST /requestpayment". It will request a
-// payment for the provided address and return a "200 OK" response if
-// successful, otherwise return a "400 Bad Request".
-func (ui *GUI) requestPayment(w http.ResponseWriter, r *http.Request) {
-	address := r.FormValue("address")
-
-	err := ui.cfg.AddPaymentRequest(address)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
