@@ -144,6 +144,13 @@ miner for testing.
 
 To run the mining harness:  
 
+Install [dcrctl](https://github.com/decred/dcrctl) 
+
+```sh
+GO111MODULE=on go get decred.org/dcrctl
+```
+then
+
 ```sh
 cd dcrpool/cmd/miner 
 go install
