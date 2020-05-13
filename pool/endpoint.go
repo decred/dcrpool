@@ -189,6 +189,8 @@ func (e *Endpoint) connect(ctx context.Context) {
 			// Signal the gui cache of the connected client.
 			e.cfg.SignalCache(ConnectedClient)
 
+			log.Debugf("Mining client connected. id=%s, addr=%s", client.id, client.addr)
+
 			close(msg.Done)
 		}
 	}
