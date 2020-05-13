@@ -187,9 +187,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 			go client.run(client.ctx)
 
 			// Signal the gui cache of the connected client.
-			if e.cfg.SignalCache != nil {
-				e.cfg.SignalCache(ConnectedClient)
-			}
+			e.cfg.SignalCache(ConnectedClient)
 
 			close(msg.Done)
 		}

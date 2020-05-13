@@ -427,9 +427,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) error {
 		}
 
 		// Signal the gui cache of the claimed weighted share.
-		if c.cfg.SignalCache != nil {
-			c.cfg.SignalCache(ClaimedShare)
-		}
+		c.cfg.SignalCache(ClaimedShare)
 	}
 
 	// Only submit work to the network if the submitted blockhash is

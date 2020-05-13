@@ -121,6 +121,9 @@ func testClient(t *testing.T, db *bolt.DB) {
 		},
 		HashCalcThreshold: 1,
 		ClientTimeout:     time.Millisecond * 1300,
+		SignalCache: func(_ CacheUpdateEvent) {
+			// Do nothing.
+		},
 	}
 	client, err := NewClient(c, tcpAddr, cCfg)
 	if err != nil {

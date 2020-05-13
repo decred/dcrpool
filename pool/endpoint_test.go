@@ -75,6 +75,9 @@ func testEndpoint(t *testing.T, db *bolt.DB) {
 			defer connectionsMtx.RUnlock()
 			return connections[host]
 		},
+		SignalCache: func(_ CacheUpdateEvent) {
+			// Do nothing.
+		},
 	}
 	port := uint32(3030)
 	endpoint, err := NewEndpoint(eCfg, diffInfo, port, miner)

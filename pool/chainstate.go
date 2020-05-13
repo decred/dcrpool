@@ -446,9 +446,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					header.PrevBlock.String(), header.Height)
 
 				// Signal the gui cache of the confirmed mined work.
-				if cs.cfg.SignalCache != nil {
-					cs.cfg.SignalCache(Confirmed)
-				}
+				cs.cfg.SignalCache(Confirmed)
 			}
 
 			close(msg.Done)
@@ -547,9 +545,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 
 			// Signal the gui cache of the unconfirmed (due to a reorg)
 			// mined work.
-			if cs.cfg.SignalCache != nil {
-				cs.cfg.SignalCache(Unconfirmed)
-			}
+			cs.cfg.SignalCache(Unconfirmed)
 
 			close(msg.Done)
 		}
