@@ -1,11 +1,11 @@
-# Dcrpool 
+# Dcrpool
 
 [![Build Status](https://github.com/decred/dcrpool/workflows/Build%20and%20Test/badge.svg)](https://github.com/decred/dcrpool/actions)
-
 
 ## Overview
 
 Dcrpool is a stratum decred mining pool. It currently supports:
+
 * Obelisk DCR1 (default port: 5551)
 * Innosilicon D9 (default port: 5552, supported firmware: [D9_20180602_094459.swu](https://drive.google.com/open?id=1wofB_OUDkB2gxz_IS7wM8Br6ogKdYDmY))
 * Antminer DR3 (default port: 5553)
@@ -55,7 +55,7 @@ provides pool administrators database backup functionality when needed.
 
 Building or updating from source requires the following build dependencies:
 
-- **Go 1.13 or better**
+- **Go 1.13 or later**
 
   Installation instructions can be found here: https://golang.org/doc/install.
   It is recommended to add `$GOPATH/bin` to your `PATH` at this point.
@@ -73,14 +73,13 @@ run `go install . ./cmd/...` in the root directory.  Some notes:
 * The `dcrpool` executable will be installed to `$GOPATH/bin`.  `GOPATH`
   defaults to `$HOME/go` (or `%USERPROFILE%\go` on Windows) if unset.
 
-
-### Example of obtaining and building from source on Ubuntu:
+### Example of obtaining and building from source on Ubuntu
 
 ```sh
 git clone https://github.com/decred/dcrpool.git
-cd dcrpool 
-go install 
-dcrpool --configfile=path/to/config.conf 
+cd dcrpool
+go install
+dcrpool --configfile=path/to/config.conf
 ```
 
 ## Configuration
@@ -91,7 +90,7 @@ source to a reachable location and updating the gui directory (`--guidir`) of
 the configuration. Currently only single instance deployments are supported, 
 support for distributed deployments will be implemented in the future.
 
-### Example of a solo pool configuration:
+### Example of a solo pool configuration
 
 ```
 rpcuser=user
@@ -104,7 +103,7 @@ adminpass=adminpass
 guidir=/home/gui
 ```
 
-### Example of a mining pool configuration:
+### Example of a mining pool configuration
 
 ```
 rpcuser=user
@@ -144,18 +143,19 @@ miner for testing.
 
 To run the mining harness:  
 
-Install [dcrctl](https://github.com/decred/dcrctl) 
+Install [dcrctl](https://github.com/decred/dcrctl)
 
 ```sh
 GO111MODULE=on go get decred.org/dcrctl
 ```
+
 then
 
 ```sh
-cd dcrpool/cmd/miner 
+cd dcrpool/cmd/miner
 go install
 cd ../..
-./harness.sh 
+./harness.sh
 ```
 
 ## Should I be running dcrpool?
