@@ -41,42 +41,6 @@
         <div class="col-12 p-3">
             <div class="block__content">
 
-                    <div style="float:right;">
-                        <div id="payment-requested-notice" class="indicator finished"
-                            {{ if not .PaymentRequested }}style="display: none;"{{end}}>
-                            Payment Requested
-                        </div>
-                        
-                        {{ if not .PaymentRequested }}
-                        <form id="request-payment-form" action="/requestpayment" method="post">
-                            <input type="hidden" name="address" value="{{.Address}}" />
-                            {{.HeaderData.CSRF}}
-                        </form>
-                        <button form="request-payment-form" type="submit" class="btn btn-primary btn-small" style="display: none;">
-                            Request Payment
-                        </button>
-                        
-                        <div class="modal fade" id="payment-requested-modal">
-                            <div class="modal-dialog modal-sm">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h1 class="modal-title">Payment Requested</h1>
-                                        <button type="button" class="modal-close" data-dismiss="modal">&times;</button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <p>Your payment request has been made </p>
-                                        <div class="d-flex flex-row pt-4 align-items-center">
-                                            <button class="btn btn-primary ml-auto" data-dismiss="modal">Close</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                            </div>
-                        </div>
-
-                        {{ end }}
-                    </div>
-
                 <h1>Pending Payments</h1>
                 
                 <table class="table">
@@ -216,31 +180,6 @@
 
 <script>
     var accountID = "{{.AccountID}}";
-
-    
-    var requestPaymentButton = $("button[form='request-payment-form'");
-    requestPaymentButton.show();
-
-    $("#request-payment-form").on("submit", function (e) {
-        e.preventDefault();
-        requestPaymentButton.prop("disabled", true);
-        $.ajax({
-            url:  $(this).attr('action'),
-            type: $(this).attr('method'),
-            data: $(this).serialize(),
-            success: function() {
-                $('#payment-requested-notice').show();
-                requestPaymentButton.hide();
-                $('#payment-requested-modal').modal("show");
-            },
-            error: function(response) {
-                console.log(response);
-                alert("unexpected error");
-                requestPaymentButton.prop("disabled", false);
-            },
-        });
-    });
-
 </script>
 <script src='/assets/js/modal.js'></script>
 <script src='/assets/js/pagination.js'></script>

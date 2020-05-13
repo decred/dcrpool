@@ -66,12 +66,6 @@ type Config struct {
 	FetchLastWorkHeight func() uint32
 	// FetchLastPaymentheight returns the last payment height of the pool.
 	FetchLastPaymentHeight func() uint32
-	// AddPaymentRequest creates a payment request from the provided account
-	// if not already requested.
-	AddPaymentRequest func(addr string) error
-	// IsPaymentRequested checks if a payment request has already been requested
-	// for the account.
-	IsPaymentRequested func(addr string) bool
 	// FetchMinedWork returns all blocks mined by the pool.
 	FetchMinedWork func() ([]*pool.AcceptedWork, error)
 	// FetchWorkQuotas returns the reward distribution to pool accounts
@@ -146,7 +140,6 @@ func (ui *GUI) route() {
 	guiRouter.HandleFunc("/", ui.homepage).Methods("GET")
 	guiRouter.HandleFunc("/account", ui.account).Methods("GET")
 	guiRouter.HandleFunc("/account", ui.isPoolAccount).Methods("HEAD")
-	guiRouter.HandleFunc("/requestpayment", ui.requestPayment).Methods("POST")
 	guiRouter.HandleFunc("/admin", ui.adminPage).Methods("GET")
 	guiRouter.HandleFunc("/admin", ui.adminLogin).Methods("POST")
 	guiRouter.HandleFunc("/backup", ui.downloadDatabaseBackup).Methods("POST")
