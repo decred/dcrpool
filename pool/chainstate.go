@@ -19,6 +19,8 @@ var (
 	bufferSize = 128
 )
 
+// ChainStateConfig contains all of the configuration values which should be
+// provided when creating a new instance of ChainState.
 type ChainStateConfig struct {
 	// DB represents the pool database.
 	DB *bolt.DB

@@ -10,8 +10,8 @@ import (
 	"github.com/decred/dcrd/chaincfg/v2"
 )
 
+// Supported mining clients.
 const (
-	// Supported mining clients.
 	CPU           = "cpu"
 	InnosiliconD9 = "innosilicond9"
 	AntminerDR3   = "antminerdr3"

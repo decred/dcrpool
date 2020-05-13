@@ -321,7 +321,7 @@ func (ui *GUI) Run(ctx context.Context) {
 		}
 	}()
 
-	// Initalise the cache.
+	// Initialise the cache.
 	work, err := ui.cfg.FetchMinedWork()
 	if err != nil {
 		log.Error(err)

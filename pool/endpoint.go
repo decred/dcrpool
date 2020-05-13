@@ -16,6 +16,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+// EndpointConfig contains all of the configuration values which should be
+// provided when creating a new instance of Endpoint.
 type EndpointConfig struct {
 	// ActiveNet represents the active network being mined on.
 	ActiveNet *chaincfg.Params

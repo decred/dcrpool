@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	// sessionKey is the key used to retreive the current session from a request
+	// sessionKey is the key used to retrieve the current session from a request
 	// context.
 	sessionKey ctxKey = iota
 )
