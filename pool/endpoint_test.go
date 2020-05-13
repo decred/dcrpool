@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/chaincfg/v3"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -51,7 +51,7 @@ func testEndpoint(t *testing.T, db *bolt.DB) {
 		NonceIterations:       iterations,
 		MaxConnectionsPerHost: 3,
 		HubWg:                 new(sync.WaitGroup),
-		SubmitWork: func(submission *string) (bool, error) {
+		SubmitWork: func(_ context.Context, submission *string) (bool, error) {
 			return false, nil
 		},
 		FetchCurrentWork: func() string {

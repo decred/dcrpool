@@ -21,8 +21,8 @@ import (
 	flags "github.com/jessevdk/go-flags"
 
 	"github.com/decred/dcrd/certgen"
-	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrpool/pool"
 	"github.com/decred/slog"
 )

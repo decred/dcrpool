@@ -17,12 +17,12 @@ import (
 	"testing"
 	"time"
 
+	"decred.org/dcrwallet/rpc/walletrpc"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrutil/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/rpc/walletrpc"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 )
@@ -117,19 +117,19 @@ func (t *tWalletConnection) PublishTransaction(context.Context, *walletrpc.Publi
 
 type tNodeConnection struct{}
 
-func (t *tNodeConnection) CreateRawTransaction([]chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error) {
+func (t *tNodeConnection) CreateRawTransaction(context.Context, []chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error) {
 	return nil, nil
 }
 
-func (t *tNodeConnection) GetTxOut(*chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error) {
+func (t *tNodeConnection) GetTxOut(context.Context, *chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error) {
 	return nil, nil
 }
 
-func (t *tNodeConnection) GetWorkSubmit(sub string) (bool, error) {
+func (t *tNodeConnection) GetWorkSubmit(_ context.Context, sub string) (bool, error) {
 	return false, nil
 }
 
-func (t *tNodeConnection) GetWork() (*chainjson.GetWorkResult, error) {
+func (t *tNodeConnection) GetWork(context.Context) (*chainjson.GetWorkResult, error) {
 	return &chainjson.GetWorkResult{
 		Data: "07000000ddb9fb70cb6ed184f57bfb94abebe7e7b9819e27d6e3ca8" +
 			"19f1f73c7218100007de69dd9365ba5a39178870780d78d86aa6d53a649a5" +
@@ -142,7 +142,7 @@ func (t *tNodeConnection) GetWork() (*chainjson.GetWorkResult, error) {
 	}, nil
 }
 
-func (t *tNodeConnection) GetBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
+func (t *tNodeConnection) GetBlock(_ context.Context, blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
 	b57 := []byte("07000000ddb9fb70cb6ed184f57bfb94abebe7e7b9819e27d6e3ca819" +
 		"f1f73c7218100007de69dd9365ba5a39178870780d78d86aa6d53a649a54bd65" +
 		"faac4be8123253e7f98f31055b0f3e94dd48e67f43742b028623192dd684d053" +
@@ -213,16 +213,16 @@ func (t *tNodeConnection) GetBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, e
 	return &b, nil
 }
 
-func (t *tNodeConnection) GetBlockVerbose(*chainhash.Hash, bool) (*chainjson.GetBlockVerboseResult, error) {
+func (t *tNodeConnection) GetBlockVerbose(context.Context, *chainhash.Hash, bool) (*chainjson.GetBlockVerboseResult, error) {
 	return &chainjson.GetBlockVerboseResult{
 		Confirmations: -1,
 	}, nil
 }
-func (t *tNodeConnection) NotifyWork() error {
+func (t *tNodeConnection) NotifyWork(context.Context) error {
 	return nil
 }
 
-func (t *tNodeConnection) NotifyBlocks() error {
+func (t *tNodeConnection) NotifyBlocks(context.Context) error {
 	return nil
 }
 
@@ -278,7 +278,7 @@ func testHub(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Listen] uexpected error: %v", err)
 	}
-	err = hub.FetchWork()
+	err = hub.FetchWork(ctx)
 	if err != nil {
 		t.Fatalf("[FetchWork] unexpected error: %v", err)
 	}
@@ -407,7 +407,7 @@ func testHub(t *testing.T, db *bolt.DB) {
 	<-confNotif.Done
 
 	// Ensure the hub can process submitted work.
-	_, err = hub.submitWork(&workE)
+	_, err = hub.submitWork(ctx, &workE)
 	if err != nil {
 		t.Fatalf("unexpected submit work error: %v", err)
 	}

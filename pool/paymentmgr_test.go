@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -8,8 +9,8 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrutil/v3"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -38,7 +39,7 @@ func fetchShare(db *bolt.DB, id []byte) (*Share, error) {
 func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	activeNet := chaincfg.SimNetParams()
 
-	getBlockConfirmations := func(*chainhash.Hash) (int64, error) {
+	getBlockConfirmations := func(context.Context, *chainhash.Hash) (int64, error) {
 		return -1, nil
 	}
 

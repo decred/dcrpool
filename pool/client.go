@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/blockchain/standalone"
-	"github.com/decred/dcrd/chaincfg/v2"
+	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/wire"
 	bolt "go.etcd.io/bbolt"
 )
@@ -78,7 +78,7 @@ type ClientConfig struct {
 	// RemoveClient removes the client from the pool.
 	RemoveClient func(*Client)
 	// SubmitWork sends solved block data to the consensus daemon.
-	SubmitWork func(*string) (bool, error)
+	SubmitWork func(context.Context, *string) (bool, error)
 	// FetchCurrentWork returns the current work of the pool.
 	FetchCurrentWork func() string
 	// WithinLimit returns if the client is still within its request limits.
@@ -348,7 +348,7 @@ func (c *Client) setDifficulty() {
 }
 
 // handleSubmitWorkRequest processes work submission request messages received.
-func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) error {
+func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allowed bool) error {
 	if !allowed {
 		err := fmt.Errorf("unable to process submit work request, limit reached")
 		sErr := NewStratumError(Unknown, err)
@@ -455,7 +455,7 @@ func (c *Client) handleSubmitWorkRequest(req *Request, allowed bool) error {
 	copy(submissionB[wire.MaxBlockHeaderPayload:],
 		c.cfg.Blake256Pad)
 	submission := hex.EncodeToString(submissionB)
-	accepted, err := c.cfg.SubmitWork(&submission)
+	accepted, err := c.cfg.SubmitWork(ctx, &submission)
 	if err != nil {
 		err := fmt.Errorf("unable to submit work request: %v", err)
 		sErr := NewStratumError(Unknown, err)
@@ -680,7 +680,7 @@ func (c *Client) process(ctx context.Context) {
 					}
 
 				case Submit:
-					err := c.handleSubmitWorkRequest(req, allowed)
+					err := c.handleSubmitWorkRequest(ctx, req, allowed)
 					if err != nil {
 						log.Error(err)
 						continue

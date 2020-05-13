@@ -19,13 +19,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"decred.org/dcrwallet/rpc/walletrpc"
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/chaincfg/v2"
-	"github.com/decred/dcrd/dcrutil/v2"
+	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrutil/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
-	"github.com/decred/dcrd/rpcclient/v5"
+	"github.com/decred/dcrd/rpcclient/v6"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrwallet/rpc/walletrpc"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 )
@@ -109,14 +109,14 @@ type WalletConnection interface {
 // NodeConnection defines the functionality needed by a mining node
 // connection for the pool.
 type NodeConnection interface {
-	GetTxOut(*chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error)
-	CreateRawTransaction([]chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
-	GetWorkSubmit(string) (bool, error)
-	GetWork() (*chainjson.GetWorkResult, error)
-	GetBlockVerbose(*chainhash.Hash, bool) (*chainjson.GetBlockVerboseResult, error)
-	GetBlock(*chainhash.Hash) (*wire.MsgBlock, error)
-	NotifyWork() error
-	NotifyBlocks() error
+	GetTxOut(context.Context, *chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error)
+	CreateRawTransaction(context.Context, []chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
+	GetWorkSubmit(context.Context, string) (bool, error)
+	GetWork(context.Context) (*chainjson.GetWorkResult, error)
+	GetBlockVerbose(context.Context, *chainhash.Hash, bool) (*chainjson.GetBlockVerboseResult, error)
+	GetBlock(context.Context, *chainhash.Hash) (*wire.MsgBlock, error)
+	NotifyWork(context.Context) error
+	NotifyBlocks(context.Context) error
 	Shutdown()
 }
 
@@ -288,21 +288,21 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 }
 
 // submitWork sends solved block data to the consensus daemon for evaluation.
-func (h *Hub) submitWork(data *string) (bool, error) {
+func (h *Hub) submitWork(ctx context.Context, data *string) (bool, error) {
 	if h.nodeConn == nil {
 		return false, MakeError(ErrOther, "node connection unset", nil)
 	}
 
-	return h.nodeConn.GetWorkSubmit(*data)
+	return h.nodeConn.GetWorkSubmit(ctx, *data)
 }
 
 // getWork fetches available work from the consensus daemon.
-func (h *Hub) getWork() (string, string, error) {
+func (h *Hub) getWork(ctx context.Context) (string, string, error) {
 	if h.nodeConn == nil {
 		return "", "", MakeError(ErrOther, "node connection unset", nil)
 	}
 
-	work, err := h.nodeConn.GetWork()
+	work, err := h.nodeConn.GetWork(ctx)
 	if err != nil {
 		return "", "", err
 	}
@@ -310,9 +310,9 @@ func (h *Hub) getWork() (string, string, error) {
 }
 
 // walletBestHeight fetches the height at which the pool wallet has synced to.
-func (h *Hub) walletBestHeight() (uint32, error) {
+func (h *Hub) walletBestHeight(ctx context.Context) (uint32, error) {
 	bestReq := &walletrpc.BestBlockRequest{}
-	bestResp, err := h.walletConn.BestBlock(context.TODO(), bestReq)
+	bestResp, err := h.walletConn.BestBlock(ctx, bestReq)
 	if err != nil {
 		return 0, err
 	}
@@ -321,8 +321,8 @@ func (h *Hub) walletBestHeight() (uint32, error) {
 
 // getBlockConfirmation returns the number of block confirmations for the
 // provided block height.
-func (h *Hub) getBlockConfirmations(hash *chainhash.Hash) (int64, error) {
-	info, err := h.nodeConn.GetBlockVerbose(hash, false)
+func (h *Hub) getBlockConfirmations(ctx context.Context, hash *chainhash.Hash) (int64, error) {
+	info, err := h.nodeConn.GetBlockVerbose(ctx, hash, false)
 	if err != nil {
 		return 0, err
 	}
@@ -345,12 +345,12 @@ func (h *Hub) FetchLastPaymentHeight() uint32 {
 }
 
 // getBlock fetches the blocks associated with the provided block hash.
-func (h *Hub) getBlock(blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
+func (h *Hub) getBlock(ctx context.Context, blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
 	if h.nodeConn == nil {
 		return nil, MakeError(ErrOther, "node connection unset", nil)
 	}
 
-	return h.nodeConn.GetBlock(blockHash)
+	return h.nodeConn.GetBlock(ctx, blockHash)
 }
 
 // fetchHostConnections returns the client connection count for the
@@ -495,8 +495,8 @@ func (h *Hub) CreateNotificationHandlers() *rpcclient.NotificationHandlers {
 
 // FetchWork queries the mining node for work. This should be called
 // immediately the pool starts to avoid for a work notification.
-func (h *Hub) FetchWork() error {
-	work, _, err := h.getWork()
+func (h *Hub) FetchWork(ctx context.Context) error {
+	work, _, err := h.getWork(ctx)
 	if err != nil {
 		desc := "unable to fetch current work"
 		return MakeError(ErrOther, desc, err)
