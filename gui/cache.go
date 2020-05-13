@@ -138,7 +138,7 @@ func (c *Cache) getConfirmedMinedWork(first, last int) (int, []minedWork, error)
 
 	count := len(allWork)
 
-	if last >= count+(last-first) {
+	if first >= count {
 		return 0, allWork[0:0], fmt.Errorf("Blocks request is out of range. Maximum %v, Requested %v", count, last)
 	}
 
@@ -162,7 +162,7 @@ func (c *Cache) getMinedWorkByAccount(first, last int, accountID string) (int, [
 
 	count := len(allWork)
 
-	if last >= count+(last-first) {
+	if first >= count {
 		return 0, allWork[0:0], fmt.Errorf("Blocks by account request is out of range. Maximum %v, Requested %v", count, last)
 	}
 
@@ -200,7 +200,7 @@ func (c *Cache) getRewardQuotas(first, last int) (int, []rewardQuota, error) {
 
 	count := len(c.rewardQuotas)
 
-	if last >= count+(last-first) {
+	if first >= count {
 		return 0, c.rewardQuotas[0:0], fmt.Errorf("Reward Quotas request is out of range. Maximum %v, Requested %v", count, last)
 	}
 
@@ -251,7 +251,7 @@ func (c *Cache) getClientsForAccount(first, last int, accountID string) (int, []
 
 	count := len(accountClients)
 
-	if last >= count+(last-first) {
+	if first >= count {
 		return 0, accountClients[0:0], fmt.Errorf("Clients by account request is out of range. Maximum %v, Requested %v", count, last)
 	}
 
@@ -326,7 +326,7 @@ func (c *Cache) getPendingPayments(first, last int, accountID string) (int, []pe
 
 	count := len(accountPayments)
 
-	if last >= count+(last-first) {
+	if first >= count {
 		return 0, accountPayments[0:0], fmt.Errorf("Pending payments by account request is out of range. Maximum %v, Requested %v", count, last)
 	}
 
@@ -345,7 +345,7 @@ func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, []a
 
 	count := len(accountPayments)
 
-	if last >= count+(last-first) {
+	if first >= count {
 		return 0, accountPayments[0:0], fmt.Errorf("Archived payments by account request is out of range. Maximum %v, Requested %v", count, last)
 	}
 
