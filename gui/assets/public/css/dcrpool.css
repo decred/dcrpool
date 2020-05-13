@@ -7565,14 +7565,14 @@ h2 {
   width: 1em;
   margin-left: -1em;
 }
-  .carousel-image {
-    background-repeat:no-repeat;
-    background-position: center;
-    margin-left: 10px;
-    height: 100%;
-    width: 100%;
+.carousel-image {
+  background-repeat:no-repeat;
+  background-position: center;
+  margin-left: 10px;
+  height: 100%;
+  width: 100%;
 
-  }
+}
   .main-carousel__image-container {
     background-color: #091440;
     min-height: 170px; }
@@ -7912,76 +7912,6 @@ h2 {
     background-color: #2971ff; }
   .circle.color6 {
     background-color: #2ed8a3; }
-
-.ticket_accordion input[type='checkbox']:checked + label + .accordion__contents {
-  max-height: 300px;
-  overflow-y: auto; }
-
-.ticket_accordion .accordion__contents {
-  margin-top: -3px; }
-.ticket_accordion .accordion__empty {
-  color: #c4cbd2; }
-  .ticket_accordion .accordion__contents div {
-    padding-top: 20px;
-    padding-bottom: 20px;
-    padding-left: 65px;
-    padding-right: 65px;
-    border-bottom: 1px solid #edeff1;
-    background-color: #fff; }
-    @media screen and (min-width: 576px) {
-      .ticket_accordion .accordion__contents div {
-        padding-top: calc(20px + -5 * (100vw - 576px) / 864);
-        padding-bottom: calc(20px + -5 * (100vw - 576px) / 864); } }
-    @media screen and (min-width: 1440px) {
-      .ticket_accordion .accordion__contents div {
-        padding-top: 15px;
-        padding-bottom: 15px; } }
-    @media screen and (min-width: 576px) {
-      .ticket_accordion .accordion__contents div {
-        padding-left: calc(65px + 35 * (100vw - 576px) / 864);
-        padding-right: calc(65px + 35 * (100vw - 576px) / 864); } }
-    @media screen and (min-width: 1440px) {
-      .ticket_accordion .accordion__contents div {
-        padding-left: 100px;
-        padding-right: 100px; } }
-    .ticket_accordion .accordion__contents div img {
-      margin-right: 15px; }
-      @media screen and (min-width: 576px) {
-        .ticket_accordion .accordion__contents div img {
-          margin-right: calc(15px + 35 * (100vw - 576px) / 864); } }
-      @media screen and (min-width: 1440px) {
-        .ticket_accordion .accordion__contents div img {
-          margin-right: 50px; } }
-
-.ticket_accordion .accordion__toggle {
-  background: #fff;
-  border-bottom: 5px solid #f3f5f6; }
-  .ticket_accordion .accordion__toggle div:not(.arrow-down) {
-    padding: 15px 30px; }
-    .ticket_accordion .accordion__toggle div:not(.arrow-down):hover {
-      cursor: pointer; }
-    .ticket_accordion .accordion__toggle div:not(.arrow-down) .arrow-down {
-      width: 0;
-      height: 0;
-      border-left: 5px solid transparent;
-      border-right: 5px solid transparent;
-      border-top: 5px solid #596D81;
-      -webkit-transition: all .5s;
-      transition: all .5s; }
-    .ticket_accordion .accordion__toggle div:not(.arrow-down)[aria-expanded="true"] .arrow-down {
-      -webkit-transform: rotate(180deg);
-              transform: rotate(180deg);
-      border-top: 5px solid #2970FF; }
-    .ticket_accordion .accordion__toggle div:not(.arrow-down) span img {
-      margin-right: 15px;
-      max-width: 17px;
-      height: auto; }
-      @media screen and (min-width: 576px) {
-        .ticket_accordion .accordion__toggle div:not(.arrow-down) span img {
-          margin-right: calc(15px + 35 * (100vw - 576px) / 864); } }
-      @media screen and (min-width: 1440px) {
-        .ticket_accordion .accordion__toggle div:not(.arrow-down) span img {
-          margin-right: 50px; } }
 
 .icon--info {
   -webkit-transition: 0.25s;
