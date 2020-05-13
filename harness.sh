@@ -105,7 +105,7 @@ lastnperiod=${LAST_N_PERIOD}
 adminpass=${ADMIN_PASS}
 guidir=${GUI_DIR}
 designation=${SESSION}
-profile=:6060
+profile=6060
 EOF
 
 cat > "${NODES_ROOT}/mwallet/dcrmwctl.conf" <<EOF
