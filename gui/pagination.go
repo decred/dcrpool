@@ -32,7 +32,7 @@ func getPaginationParams(r *http.Request) (first, last int, err error) {
 	}
 
 	if pageNumber < 1 || pageSize < 1 {
-		return 0, 0, errors.New("Invalid number given for pageNumber or pageSize")
+		return 0, 0, errors.New("invalid number given for pagenumber or pagesize")
 	}
 
 	first = (pageNumber - 1) * pageSize
@@ -68,7 +68,6 @@ func (ui *GUI) paginatedBlocks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	count, confirmedWork, err := ui.cache.getConfirmedMinedWork(first, last)
-
 	if err != nil {
 		log.Error(err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -94,7 +93,6 @@ func (ui *GUI) paginatedRewardQuotas(w http.ResponseWriter, r *http.Request) {
 	}
 
 	count, quotas, err := ui.cache.getRewardQuotas(first, last)
-
 	if err != nil {
 		log.Error(err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -122,7 +120,6 @@ func (ui *GUI) paginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 	accountID := mux.Vars(r)["accountID"]
 
 	count, work, err := ui.cache.getMinedWorkByAccount(first, last, accountID)
-
 	if err != nil {
 		log.Error(err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -150,7 +147,6 @@ func (ui *GUI) paginatedClientsByAccount(w http.ResponseWriter, r *http.Request)
 	accountID := mux.Vars(r)["accountID"]
 
 	count, clients, err := ui.cache.getClientsForAccount(first, last, accountID)
-
 	if err != nil {
 		log.Error(err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -178,7 +174,6 @@ func (ui *GUI) paginatedPendingPaymentsByAccount(w http.ResponseWriter, r *http.
 	accountID := mux.Vars(r)["accountID"]
 
 	count, payments, err := ui.cache.getPendingPayments(first, last, accountID)
-
 	if err != nil {
 		log.Error(err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -206,7 +201,6 @@ func (ui *GUI) paginatedArchivedPaymentsByAccount(w http.ResponseWriter, r *http
 	accountID := mux.Vars(r)["accountID"]
 
 	count, payments, err := ui.cache.getArchivedPayments(first, last, accountID)
-
 	if err != nil {
 		log.Error(err)
 		w.WriteHeader(http.StatusBadRequest)
