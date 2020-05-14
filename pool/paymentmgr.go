@@ -747,8 +747,13 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 		return nil
 	}
 
-	// Create the payout transaction.
+	// The fee address is being picked at random from the set of pool fee
+	// addresses to make it difficult for third-parties wanting to track
+	// pool fees collected by the pool and ultimately determine the
+	// cummulative value accrued by pool operators.
 	feeAddr := pm.cfg.PoolFeeAddrs[rand.Intn(len(pm.cfg.PoolFeeAddrs))]
+
+	// Create the payout transaction.
 	inputs := make([]chainjson.TransactionInput, 0)
 	outputs := make(map[string]dcrutil.Amount)
 	var tIn dcrutil.Amount
