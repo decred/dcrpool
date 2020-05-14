@@ -191,8 +191,15 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	data := <-recvCh
-	msg, mType, err := IdentifyMessage(data)
+	var msg Message
+	var mType int
+	var data []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
+	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
@@ -222,7 +229,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	msg, _, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -246,7 +257,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	msg, _, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -270,7 +285,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -289,7 +308,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if resp.Error != nil {
 		t.Fatalf("expected non-error authorize response, got %v", resp.Error)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -318,7 +341,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -348,7 +375,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -378,7 +409,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	_, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -396,7 +431,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	_, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -414,7 +453,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -439,7 +482,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -503,8 +550,18 @@ func testClient(t *testing.T, db *bolt.DB) {
 	// Send a work notification to the CPU client.
 	r = WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
 		blockVersion, nBits, nTime, true)
-	client.ch <- r
-	cpuWork := <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case client.ch <- r:
+	}
+
+	var cpuWork []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case cpuWork = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(cpuWork)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -553,10 +610,19 @@ func testClient(t *testing.T, db *bolt.DB) {
 
 	// Send a work notification to an Innosilicon D9 client.
 	setMiner(InnosiliconD9)
-	client.ch <- r
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case client.ch <- r:
+	}
 
 	// Ensure the work notification received is unique to the D9.
-	d9Work := <-recvCh
+	var d9Work []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case d9Work = <-recvCh:
+	}
 	if bytes.Equal(cpuWork, d9Work) {
 		t.Fatalf("expected innosilicond9 work to be different from cpu work")
 	}
@@ -569,10 +635,19 @@ func testClient(t *testing.T, db *bolt.DB) {
 
 	// Send a work notification to a Whatsminer D1 client.
 	setMiner(WhatsminerD1)
-	client.ch <- r
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case client.ch <- r:
+	}
 
 	// Ensure the work notification received is unique to the D1.
-	d1Work := <-recvCh
+	var d1Work []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case d1Work = <-recvCh:
+	}
 	if bytes.Equal(d1Work, d9Work) {
 		t.Fatalf("expected whatsminer d1 work to be different from " +
 			"innosilion d9 work")
@@ -586,10 +661,19 @@ func testClient(t *testing.T, db *bolt.DB) {
 
 	// Send a work notification to an Antminer DR3 client.
 	setMiner(AntminerDR3)
-	client.ch <- r
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case client.ch <- r:
+	}
 
 	// Ensure the work notification received is unique to the DR3.
-	dr3Work := <-recvCh
+	var dr3Work []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case dr3Work = <-recvCh:
+	}
 	if bytes.Equal(d1Work, dr3Work) {
 		t.Fatalf("expected antminer dr3 work to be different from " +
 			"whatsminer d1 work")
@@ -603,10 +687,19 @@ func testClient(t *testing.T, db *bolt.DB) {
 
 	// Send a work notification to an Antminer DR5 client.
 	setMiner(AntminerDR5)
-	client.ch <- r
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case client.ch <- r:
+	}
 
 	// Ensure the work notification received is identical to that of the DR3.
-	dr5Work := <-recvCh
+	var dr5Work []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case dr5Work = <-recvCh:
+	}
 	if !bytes.Equal(dr5Work, dr3Work) {
 		t.Fatalf("expected antminer dr5 work to be equal to antminer dr3 work")
 	}
@@ -619,10 +712,19 @@ func testClient(t *testing.T, db *bolt.DB) {
 
 	// Send a work notification to an Obelisk DCR1 client.
 	setMiner(ObeliskDCR1)
-	client.ch <- r
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case client.ch <- r:
+	}
 
 	// Ensure the work notification received is unique to the DCR1.
-	dcr1Work := <-recvCh
+	var dcr1Work []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case dcr1Work = <-recvCh:
+	}
 	if !bytes.Equal(dr5Work, dcr1Work) {
 		t.Fatalf("expected obelisk DCR1 work to be different from " +
 			"antminer dr5 work")
@@ -647,7 +749,12 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	cpuSub := <-recvCh
+	var cpuSub []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case cpuSub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(cpuSub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -677,7 +784,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	cpuSub = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case cpuSub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(cpuSub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -723,7 +834,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	cpuSub = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case cpuSub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(cpuSub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -751,7 +866,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	cpuSub = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case cpuSub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(cpuSub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -782,7 +901,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	cpuSub = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case cpuSub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(cpuSub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -812,7 +935,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	cpuSub = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case cpuSub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(cpuSub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -839,7 +966,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	cpuSub = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case cpuSub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(cpuSub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -870,7 +1001,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	cpuSub = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case cpuSub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(cpuSub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -898,7 +1033,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	cpuSub = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case cpuSub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(cpuSub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -926,7 +1065,12 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	d1Sub := <-recvCh
+	var d1Sub []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case d1Sub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(d1Sub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -951,7 +1095,12 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	dr3Sub := <-recvCh
+	var dr3Sub []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case dr3Sub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(dr3Sub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -976,7 +1125,12 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	dr5Sub := <-recvCh
+	var dr5Sub []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case dr5Sub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(dr5Sub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -1001,7 +1155,12 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	d9Sub := <-recvCh
+	var d9Sub []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case d9Sub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(d9Sub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -1026,7 +1185,12 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	dcr1Sub := <-recvCh
+	var dcr1Sub []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case dcr1Sub = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(dcr1Sub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -1096,7 +1260,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -1114,7 +1282,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if resp.Error != nil {
 		t.Fatalf("expected non-error authorize response, got %v", resp.Error)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -1138,7 +1310,11 @@ func testClient(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
-	data = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -1181,8 +1357,17 @@ func testClient(t *testing.T, db *bolt.DB) {
 	// Send a work notification to the CPU client.
 	r = WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
 		blockVersion, nBits, nTime, true)
-	client.ch <- r
-	cpuWork = <-recvCh
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case client.ch <- r:
+	}
+
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case cpuWork = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(cpuWork)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
@@ -1199,7 +1384,12 @@ func testClient(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure the client receives time-rolled work.
-	timeRolledWork := <-recvCh
+	var timeRolledWork []byte
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case timeRolledWork = <-recvCh:
+	}
 	msg, mType, err = IdentifyMessage(timeRolledWork)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
