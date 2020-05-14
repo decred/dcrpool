@@ -2,6 +2,7 @@ package pool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -104,7 +105,8 @@ func testEndpoint(t *testing.T, db *bolt.DB) {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
-				if opErr, ok := err.(*net.OpError); ok {
+				var opErr *net.OpError
+				if errors.As(err, &opErr) {
 					if opErr.Op == "accept" {
 						if strings.Contains(opErr.Err.Error(),
 							"use of closed network connection") {

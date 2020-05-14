@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -536,28 +537,26 @@ func (c *Client) read() {
 		}
 		data, err := c.reader.ReadBytes('\n')
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				log.Errorf("%s: EOF", c.id)
 				c.cancel()
 				return
 			}
-			nErr, ok := err.(*net.OpError)
-			if !ok {
+			var nErr *net.OpError
+			if !errors.As(err, &nErr) {
 				log.Errorf("%s: failed to read bytes: %v", c.id, err)
 				c.cancel()
 				return
 			}
-			if nErr != nil {
-				if nErr.Op == "read" && nErr.Net == "tcp" {
-					switch {
-					case nErr.Timeout():
-						log.Errorf("%s: read timeout: %v", c.id, err)
-					case !nErr.Timeout():
-						log.Errorf("%s: read error: %v", c.id, err)
-					}
-					c.cancel()
-					return
+			if nErr.Op == "read" && nErr.Net == "tcp" {
+				switch {
+				case nErr.Timeout():
+					log.Errorf("%s: read timeout: %v", c.id, err)
+				case !nErr.Timeout():
+					log.Errorf("%s: read error: %v", c.id, err)
 				}
+				c.cancel()
+				return
 			}
 			log.Errorf("failed to read bytes: %v %T", err, err)
 			c.cancel()

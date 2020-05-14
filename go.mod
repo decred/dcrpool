@@ -1,6 +1,6 @@
 module github.com/decred/dcrpool
 
-go 1.12
+go 1.13
 
 require (
 	decred.org/dcrwallet v1.2.3-0.20200512175900-4d19ca19f24a

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Decred developers
+// Copyright (c) 2019-2020 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -6,6 +6,7 @@ package pool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -105,7 +106,8 @@ func (e *Endpoint) listen() {
 	for {
 		conn, err := e.listener.Accept()
 		if err != nil {
-			if opErr, ok := err.(*net.OpError); ok {
+			var opErr *net.OpError
+			if errors.As(err, &opErr) {
 				if opErr.Op == "accept" {
 					if strings.Contains(opErr.Err.Error(),
 						"use of closed network connection") {

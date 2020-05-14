@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2016 The btcsuite developers
-// Copyright (c) 2015-2019 The Decred developers
+// Copyright (c) 2015-2020 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -236,11 +237,12 @@ func (m *CPUMiner) generateBlocks(ctx context.Context) {
 			m.miner.recordRequest(*work.ID, pool.Submit)
 			err := m.miner.encoder.Encode(work)
 			if err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					return
 				}
 
-				if nErr := err.(*net.OpError); nErr != nil {
+				var nErr *net.OpError
+				if errors.As(err, &nErr) {
 					if nErr.Op == "write" && nErr.Net == "tcp" {
 						continue
 					}

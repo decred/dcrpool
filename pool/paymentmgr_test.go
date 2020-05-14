@@ -3,6 +3,7 @@ package pool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"testing"
@@ -123,20 +124,20 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	for name, test := range shareSet {
 		actual, err := mgr.sharePercentages(test.input)
-		if err != test.err {
+		if !errors.Is(err, test.err) {
 			var errCode ErrorCode
 			var expectedCode ErrorCode
 
 			if err != nil {
-				e, ok := err.(Error)
-				if ok {
+				var e Error
+				if errors.As(err, &e) {
 					errCode = e.ErrorCode
 				}
 			}
 
 			if test.err != nil {
-				e, ok := test.err.(Error)
-				if ok {
+				var e Error
+				if errors.As(test.err, &e) {
 					expectedCode = e.ErrorCode
 				}
 			}

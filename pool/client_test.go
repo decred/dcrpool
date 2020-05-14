@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -38,7 +39,8 @@ func testClient(t *testing.T, db *bolt.DB) {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
-				if opErr, ok := err.(*net.OpError); ok {
+				var opErr *net.OpError
+				if errors.As(err, &opErr) {
 					if opErr.Op == "accept" {
 						if strings.Contains(opErr.Err.Error(),
 							"use of closed network connection") {
@@ -146,27 +148,25 @@ func testClient(t *testing.T, db *bolt.DB) {
 
 			data, err := r.ReadBytes('\n')
 			if err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					c.cancel()
 					return
 				}
-				nErr, ok := err.(*net.OpError)
-				if !ok {
+				var nErr *net.OpError
+				if !errors.As(err, &nErr) {
 					log.Errorf("failed to read bytes: %v", err)
 					c.cancel()
 					return
 				}
-				if nErr != nil {
-					if nErr.Op == "read" && nErr.Net == "tcp" {
-						switch {
-						case nErr.Timeout():
-							log.Errorf("read timeout: %v", err)
-						case !nErr.Timeout():
-							log.Errorf("read error: %v", err)
-						}
-						c.cancel()
-						return
+				if nErr.Op == "read" && nErr.Net == "tcp" {
+					switch {
+					case nErr.Timeout():
+						log.Errorf("read timeout: %v", err)
+					case !nErr.Timeout():
+						log.Errorf("read error: %v", err)
 					}
+					c.cancel()
+					return
 				}
 
 				log.Errorf("failed to read bytes: %v %T", err, err)
