@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Decred developers
+// Copyright (c) 2019-2020 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -6,6 +6,7 @@ package main
 
 import (
 	"crypto/elliptic"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -362,12 +363,15 @@ func loadConfig() (*config, []string, error) {
 
 	_, err = preParser.Parse()
 	if err != nil {
-		if e, ok := err.(*flags.Error); ok && e.Type != flags.ErrHelp {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		} else if ok && e.Type == flags.ErrHelp {
-			fmt.Fprintln(os.Stdout, err)
-			os.Exit(0)
+		var e *flags.Error
+		if errors.As(err, &e) {
+			if e.Type != flags.ErrHelp {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			} else if e.Type == flags.ErrHelp {
+				fmt.Fprintln(os.Stdout, err)
+				os.Exit(0)
+			}
 		}
 	}
 
@@ -435,7 +439,8 @@ func loadConfig() (*config, []string, error) {
 		// Show a nicer error message if it's because a symlink is
 		// linked to a directory that does not exist (probably because
 		// it's not mounted).
-		if e, ok := err.(*os.PathError); ok && os.IsExist(err) {
+		var e *os.PathError
+		if errors.As(err, &e) && os.IsExist(err) {
 			if link, lerr := os.Readlink(e.Path); lerr == nil {
 				str := "is symlink %s -> %s mounted?"
 				err = fmt.Errorf(str, e.Path, link)
@@ -470,7 +475,8 @@ func loadConfig() (*config, []string, error) {
 
 	err = flags.NewIniParser(parser).ParseFile(preCfg.ConfigFile)
 	if err != nil {
-		if _, ok := err.(*os.PathError); !ok {
+		var e *os.PathError
+		if !errors.As(err, &e) {
 			fmt.Fprintf(os.Stderr, "error parsing config file: %v\n", err)
 			fmt.Fprintln(os.Stderr, usageMessage)
 			return nil, nil, err
@@ -481,7 +487,8 @@ func loadConfig() (*config, []string, error) {
 	// Parse command line options again to ensure they take precedence.
 	remainingArgs, err := parser.Parse()
 	if err != nil {
-		if e, ok := err.(*flags.Error); !ok || e.Type != flags.ErrHelp {
+		var e *flags.Error
+		if !errors.As(err, &e) || e.Type != flags.ErrHelp {
 			fmt.Fprintln(os.Stderr, usageMessage)
 		}
 		return nil, nil, err

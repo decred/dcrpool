@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"html/template"
 	"net"
@@ -254,7 +255,7 @@ func (ui *GUI) Run(ctx context.Context) {
 
 			if err := ui.server.ListenAndServeTLS(ui.cfg.TLSCertFile,
 				ui.cfg.TLSKeyFile); err != nil &&
-				err != http.ErrServerClosed {
+				!errors.Is(err, http.ErrServerClosed) {
 				log.Error(err)
 			}
 		}
@@ -282,7 +283,7 @@ func (ui *GUI) Run(ctx context.Context) {
 				log.Info("Starting GUI server on port 80 (http, will forward to https)")
 				if err := http.ListenAndServe(port80,
 					certMgr.HTTPHandler(nil)); err != nil &&
-					err != http.ErrServerClosed {
+					!errors.Is(err, http.ErrServerClosed) {
 					log.Error(err)
 				}
 			}()

@@ -1,10 +1,13 @@
-// Copyright (c) 2019 The Decred developers
+// Copyright (c) 2019-2020 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package pool
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // ErrorCode identifies a kind of error.
 type ErrorCode int
@@ -106,6 +109,6 @@ func MakeError(c ErrorCode, desc string, err error) Error {
 
 // IsError returns whether err is an Error with a matching error code.
 func IsError(err error, code ErrorCode) bool {
-	e, ok := err.(Error)
-	return ok && e.ErrorCode == code
+	var e Error
+	return errors.As(err, &e) && e.ErrorCode == code
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Decred developers
+// Copyright (c) 2019-2020 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"math/big"
 	"net"
@@ -189,11 +190,12 @@ func (m *Miner) read(ctx context.Context) {
 				// Non-blocking receive fallthrough.
 			}
 
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				continue
 			}
 
-			if nErr := err.(*net.OpError); nErr != nil {
+			var nErr *net.OpError
+			if errors.As(err, &nErr) {
 				if nErr.Op == "read" && nErr.Net == "tcp" {
 					continue
 				}
