@@ -100,10 +100,6 @@ func (t *tWalletConnection) SignTransaction(context.Context, *walletrpc.SignTran
 	}, nil
 }
 
-func (t *tWalletConnection) BestBlock(ctx context.Context, in *walletrpc.BestBlockRequest, opts ...grpc.CallOption) (*walletrpc.BestBlockResponse, error) {
-	return nil, nil
-}
-
 func (t *tWalletConnection) PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
 	txHash, err := hex.DecodeString("d2a667e0f1643c3deb2de87ef9af3252679459f62" +
 		"5451a351b1510b5090abe23")

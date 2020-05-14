@@ -100,8 +100,6 @@ var (
 // WalletConnection defines the functionality needed by a wallet
 // grpc connection for the pool.
 type WalletConnection interface {
-	Balance(context.Context, *walletrpc.BalanceRequest, ...grpc.CallOption) (*walletrpc.BalanceResponse, error)
-	BestBlock(context.Context, *walletrpc.BestBlockRequest, ...grpc.CallOption) (*walletrpc.BestBlockResponse, error)
 	SignTransaction(context.Context, *walletrpc.SignTransactionRequest, ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
 	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
 }
@@ -150,6 +148,7 @@ type Hub struct {
 	nodeConn       NodeConnection
 	walletClose    func() error
 	walletConn     WalletConnection
+	notifClient    walletrpc.WalletService_ConfirmationNotificationsClient
 	poolDiffs      *DifficultySet
 	paymentMgr     *PaymentMgr
 	chainState     *ChainState
@@ -185,6 +184,12 @@ func (h *Hub) SetNodeConnection(conn NodeConnection) {
 func (h *Hub) SetWalletConnection(conn WalletConnection, close func() error) {
 	h.walletConn = conn
 	h.walletClose = close
+}
+
+// SetTxConfNotifClient sets the wallet transaction confirmation notification
+// client.
+func (h *Hub) SetTxConfNotifClient(conn walletrpc.WalletService_ConfirmationNotificationsClient) {
+	h.notifClient = conn
 }
 
 // persistPoolMode saves the pool mode to the db.
@@ -234,19 +239,19 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	}
 
 	pCfg := &PaymentMgrConfig{
-		DB:                    h.db,
-		ActiveNet:             h.cfg.ActiveNet,
-		PoolFee:               h.cfg.PoolFee,
-		LastNPeriod:           h.cfg.LastNPeriod,
-		SoloPool:              h.cfg.SoloPool,
-		PaymentMethod:         h.cfg.PaymentMethod,
-		PoolFeeAddrs:          h.cfg.PoolFeeAddrs,
-		WalletAccount:         h.cfg.WalletAccount,
-		WalletPass:            h.cfg.WalletPass,
-		WalletBestHeight:      h.walletBestHeight,
-		GetBlockConfirmations: h.getBlockConfirmations,
-		FetchTxCreator:        func() TxCreator { return h.nodeConn },
-		FetchTxBroadcaster:    func() TxBroadcaster { return h.walletConn },
+		DB:                     h.db,
+		ActiveNet:              h.cfg.ActiveNet,
+		PoolFee:                h.cfg.PoolFee,
+		LastNPeriod:            h.cfg.LastNPeriod,
+		SoloPool:               h.cfg.SoloPool,
+		PaymentMethod:          h.cfg.PaymentMethod,
+		PoolFeeAddrs:           h.cfg.PoolFeeAddrs,
+		WalletAccount:          h.cfg.WalletAccount,
+		WalletPass:             h.cfg.WalletPass,
+		GetBlockConfirmations:  h.getBlockConfirmations,
+		GetTxConfNotifications: h.getTxConfNotifications,
+		FetchTxCreator:         func() TxCreator { return h.nodeConn },
+		FetchTxBroadcaster:     func() TxBroadcaster { return h.walletConn },
 	}
 	h.paymentMgr, err = NewPaymentMgr(pCfg)
 	if err != nil {
@@ -309,14 +314,25 @@ func (h *Hub) getWork(ctx context.Context) (string, string, error) {
 	return work.Data, work.Target, err
 }
 
-// walletBestHeight fetches the height at which the pool wallet has synced to.
-func (h *Hub) walletBestHeight(ctx context.Context) (uint32, error) {
-	bestReq := &walletrpc.BestBlockRequest{}
-	bestResp, err := h.walletConn.BestBlock(ctx, bestReq)
-	if err != nil {
-		return 0, err
+// getTxConfNotifications streams transaction confirmation notifications for
+// the provided transaction hashes.
+func (h *Hub) getTxConfNotifications(txHashes []*chainhash.Hash, stopAfter int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
+	hashes := make([][]byte, 0, len(txHashes))
+	for _, hash := range txHashes {
+		hashes = append(hashes, hash[:])
 	}
-	return bestResp.Height, nil
+
+	req := &walletrpc.ConfirmationNotificationsRequest{
+		TxHashes:  hashes,
+		StopAfter: stopAfter,
+	}
+
+	err := h.notifClient.Send(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return h.notifClient.Recv, nil
 }
 
 // getBlockConfirmation returns the number of block confirmations for the

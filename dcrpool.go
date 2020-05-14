@@ -153,12 +153,19 @@ func newPool(cfg *config) (*miningPool, error) {
 			AccountNumber:         cfg.WalletAccount,
 			RequiredConfirmations: 1,
 		}
-		_, err = walletConn.Balance(context.TODO(), req)
+		_, err = walletConn.Balance(p.ctx, req)
 		if err != nil {
 			return nil, err
 		}
 
 		p.hub.SetWalletConnection(walletConn, grpc.Close)
+
+		confNotifs, err := walletConn.ConfirmationNotifications(p.ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		p.hub.SetTxConfNotifClient(confNotifs)
 	}
 
 	err = p.hub.FetchWork(p.ctx)
