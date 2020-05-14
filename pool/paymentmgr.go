@@ -56,8 +56,6 @@ type TxBroadcaster interface {
 	SignTransaction(context.Context, *walletrpc.SignTransactionRequest, ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
 	// PublishTransaction broadcasts the transaction unto the network.
 	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
-	// Balance returns the account balance details of the wallet.
-	Balance(context.Context, *walletrpc.BalanceRequest, ...grpc.CallOption) (*walletrpc.BalanceResponse, error)
 }
 
 // PaymentMgrConfig contains all of the configuration values which should be
@@ -82,12 +80,12 @@ type PaymentMgrConfig struct {
 	WalletAccount uint32
 	// WalletPass represents the passphrase to unlock the wallet with.
 	WalletPass string
-	// WalletBestHeight fetches the height at which the pool wallet
-	// has synced to.
-	WalletBestHeight func(context.Context) (uint32, error)
 	// GetBlockConfirmations returns the number of block confirmations for the
 	// provided block hash.
 	GetBlockConfirmations func(context.Context, *chainhash.Hash) (int64, error)
+	// GetTxConfNotifications streams transaction confirmation notifications on
+	// the provided hashes.
+	GetTxConfNotifications func([]*chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error)
 	// FetchTxCreator returns a transaction creator that allows coinbase lookups
 	// and payment transaction creation.
 	FetchTxCreator func() TxCreator
@@ -755,9 +753,11 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 
 	// Create the payout transaction.
 	inputs := make([]chainjson.TransactionInput, 0)
+	txHashes := make(map[string]*chainhash.Hash)
 	outputs := make(map[string]dcrutil.Amount)
 	var tIn dcrutil.Amount
 	var tOut dcrutil.Amount
+	var maxSpendableHeight uint32
 
 	txCreator := pm.cfg.FetchTxCreator()
 	if txCreator == nil {
@@ -777,7 +777,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 		}
 
 		// If the block has no confirmations at the current height,
-		// it is an orphan. Remove the payments associated with it.
+		// it is an orphan. Remove payments associated with it.
 		if confs <= 0 {
 			toDelete = append(toDelete, key)
 		}
@@ -819,6 +819,13 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 			Tree:   wire.TxTreeRegular,
 		}
 		inputs = append(inputs, in)
+
+		spendableHeight := set[0].EstimatedMaturity + 1
+		if maxSpendableHeight < spendableHeight {
+			maxSpendableHeight = spendableHeight
+		}
+
+		txHashes[txHash.String()] = txHash
 
 		outV, err := dcrutil.NewAmount(txOutResult.Value)
 		if err != nil {
@@ -882,12 +889,12 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 	estFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, estSize)
 	sansFees := tOut - estFee
 
-	// Deduct the portion of the transaction fees being paid for by
-	// the participating accounts from the outputs being paid to them.
+	// Deduct the portion of transaction fees being paid for by
+	// participating accounts from outputs being paid to them.
 	//
-	// The portion is calculated as the percentage of the fees based
-	// on the ratio of the amount being paid to the total transaction
-	// output minus the pool fees.
+	// It is  calculated as the percentage of fees based on the
+	// ratio of the amount being paid to the total transaction
+	// output minus pool fees.
 	for addr, v := range outputs {
 		if addr == feeAddr.String() {
 			continue
@@ -909,6 +916,51 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 		outs[addr] = amt
 	}
 
+	// Ensure the wallet is aware of all the outputs to be spent by the payout
+	// transaction.
+	if maxSpendableHeight < height {
+		maxSpendableHeight = height
+	}
+
+	hashes := make([]*chainhash.Hash, 0, len(txHashes))
+	for _, hash := range txHashes {
+		hashes = append(hashes, hash)
+	}
+
+	notifSource, err := pm.cfg.GetTxConfNotifications(hashes,
+		int32(maxSpendableHeight))
+	if err != nil {
+		return fmt.Errorf("unable to stream tx confirmations: %v", err)
+	}
+
+	// Wait for coinbase tx confirmations from the wallet.
+	maxSpendableConfs := int32(pm.cfg.ActiveNet.CoinbaseMaturity) + 1
+	for {
+		resp, err := notifSource()
+		if err != nil {
+			return fmt.Errorf("tx confirmations notification error: %v", err)
+		}
+
+		// Ensure all coinbases being spent are spendable before proceeding
+		// with creating and publishing the transaction.
+		for _, coinbase := range resp.Confirmations {
+			if coinbase.Confirmations >= maxSpendableConfs {
+				cbHash, err := chainhash.NewHash(coinbase.TxHash)
+				if err != nil {
+					return fmt.Errorf("unable to create block hash: %v", err)
+				}
+
+				// Remove spendable coinbases from the tx hash set. All
+				// coinbases are spendable when the tx hash set is empty.
+				delete(txHashes, cbHash.String())
+			}
+		}
+
+		if len(txHashes) == 0 {
+			break
+		}
+	}
+
 	tx, err := txCreator.CreateRawTransaction(ctx, inputs, outs, nil, nil)
 	if err != nil {
 		return fmt.Errorf("unable to create raw transaction: %v", err)
@@ -919,43 +971,9 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 		return err
 	}
 
-	// TODO: With dcrwallet notifications on the coinbase tx like jholdstock
-	// suggested we would not need to be watching the wallet like this or even
-	// make balance queries.
-	for {
-		// Ensure the wallet is synced to the current chain height before
-		// proceeding with payments.
-		walletHeight, err := pm.cfg.WalletBestHeight(ctx)
-		if err != nil {
-			return fmt.Errorf("unable to fetch best wallet height: %v", err)
-		}
-
-		if walletHeight >= height {
-			time.Sleep(time.Second * 3)
-			break
-		}
-	}
-
 	txBroadcaster := pm.cfg.FetchTxBroadcaster()
 	if txBroadcaster == nil {
 		return fmt.Errorf("tx broadcaster unset")
-	}
-
-	balanceReq := &walletrpc.BalanceRequest{
-		AccountNumber:         pm.cfg.WalletAccount,
-		RequiredConfirmations: int32(pm.cfg.ActiveNet.CoinbaseMaturity + 1),
-	}
-	balanceResp, err := txBroadcaster.Balance(context.TODO(), balanceReq)
-	if err != nil {
-		return fmt.Errorf("unable to get account balance: %v", err)
-	}
-
-	spendable := dcrutil.Amount(balanceResp.Spendable)
-
-	if spendable < tOut {
-		return fmt.Errorf("insufficient account funds, pool account "+
-			"has only %v to spend, however outgoing transaction will "+
-			"require spending %v", spendable, tOut)
 	}
 
 	// Sign the transaction.
