@@ -49,9 +49,9 @@ const (
 
 // StratumError represents a stratum error message.
 type StratumError struct {
-	Code      uint32  `json:"code"`
-	Message   string  `json:"message"`
-	Traceback *string `json:"traceback"`
+	Code      uint32 `json:"code"`
+	Message   string `json:"message"`
+	Traceback string `json:"traceback"`
 }
 
 // NewStratumError creates a stratum error instance.
@@ -78,7 +78,7 @@ func NewStratumError(code uint32, err error) *StratumError {
 	return &StratumError{
 		Code:      code,
 		Message:   fmt.Sprintf("%s: %s", msg, err.Error()),
-		Traceback: nil,
+		Traceback: "",
 	}
 }
 
@@ -288,7 +288,7 @@ func SubscribeResponse(id uint64, notifyID string, extraNonce1 string, extraNonc
 // ParseSubscribeResponse resolves a subscribe response into its components.
 func ParseSubscribeResponse(resp *Response) (string, string, string, uint64, error) {
 	if resp.Error != nil {
-		desc := fmt.Sprintf("%d, %s, %v", resp.Error.Code,
+		desc := fmt.Sprintf("%d, %s, %s", resp.Error.Code,
 			resp.Error.Message, resp.Error.Traceback)
 		return "", "", "", 0, MakeError(ErrParse, desc, nil)
 	}

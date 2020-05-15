@@ -246,7 +246,7 @@ func (m *CPUMiner) generateBlocks(ctx context.Context) {
 					}
 				}
 
-				log.Errorf("Failed to encode work submission request: %v", err)
+				log.Errorf("failed to encode work submission request: %v", err)
 				m.miner.cancel()
 			}
 		}

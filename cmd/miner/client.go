@@ -29,7 +29,7 @@ type Work struct {
 
 // Miner represents a stratum mining client.
 type Miner struct {
-	id uint64 // update atomically
+	id uint64 // update atomically.
 
 	conn            net.Conn
 	core            *CPUMiner
@@ -108,7 +108,6 @@ func (m *Miner) keepAlive(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			m.conn.Close()
 			m.wg.Done()
 			return
 
@@ -116,34 +115,30 @@ func (m *Miner) keepAlive(ctx context.Context) {
 			m.connectedMtx.RLock()
 			if m.connected {
 				m.connectedMtx.RUnlock()
-				time.Sleep(time.Second)
 				continue
 			}
 			m.connectedMtx.RUnlock()
 
+			time.Sleep(time.Second * 2)
+
 			poolAddr := strings.Replace(m.config.Pool, "stratum+tcp", "", 1)
 			conn, err := net.Dial("tcp", poolAddr)
 			if err != nil {
-				log.Errorf("unable connect to %s, %v", poolAddr, err)
-				time.Sleep(time.Second * 5)
 				continue
 			}
 
 			m.conn = conn
 			m.encoder = json.NewEncoder(m.conn)
 			m.reader = bufio.NewReader(m.conn)
-
 			err = m.subscribe()
 			if err != nil {
 				log.Errorf("unable to subscribe miner: %v", err)
-				time.Sleep(time.Second * 5)
 				continue
 			}
 
 			err = m.authenticate()
 			if err != nil {
 				log.Errorf("unable to authenticate miner: %v", err)
-				time.Sleep(time.Second * 5)
 				continue
 			}
 
@@ -151,7 +146,7 @@ func (m *Miner) keepAlive(ctx context.Context) {
 			m.connected = true
 			m.connectedMtx.Unlock()
 
-			time.Sleep(time.Second * 5)
+			log.Debugf("miner reconnected to %s", poolAddr)
 		}
 	}
 }
@@ -160,11 +155,18 @@ func (m *Miner) keepAlive(ctx context.Context) {
 // processing. It must be run as a goroutine.
 func (m *Miner) read(ctx context.Context) {
 	for {
-		// Read only if the miner is connected.
+		select {
+		case <-ctx.Done():
+			m.wg.Done()
+			return
+		default:
+			// Non-blocking receive fallthrough.
+		}
+
+		// Proceed to read messages if the miner is connected.
 		m.connectedMtx.RLock()
 		if !m.connected {
 			m.connectedMtx.RUnlock()
-			time.Sleep(time.Second)
 			continue
 		}
 		m.connectedMtx.RUnlock()
@@ -179,23 +181,25 @@ func (m *Miner) read(ctx context.Context) {
 			m.connected = false
 			m.connectedMtx.Unlock()
 
+			select {
+			case <-ctx.Done():
+				m.wg.Done()
+				return
+			default:
+				// Non-blocking receive fallthrough.
+			}
+
 			if err == io.EOF {
 				continue
 			}
 
 			if nErr := err.(*net.OpError); nErr != nil {
 				if nErr.Op == "read" && nErr.Net == "tcp" {
-					select {
-					case <-ctx.Done():
-						m.wg.Done()
-						return
-					default:
-						continue
-					}
+					continue
 				}
 			}
 
-			log.Errorf("failed to read bytes: %v", err)
+			log.Errorf("unable to read bytes: %v", err)
 			continue
 		}
 		m.readCh <- data
@@ -215,7 +219,7 @@ func (m *Miner) process(ctx context.Context) {
 		case data := <-m.readCh:
 			msg, reqType, err := pool.IdentifyMessage(data)
 			if err != nil {
-				log.Errorf("Message identification error: %v", err)
+				log.Errorf("message identification error: %v", err)
 				m.cancel()
 				continue
 			}
@@ -232,7 +236,8 @@ func (m *Miner) process(ctx context.Context) {
 				resp := msg.(*pool.Response)
 				method := m.fetchRequest(resp.ID)
 				if method == "" {
-					log.Errorf("No request found for response with id: %d", resp.ID)
+					log.Errorf("no request found for response "+
+						"with id: %d", resp.ID)
 					m.cancel()
 					continue
 				}
@@ -241,31 +246,31 @@ func (m *Miner) process(ctx context.Context) {
 				case pool.Authorize:
 					status, errStr, err := pool.ParseAuthorizeResponse(resp)
 					if err != nil {
-						log.Errorf("Parse authorize response error: %v", err)
+						log.Errorf("parse authorize response error: %v", err)
 						m.cancel()
 						continue
 					}
 
 					if errStr != nil {
-						log.Errorf("Authorize error: %s", errStr)
+						log.Errorf("authorize error: %s", errStr)
 						m.cancel()
 						continue
 					}
 
 					if !status {
-						log.Error("Authorize request for miner failed")
+						log.Error("unable to authorize request for miner")
 						m.cancel()
 						continue
 					}
 
 					m.authorized = true
-					log.Trace("Miner successfully authorized")
+					log.Trace("Miner successfully authorized.")
 
 				case pool.Subscribe:
 					diffID, notifyID, extraNonce1E, extraNonce2Size, err :=
 						pool.ParseSubscribeResponse(resp)
 					if err != nil {
-						log.Errorf("Parse subscribe response error: %v", err)
+						log.Errorf("parse subscribe response error: %v", err)
 						m.cancel()
 						continue
 					}
@@ -281,25 +286,25 @@ func (m *Miner) process(ctx context.Context) {
 				case pool.Submit:
 					accepted, sErr, err := pool.ParseSubmitWorkResponse(resp)
 					if err != nil {
-						log.Errorf("Parse submit response error: %v", err)
+						log.Errorf("parse submit response error: %v", err)
 						m.cancel()
 						continue
 					}
 
 					if accepted {
-						log.Trace("Submitted work was accepted by the network")
+						log.Trace("Submitted work was accepted by the network.")
 					} else {
-						log.Trace("Submitted work was rejected by the network")
+						log.Trace("Submitted work was rejected by the network.")
 					}
 
 					if sErr != nil {
-						log.Errorf("Stratum mining.submit error: [%d, %s, %s]",
+						log.Errorf("stratum mining.submit error: [%d, %s, %s]",
 							sErr.Code, sErr.Message, sErr.Traceback)
 						continue
 					}
 
 				default:
-					log.Errorf("Unknown request method for response: %s", method)
+					log.Errorf("unknown request method for response: %s", method)
 				}
 
 			case pool.NotificationMessage:
@@ -308,7 +313,7 @@ func (m *Miner) process(ctx context.Context) {
 				case pool.SetDifficulty:
 					difficulty, err := pool.ParseSetDifficultyNotification(notif)
 					if err != nil {
-						log.Errorf("Parse set difficulty response error: %v", err)
+						log.Errorf("parse set difficulty response error: %v", err)
 						m.cancel()
 						continue
 					}
@@ -332,7 +337,7 @@ func (m *Miner) process(ctx context.Context) {
 					jobID, prevBlockE, genTx1E, genTx2E, blockVersionE, _, _, _, err :=
 						pool.ParseWorkNotification(notif)
 					if err != nil {
-						log.Errorf("Parse job notification error: %v", err)
+						log.Errorf("parse job notification error: %v", err)
 						m.cancel()
 						continue
 					}
@@ -340,14 +345,14 @@ func (m *Miner) process(ctx context.Context) {
 					blockHeader, err := pool.GenerateBlockHeader(blockVersionE,
 						prevBlockE, genTx1E, m.extraNonce1E, genTx2E)
 					if err != nil {
-						log.Errorf("Generate block header error: %v", err)
+						log.Errorf("generate block header error: %v", err)
 						m.cancel()
 						continue
 					}
 
 					headerB, err := blockHeader.Bytes()
 					if err != nil {
-						log.Errorf("Failed to get header bytes error: %v", err)
+						log.Errorf("unable to get header bytes error: %v", err)
 						m.cancel()
 						continue
 					}
@@ -370,11 +375,11 @@ func (m *Miner) process(ctx context.Context) {
 					}
 
 				default:
-					log.Errorf("Unknown method for notification: %s", notif.Method)
+					log.Errorf("unknown method for notification: %s", notif.Method)
 				}
 
 			default:
-				log.Errorf("Unknown message type received: %s", reqType)
+				log.Errorf("unknown message type received: %s", reqType)
 			}
 		}
 	}
@@ -395,7 +400,7 @@ func (m *Miner) run(ctx context.Context) {
 	}
 
 	m.wg.Wait()
-	log.Infof("Shutdown miner.")
+	log.Infof("Miner terminated.")
 }
 
 // NewMiner creates a stratum mining client.
