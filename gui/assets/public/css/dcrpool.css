@@ -7657,12 +7657,22 @@ h2 {
 .tooltip .arrow {
   display: none !important; }
 
+.carousel-text {
+  padding-bottom: 1rem;
+  padding-top: 1rem;
+}
+@media (max-width: 991.98px) {
+  .carousel-text {
+    padding-bottom: 45px;
+    padding-top: 1rem;
+} }
+
 .carousel-nav {
+  position: absolute;
+  bottom: 10px;
   text-align: center;
   list-style: none;
-  background-color: white;
-  padding-top: 14px;
-  padding-bottom: 14px;
+  margin: 0;
   /* white circles */ }
   @media (max-width: 991.98px) {
     .carousel-nav {
@@ -7672,10 +7682,6 @@ h2 {
       -webkit-box-align: center;
          -ms-flex-align: center;
             align-items: center; } }
-  @media (min-width: 992px) {
-    .carousel-nav {
-      padding-top: 10px;
-      padding-bottom: 10px; } }
   .carousel-nav li {
     display: inline-block;
     cursor: pointer;
