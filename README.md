@@ -137,12 +137,12 @@ mining rewards of the pool. The addresses generated from it should be the mining
 addresses (`--miningaddr`) set for the mining node. It is important to set 
 multiple mining addresses for the mining node in production to make it 
 difficult for third-parties wanting to track coinbases mined by the pool and 
-ultimately determine the cummulative value of coinbases mined. 
+ultimately determine the cumulative value of coinbases mined. 
 
 The fee account's purpose is to receive pool fees of the mining pool. It is 
 important to set multiple pool fee addresses to the mining pool in production to 
 make it difficult for third-parties wanting to track pool fees collected by 
-the pool and ultimately determine the cummulative value accrued by pool operators. 
+the pool and ultimately determine the cumulative value accrued by pool operators. 
 With multiple pool fee addresses set, the mining pool picks one at random for 
 every payout made. The addresses generated from the fee account should be 
 set as the pool fee addresses (`--poolfeeaddrs`) of the mining pool.
