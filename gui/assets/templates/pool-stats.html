@@ -3,35 +3,35 @@
 <div class="row">
     
     <div class="col-6 col-sm-4 col-lg-2 py-3">
-        <span class="pool-overview-stat-title">Pool Hash Rate</span>
-        <div><span class="pool-overview-stat-value" id="pool-hash-rate">{{ .PoolHashRate }}</span></div>
+        <div class="pool-overview-stat-title">Pool Hash Rate</div>
+        <div class="pool-overview-stat-value" id="pool-hash-rate">{{ .PoolHashRate }}</div>
     </div>
 
     <div class="col-6 col-sm-4 col-lg-2 py-3">
-        <span class="pool-overview-stat-title">Last Work Height</span>
-        <div><span class="pool-overview-stat-value" id="last-work-height">{{ .LastWorkHeight }}</span></div>
+        <div class="pool-overview-stat-title">Last Work Height</div>
+        <div class="pool-overview-stat-value" id="last-work-height">{{ .LastWorkHeight }}</div>
     </div>
 
     <div class="col-6 col-sm-4 col-lg-2 py-3">
-        <span class="pool-overview-stat-title">Network</span>
-        <div><span class="pool-overview-stat-value">{{.Network}}</span></div>
+        <div class="pool-overview-stat-title">Network</div>
+        <div class="pool-overview-stat-value">{{.Network}}</div>
     </div>
 
     <div class="col-6 col-sm-4 col-lg-2 py-3">
-        <span class="pool-overview-stat-title">Pool Fee</span>
-        <div><span class="pool-overview-stat-value">{{floatToPercent .PoolFee }}</span></div>
+        <div class="pool-overview-stat-title">Pool Fee</div>
+        <div class="pool-overview-stat-value">{{floatToPercent .PoolFee }}</div>
     </div>
 
     {{ if not .SoloPool }}
     
     <div class="col-6 col-sm-4 col-lg-2 py-3">
-        <span class="pool-overview-stat-title">Payment Method</span>
-        <div><span class="pool-overview-stat-value">{{ upper .PaymentMethod }}</span></div>
+        <div class="pool-overview-stat-title">Payment Method</div>
+        <div class="pool-overview-stat-value">{{ upper .PaymentMethod }}</div>
     </div>
 
     <div class="col-6 col-sm-4 col-lg-2 py-3">
-        <span class="pool-overview-stat-title">Last Payment Height</span>
-        <div><span class="pool-overview-stat-value" id="last-payment-height">{{ .LastPaymentHeight }}</span></div>
+        <div class="pool-overview-stat-title">Last Payment Height</div>
+        <div class="pool-overview-stat-value" id="last-payment-height">{{ .LastPaymentHeight }}</div>
     </div>
 
     {{end}}
