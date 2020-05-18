@@ -548,6 +548,9 @@ func (h *Hub) shutdown() {
 	if h.nodeConn != nil {
 		h.nodeConn.Shutdown()
 	}
+	if h.notifClient != nil {
+		_ = h.notifClient.CloseSend()
+	}
 	h.db.Close()
 }
 
