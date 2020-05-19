@@ -62,14 +62,14 @@ func sendJSONResponse(w http.ResponseWriter, payload interface{}) {
 func (ui *GUI) paginatedBlocks(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	count, confirmedWork, err := ui.cache.getConfirmedMinedWork(first, last)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -87,14 +87,14 @@ func (ui *GUI) paginatedBlocks(w http.ResponseWriter, r *http.Request) {
 func (ui *GUI) paginatedRewardQuotas(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	count, quotas, err := ui.cache.getRewardQuotas(first, last)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -112,7 +112,7 @@ func (ui *GUI) paginatedRewardQuotas(w http.ResponseWriter, r *http.Request) {
 func (ui *GUI) paginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -121,7 +121,7 @@ func (ui *GUI) paginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 
 	count, work, err := ui.cache.getMinedWorkByAccount(first, last, accountID)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -139,7 +139,7 @@ func (ui *GUI) paginatedBlocksByAccount(w http.ResponseWriter, r *http.Request) 
 func (ui *GUI) paginatedClientsByAccount(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -148,7 +148,7 @@ func (ui *GUI) paginatedClientsByAccount(w http.ResponseWriter, r *http.Request)
 
 	count, clients, err := ui.cache.getClientsForAccount(first, last, accountID)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -166,7 +166,7 @@ func (ui *GUI) paginatedClientsByAccount(w http.ResponseWriter, r *http.Request)
 func (ui *GUI) paginatedPendingPaymentsByAccount(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -175,7 +175,7 @@ func (ui *GUI) paginatedPendingPaymentsByAccount(w http.ResponseWriter, r *http.
 
 	count, payments, err := ui.cache.getPendingPayments(first, last, accountID)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -193,7 +193,7 @@ func (ui *GUI) paginatedPendingPaymentsByAccount(w http.ResponseWriter, r *http.
 func (ui *GUI) paginatedArchivedPaymentsByAccount(w http.ResponseWriter, r *http.Request) {
 	first, last, err := getPaginationParams(r)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -202,7 +202,7 @@ func (ui *GUI) paginatedArchivedPaymentsByAccount(w http.ResponseWriter, r *http
 
 	count, payments, err := ui.cache.getArchivedPayments(first, last, accountID)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
