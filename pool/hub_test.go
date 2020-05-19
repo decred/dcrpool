@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -278,6 +277,59 @@ func testHub(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("[FetchWork] unexpected error: %v", err)
 	}
+
+	// Ensure work quotas are generated as expected.
+	now := time.Now()
+	tenBefore := now.Add(-(time.Second * 10)).UnixNano()
+	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
+	sixtyAfter := now.Add(time.Second * 60).UnixNano()
+	xWeight := new(big.Rat).SetFloat64(1.0)
+	yWeight := new(big.Rat).SetFloat64(4.0)
+	err = persistShare(db, xID, xWeight, sixtyAfter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = persistShare(db, xID, xWeight, tenBefore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = persistShare(db, yID, yWeight, thirtyBefore)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	quotas, err := hub.FetchWorkQuotas()
+	if err != nil {
+		t.Fatalf("[FetchWorkQuotas] unexpected error: %v", err)
+	}
+	if len(quotas) != 2 {
+		t.Fatalf("expected a work quota length of 2, got %v", len(quotas))
+	}
+
+	var xQuota, yQuota *Quota
+	for _, q := range quotas {
+		if q.AccountID == xID {
+			xQuota = q
+		}
+		if q.AccountID == yID {
+			yQuota = q
+		}
+	}
+
+	sum := new(big.Rat).Add(yQuota.Percentage, xQuota.Percentage)
+	if sum.Cmp(new(big.Rat).SetInt(new(big.Int).SetInt64(1))) != 0 {
+		t.Fatalf("expected the sum of share percentages to be 1, got %v", sum)
+	}
+
+	// Ensure account x's work quota is four times less than
+	// account y's work quota.
+	xPercent, _ := xQuota.Percentage.Float64()
+	yPercent, _ := yQuota.Percentage.Float64()
+	if yPercent/xPercent < 4 {
+		t.Fatal("expected account y's quota to be four times more" +
+			" than account x's work quota")
+	}
+
 	go hub.Run(ctx)
 
 	// Create the mined work to be confirmed.
@@ -436,57 +488,6 @@ func testHub(t *testing.T, db *bolt.DB) {
 		t.Fatal("expected a response body with data")
 	}
 
-	// Ensure work quotas are generated as expected.
-	now := time.Now()
-	outOfRange := now.Add(-(time.Second * 60)).UnixNano()
-	lastPaymentCreatedOn := atomic.LoadUint64(&hub.paymentMgr.lastPaymentCreatedOn)
-	xWeight := new(big.Rat).SetFloat64(1.0)
-	yWeight := new(big.Rat).SetFloat64(4.0)
-	err = persistShare(db, xID, xWeight, outOfRange)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = persistShare(db, xID, xWeight, int64(lastPaymentCreatedOn))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = persistShare(db, yID, yWeight, now.UnixNano())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	quotas, err := hub.FetchWorkQuotas()
-	if err != nil {
-		t.Fatalf("[FetchWorkQuotas] unexpected error: %v", err)
-	}
-	if len(quotas) != 2 {
-		t.Fatalf("expected a work quota length of 2, got %v", len(quotas))
-	}
-
-	var xQuota, yQuota *Quota
-	for _, q := range quotas {
-		if q.AccountID == xID {
-			xQuota = q
-		}
-		if q.AccountID == yID {
-			yQuota = q
-		}
-	}
-
-	sum := new(big.Rat).Add(yQuota.Percentage, xQuota.Percentage)
-	if sum.Cmp(new(big.Rat).SetInt(new(big.Int).SetInt64(1))) != 0 {
-		t.Fatalf("expected the sum of share percentages to be 1, got %v", sum)
-	}
-
-	// Ensure account x's work quota is four times less than
-	// account y's work quota.
-	xPercent, _ := xQuota.Percentage.Float64()
-	yPercent, _ := yQuota.Percentage.Float64()
-	if yPercent/xPercent < 4 {
-		t.Fatal("expected account y's quota to be four times more" +
-			" than account x's work quota")
-	}
-
 	// Empty the share bucket.
 	err = emptyBucket(db, shareBkt)
 	if err != nil {
@@ -518,4 +519,5 @@ func testHub(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("backup deletion error: %v", err)
 	}
+
 }

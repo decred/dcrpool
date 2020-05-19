@@ -318,10 +318,9 @@ func (pm *PaymentMgr) sharePercentages(shares []*Share) (map[string]*big.Rat, er
 	return percentages, nil
 }
 
-// PPSEligibleShares fetches all shares within the provided inclusive bounds.
-//
-// The entire share range is iterated if the provided range start (min) is nil.
-func (pm *PaymentMgr) PPSEligibleShares(min []byte, max []byte) ([]*Share, error) {
+// PPSEligibleShares fetches all shares created before or at the provided
+// time.
+func (pm *PaymentMgr) PPSEligibleShares(max []byte) ([]*Share, error) {
 	eligibleShares := make([]*Share, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchShareBucket(tx)
@@ -329,8 +328,14 @@ func (pm *PaymentMgr) PPSEligibleShares(min []byte, max []byte) ([]*Share, error
 			return err
 		}
 		c := bkt.Cursor()
-		if min == nil {
-			for k, v := c.First(); k != nil; k, v = c.Next() {
+		createdOnB := make([]byte, 8)
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			_, err := hex.Decode(createdOnB, k[:16])
+			if err != nil {
+				return err
+			}
+
+			if bytes.Compare(createdOnB, max) <= 0 {
 				var share Share
 				err := json.Unmarshal(v, &share)
 				if err != nil {
@@ -339,25 +344,7 @@ func (pm *PaymentMgr) PPSEligibleShares(min []byte, max []byte) ([]*Share, error
 				eligibleShares = append(eligibleShares, &share)
 			}
 		}
-		if min != nil {
-			createdOnB := make([]byte, 8)
-			for k, v := c.Last(); k != nil; k, v = c.Prev() {
-				_, err := hex.Decode(createdOnB, k[:16])
-				if err != nil {
-					return err
-				}
 
-				if bytes.Compare(createdOnB, min) >= 0 &&
-					bytes.Compare(createdOnB, max) <= 0 {
-					var share Share
-					err := json.Unmarshal(v, &share)
-					if err != nil {
-						return err
-					}
-					eligibleShares = append(eligibleShares, &share)
-				}
-			}
-		}
 		return nil
 	})
 	if err != nil {
@@ -369,11 +356,9 @@ func (pm *PaymentMgr) PPSEligibleShares(min []byte, max []byte) ([]*Share, error
 // PPSSharePercentages calculates the current mining reward percentages
 // due participating pool accounts based on work performed measured by
 // the PPS payment scheme.
-func (pm *PaymentMgr) PPSSharePercentages() (map[string]*big.Rat, error) {
-	now := nanoToBigEndianBytes(time.Now().UnixNano())
-	lastPaymentCreatedOn := nanoToBigEndianBytes(
-		int64(pm.fetchLastPaymentCreatedOn()))
-	shares, err := pm.PPSEligibleShares(lastPaymentCreatedOn, now)
+func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.Rat, error) {
+	max := nanoToBigEndianBytes(workCreatedOn)
+	shares, err := pm.PPSEligibleShares(max)
 	if err != nil {
 		return nil, err
 	}
@@ -445,7 +430,12 @@ func (pm *PaymentMgr) PPLNSSharePercentages() (map[string]*big.Rat, error) {
 
 // calculatePayments creates the payments due participating accounts.
 func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *PaymentSource,
-	total dcrutil.Amount, poolFee float64, height uint32, estMaturity uint32) ([]*Payment, error) {
+	total dcrutil.Amount, poolFee float64, height uint32, estMaturity uint32) ([]*Payment, int64, error) {
+	if len(ratios) == 0 {
+		return nil, 0, fmt.Errorf("valid share ratios required to" +
+			" generate payments")
+	}
+
 	// Deduct pool fee from the amount to be shared.
 	fee := total.MulF64(poolFee)
 	amtSansFees := total - fee
@@ -472,30 +462,29 @@ func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *Paym
 
 	if amtSansFees < paymentTotal {
 		diff := paymentTotal - amtSansFees
-		return nil, fmt.Errorf("total payments (%s) is greater than "+
+		return nil, 0, fmt.Errorf("total payments (%s) is greater than "+
 			"the remaining coinbase amount after fees (%s). Difference is %s",
 			paymentTotal, amtSansFees, diff)
 	}
 
 	// Add a payout entry for pool fees.
-	payments = append(payments, NewPayment(poolFeesK, source, fee, height,
-		estMaturity))
+	feePayment := NewPayment(poolFeesK, source, fee, height, estMaturity)
+	payments = append(payments, feePayment)
 
-	return payments, nil
+	return payments, feePayment.CreatedOn, nil
 }
 
 // PayPerShare generates a payment bundle comprised of payments to all
 // participating accounts. Payments are calculated based on work contributed
 // to the pool since the last payment batch.
-func (pm *PaymentMgr) payPerShare(source *PaymentSource, amt dcrutil.Amount, height uint32) error {
-	now := time.Now()
-	percentages, err := pm.PPSSharePercentages()
+func (pm *PaymentMgr) payPerShare(source *PaymentSource, amt dcrutil.Amount, height uint32, workCreatedOn int64) error {
+	percentages, err := pm.PPSSharePercentages(workCreatedOn)
 	if err != nil {
 		return err
 	}
 	estMaturity := height + uint32(pm.cfg.ActiveNet.CoinbaseMaturity)
-	payments, err := pm.calculatePayments(percentages, source, amt, pm.cfg.PoolFee,
-		height, estMaturity)
+	payments, lastPmtCreatedOn, err := pm.calculatePayments(percentages,
+		source, amt, pm.cfg.PoolFee, height, estMaturity)
 	if err != nil {
 		return err
 	}
@@ -505,15 +494,14 @@ func (pm *PaymentMgr) payPerShare(source *PaymentSource, amt dcrutil.Amount, hei
 			return err
 		}
 	}
-	lastPaymentCreatedOn := uint64(payments[len(payments)-1].CreatedOn)
-	pm.setLastPaymentCreatedOn(lastPaymentCreatedOn)
+	pm.setLastPaymentCreatedOn(uint64(lastPmtCreatedOn))
 	err = pm.cfg.DB.Update(func(tx *bolt.Tx) error {
 		// Update the last payment created on time and prune invalidated shares.
 		err := pm.persistLastPaymentCreatedOn(tx)
 		if err != nil {
 			return err
 		}
-		return pm.pruneShares(tx, now.UnixNano())
+		return pm.pruneShares(tx, workCreatedOn)
 	})
 	return err
 }
@@ -526,8 +514,8 @@ func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amoun
 		return err
 	}
 	estMaturity := height + uint32(pm.cfg.ActiveNet.CoinbaseMaturity)
-	payments, err := pm.calculatePayments(percentages, source, amt, pm.cfg.PoolFee,
-		height, estMaturity)
+	payments, lastPmtCreatedOn, err := pm.calculatePayments(percentages,
+		source, amt, pm.cfg.PoolFee, height, estMaturity)
 	if err != nil {
 		return err
 	}
@@ -537,8 +525,7 @@ func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amoun
 			return err
 		}
 	}
-	lastPaymentCreatedOn := uint64(payments[len(payments)-1].CreatedOn)
-	pm.setLastPaymentCreatedOn(lastPaymentCreatedOn)
+	pm.setLastPaymentCreatedOn(uint64(lastPmtCreatedOn))
 	err = pm.cfg.DB.Update(func(tx *bolt.Tx) error {
 		// Update the last payment created on time and prune invalidated shares.
 		err := pm.persistLastPaymentCreatedOn(tx)
@@ -553,10 +540,10 @@ func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amoun
 
 // generatePayments creates payments for participating accounts. This should
 // only be called when a block is confirmed mined, in pool mining mode.
-func (pm *PaymentMgr) generatePayments(height uint32, source *PaymentSource, amt dcrutil.Amount) error {
+func (pm *PaymentMgr) generatePayments(height uint32, source *PaymentSource, amt dcrutil.Amount, workCreatedOn int64) error {
 	switch pm.cfg.PaymentMethod {
 	case PPS:
-		return pm.payPerShare(source, amt, height)
+		return pm.payPerShare(source, amt, height, workCreatedOn)
 
 	case PPLNS:
 		return pm.payPerLastNShares(source, amt, height)

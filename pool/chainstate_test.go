@@ -41,7 +41,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	payDividends := func(context.Context, uint32) error {
 		return nil
 	}
-	generatePayments := func(uint32, *PaymentSource, dcrutil.Amount) error {
+	generatePayments := func(uint32, *PaymentSource, dcrutil.Amount, int64) error {
 		return nil
 	}
 	getBlock := func(context.Context, *chainhash.Hash) (*wire.MsgBlock, error) {

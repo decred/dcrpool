@@ -617,7 +617,7 @@ func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 	var percentages map[string]*big.Rat
 	var err error
 	if h.cfg.PaymentMethod == PPS {
-		percentages, err = h.paymentMgr.PPSSharePercentages()
+		percentages, err = h.paymentMgr.PPSSharePercentages(time.Now().UnixNano())
 	}
 	if h.cfg.PaymentMethod == PPLNS {
 		percentages, err = h.paymentMgr.PPLNSSharePercentages()

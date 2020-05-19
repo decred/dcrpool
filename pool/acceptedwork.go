@@ -62,7 +62,7 @@ func NewAcceptedWork(blockHash string, prevHash string, height uint32,
 		Height:    height,
 		MinedBy:   minedBy,
 		Miner:     miner,
-		CreatedOn: time.Now().Unix(),
+		CreatedOn: time.Now().UnixNano(),
 	}
 }
 
