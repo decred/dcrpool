@@ -157,47 +157,44 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Test pruneShares.
 	now := time.Now()
-	zeroSource := &PaymentSource{
-		BlockHash: chainhash.Hash{0}.String(),
-		Coinbase:  chainhash.Hash{0}.String(),
-	}
-	minimumTime := now.Add(-(time.Second * 60)).UnixNano()
-	maximumTime := now.UnixNano()
-	aboveMaximumTime := now.Add(time.Second * 10).UnixNano()
+	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
+	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
+	eightyBefore := now.Add(-(time.Second * 80)).UnixNano()
+	tenAfter := now.Add(time.Second * 10).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
 
-	err = persistShare(db, xID, weight, minimumTime) // Share A
+	err = persistShare(db, xID, weight, eightyBefore) // Share A
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = persistShare(db, yID, weight, maximumTime) // Share B
+	err = persistShare(db, yID, weight, thirtyBefore) // Share B
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	err = mgr.cfg.DB.Update(func(tx *bolt.Tx) error {
-		return mgr.pruneShares(tx, maximumTime)
+		return mgr.pruneShares(tx, sixtyBefore)
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Ensure share A got pruned with share B remaining.
-	shareAID := shareID(xID, minimumTime)
+	shareAID := shareID(xID, eightyBefore)
 	_, err = fetchShare(db, shareAID)
 	if err == nil {
 		t.Fatal("expected value not found error")
 	}
 
-	shareBID := shareID(yID, maximumTime)
+	shareBID := shareID(yID, thirtyBefore)
 	_, err = fetchShare(db, shareBID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching share B: %v", err)
 	}
 
 	err = mgr.cfg.DB.Update(func(tx *bolt.Tx) error {
-		return mgr.pruneShares(tx, aboveMaximumTime)
+		return mgr.pruneShares(tx, tenAfter)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -211,44 +208,39 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Test PPSEligibleShares and PPLNSEligibleShares.
 	now = time.Now()
-	minimumTime = now.Add(-(time.Second * 60)).UnixNano()
-	maximumTime = now.UnixNano()
-	belowMinimumTime := now.Add(-(time.Second * 80)).UnixNano()
-	aboveMaximumTime = now.Add(time.Second * 10).UnixNano()
+	sixtyBefore = now.Add(-(time.Second * 60)).UnixNano()
+	eightyBefore = now.Add(-(time.Second * 80)).UnixNano()
+	tenAfter = now.Add(time.Second * 10).UnixNano()
 	weight = new(big.Rat).SetFloat64(1.0)
 
 	shareCount := 1
 	expectedShareCount := 2
 
-	// Create a share below the PPS time range for account x.
-	err = persistShare(db, xID, weight, belowMinimumTime)
+	err = persistShare(db, xID, weight, eightyBefore) // Share A
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create a share at minimum of the PPS time range for account x.
-	err = persistShare(db, xID, weight, minimumTime)
+	err = persistShare(db, xID, weight, tenAfter) // Share B
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create a share at maximum of the PPS time range for account y.
-	err = persistShare(db, yID, weight, maximumTime)
+	err = persistShare(db, yID, weight, sixtyBefore) // Share C
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create a share above maximum of the PPS time range for account y.
-	err = persistShare(db, yID, weight, aboveMaximumTime)
+	err = persistShare(db, yID, weight, tenAfter) // Share D
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	minimumTimeBytes := nanoToBigEndianBytes(minimumTime)
-	maximumTimeBytes := nanoToBigEndianBytes(maximumTime)
+	sixtyBeforeB := nanoToBigEndianBytes(sixtyBefore)
+	// nowB := nanoToBigEndianBytes(minimum)
 
-	// Fetch eligible shares using the minimum and maximum time range.
-	shares, err := mgr.PPSEligibleShares(minimumTimeBytes, maximumTimeBytes)
+	// Fetch eligible shares at minimum time.
+	shares, err := mgr.PPSEligibleShares(sixtyBeforeB)
 	if err != nil {
 		t.Fatalf("PPSEligibleShares: unexpected error: %v", err)
 	}
@@ -296,47 +288,47 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Create a share below the minimum exclusive PPLNS time for account x.
-	err = persistShare(db, xID, weight, belowMinimumTime)
+	err = persistShare(db, xID, weight, eightyBefore)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share below the minimum exclusive PPLNS time for account y.
-	err = persistShare(db, yID, weight, belowMinimumTime)
+	err = persistShare(db, yID, weight, eightyBefore)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share at minimum exclusive PPLNS time for account x.
-	err = persistShare(db, xID, weight, minimumTime)
+	err = persistShare(db, xID, weight, sixtyBefore)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share at minimum exclusive PPLNS time for account y.
-	err = persistShare(db, yID, weight, minimumTime)
+	err = persistShare(db, yID, weight, sixtyBefore)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share above minimum exclusive PPLNS time for account x.
-	err = persistShare(db, xID, weight, maximumTime)
+	err = persistShare(db, xID, weight, now.UnixNano())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share above minimum exclusive PPLNS time for account y.
-	err = persistShare(db, yID, weight, aboveMaximumTime)
+	err = persistShare(db, yID, weight, tenAfter)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	shares, err = mgr.PPLNSEligibleShares(minimumTimeBytes)
+	shares, err = mgr.PPLNSEligibleShares(sixtyBeforeB)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Ensure the returned number of shates is as expected.
+	// Ensure the returned number of shares is as expected.
 	if len(shares) != expectedShareCount {
 		t.Fatalf("PPLNS error: expected %v eligible PPLNS shares, got %v",
 			expectedShareCount, len(shares))
@@ -383,6 +375,10 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	// pendingPaymentsForBlockHash.
 	height := uint32(10)
 	estMaturity := uint32(26)
+	zeroSource := &PaymentSource{
+		BlockHash: chainhash.Hash{0}.String(),
+		Coinbase:  chainhash.Hash{0}.String(),
+	}
 	amt, _ := dcrutil.NewAmount(5)
 	_, err = persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
 	if err != nil {
@@ -632,8 +628,8 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure Pay-Per-Share (PPS) works as expected.
 	now = time.Now()
-	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
-	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
+	sixtyBefore = now.Add(-(time.Second * 60)).UnixNano()
+	thirtyBefore = now.Add(-(time.Second * 30)).UnixNano()
 	shareCount = 10
 	coinbaseValue := 80
 	height = uint32(20)
@@ -657,7 +653,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure the last payment created on time was updated.
 	previousPaymentCreatedOn := int64(mgr.fetchLastPaymentCreatedOn())
-	err = mgr.generatePayments(height, zeroSource, coinbase)
+	err = mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
 	if err != nil {
 		t.Fatalf("[PPS] unable to generate payments: %v", err)
 	}
@@ -749,6 +745,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure Pay-Per-Last-N-Shares (PPLNS) works as expected.
+	now = time.Now()
 	pCfg.PaymentMethod = PPLNS
 	shareCount = 5
 	coinbaseValue = 60
@@ -772,7 +769,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure the last payment created on time was updated.
 	previousPaymentCreatedOn = int64(mgr.fetchLastPaymentCreatedOn())
-	err = mgr.generatePayments(height, zeroSource, coinbase)
+	err = mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
 	if err != nil {
 		t.Fatalf("[PPLNS] unable to generate payments: %v", err)
 	}
@@ -865,6 +862,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
+	now = time.Now()
 	paymentMaturity := height + uint32(activeNet.CoinbaseMaturity+1)
 
 	// Ensure payment maturity works as expected.
@@ -884,7 +882,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		}
 	}
 
-	err = mgr.generatePayments(height, zeroSource, coinbase)
+	err = mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
 	if err != nil {
 		t.Fatalf("unable to generate payments: %v", err)
 	}

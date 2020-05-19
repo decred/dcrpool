@@ -30,7 +30,7 @@ type ChainStateConfig struct {
 	PayDividends func(context.Context, uint32) error
 	// GeneratePayments creates payments for participating accounts in pool
 	// mining mode based on the configured payment scheme.
-	GeneratePayments func(uint32, *PaymentSource, dcrutil.Amount) error
+	GeneratePayments func(uint32, *PaymentSource, dcrutil.Amount, int64) error
 	// GetBlock fetches the block associated with the provided block hash.
 	GetBlock func(context.Context, *chainhash.Hash) (*wire.MsgBlock, error)
 	// GetBlockConfirmations fetches the block confirmations with the provided
@@ -420,7 +420,8 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					Coinbase:  block.Transactions[0].TxHash().String(),
 				}
 				amt := dcrutil.Amount(block.Transactions[0].TxOut[2].Value)
-				err = cs.cfg.GeneratePayments(block.Header.Height, source, amt)
+				err = cs.cfg.GeneratePayments(block.Header.Height, source,
+					amt, work.CreatedOn)
 				if err != nil {
 					// Errors generated creating payments are fatal since it is
 					// required to distribute payments to participating miners.
