@@ -138,6 +138,10 @@ func (c *Cache) getConfirmedMinedWork(first, last int) (int, []minedWork, error)
 
 	count := len(allWork)
 
+	if count == 0 {
+		return count, allWork[0:0], nil
+	}
+
 	if first >= count {
 		return 0, allWork[0:0], fmt.Errorf("blocks request is out of range. maximum %v, requested %v", count, first)
 	}
@@ -161,6 +165,10 @@ func (c *Cache) getMinedWorkByAccount(first, last int, accountID string) (int, [
 	}
 
 	count := len(allWork)
+
+	if count == 0 {
+		return count, allWork[0:0], nil
+	}
 
 	if first >= count {
 		return 0, allWork[0:0], fmt.Errorf("blocks by account request is out of range. maximum %v, requested %v", count, first)
@@ -199,6 +207,10 @@ func (c *Cache) getRewardQuotas(first, last int) (int, []rewardQuota, error) {
 	defer c.rewardQuotasMtx.RUnlock()
 
 	count := len(c.rewardQuotas)
+
+	if count == 0 {
+		return count, c.rewardQuotas[0:0], nil
+	}
 
 	if first >= count {
 		return 0, c.rewardQuotas[0:0], fmt.Errorf("reward quotas request is out of range. maximum %v, requested %v", count, first)
@@ -250,6 +262,10 @@ func (c *Cache) getClientsForAccount(first, last int, accountID string) (int, []
 	accountClients := c.clients[accountID]
 
 	count := len(accountClients)
+
+	if count == 0 {
+		return count, accountClients[0:0], nil
+	}
 
 	if first >= count {
 		return 0, accountClients[0:0], fmt.Errorf("clients by account request is out of range. maximum %v, requested %v", count, first)
@@ -326,6 +342,10 @@ func (c *Cache) getPendingPayments(first, last int, accountID string) (int, []pe
 
 	count := len(accountPayments)
 
+	if count == 0 {
+		return count, accountPayments[0:0], nil
+	}
+
 	if first >= count {
 		return 0, accountPayments[0:0], fmt.Errorf("pending payments by account request is out of range. maximum %v, requested %v", count, first)
 	}
@@ -344,6 +364,10 @@ func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, []a
 	accountPayments := c.archivedPayments[accountID]
 
 	count := len(accountPayments)
+
+	if count == 0 {
+		return count, accountPayments[0:0], nil
+	}
 
 	if first >= count {
 		return 0, accountPayments[0:0], fmt.Errorf("archived payments by account request is out of range. maximum %v, requested %v", count, first)
