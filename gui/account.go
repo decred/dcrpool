@@ -15,10 +15,10 @@ import (
 // account template.
 type accountPageData struct {
 	HeaderData       headerData
-	MinedWork        []minedWork
-	ArchivedPayments []archivedPayment
-	PendingPayments  []pendingPayment
-	ConnectedClients []client
+	MinedWork        []*minedWork
+	ArchivedPayments []*archivedPayment
+	PendingPayments  []*pendingPayment
+	ConnectedClients []*client
 	AccountID        string
 	Address          string
 	BlockExplorerURL string
