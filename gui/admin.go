@@ -16,7 +16,7 @@ import (
 type adminPageData struct {
 	HeaderData       headerData
 	PoolStatsData    poolStatsData
-	ConnectedClients map[string][]client
+	ConnectedClients map[string][]*client
 }
 
 // adminPage is the handler for "GET /admin". If the current session is
