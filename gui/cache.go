@@ -359,7 +359,7 @@ func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, []*
 
 	if first >= count {
 		return 0, archivedPmts[0:0], fmt.Errorf("requested archived "+
-			"payments by account is out of range. maximum %vd, "+
+			"payments by account is out of range. maximum %d, "+
 			"requested %d", count, first)
 	}
 
