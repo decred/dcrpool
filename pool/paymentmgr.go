@@ -722,6 +722,9 @@ func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[string][]*Paymen
 }
 
 // PayDividends pays mature mining rewards to participating accounts.
+//
+// TODO: need to break this down into smaller funcs to make it easier to
+// test.
 func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 	pmts, err := pm.maturePendingPayments(height)
 	if err != nil {
@@ -968,8 +971,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 		SerializedTransaction: txB,
 		Passphrase:            []byte(pm.cfg.WalletPass),
 	}
-	signedTxResp, err := txBroadcaster.SignTransaction(context.TODO(),
-		signTxReq)
+	signedTxResp, err := txBroadcaster.SignTransaction(ctx, signTxReq)
 	if err != nil {
 		return fmt.Errorf("unable to sign transaction: %v", err)
 	}
@@ -978,8 +980,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 	pubTxReq := &walletrpc.PublishTransactionRequest{
 		SignedTransaction: signedTxResp.Transaction,
 	}
-	pubTxResp, err := txBroadcaster.PublishTransaction(context.TODO(),
-		pubTxReq)
+	pubTxResp, err := txBroadcaster.PublishTransaction(ctx, pubTxReq)
 	if err != nil {
 		return fmt.Errorf("unable to publish transaction: %v", err)
 	}

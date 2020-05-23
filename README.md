@@ -147,6 +147,23 @@ With multiple pool fee addresses set, the mining pool picks one at random for
 every payout made. The addresses generated from the fee account should be 
 set as the pool fee addresses (`--poolfeeaddrs`) of the mining pool.
 
+## Pool Fees
+In mining pool mode pool fees collected by the pool operator are for 
+maintaining a connection to the decred network for the delivery of work 
+to mining clients, the submission of solved work by mining clients to the 
+network and processing of block rewards based on work contributed by 
+participting accounts.
+
+## Transaction fees
+Every mature group of payments plus the pool fees collected completely 
+exhaust the referenced coinbases being sourced from by payments. For this 
+reason payout transactions by the pool create no change. It is implicit 
+that the  transaction fees of the payout transaction are paid for by the 
+accounts receiving payouts, since transaction fees are not collected as part 
+of pool fees. Each account receiving a payout from the transaction pays a 
+portion of the transaction fee based on value of the payout in comparison to 
+the overall value of payouts being made by the transaction. 
+
 ## Testing
 
 The project has [a configurable tmux mining harness](harness.sh) and a cpu 
@@ -174,11 +191,12 @@ cd ../..
 dcrpool is ideal for miners running medium-to-large mining operations. The 
 revenue generated from mining blocks as well as not paying pool fees to a 
 publicly available mining pool in the process should be enough to offset 
-the cost of running a pool. It will most likely not be cost effective to run dcrpool for a small mining operation, the better option here would be using  
+the cost of running a pool. It will most likely not be cost effective to run 
+dcrpool for a small mining operation, the better option here would be using 
 a public mining pool instead.
 
-For people looking to setup a publicly available mining pool, dcrpool's well-documented configuration and simple setup process also make it
-a great option.
+For people looking to setup a publicly available mining pool, dcrpool's 
+well-documented configuration and simple setup process also make it a great option.
 
 ## Contact
 
