@@ -28,7 +28,6 @@ type indexPageData struct {
 // message. The error message will only be displayed if the browser has
 // Javascript enabled.
 func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError string) {
-
 	// Get the 10 most recent confirmed mined blocks.
 	_, confirmedWork, _ := ui.cache.getConfirmedMinedWork(0, 9)
 
