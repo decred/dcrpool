@@ -31,7 +31,15 @@ func (ui *GUI) sessionMiddleware(next http.Handler) http.Handler {
 			// common during development (eg. when using the test harness) but
 			// it should not occur in production.
 			if strings.Contains(err.Error(), "securecookie: the value is not valid") {
-				log.Warnf("getSession error: CSRF secret has changed. Generating new session.")
+				log.Warn("getSession error: CSRF secret has changed. Generating new session.")
+
+				// Persist the generated session.
+				err = ui.cookieStore.Save(r, w, session)
+				if err != nil {
+					log.Errorf("saveSession error: %v", err)
+					http.Error(w, "Session error", http.StatusInternalServerError)
+					return
+				}
 			} else {
 				log.Errorf("getSession error: %v", err)
 				http.Error(w, "Session error", http.StatusInternalServerError)
