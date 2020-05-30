@@ -128,11 +128,12 @@ func testClient(t *testing.T, db *bolt.DB) {
 			// Do nothing.
 		},
 	}
-	client, err := NewClient(c, tcpAddr, cCfg)
+	ctx := context.Background()
+	client, err := NewClient(ctx, c, tcpAddr, cCfg)
 	if err != nil {
 		t.Fatalf("[NewClient] unexpected error: %v", err)
 	}
-	go client.run(client.ctx)
+	go client.run()
 	time.Sleep(time.Millisecond * 50)
 	sE := json.NewEncoder(s)
 	sR := bufio.NewReaderSize(s, maxMessageSize)
@@ -1239,12 +1240,12 @@ func testClient(t *testing.T, db *bolt.DB) {
 	}
 
 	cCfg.SoloPool = true
-	client, err = NewClient(c, tcpAddr, cCfg)
+	client, err = NewClient(ctx, c, tcpAddr, cCfg)
 	if err != nil {
 		t.Fatalf("[NewClient] unexpected error: %v", err)
 	}
 
-	go client.run(client.ctx)
+	go client.run()
 	time.Sleep(time.Millisecond * 50)
 
 	sE = json.NewEncoder(s)

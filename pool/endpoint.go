@@ -177,7 +177,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 				ClientTimeout:     clientTimeout,
 				SignalCache:       e.cfg.SignalCache,
 			}
-			client, err := NewClient(msg.Conn, tcpAddr, cCfg)
+			client, err := NewClient(ctx, msg.Conn, tcpAddr, cCfg)
 			if err != nil {
 				log.Errorf("unable to create client: %v", err)
 				msg.Conn.Close()
@@ -188,7 +188,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 			e.clients[client.id] = client
 			e.clientsMtx.Unlock()
 			e.cfg.AddConnection(host)
-			go client.run(client.ctx)
+			go client.run()
 
 			// Signal the gui cache of the connected client.
 			e.cfg.SignalCache(ConnectedClient)

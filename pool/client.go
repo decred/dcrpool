@@ -135,8 +135,8 @@ func (c *Client) generateExtraNonce1() error {
 }
 
 // NewClient creates client connection instance.
-func NewClient(conn net.Conn, addr *net.TCPAddr, cCfg *ClientConfig) (*Client, error) {
-	ctx, cancel := context.WithCancel(context.TODO())
+func NewClient(ctx context.Context, conn net.Conn, addr *net.TCPAddr, cCfg *ClientConfig) (*Client, error) {
+	ctx, cancel := context.WithCancel(ctx)
 	c := &Client{
 		addr:     addr,
 		cfg:      cCfg,
@@ -498,12 +498,12 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 }
 
 // rollWork provides the client with timestamp-rolled work to avoid stalling.
-func (c *Client) rollWork(ctx context.Context) {
+func (c *Client) rollWork() {
 	ticker := time.NewTicker(time.Second)
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			ticker.Stop()
 			c.wg.Done()
 			return
@@ -639,11 +639,11 @@ func (c *Client) updateWork() {
 
 // process  handles incoming messages from the connected pool client.
 // It must be run as a goroutine.
-func (c *Client) process(ctx context.Context) {
+func (c *Client) process() {
 	ip := c.addr.String()
 	for {
 		select {
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			_, err := c.conn.Write([]byte{})
 			if err != nil {
 				log.Errorf("%s: unable to send close message: %v", c.id, err)
@@ -679,7 +679,7 @@ func (c *Client) process(ctx context.Context) {
 					}
 
 				case Submit:
-					err := c.handleSubmitWorkRequest(ctx, req, allowed)
+					err := c.handleSubmitWorkRequest(c.ctx, req, allowed)
 					if err != nil {
 						log.Error(err)
 						continue
@@ -916,12 +916,12 @@ func (c *Client) FetchAccountID() string {
 	return c.account
 }
 
-func (c *Client) hashMonitor(ctx context.Context) {
+func (c *Client) hashMonitor() {
 	ticker := time.NewTicker(time.Second * time.Duration(c.cfg.HashCalcThreshold))
 	defer ticker.Stop()
 	for {
 		select {
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			c.wg.Done()
 			return
 
@@ -943,10 +943,10 @@ func (c *Client) hashMonitor(ctx context.Context) {
 }
 
 // Send dispatches messages to a pool client. It must be run as a goroutine.
-func (c *Client) send(ctx context.Context) {
+func (c *Client) send() {
 	for {
 		select {
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			c.wg.Done()
 			return
 
@@ -1018,16 +1018,16 @@ func (c *Client) send(ctx context.Context) {
 }
 
 // run handles the process lifecycles of the pool client.
-func (c *Client) run(ctx context.Context) {
+func (c *Client) run() {
 	endpointWg := c.cfg.EndpointWg
 	endpointWg.Add(1)
 	go c.read()
 
 	c.wg.Add(4)
-	go c.process(ctx)
-	go c.send(ctx)
-	go c.hashMonitor(ctx)
-	go c.rollWork(ctx)
+	go c.process()
+	go c.send()
+	go c.hashMonitor()
+	go c.rollWork()
 	c.wg.Wait()
 
 	c.shutdown()
