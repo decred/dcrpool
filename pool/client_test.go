@@ -123,7 +123,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 			return true
 		},
 		HashCalcThreshold: 1,
-		ClientTimeout:     time.Millisecond * 1300,
+		ClientTimeout:     time.Millisecond * 5000,
 		SignalCache: func(_ CacheUpdateEvent) {
 			// Do nothing.
 		},
@@ -1407,7 +1407,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 	}
 
 	// Trigger a client timeout by waiting.
-	time.Sleep(time.Millisecond * 1500)
+	time.Sleep(time.Millisecond * 5300)
 
 	// Empty the job bucket.
 	err = emptyBucket(db, jobBkt)
