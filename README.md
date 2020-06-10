@@ -9,7 +9,7 @@
 dcrpool is a stratum decred mining pool. It currently supports:
 
 * Obelisk DCR1 (default port: 5551)
-* Innosilicon D9 (default port: 5552, supported firmware: [D9_20180602_094459.swu](https://drive.google.com/open?id=1wofB_OUDkB2gxz_IS7wM8Br6ogKdYDmY))
+* Innosilicon D9 (default port: 5552, supported firmware: [D9_20180602_094459.swu](https://github.com/decred/dcrpool/releases/download/v1.1.0-rc1/D9_20180602_094459.swu))
 * Antminer DR3 (default port: 5553)
 * Antminer DR5 (default port: 5554)
 * Whatsminer D1 (default port: 5555)

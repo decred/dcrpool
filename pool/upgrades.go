@@ -347,26 +347,19 @@ func removeTxFeeReserveUpgrade(tx *bolt.Tx) error {
 	return setDBVersion(tx, newVersion)
 }
 
-// upgradeDB checks whether the any upgrades are necessary before the database is
+// upgradeDB checks whether any upgrades are necessary before the database is
 // ready for application usage.  If any are, they are performed.
 func upgradeDB(db *bolt.DB) error {
 	var version uint32
 	err := db.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		if poolBkt == nil {
-			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return MakeError(ErrBucketNotFound, desc, nil)
+		var err error
+		version, err = fetchDBVersion(tx)
+		if err != nil {
+			return err
 		}
-		v := pbkt.Get(versionK)
-		if v == nil {
-			return MakeError(ErrValueNotFound, "db version not set", nil)
-		}
-
-		version = binary.LittleEndian.Uint32(v)
 
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
