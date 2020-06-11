@@ -333,10 +333,11 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 		resp = SubscribeResponse(*req.ID, nid, c.extraNonce1, ExtraNonce2Size, nil)
 	}
 
-	c.ch <- resp
 	c.subscribedMtx.Lock()
 	c.subscribed = true
 	c.subscribedMtx.Unlock()
+
+	c.ch <- resp
 
 	return nil
 }
