@@ -494,8 +494,26 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
+	// Set the mining active network.
+	switch cfg.ActiveNet {
+	case chaincfg.TestNet3Params().Name:
+		cfg.net = &testNet3Params
+	case chaincfg.MainNetParams().Name:
+		cfg.net = &mainNetParams
+	case chaincfg.SimNetParams().Name:
+		cfg.net = &simNetParams
+	default:
+		return nil, nil, fmt.Errorf("unknown network provided %v",
+			cfg.ActiveNet)
+	}
+
 	cfg.DataDir = cleanAndExpandPath(cfg.DataDir)
 	cfg.LogDir = cleanAndExpandPath(cfg.LogDir)
+
+	// Use separate data and log directories for each Decred network.
+	cfg.DataDir = filepath.Join(cfg.DataDir, cfg.net.Name)
+	cfg.LogDir = filepath.Join(cfg.LogDir, cfg.net.Name)
+
 	logRotator = nil
 
 	// Initialize log rotation.  After log rotation has been initialized, the
@@ -543,19 +561,6 @@ func loadConfig() (*config, []string, error) {
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)
 		return nil, nil, err
-	}
-
-	// Set the mining active network.
-	switch cfg.ActiveNet {
-	case chaincfg.TestNet3Params().Name:
-		cfg.net = &testNet3Params
-	case chaincfg.MainNetParams().Name:
-		cfg.net = &mainNetParams
-	case chaincfg.SimNetParams().Name:
-		cfg.net = &simNetParams
-	default:
-		return nil, nil, fmt.Errorf("unknown network provided %v",
-			cfg.ActiveNet)
 	}
 
 	// Add default ports for the active network if there are no ports specified.
