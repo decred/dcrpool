@@ -53,11 +53,9 @@
 }
 
 html, body {
-    /* use !important to prevent issues with browser extensions that change fonts */
-    font-family: "dcrpool", "Verdana", "sans-serif" !important;
+    font-family: "dcrpool", "Verdana", sans-serif;
 }
 
 pre, code {
-    /* use !important to prevent issues with browser extensions that change fonts */
-    font-family: "dcrpool-code", "Courier New", "monospace" !important;
+    font-family: "dcrpool-code", "Courier New", monospace;
 }
