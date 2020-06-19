@@ -507,12 +507,9 @@ func loadConfig() (*config, []string, error) {
 			cfg.ActiveNet)
 	}
 
-	cfg.DataDir = cleanAndExpandPath(cfg.DataDir)
-	cfg.LogDir = cleanAndExpandPath(cfg.LogDir)
-
 	// Use separate data and log directories for each Decred network.
-	cfg.DataDir = filepath.Join(cfg.DataDir, cfg.net.Name)
-	cfg.LogDir = filepath.Join(cfg.LogDir, cfg.net.Name)
+	cfg.DataDir = cleanAndExpandPath(filepath.Join(cfg.DataDir, cfg.net.Name))
+	cfg.LogDir = cleanAndExpandPath(filepath.Join(cfg.LogDir, cfg.net.Name))
 
 	logRotator = nil
 
