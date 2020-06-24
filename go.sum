@@ -76,7 +76,6 @@ github.com/decred/dcrd/dcrutil/v3 v3.0.0-20200608124004-b2f67c2dc475 h1:DpFcippc
 github.com/decred/dcrd/dcrutil/v3 v3.0.0-20200608124004-b2f67c2dc475/go.mod h1:WyoYp6FRgNAQL33CdcpvSnKcujH8wMzIRBSMCg64Egw=
 github.com/decred/dcrd/gcs/v2 v2.0.0 h1:nCc3q9iIwIpF0khTSiC7xYgojKoKnPrqrgVjboOBXDE=
 github.com/decred/dcrd/gcs/v2 v2.0.0/go.mod h1:3XjKcrtvB+r2ezhIsyNCLk6dRnXRJVyYmsd1P3SkU3o=
-github.com/decred/dcrd/gcs/v2 v2.0.1 h1:A6OQLuvffyMWdvGvj+xIgx/WyuWCLQbSnbYpT2frKTo=
 github.com/decred/dcrd/gcs/v2 v2.0.1/go.mod h1:3XjKcrtvB+r2ezhIsyNCLk6dRnXRJVyYmsd1P3SkU3o=
 github.com/decred/dcrd/gcs/v2 v2.0.2-0.20200608124004-b2f67c2dc475 h1:5Qd0LWsOKVAmZyFRI/enaIsPpD8NsIPSxYwJ7uywMqo=
 github.com/decred/dcrd/gcs/v2 v2.0.2-0.20200608124004-b2f67c2dc475/go.mod h1:JJGd1m0DrFgV4J2J8HKNB9YVkM06ewQHT6iINis39Z4=
@@ -84,8 +83,8 @@ github.com/decred/dcrd/hdkeychain/v3 v3.0.0-20200608124004-b2f67c2dc475/go.mod h
 github.com/decred/dcrd/rpc/jsonrpc/types/v2 v2.0.0/go.mod h1:c5S+PtQWNIA2aUakgrLhrlopkMadcOv51dWhCEdo49c=
 github.com/decred/dcrd/rpc/jsonrpc/types/v2 v2.0.1-0.20200503044000-76f6906e50e5 h1:O8kpj3huIKO6N+KiyndTPTJwoo/Q0Jq+92Do511CGoE=
 github.com/decred/dcrd/rpc/jsonrpc/types/v2 v2.0.1-0.20200503044000-76f6906e50e5/go.mod h1:c5S+PtQWNIA2aUakgrLhrlopkMadcOv51dWhCEdo49c=
-github.com/decred/dcrd/rpcclient/v6 v6.0.0-20200608124004-b2f67c2dc475 h1:iK76Et3A8fGj13t+nYmpg/kv9+mQS399+VTJ2Q4/4oM=
-github.com/decred/dcrd/rpcclient/v6 v6.0.0-20200608124004-b2f67c2dc475/go.mod h1:zr/FgNndAxHG39OZ5Hviqmk7gGj7xm6oxvCw9iqCjvQ=
+github.com/decred/dcrd/rpcclient/v6 v6.0.0-20200623174822-e2d77e4e7efe h1:9w7kn8OITstq0q/sQP0w0LQui0iSRi13XJHXHxugdHE=
+github.com/decred/dcrd/rpcclient/v6 v6.0.0-20200623174822-e2d77e4e7efe/go.mod h1:zr/FgNndAxHG39OZ5Hviqmk7gGj7xm6oxvCw9iqCjvQ=
 github.com/decred/dcrd/txscript/v2 v2.1.0 h1:IKIpNm0lPmNQoaZ2zxZm1qMwfmLb/XXeahxXlfc+MrA=
 github.com/decred/dcrd/txscript/v2 v2.1.0/go.mod h1:XaJAVrZU4NWRx4UEzTiDAs86op1m8GRJLz24SDBKOi0=
 github.com/decred/dcrd/txscript/v3 v3.0.0-20200215023918-6247af01d5e3/go.mod h1:ATMA8K0SOo+M9Wdbr6dMnAd8qICJi6pXjGLlKsJc99E=
