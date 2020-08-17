@@ -57,7 +57,7 @@ provides pool administrators database backup functionality when needed.
 
 Building or updating from source requires the following build dependencies:
 
-- **Go 1.13 or later**
+- **Go 1.14 or later**
 
   Installation instructions can be found here: <https://golang.org/doc/install>.
   It is recommended to add `$GOPATH/bin` to your `PATH` at this point.
