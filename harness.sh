@@ -224,12 +224,14 @@ chmod +x "${HARNESS_ROOT}/mwallet/ctl"
 
 tmux new-window -t $TMUX_SESSION -n 'mwallet'
 tmux send-keys "cd ${HARNESS_ROOT}/mwallet" C-m
-tmux send-keys "dcrwallet -C mwallet.conf --create" C-m
 echo "Creating simnet master wallet"
+tmux send-keys "dcrwallet -C mwallet.conf --create <<EOF
+y
+n
+y
+${MASTER_WALLET_SEED}
+EOF" C-m
 sleep 1
-tmux send-keys "${WALLET_PASS}" C-m "${WALLET_PASS}" C-m "n" C-m "y" C-m
-sleep 1
-tmux send-keys "${MASTER_WALLET_SEED}" C-m C-m
 tmux send-keys "dcrwallet -C mwallet.conf " C-m # --debuglevel=warn
 
 # ################################################################################
@@ -323,12 +325,14 @@ chmod +x "${HARNESS_ROOT}/vwallet/tickets"
 
 tmux new-window -t $TMUX_SESSION -n 'vwallet'
 tmux send-keys "cd ${HARNESS_ROOT}/vwallet" C-m
-tmux send-keys "dcrwallet -C vwallet.conf --create" C-m
 echo "Creating simnet voting wallet"
+tmux send-keys "dcrwallet -C vwallet.conf --create <<EOF
+y
+n
+y
+${VOTING_WALLET_SEED}
+EOF" C-m
 sleep 1
-tmux send-keys "${WALLET_PASS}" C-m "${WALLET_PASS}" C-m "n" C-m "y" C-m
-sleep 1
-tmux send-keys "${VOTING_WALLET_SEED}" C-m C-m
 tmux send-keys "dcrwallet -C vwallet.conf --debuglevel=debug" C-m
 
 ################################################################################
