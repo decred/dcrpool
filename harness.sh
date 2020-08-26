@@ -29,30 +29,38 @@ MINER_MAX_PROCS=1
 PAYMENT_METHOD="pplns"
 LAST_N_PERIOD=5m
 GUI_DIR="${HARNESS_ROOT}/gui"
-CPU_MINING_ADDR="SsiuwSRYvH7pqWmRxFJWR8Vmqc3AWsjmK2Y"
-POOL_MINING_ADDR="SspUvSyDGSzvPz2NfdZ5LW15uq6rmuGZyhL"
-PFEE_ADDR="SsVPfV8yoMu7AvF5fGjxTGmQ57pGkaY6n8z"
+# CPU_MINING_ADDR is the mining address printed during creation of vwallet.
+# Initial block rewards from `generate` are sent here so vwallet can buy tickets.
+CPU_MINING_ADDR="SsaJxXSymEGroxAiUY9u1mRq1DDWLxn5WhB"
+# POOL_MINING_ADDR is the mining address printed during creation of mwallet.
+# Block rewards from pool mining are sent here before being distributed to participants.
+POOL_MINING_ADDR="SsXciQNTo3HuV5tX3yy4hXndRWgLMRVC7Ah"
+# PFEE_ADDR is from mwallet, pfee account.
+# Pool fees are collected here.
+PFEE_ADDR="SsYcrXcBfUA1TAYiMhYRTkHupEapH7QWNU6"
+# CLIENT_ADDRS are from mwallet, accounts c0, c1, etc.
+# Client reward payments are sent to these addresses.
 CLIENT_ADDRS=(
-  "SsZckVrqHRBtvhJA5UqLZ3MDXpZHi5mK6uU"
-  "Ssn23a3rJaCUxjqXiVSNwU6FxV45sLkiFpz"
-  "SsgGu2Fz3c2YeoRKZMeXNQBJ324J8uFe2ku"
-  "Ssj65eTTHTvyEyQJBPuqUuueLouf5yMtmJL"
-  "SsZKVJQnN3Hm3A1Ga3WTTZMRceeGTZgsMTQ"
-  "SsivBg41hYAxGf4FDK8swGoxmJMTk8kqaks"
-  "Ssi34kZ7HN9WNHkofWsjKajoYwiAdryfr89"
-  "SsnEdBRWU5zVfo6rQxVkyVikCF2X3p5mVrW"
-  "SskZsGb78uyvkzCF7aqHYa24oWWHLF3XEKe"
-  "SsaJoAxcB3bTGoavzpymrx1q2wa6nkna35g"
-  "SsUpkNXC5824166ASdw72BFE8zeF4i4XaDp"
-  "SsZbyZp62wrEiZQ3iLyfUgpTg4KzNUNmzVP"
-  "SsaYJ3DYpaxquCd2cdD6Zba8p6jTnBFVjck"
-  "SsZpjNR3ZfrRzKGMtRZixoRb2uii43qE2QE"
-  "SsWTW7sgp5Pb1Hede5imKDUP5ymYZTXkzkX"
-  "SssRDNnKvD2bfKvKfC3p8b5UGR78nivxG56"
-  "Ssmc27WaSfizoyvhy6GSht5XtC9DYswKyTD"
-  "SsV83wxme92uY6tDKWxnGer5GBKXDHpknDo"
-  "Sse8V9WrWLSHS5t4WEr2Cy92FGRsxGwXTfo"
-  "SssSxnc6rixXPowbxcdrXg6PccAHFCe4x6K"
+  "SscVdtfaNS1iCLceaT8Sqwd8hGoia8XDifR"
+  "SsjUjmw8oGCg63C2MQPygFGZPh2Mbq3iaHM"
+  "SsbpP2WFUWtnzm4GbiLUTVYWgpGiFDb6M8G"
+  "SsVDptDDFQrfq7YZoDU3F1i6qNGgRo59FXG"
+  "SsViw2X9sY74GfXjYm5ieWLZv3vNmmtZGXB"
+  "SshjubSN3mXx6NTRiGnYZ2p9bU3ZKvMkd3f"
+  "Ssj1cwFpr7JM1KqW9cePAXM6nXVYz7BHveC"
+  "SsUgTPPZzQPQLq9MDYQKDXiAJjK4F5aQMjV"
+  "Ssh37A184b5pequfjwZGSZrPyrAFJETg7c4"
+  "Ssa9aqaHJYsPLyLRAz47j5uSJDmsSDkaSPU"
+  "Ssjti72KzbRACaMQcjrXHEUHn374dm4hbn6"
+  "SsUmjGtniYZxWQVkRUbN2Q65ou8poUMAFm8"
+  "SsjqAzmWmPPKG7kk9LDs9ZNfi2y9HjkVXU6"
+  "SsVwnUEBVSne61pqnxEU9WXh3HKeUemjHgU"
+  "SsZpWMDW6UN8AZkKfW99RWG4imY93Bnu8X2"
+  "SsqzmU32q7DWU8Pvqrhj7BLRZ4iy6wa6wTB"
+  "SsWJKGHaEmTjN9AUrTPoLWbumBJGqZnGvz6"
+  "SsbAAMn7b3Ei8rN4qq1CWZvgfytCHoSBq7c"
+  "SsnL7yGMaASzaDVb3VVsVutWGzAMT8hHFvR"
+  "SsjSDtCo8E6ztfib23kZSACFjW8Dfkv3obq"
 )
 
 # Number of mining clients to create. Maximum is determined by number of client
