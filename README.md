@@ -57,7 +57,7 @@ provides pool administrators database backup functionality when needed.
 
 Building or updating from source requires the following build dependencies:
 
-- **Go 1.13 or later**
+- **Go 1.14 or later**
 
   Installation instructions can be found here: <https://golang.org/doc/install>.
   It is recommended to add `$GOPATH/bin` to your `PATH` at this point.
@@ -148,6 +148,7 @@ every payout made. The addresses generated from the fee account should be
 set as the pool fee addresses (`--poolfeeaddrs`) of the mining pool.
 
 ## Pool Fees
+
 In mining pool mode pool fees collected by the pool operator are for 
 maintaining a connection to the decred network for the delivery of work 
 to mining clients, the submission of solved work by mining clients to the 
@@ -155,6 +156,7 @@ network and processing of block rewards based on work contributed by
 participting accounts.
 
 ## Transaction fees
+
 Every mature group of payments plus the pool fees collected completely 
 exhaust the referenced coinbases being sourced from by payments. For this 
 reason payout transactions by the pool create no change. It is implicit 
@@ -166,25 +168,8 @@ the overall value of payouts being made by the transaction.
 
 ## Testing
 
-The project has [a configurable tmux mining harness](harness.sh) and a cpu 
-miner for testing.
-
-To run the mining harness:  
-
-Install [dcrctl](https://github.com/decred/dcrctl)
-
-```sh
-GO111MODULE=on go get decred.org/dcrctl
-```
-
-then
-
-```sh
-cd dcrpool/cmd/miner
-go install
-cd ../..
-./harness.sh
-```
+The project has a configurable tmux mining harness and a CPU miner for testing
+on simnet. Further documentation can be found in [harness.sh](./harness.sh).
 
 ## Should I be running dcrpool?
 
