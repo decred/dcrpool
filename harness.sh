@@ -189,8 +189,7 @@ echo "Starting simnet master node"
 tmux send-keys "dcrd --appdata=${HARNESS_ROOT}/master \
 --rpcuser=${RPC_USER} --rpcpass=${RPC_PASS} \
 --miningaddr=${POOL_MINING_ADDR} \
---txindex \
---debuglevel=info \
+--txindex --debuglevel=info \
 --simnet" C-m
 
 ################################################################################
@@ -213,12 +212,11 @@ chmod +x "${HARNESS_ROOT}/master/mine"
 tmux new-window -t $TMUX_SESSION -n 'mctl'
 tmux send-keys "cd ${HARNESS_ROOT}/master" C-m
 
-sleep 3
-# mine some blocks to start the chain.
-tmux send-keys "./mine 2" C-m
-echo "Mined 2 blocks"
 sleep 1
-
+# mine some blocks to start the chain.
+tmux send-keys "./mine 2; tmux wait -S mine-two" C-m
+tmux wait mine-two
+echo "Mined 2 blocks"
 tmux send-keys "./ctl livetickets"
 
 ################################################################################
@@ -240,12 +238,12 @@ y
 ${MASTER_WALLET_SEED}
 EOF" C-m
 sleep 1
-tmux send-keys "dcrwallet -C mwallet.conf " C-m # --debuglevel=warn
+tmux send-keys "dcrwallet -C mwallet.conf " C-m
 
 # ################################################################################
 # # Setup the pool wallet's dcrctl (wctl).
 # ################################################################################
-sleep 10
+sleep 6
 # The consensus daemon must be synced for account generation to 
 # work as expected.
 echo "Setting up pool wallet accounts"
@@ -282,8 +280,7 @@ tmux send-keys "dcrd --appdata=${HARNESS_ROOT}/vnode \
 --connect=127.0.0.1:18555 \
 --listen=127.0.0.1:19559 --rpclisten=127.0.0.1:19560 \
 --miningaddr=${CPU_MINING_ADDR} \
---txindex \
---debuglevel=info \
+--txindex --debuglevel=info \
 --simnet" C-m
 
 ################################################################################
@@ -307,8 +304,10 @@ chmod +x "${HARNESS_ROOT}/vnode/mine"
 tmux new-window -t $TMUX_SESSION -n 'vctl'
 tmux send-keys "cd ${HARNESS_ROOT}/vnode" C-m
 
-tmux send-keys "./mine 30" C-m
-sleep 10
+# mine to stake enabled height (SEH).
+tmux send-keys "./mine 30; tmux wait -S mine" C-m
+tmux wait mine
+
 echo "Mined 30 blocks, at stake enabled height (SEH)"
 
 ################################################################################
@@ -346,7 +345,6 @@ tmux send-keys "dcrwallet -C vwallet.conf --debuglevel=debug" C-m
 ################################################################################
 # Setup the voting wallet's dcrctl (vwctl).
 ################################################################################
-sleep 1
 tmux new-window -t $TMUX_SESSION -n 'vwctl'
 tmux send-keys "cd ${HARNESS_ROOT}/vwallet" C-m
 
