@@ -25,17 +25,19 @@ type Account struct {
 
 // AccountID generates a unique id using provided address of the account.
 func AccountID(address string, activeNet *chaincfg.Params) (string, error) {
+	funcName := "AcccountID"
 	_, err := dcrutil.DecodeAddress(address, activeNet)
 	if err != nil {
-		return "", err
+		desc := fmt.Sprintf("%s: unable to decode address %s: %v",
+			funcName, address, err)
+		return "", poolError(ErrID, desc)
 	}
-
 	hasher := blake256.New()
 	_, err = hasher.Write([]byte(address))
 	if err != nil {
-		return "", err
+		desc := fmt.Sprintf("%s: unable to write address: %v", funcName, err)
+		return "", poolError(ErrID, desc)
 	}
-
 	id := hex.EncodeToString(hasher.Sum(nil))
 	return id, nil
 }
@@ -48,34 +50,35 @@ func NewAccount(address string, activeNet *chaincfg.Params) (*Account, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	account := &Account{
 		UUID:      id,
 		Address:   address,
 		CreatedOn: uint64(time.Now().Unix()),
 	}
-
 	return account, nil
 }
 
 // fetchAccountBucket is a helper function for getting the account bucket.
 func fetchAccountBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	funcName := "fetchAccountBucket"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	bkt := pbkt.Bucket(accountBkt)
 	if bkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(accountBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(accountBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
-
 	return bkt, nil
 }
 
 // FetchAccount fetches the account referenced by the provided id.
 func FetchAccount(db *bolt.DB, id []byte) (*Account, error) {
+	funcName := "FetchAccount"
 	var account Account
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchAccountBucket(tx)
@@ -85,42 +88,62 @@ func FetchAccount(db *bolt.DB, id []byte) (*Account, error) {
 
 		v := bkt.Get(id)
 		if v == nil {
-			desc := fmt.Sprintf("no account found for id %s", string(id))
-			return MakeError(ErrValueNotFound, desc, nil)
+			desc := fmt.Sprintf("%s: no account found for id %s", funcName,
+				string(id))
+			return dbError(ErrValueNotFound, desc)
 		}
-
 		err = json.Unmarshal(v, &account)
-		return err
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to unmarshal account: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-
 	return &account, err
 }
 
 // Create persists the account to the database.
 func (acc *Account) Create(db *bolt.DB) error {
-	err := db.Update(func(tx *bolt.Tx) error {
+	funcName := "Account.Create"
+	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchAccountBucket(tx)
 		if err != nil {
 			return err
 		}
 
+		// Do not persist already existing account.
+		id := []byte(acc.UUID)
+		v := bkt.Get(id)
+		if v != nil {
+			desc := fmt.Sprintf("%s: account %s already exists", funcName,
+				acc.UUID)
+			return dbError(ErrAccountExists, desc)
+		}
 		accBytes, err := json.Marshal(acc)
 		if err != nil {
-			return err
+			desc := fmt.Sprintf("%s: unable to marshal account bytes: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
 		}
 		err = bkt.Put([]byte(acc.UUID), accBytes)
-		return err
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist account entry: %v",
+				funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+		return nil
 	})
-	return err
 }
 
 // Update is not supported for accounts.
 func (acc *Account) Update(db *bolt.DB) error {
-	desc := "account update not supported"
-	return MakeError(ErrNotSupported, desc, nil)
+	funcName := "Account.Update"
+	desc := fmt.Sprintf("%s: not supported", funcName)
+	return dbError(ErrNotSupported, desc)
 }
 
 // Delete purges the referenced account from the database.
