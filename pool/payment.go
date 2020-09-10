@@ -50,25 +50,45 @@ func NewPayment(account string, source *PaymentSource, amount dcrutil.Amount,
 }
 
 // paymentID generates a unique id using the provided payment details.
-func paymentID(height uint32, createdOnNano int64, account string) []byte {
+func paymentID(height uint32, createdOnNano int64, account string) ([]byte, error) {
+	funcName := "paymentID"
 	buf := bytes.Buffer{}
-	buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(height)))
-	buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOnNano)))
-	buf.WriteString(account)
-	return buf.Bytes()
+	_, err := buf.WriteString(hex.EncodeToString(
+		heightToBigEndianBytes(height)))
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to write block height: %v",
+			funcName, err)
+		return nil, poolError(ErrID, desc)
+	}
+	_, err = buf.WriteString(hex.EncodeToString(
+		nanoToBigEndianBytes(createdOnNano)))
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to write created-on time: %v",
+			funcName, err)
+		return nil, poolError(ErrID, desc)
+	}
+	_, err = buf.WriteString(account)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to write account: %v", funcName, err)
+		return nil, poolError(ErrID, desc)
+	}
+	return buf.Bytes(), nil
 }
 
 // fetchPaymentBucket is a helper function for getting the payment bucket.
 func fetchPaymentBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	funcName := "fetchPaymentBucket"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	bkt := pbkt.Bucket(paymentBkt)
 	if bkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(paymentBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(paymentBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	return bkt, nil
 }
@@ -76,21 +96,25 @@ func fetchPaymentBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 // fetchPaymentArchiveBucket is a helper function for getting the
 // payment archive bucket.
 func fetchPaymentArchiveBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	funcName := "fetchPaymentArchiveBucket"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	bkt := pbkt.Bucket(paymentArchiveBkt)
 	if bkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(paymentArchiveBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(paymentArchiveBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	return bkt, nil
 }
 
 // FetchPayment fetches the payment referenced by the provided id.
 func FetchPayment(db *bolt.DB, id []byte) (*Payment, error) {
+	funcName := "FetchPayment"
 	var payment Payment
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchPaymentBucket(tx)
@@ -99,11 +123,17 @@ func FetchPayment(db *bolt.DB, id []byte) (*Payment, error) {
 		}
 		v := bkt.Get(id)
 		if v == nil {
-			desc := fmt.Sprintf("no payment found for id %s", string(id))
-			return MakeError(ErrValueNotFound, desc, nil)
+			desc := fmt.Sprintf("%s: no payment found for id %s",
+				funcName, string(id))
+			return dbError(ErrValueNotFound, desc)
 		}
 		err = json.Unmarshal(v, &payment)
-		return err
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -113,19 +143,30 @@ func FetchPayment(db *bolt.DB, id []byte) (*Payment, error) {
 
 // Create persists a payment to the database.
 func (pmt *Payment) Create(db *bolt.DB) error {
-	err := db.Update(func(tx *bolt.Tx) error {
+	funcName := "Payment.Create"
+	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchPaymentBucket(tx)
 		if err != nil {
 			return err
 		}
 		b, err := json.Marshal(pmt)
 		if err != nil {
+			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
+		}
+		id, err := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
+		if err != nil {
 			return err
 		}
-		id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
-		return bkt.Put(id, b)
+		err = bkt.Put(id, b)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist payment bytes: %v",
+				funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+		return nil
 	})
-	return err
 }
 
 // Update persists the updated payment to the database.
@@ -136,12 +177,16 @@ func (pmt *Payment) Update(db *bolt.DB) error {
 // Delete purges the referenced payment from the database. Note that
 // archived payments cannot be deleted.
 func (pmt *Payment) Delete(db *bolt.DB) error {
-	id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
+	id, err := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
+	if err != nil {
+		return err
+	}
 	return deleteEntry(db, paymentBkt, id)
 }
 
 // Archive removes the associated payment from active payments and archives it.
 func (pmt *Payment) Archive(db *bolt.DB) error {
+	funcName := "Payment.Archive"
 	return db.Update(func(tx *bolt.Tx) error {
 		pbkt, err := fetchPaymentBucket(tx)
 		if err != nil {
@@ -153,7 +198,10 @@ func (pmt *Payment) Archive(db *bolt.DB) error {
 		}
 
 		// Remove the active payment record.
-		id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
+		id, err := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
+		if err != nil {
+			return err
+		}
 		err = pbkt.Delete(id)
 		if err != nil {
 			return err
@@ -163,10 +211,21 @@ func (pmt *Payment) Archive(db *bolt.DB) error {
 		pmt.CreatedOn = time.Now().UnixNano()
 		pmtB, err := json.Marshal(pmt)
 		if err != nil {
-			return err
+			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
 		}
 
-		id = paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
-		return abkt.Put(id, pmtB)
+		id, err = paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
+		if err != nil {
+			return err
+		}
+		err = abkt.Put(id, pmtB)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to archive payment entry: %v",
+				funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+		return nil
 	})
 }
