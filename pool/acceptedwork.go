@@ -45,70 +45,93 @@ func bigEndianBytesToHeight(b []byte) uint32 {
 }
 
 // AcceptedWorkID generates a unique id for work accepted by the network.
-func AcceptedWorkID(blockHash string, blockHeight uint32) []byte {
+func AcceptedWorkID(blockHash string, blockHeight uint32) ([]byte, error) {
+	funcName := "AcceptedWorkID"
 	buf := bytes.Buffer{}
-	buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(blockHeight)))
+	_, err := buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(blockHeight)))
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to write block height: %v",
+			funcName, err)
+		return nil, poolError(ErrID, desc)
+	}
 	buf.WriteString(blockHash)
-	return buf.Bytes()
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to write block hash: %v",
+			funcName, err)
+		return nil, poolError(ErrID, desc)
+	}
+	return buf.Bytes(), nil
 }
 
 // NewAcceptedWork creates an accepted work.
 func NewAcceptedWork(blockHash string, prevHash string, height uint32,
-	minedBy string, miner string) *AcceptedWork {
+	minedBy string, miner string) (*AcceptedWork, error) {
+	id, err := AcceptedWorkID(blockHash, height)
+	if err != nil {
+		return nil, err
+	}
 	return &AcceptedWork{
-		UUID:      string(AcceptedWorkID(blockHash, height)),
+		UUID:      string(id),
 		BlockHash: blockHash,
 		PrevHash:  prevHash,
 		Height:    height,
 		MinedBy:   minedBy,
 		Miner:     miner,
 		CreatedOn: time.Now().UnixNano(),
-	}
+	}, nil
 }
 
 // fetchWorkBucket is a helper function for getting the work bucket.
 func fetchWorkBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	funcName := "fetchWorkBucket"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	bkt := pbkt.Bucket(workBkt)
 	if bkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(workBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(workBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	return bkt, nil
 }
 
 // FetchAcceptedWork fetches the accepted work referenced by the provided id.
 func FetchAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
+	funcName := "FetchAcceptedWork"
 	var work AcceptedWork
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
 		if err != nil {
 			return err
 		}
-
 		v := bkt.Get(id)
 		if v == nil {
-			desc := fmt.Sprintf("no value for key %s", string(id))
-			return MakeError(ErrValueNotFound, desc, nil)
+			desc := fmt.Sprintf("%s: no value for key %s",
+				funcName, string(id))
+			return dbError(ErrValueNotFound, desc)
 		}
-
 		err = json.Unmarshal(v, &work)
-		return err
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to unmarshal accepted work: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-
 	return &work, err
 }
 
 // Create persists the accepted work to the database.
 func (work *AcceptedWork) Create(db *bolt.DB) error {
-	err := db.Update(func(tx *bolt.Tx) error {
+	funcName := "AcceptedWork.Create"
+	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
 		if err != nil {
 			return err
@@ -118,23 +141,31 @@ func (work *AcceptedWork) Create(db *bolt.DB) error {
 		id := []byte(work.UUID)
 		v := bkt.Get(id)
 		if v != nil {
-			desc := fmt.Sprintf("work %s already exists", work.UUID)
-			return MakeError(ErrWorkExists, desc, nil)
+			desc := fmt.Sprintf("%s: work %s already exists", funcName,
+				work.UUID)
+			return dbError(ErrWorkExists, desc)
 		}
-
 		workBytes, err := json.Marshal(work)
 		if err != nil {
-			return err
+			desc := fmt.Sprintf("%s: unable to marshal accepted "+
+				"work bytes: %v", funcName, err)
+			return dbError(ErrParse, desc)
 		}
 
-		return bkt.Put(id, workBytes)
+		err = bkt.Put(id, workBytes)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist accepted work: %v",
+				funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+		return nil
 	})
-	return err
 }
 
 // Update persists modifications to an existing work.
 func (work *AcceptedWork) Update(db *bolt.DB) error {
-	err := db.Update(func(tx *bolt.Tx) error {
+	funcName := "AcceptedWork.Update"
+	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
 		if err != nil {
 			return err
@@ -144,18 +175,23 @@ func (work *AcceptedWork) Update(db *bolt.DB) error {
 		id := []byte(work.UUID)
 		v := bkt.Get(id)
 		if v == nil {
-			desc := fmt.Sprintf("work %s not found", work.UUID)
-			return MakeError(ErrWorkNotFound, desc, nil)
+			desc := fmt.Sprintf("%s: work %s not found", funcName, work.UUID)
+			return dbError(ErrValueNotFound, desc)
 		}
-
 		workBytes, err := json.Marshal(work)
 		if err != nil {
-			return err
+			desc := fmt.Sprintf("%s: unable to marshal accepted "+
+				"work bytes: %v", funcName, err)
+			return dbError(ErrPersistEntry, desc)
 		}
-
-		return bkt.Put(id, workBytes)
+		err = bkt.Put(id, workBytes)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist accepted work: %v",
+				funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+		return nil
 	})
-	return err
 }
 
 // Delete removes the associated accepted work from the database.
@@ -168,6 +204,7 @@ func (work *AcceptedWork) Delete(db *bolt.DB) error {
 //
 // List is ordered, most recent comes first.
 func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
+	funcName := "ListMinedWork"
 	minedWork := make([]*AcceptedWork, 0)
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
@@ -180,17 +217,16 @@ func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
 			var work AcceptedWork
 			err := json.Unmarshal(v, &work)
 			if err != nil {
-				return err
+				desc := fmt.Sprintf("%s: unable to unmarshal accepted "+
+					"work: %v", funcName, err)
+				return poolError(ErrParse, desc)
 			}
-
 			minedWork = append(minedWork, &work)
 		}
-
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-
 	return minedWork, nil
 }
