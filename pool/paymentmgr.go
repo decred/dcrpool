@@ -142,7 +142,7 @@ func (pm *PaymentMgr) persistLastPaymentHeight(tx *bolt.Tx) error {
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return dbError(ErrBucketNotFound, desc)
 	}
 	height := atomic.LoadUint32(&pm.lastPaymentHeight)
 	b := make([]byte, 4)
@@ -156,7 +156,7 @@ func (pm *PaymentMgr) loadLastPaymentHeight(tx *bolt.Tx) error {
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return dbError(ErrBucketNotFound, desc)
 	}
 	lastPaymentHeightB := pbkt.Get(lastPaymentHeight)
 	if lastPaymentHeightB == nil {
@@ -184,7 +184,7 @@ func (pm *PaymentMgr) persistLastPaymentPaidOn(tx *bolt.Tx) error {
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return MakeError(ErrBucketNotFound, desc, nil)
+		return dbError(ErrBucketNotFound, desc)
 	}
 	return pbkt.Put(lastPaymentPaidOn,
 		nanoToBigEndianBytes(int64(pm.lastPaymentPaidOn)))
@@ -224,7 +224,7 @@ func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	return pbkt, nil
 }
@@ -310,7 +310,7 @@ func (pm *PaymentMgr) sharePercentages(shares []*Share) (map[string]*big.Rat, er
 	// Calculate each participating account percentage to be claimed.
 	for account, shareCount := range tally {
 		if tally[account].Cmp(ZeroRat) == 0 {
-			return nil, MakeError(ErrDivideByZero, "division by zero", nil)
+			return nil, poolError(ErrDivideByZero, "division by zero")
 		}
 		accPercent := new(big.Rat).Quo(shareCount, totalShares)
 		percentages[account] = accPercent
