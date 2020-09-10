@@ -4,111 +4,140 @@
 
 package pool
 
-import (
-	"errors"
-	"fmt"
-)
-
-// ErrorCode identifies a kind of error.
-type ErrorCode int
+// ErrorKind identifies a kind of error.  It has full support for errors.Is and
+// errors.As, so the caller can directly check against an error kind when
+// determining the reason for an error.
+type ErrorKind string
 
 // These constants are used to identify a specific error.
 const (
-	// ErrValueNotFound indicates a key does not map to any value.
-	ErrValueNotFound ErrorCode = iota
+	// ------------------------------------------
+	// Errors related to database operations.
+	// ------------------------------------------
 
-	// ErrValueNotFound indicates a bucket key does not map to a bucket.
-	ErrBucketNotFound
+	// ErrValueNotFound indicates no value found.
+	ErrValueNotFound = ErrorKind("ErrValueNotFound")
+
+	// ErrBucketNotFound indicates no bucket found.
+	ErrBucketNotFound = ErrorKind("ErrBucketNotFound")
 
 	// ErrBucketCreate indicates bucket creation failed.
-	ErrBucketCreate
+	ErrBucketCreate = ErrorKind("ErrBucketCreate")
 
-	// ErrDBOpen indicates database open error.
-	ErrDBOpen
-
-	// ErrWorkExists indicates an already existing work.
-	ErrWorkExists
-
-	// ErrWorkNotFound indicates non-existent work.
-	ErrWorkNotFound
-
-	// ErrWrongInputLength indicates an incorrect input size.
-	ErrWrongInputLength
-
-	// ErrDifficultyNotFound indicates a non-existent miner pool difficulty.
-	ErrDifficultyNotFound
-
-	// ErrParse indicates a message parsing error.
-	ErrParse
-
-	// ErrDecode indicates a decode error.
-	ErrDecode
-
-	// ErrNotSupported indicates not supported functionality.
-	ErrNotSupported
-
-	// ErrDivideByZero indicates a division by zero error.
-	ErrDivideByZero
+	// ErrDBOpen indicates a database open error.
+	ErrDBOpen = ErrorKind("ErrDBOpen")
 
 	// ErrDBUpgrade indicates a database upgrade error.
-	ErrDBUpgrade
+	ErrDBUpgrade = ErrorKind("ErrDBUpgrade")
 
-	// ErrOther indicates a miscellenious error.
-	ErrOther
+	// ErrPersistEntry indicates a database persistence error.
+	ErrPersistEntry = ErrorKind("ErrPersistEntry")
+
+	// ErrDeleteEntry indicates a database entry delete error.
+	ErrDeleteEntry = ErrorKind("ErrDeleteEntry")
+
+	// ErrNotSupported indicates unsupported functionality.
+	ErrNotSupported = ErrorKind("ErrNotSupported")
+
+	// ErrBackup indicates database backup error.
+	ErrBackup = ErrorKind("ErrBackup")
+
+	// ErrParse indicates a parsing error.
+	ErrParse = ErrorKind("ErrParse")
+
+	// ErrDecode indicates a decoding error.
+	ErrDecode = ErrorKind("ErrDecode")
+
+	// ErrID indicates an ID related error.
+	ErrID = ErrorKind("ErrID")
+
+	// ------------------------------------------
+	// Errors related to pool operations.
+	// ------------------------------------------
+
+	// ErrGetWork indicates current work could not be fetched.
+	ErrGetWork = ErrorKind("ErrGetWork")
+
+	// ErrGetBlock indicates a block could not be fetched.
+	ErrGetBlock = ErrorKind("ErrGetBlock")
+
+	// ErrWorkExists indicates the work being created already exists.
+	ErrWorkExists = ErrorKind("ErrWorkExists")
+
+	// ErrDisconnected indicates a disconnected resource.
+	ErrDisconnected = ErrorKind("ErrDisconnected")
+
+	// ErrListener indicates a miner listener error.
+	ErrListener = ErrorKind("ErrListener")
+
+	// ErrHeaderInvalid indicates header creation failed.
+	ErrHeaderInvalid = ErrorKind("ErrHeaderInvalid")
+
+	// ErrMinerUnknown indicates an unknown miner.
+	ErrMinerUnknown = ErrorKind("ErrMinerUnknown")
+
+	// ErrDivideByZero indicates a division by zero error.
+	ErrDivideByZero = ErrorKind("ErrDivideByZero")
+
+	// ErrHexLength indicates an invalid hex length.
+	ErrHexLength = ErrorKind("ErrHexLength")
+
+	// ErrTxConf indicates a transaction confirmation error.
+	ErrTxConf = ErrorKind("ErrTxConf")
+
+	// ErrBlockConf indicates a block confirmation error.
+	ErrBlockConf = ErrorKind("ErrBlockConf")
+
+	// ErrClaimShare indicates a share claim error.
+	ErrClaimShare = ErrorKind("ErrClaimShare")
+
+	// ErrLimitExceeded indicates a rate limit exhaustion error.
+	ErrLimitExceeded = ErrorKind("ErrLimitExceeded")
+
+	// ErrDifficulty indicates a difficulty related error.
+	ErrDifficulty = ErrorKind("ErrDifficulty")
+
+	// ErrWorkRejected indicates the rejected submitted work.
+	ErrWorkRejected = ErrorKind("ErrWorkRejected")
+
+	// ErrAccountExists indicates the account being created already exists.
+	ErrAccountExists = ErrorKind("ErrAccountExists")
 )
 
-// Map of ErrorCode values back to their constant names for pretty printing.
-var errorCodeStrings = map[ErrorCode]string{
-	ErrValueNotFound:      "ErrValueNotFound",
-	ErrBucketNotFound:     "ErrBucketNotFound",
-	ErrBucketCreate:       "ErrBucketCreate",
-	ErrDBOpen:             "ErrDBOpen",
-	ErrWorkExists:         "ErrWorkExists",
-	ErrWorkNotFound:       "ErrWorkNotfound",
-	ErrWrongInputLength:   "ErrWrongInputLength",
-	ErrDifficultyNotFound: "ErrDifficultyNotFound",
-	ErrParse:              "ErrParse",
-	ErrDecode:             "ErrDecode",
-	ErrNotSupported:       "ErrNotSupported",
-	ErrDivideByZero:       "ErrDivideByZero",
-	ErrDBUpgrade:          "ErrDBUpgrade",
-	ErrOther:              "ErrOther",
+// Error satisfies the error interface and prints human-readable errors.
+func (e ErrorKind) Error() string {
+	return string(e)
 }
 
-// String returns the ErrorCode as a human-readable name.
-func (e ErrorCode) String() string {
-	if s := errorCodeStrings[e]; s != "" {
-		return s
-	}
-	return fmt.Sprintf("Unknown ErrorCode (%d)", int(e))
-}
-
-// Error extends the base error type by adding an error description and an
-// error code.
-//
-// The caller can use type assertions to determine if an error is an Error and
-// access the ErrorCode field to ascertain the specific reason for the failure.
+// Error identifies an error. It has full support for errors.Is and
+// errors.As, so the caller can ascertain the specific reason for
+// the error by checking the underlying error.
 type Error struct {
-	ErrorCode   ErrorCode
 	Description string
 	Err         error
 }
 
 // Error satisfies the error interface and prints human-readable errors.
 func (e Error) Error() string {
-	if e.Err != nil {
-		return e.Description + ": " + e.Err.Error()
-	}
 	return e.Description
 }
 
-// MakeError creates an Error given a set of arguments.
-func MakeError(c ErrorCode, desc string, err error) Error {
-	return Error{ErrorCode: c, Description: desc, Err: err}
+// Unwrap returns the underlying wrapped error.
+func (e Error) Unwrap() error {
+	return e.Err
 }
 
-// IsError returns whether err is an Error with a matching error code.
-func IsError(err error, code ErrorCode) bool {
-	var e Error
-	return errors.As(err, &e) && e.ErrorCode == code
+// poolError creates an Error given a set of arguments.
+func poolError(kind ErrorKind, desc string) Error {
+	return Error{Err: kind, Description: desc}
+}
+
+// dbError creates an Error given a set of arguments.
+func dbError(kind ErrorKind, desc string) Error {
+	return Error{Err: kind, Description: desc}
+}
+
+// msgError creates a MesssageError given a set of arguments.
+func msgError(kind ErrorKind, desc string) Error {
+	return Error{Err: kind, Description: desc}
 }
