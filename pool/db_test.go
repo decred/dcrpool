@@ -2,6 +2,7 @@ package pool
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,7 +16,7 @@ func initBlankDB(dbFile string) (*bolt.DB, error) {
 	os.Remove(dbFile)
 	db, err := openDB(dbFile)
 	if err != nil {
-		return nil, MakeError(ErrDBOpen, "unable to open db file", err)
+		return nil, err
 	}
 
 	return db, nil
@@ -133,8 +134,9 @@ func testFetchBucketHelpers(t *testing.T) {
 		if pbkt == nil {
 			pbkt, err = tx.CreateBucketIfNotExists(poolBkt)
 			if err != nil {
-				desc := fmt.Sprintf("failed to create %s bucket", string(poolBkt))
-				return MakeError(ErrBucketCreate, desc, err)
+				desc := fmt.Sprintf("unable to create %s bucket: %v",
+					string(poolBkt), err)
+				return dbError(ErrBucketCreate, desc)
 			}
 			vbytes := make([]byte, 4)
 			binary.LittleEndian.PutUint32(vbytes, uint32(DBVersion))
@@ -303,8 +305,8 @@ func testDatabase(t *testing.T, db *bolt.DB) {
 
 	// Ensure the accountA has been removed.
 	_, err = FetchAccount(db, []byte(accountA.UUID))
-	if err == nil {
-		t.Fatalf("expected no value found error")
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected no value found error: %v", err)
 	}
 
 	// purge the db.
@@ -331,7 +333,7 @@ func testDatabase(t *testing.T, db *bolt.DB) {
 
 	err = backup(db, backupFile)
 	if err != nil {
-		t.Fatalf("backup error: %v", err)
+		t.Fatal(err)
 	}
 
 	// Recreate account X and Y.

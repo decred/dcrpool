@@ -6,6 +6,7 @@ package pool
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -58,40 +59,48 @@ var (
 // openDB creates a connection to the provided bolt storage, the returned
 // connection storage should always be closed after use.
 func openDB(storage string) (*bolt.DB, error) {
+	funcName := "openDB"
 	db, err := bolt.Open(storage, 0600,
 		&bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
-		return nil, MakeError(ErrDBOpen, "", err)
+		desc := fmt.Sprintf("%s: unable to open db file: %v", funcName, err)
+		return nil, dbError(ErrDBOpen, desc)
 	}
 	return db, nil
 }
 
 // createNestedBucket creates a nested child bucket of the provided parent.
 func createNestedBucket(parent *bolt.Bucket, child []byte) error {
+	funcName := "createNestedBucket"
 	_, err := parent.CreateBucketIfNotExists(child)
 	if err != nil {
-		desc := fmt.Sprintf("failed to create %s bucket", string(child))
-		return MakeError(ErrBucketCreate, desc, err)
+		desc := fmt.Sprintf("%s: unable to create %s bucket: %v",
+			string(child), funcName, err)
+		return dbError(ErrBucketCreate, desc)
 	}
 	return nil
 }
 
 // createBuckets creates all storage buckets of the mining pool.
 func createBuckets(db *bolt.DB) error {
+	funcName := "createBuckets"
 	err := db.Update(func(tx *bolt.Tx) error {
 		var err error
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			pbkt, err = tx.CreateBucketIfNotExists(poolBkt)
 			if err != nil {
-				desc := fmt.Sprintf("failed to create %s bucket", string(poolBkt))
-				return MakeError(ErrBucketCreate, desc, err)
+				desc := fmt.Sprintf("%s: unable to create %s bucket: %v",
+					string(poolBkt), funcName, err)
+				return dbError(ErrBucketCreate, desc)
 			}
 			vbytes := make([]byte, 4)
 			binary.LittleEndian.PutUint32(vbytes, uint32(DBVersion))
 			err = pbkt.Put(versionK, vbytes)
 			if err != nil {
-				return err
+				desc := fmt.Sprintf("%s: unable to persist version: %v",
+					funcName, err)
+				return dbError(ErrPersistEntry, desc)
 			}
 		}
 
@@ -122,20 +131,25 @@ func createBuckets(db *bolt.DB) error {
 
 // backup saves a copy of the db to file.
 func backup(db *bolt.DB, file string) error {
-	err := db.View(func(tx *bolt.Tx) error {
+	return db.View(func(tx *bolt.Tx) error {
 		err := tx.CopyFile(file, 0600)
-		return err
+		if err != nil {
+			desc := fmt.Sprintf("unable to backup db: %v", err)
+			return poolError(ErrBackup, desc)
+		}
+		return nil
 	})
-	return err
 }
 
 // purge removes all existing data and recreates the db.
 func purge(db *bolt.DB) error {
+	funcName := "purge"
 	err := db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
-			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return MakeError(ErrBucketNotFound, desc, nil)
+			desc := fmt.Sprintf("%s: bucket %s not found",
+				funcName, string(poolBkt))
+			return dbError(ErrBucketNotFound, desc)
 		}
 		err := pbkt.DeleteBucket(accountBkt)
 		if err != nil {
@@ -189,7 +203,7 @@ func purge(db *bolt.DB) error {
 func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 	db, err := openDB(dbFile)
 	if err != nil {
-		return nil, MakeError(ErrDBOpen, "unable to open db file", err)
+		return nil, err
 	}
 	err = createBuckets(db)
 	if err != nil {
@@ -240,25 +254,36 @@ func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 // deleteEntry removes the specified key and its associated value from
 // the provided bucket.
 func deleteEntry(db *bolt.DB, bucket, key []byte) error {
-	err := db.Update(func(tx *bolt.Tx) error {
+	funcName := "deleteEntry"
+	return db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
-			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return MakeError(ErrBucketNotFound, desc, nil)
+			desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+				string(poolBkt))
+			return dbError(ErrBucketNotFound, desc)
 		}
 		b := pbkt.Bucket(bucket)
-		return b.Delete(key)
+
+		err := b.Delete(key)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete entry with "+
+				"key %s from bucket %s", funcName, hex.EncodeToString(key),
+				string(poolBkt))
+			return dbError(ErrDeleteEntry, desc)
+		}
+		return nil
 	})
-	return err
 }
 
 // emptyBucket deletes all k/v pairs in the provided bucket.
 func emptyBucket(db *bolt.DB, bucket []byte) error {
-	err := db.Update(func(tx *bolt.Tx) error {
+	funcName := "emptyBucket"
+	return db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
-			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return MakeError(ErrBucketNotFound, desc, nil)
+			desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+				string(poolBkt))
+			return dbError(ErrBucketNotFound, desc)
 		}
 		b := pbkt.Bucket(bucket)
 		toDelete := [][]byte{}
@@ -274,5 +299,4 @@ func emptyBucket(db *bolt.DB, bucket []byte) error {
 		}
 		return nil
 	})
-	return err
 }
