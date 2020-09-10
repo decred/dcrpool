@@ -26,7 +26,7 @@ func fetchShare(db *bolt.DB, id []byte) (*Share, error) {
 		v := bkt.Get(id)
 		if v == nil {
 			desc := fmt.Sprintf("no share found for id %s", string(id))
-			return MakeError(ErrValueNotFound, desc, nil)
+			return dbError(ErrValueNotFound, desc)
 		}
 		err = json.Unmarshal(v, &share)
 		return err
@@ -35,6 +35,12 @@ func fetchShare(db *bolt.DB, id []byte) (*Share, error) {
 		return nil, err
 	}
 	return &share, err
+}
+
+// makeShare creates a new share, this is reserved for testing purposes.
+func makeShare(account string, weight *big.Rat) *Share {
+	share, _ := NewShare(account, weight)
+	return share
 }
 
 func testPaymentMgr(t *testing.T, db *bolt.DB) {
@@ -77,11 +83,11 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}{
 		"equal shares": {
 			input: []*Share{
-				NewShare("a", new(big.Rat).SetInt64(5)),
-				NewShare("b", new(big.Rat).SetInt64(5)),
-				NewShare("c", new(big.Rat).SetInt64(5)),
-				NewShare("d", new(big.Rat).SetInt64(5)),
-				NewShare("e", new(big.Rat).SetInt64(5)),
+				makeShare("a", new(big.Rat).SetInt64(5)),
+				makeShare("b", new(big.Rat).SetInt64(5)),
+				makeShare("c", new(big.Rat).SetInt64(5)),
+				makeShare("d", new(big.Rat).SetInt64(5)),
+				makeShare("e", new(big.Rat).SetInt64(5)),
 			},
 			output: map[string]*big.Rat{
 				"a": new(big.Rat).SetFrac64(5, 25),
@@ -94,11 +100,11 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		},
 		"inequal shares": {
 			input: []*Share{
-				NewShare("a", new(big.Rat).SetInt64(5)),
-				NewShare("b", new(big.Rat).SetInt64(10)),
-				NewShare("c", new(big.Rat).SetInt64(15)),
-				NewShare("d", new(big.Rat).SetInt64(20.0)),
-				NewShare("e", new(big.Rat).SetInt64(25.0)),
+				makeShare("a", new(big.Rat).SetInt64(5)),
+				makeShare("b", new(big.Rat).SetInt64(10)),
+				makeShare("c", new(big.Rat).SetInt64(15)),
+				makeShare("d", new(big.Rat).SetInt64(20.0)),
+				makeShare("e", new(big.Rat).SetInt64(25.0)),
 			},
 			output: map[string]*big.Rat{
 				"a": new(big.Rat).SetFrac64(5, 75),
@@ -111,41 +117,22 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		},
 		"zero shares": {
 			input: []*Share{
-				NewShare("a", new(big.Rat)),
-				NewShare("b", new(big.Rat)),
-				NewShare("c", new(big.Rat)),
-				NewShare("d", new(big.Rat)),
-				NewShare("e", new(big.Rat)),
+				makeShare("a", new(big.Rat)),
+				makeShare("b", new(big.Rat)),
+				makeShare("c", new(big.Rat)),
+				makeShare("d", new(big.Rat)),
+				makeShare("e", new(big.Rat)),
 			},
 			output: nil,
-			err:    MakeError(ErrDivideByZero, "division by zero", nil),
+			err:    poolError(ErrDivideByZero, "division by zero"),
 		},
 	}
 
 	for name, test := range shareSet {
 		actual, err := mgr.sharePercentages(test.input)
 		if !errors.Is(err, test.err) {
-			var errCode ErrorCode
-			var expectedCode ErrorCode
-
-			if err != nil {
-				var e Error
-				if errors.As(err, &e) {
-					errCode = e.ErrorCode
-				}
-			}
-
-			if test.err != nil {
-				var e Error
-				if errors.As(test.err, &e) {
-					expectedCode = e.ErrorCode
-				}
-			}
-
-			if errCode.String() != expectedCode.String() {
-				t.Fatalf("%s: error generated was %v, expected %v.",
-					name, errCode.String(), expectedCode.String())
-			}
+			t.Fatalf("%s: error generated was %v, expected %v.",
+				name, err, test.err)
 		}
 
 		for account, dividend := range test.output {
@@ -182,13 +169,19 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure share A got pruned with share B remaining.
-	shareAID := shareID(xID, eightyBefore)
+	shareAID, err := shareID(xID, eightyBefore)
+	if err != nil {
+		t.Fatalf("unexpected share creation error: %v", err)
+	}
 	_, err = fetchShare(db, shareAID)
 	if err == nil {
 		t.Fatal("expected value not found error")
 	}
 
-	shareBID := shareID(yID, thirtyBefore)
+	shareBID, err := shareID(yID, thirtyBefore)
+	if err != nil {
+		t.Fatalf("unexpected share creation error: %v", err)
+	}
 	_, err = fetchShare(db, shareBID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching share B: %v", err)
