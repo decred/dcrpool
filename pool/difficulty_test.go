@@ -84,11 +84,7 @@ func testDifficulty(t *testing.T) {
 	for idx, tc := range diffSet {
 		net := chaincfg.SimNetParams()
 		powLimit := new(big.Rat).SetInt(net.PowLimit)
-		set, err := NewDifficultySet(net, powLimit, soloMaxGenTime)
-		if err != nil {
-			t.Fatalf("[NewDifficultySet] #%d, unexpected error %v", idx+1, err)
-		}
-
+		set := NewDifficultySet(net, powLimit, soloMaxGenTime)
 		diffInfo, err := set.fetchMinerDifficulty(tc.miner)
 		if (err != nil) != tc.wantErr {
 			t.Fatalf("[fetchMinerDifficulty] #%d: error: %v, wantErr: %v",

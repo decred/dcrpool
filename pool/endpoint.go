@@ -146,7 +146,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 			addr := msg.Conn.RemoteAddr()
 			tcpAddr, err := net.ResolveTCPAddr(addr.Network(), addr.String())
 			if err != nil {
-				log.Errorf("unable to parse tcp addresss: %v", err)
+				log.Errorf("unable to parse tcp address: %v", err)
 				continue
 			}
 			host := tcpAddr.IP.String()

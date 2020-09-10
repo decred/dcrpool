@@ -99,7 +99,7 @@ type DifficultySet struct {
 }
 
 // NewDifficultySet generates difficulty data for all supported mining clients.
-func NewDifficultySet(net *chaincfg.Params, powLimit *big.Rat, maxGenTime time.Duration) (*DifficultySet, error) {
+func NewDifficultySet(net *chaincfg.Params, powLimit *big.Rat, maxGenTime time.Duration) *DifficultySet {
 	genTime := new(big.Int).SetInt64(int64(maxGenTime.Seconds()))
 	set := &DifficultySet{
 		diffs: make(map[string]*DifficultyInfo),
@@ -112,19 +112,20 @@ func NewDifficultySet(net *chaincfg.Params, powLimit *big.Rat, maxGenTime time.D
 			powLimit:   powLimit,
 		}
 	}
-
-	return set, nil
+	return set
 }
 
 // fetchMinerDifficulty returns the difficulty data of the provided miner,
 // if it exists.
 func (d *DifficultySet) fetchMinerDifficulty(miner string) (*DifficultyInfo, error) {
+	funcName := "fetchMinerDifficulty"
 	d.mtx.Lock()
 	diffData, ok := d.diffs[miner]
 	d.mtx.Unlock()
 	if !ok {
-		desc := fmt.Sprintf("no difficulty data found for miner %s", miner)
-		return nil, MakeError(ErrValueNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: no difficulty data found for miner %s",
+			funcName, miner)
+		return nil, poolError(ErrValueNotFound, desc)
 	}
 	return diffData, nil
 }
