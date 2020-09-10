@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -348,14 +349,20 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			// of the pool.
 			parentHeight := header.Height - 1
 			parentHash := header.PrevBlock.String()
-			parentID := AcceptedWorkID(parentHash, parentHeight)
+			parentID, err := AcceptedWorkID(parentHash, parentHeight)
+			if err != nil {
+				log.Error(err)
+				close(msg.Done)
+				cs.cfg.Cancel()
+				continue
+			}
 			work, err := FetchAcceptedWork(cs.cfg.DB, parentID)
 			if err != nil {
 				// If the parent of the connected block is not an accepted
 				// work of the the pool, ignore it.
-				if IsError(err, ErrValueNotFound) {
-					log.Tracef("Block %d (%s) not an accepted work of the pool",
-						parentHeight, parentHash)
+				if errors.Is(err, ErrValueNotFound) {
+					log.Tracef("Block #%d (%s) is not an accepted "+
+						"work of the pool", parentHeight, parentHash)
 					close(msg.Done)
 					continue
 				}
@@ -469,16 +476,22 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			// does unconfirm it.
 			parentHeight := header.Height - 1
 			parentHash := header.PrevBlock.String()
-			parentID := AcceptedWorkID(parentHash, parentHeight)
+			parentID, err := AcceptedWorkID(parentHash, parentHeight)
+			if err != nil {
+				log.Error(err)
+				close(msg.Done)
+				cs.cfg.Cancel()
+				continue
+			}
 			confirmedWork, err := FetchAcceptedWork(cs.cfg.DB, parentID)
 			if err != nil {
 				// Errors generated, except for a value not found error,
 				// looking up accepted work indicates an underlying issue
 				// accessing the database. The chainstate process will be
 				// terminated as a result.
-				if !IsError(err, ErrValueNotFound) {
-					log.Errorf("unable to fetch accepted work for block #%d's "+
-						"parent %s : %v", header.Height, parentHash, err)
+				if !errors.Is(err, ErrValueNotFound) {
+					log.Errorf("unable to fetch accepted work for block "+
+						"#%d's parent %s: %v", header.Height, parentHash, err)
 					close(msg.Done)
 					cs.cfg.Cancel()
 					continue
@@ -509,12 +522,18 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			// If the disconnected block is an accepted work of the pool
 			// ensure it is not confirmed mined.
 			blockHash := header.BlockHash().String()
-			id := AcceptedWorkID(blockHash, header.Height)
+			id, err := AcceptedWorkID(blockHash, header.Height)
+			if err != nil {
+				log.Error(err)
+				close(msg.Done)
+				cs.cfg.Cancel()
+				continue
+			}
 			work, err := FetchAcceptedWork(cs.cfg.DB, id)
 			if err != nil {
 				// If the disconnected block is not an accepted
 				// work of the the pool, ignore it.
-				if IsError(err, ErrValueNotFound) {
+				if errors.Is(err, ErrValueNotFound) {
 					close(msg.Done)
 					continue
 				}
