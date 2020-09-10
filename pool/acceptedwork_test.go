@@ -2,7 +2,6 @@ package pool
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -11,10 +10,13 @@ import (
 
 func persistAcceptedWork(db *bolt.DB, blockHash string, prevHash string,
 	height uint32, minedBy string, miner string) (*AcceptedWork, error) {
-	acceptedWork := NewAcceptedWork(blockHash, prevHash, height, minedBy, miner)
-	err := acceptedWork.Create(db)
+	acceptedWork, err := NewAcceptedWork(blockHash, prevHash, height, minedBy, miner)
 	if err != nil {
-		return nil, fmt.Errorf("unable to persist accepted work: %v", err)
+		return nil, err
+	}
+	err = acceptedWork.Create(db)
+	if err != nil {
+		return nil, err
 	}
 	return acceptedWork, nil
 }
@@ -83,10 +85,13 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
-	workE := NewAcceptedWork(
+	workE, err := NewAcceptedWork(
 		"0000000000000000032e25218be722327ae3dccf9015756facb2f98931fda7b8",
 		"00000000000000000476712b2f5df31bc62b9976066262af2d639a551853c056",
 		431611, xID, "dcr1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Ensure updating a non persisted accepted work returns an error.
 	err = workE.Update(db)
@@ -101,7 +106,10 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure fetching a non existent accepted work returns an error.
-	id := AcceptedWorkID(workC.BlockHash, workD.Height)
+	id, err := AcceptedWorkID(workC.BlockHash, workD.Height)
+	if err != nil {
+		t.Fatalf("unexpected work id error: %v", err)
+	}
 
 	_, err = FetchAcceptedWork(db, id)
 	if err == nil {
@@ -109,7 +117,10 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 	}
 
 	// Fetch an accepted work with its id.
-	id = AcceptedWorkID(workC.BlockHash, workC.Height)
+	id, err = AcceptedWorkID(workC.BlockHash, workC.Height)
+	if err != nil {
+		t.Fatalf("unexpected work id error: %v", err)
+	}
 
 	fetchedWork, err := FetchAcceptedWork(db, id)
 	if err != nil {
