@@ -32,9 +32,20 @@ func nanoToBigEndianBytes(nano int64) []byte {
 
 // jobID generates a unique job id of the provided block height.
 func jobID(height uint32) (string, error) {
+	funcName := "jobID"
 	buf := bytes.Buffer{}
-	buf.Write(heightToBigEndianBytes(height))
+	_, err := buf.Write(heightToBigEndianBytes(height))
+	if err != nil {
+		desc := fmt.Sprintf("(%s) unable to write block height: %v",
+			funcName, err)
+		return "", poolError(ErrID, desc)
+	}
 	buf.Write(nanoToBigEndianBytes(time.Now().UnixNano()))
+	if err != nil {
+		desc := fmt.Sprintf("(%s) unable to write current time: %v",
+			funcName, err)
+		return "", poolError(ErrID, desc)
+	}
 	return hex.EncodeToString(buf.Bytes()), nil
 }
 
@@ -44,7 +55,6 @@ func NewJob(header string, height uint32) (*Job, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return &Job{
 		UUID:   id,
 		Height: height,
@@ -54,22 +64,25 @@ func NewJob(header string, height uint32) (*Job, error) {
 
 // fetchJobBucket is a helper function for getting the job bucket.
 func fetchJobBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	funcName := "fetchJobBucket"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	bkt := pbkt.Bucket(jobBkt)
 	if bkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(jobBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(jobBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
-
 	return bkt, nil
 }
 
 // FetchJob fetches the job referenced by the provided id.
 func FetchJob(db *bolt.DB, id []byte) (*Job, error) {
+	funcName := "FetchJob"
 	var job Job
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchJobBucket(tx)
@@ -79,22 +92,28 @@ func FetchJob(db *bolt.DB, id []byte) (*Job, error) {
 
 		v := bkt.Get(id)
 		if v == nil {
-			desc := fmt.Sprintf("no value found for job id %s", string(id))
-			return MakeError(ErrValueNotFound, desc, nil)
+			desc := fmt.Sprintf("%s: no job found for id %s", funcName,
+				string(id))
+			return dbError(ErrValueNotFound, desc)
 		}
 		err = json.Unmarshal(v, &job)
-		return err
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to unmarshal job bytes: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-
 	return &job, err
 }
 
 // Create persists the job to the database.
 func (job *Job) Create(db *bolt.DB) error {
-	err := db.Update(func(tx *bolt.Tx) error {
+	funcName := "Job.Create"
+	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchJobBucket(tx)
 		if err != nil {
 			return err
@@ -102,18 +121,25 @@ func (job *Job) Create(db *bolt.DB) error {
 
 		jobBytes, err := json.Marshal(job)
 		if err != nil {
-			return err
+			desc := fmt.Sprintf("%s: unable to marshal job bytes: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
 		}
-
-		return bkt.Put([]byte(job.UUID), jobBytes)
+		err = bkt.Put([]byte(job.UUID), jobBytes)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist job entry: %v",
+				funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+		return nil
 	})
-	return err
 }
 
 // Update is not supported for jobs.
 func (job *Job) Update(db *bolt.DB) error {
-	desc := "job update not supported"
-	return MakeError(ErrNotSupported, desc, nil)
+	funcName := "Job.Update"
+	desc := fmt.Sprintf("%s: not supported", funcName)
+	return dbError(ErrNotSupported, desc)
 }
 
 // Delete removes the associated job from the database.
