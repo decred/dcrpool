@@ -30,11 +30,23 @@ var ShareWeights = map[string]*big.Rat{
 
 // shareID generates a unique share id using the provided account and time
 // created.
-func shareID(account string, createdOn int64) []byte {
+func shareID(account string, createdOn int64) ([]byte, error) {
+	funcName := "shareID"
 	buf := bytes.Buffer{}
-	buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOn)))
-	buf.WriteString(account)
-	return buf.Bytes()
+	_, err := buf.WriteString(hex.EncodeToString(
+		nanoToBigEndianBytes(createdOn)))
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to write created-on time: %v",
+			funcName, err)
+		return nil, poolError(ErrID, desc)
+	}
+	_, err = buf.WriteString(account)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to write account id: %v",
+			funcName, err)
+		return nil, poolError(ErrID, desc)
+	}
+	return buf.Bytes(), nil
 }
 
 // Share represents verifiable work performed by a pool client.
@@ -45,55 +57,70 @@ type Share struct {
 }
 
 // NewShare creates a share with the provided account and weight.
-func NewShare(account string, weight *big.Rat) *Share {
+func NewShare(account string, weight *big.Rat) (*Share, error) {
+	id, err := shareID(account, time.Now().UnixNano())
+	if err != nil {
+		return nil, err
+	}
 	return &Share{
-		UUID:    string(shareID(account, time.Now().UnixNano())),
+		UUID:    string(id),
 		Account: account,
 		Weight:  weight,
-	}
+	}, nil
 }
 
 // fetchShareBucket is a helper function for getting the share bucket.
 func fetchShareBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	funcName := "fetchShareBucket"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	bkt := pbkt.Bucket(shareBkt)
 	if bkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(shareBkt))
-		return nil, MakeError(ErrBucketNotFound, desc, nil)
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(shareBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
 	}
-
 	return bkt, nil
 }
 
 // Create persists a share to the database.
 func (s *Share) Create(db *bolt.DB) error {
-	err := db.Update(func(tx *bolt.Tx) error {
+	funcName := "Share.Create"
+	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchShareBucket(tx)
 		if err != nil {
 			return err
 		}
 		sBytes, err := json.Marshal(s)
 		if err != nil {
-			return err
+			desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
+				funcName, err)
+			return poolError(ErrParse, desc)
 		}
 		err = bkt.Put([]byte(s.UUID), sBytes)
-		return err
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist share entry: %v",
+				funcName, err)
+			return poolError(ErrPersistEntry, desc)
+		}
+		return nil
 	})
-	return err
 }
 
 // Update is not supported for shares.
 func (s *Share) Update(db *bolt.DB) error {
-	desc := "share update not supported"
-	return MakeError(ErrNotSupported, desc, nil)
+	funcName := "Share.Update"
+	desc := fmt.Sprintf("%s: not supported", funcName)
+	return dbError(ErrNotSupported, desc)
 }
 
 // Delete is not supported for shares.
 func (s *Share) Delete(db *bolt.DB) error {
-	desc := "share deletion not supported"
-	return MakeError(ErrNotSupported, desc, nil)
+	funcName := "Share.Delete"
+	desc := fmt.Sprintf("%s: not supported", funcName)
+	return dbError(ErrNotSupported, desc)
 }

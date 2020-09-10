@@ -5,7 +5,6 @@
 package pool
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -15,19 +14,20 @@ import (
 
 // persistShare creates a persisted share with the provided account and share
 // weight.
-func persistShare(db *bolt.DB, account string, weight *big.Rat,
-	createdOnNano int64) error {
+func persistShare(db *bolt.DB, account string, weight *big.Rat, createdOnNano int64) error {
+	id, err := shareID(account, createdOnNano)
+	if err != nil {
+		return err
+	}
 	share := &Share{
-		UUID:    string(shareID(account, createdOnNano)),
+		UUID:    string(id),
 		Account: account,
 		Weight:  weight,
 	}
-
-	err := share.Create(db)
+	err = share.Create(db)
 	if err != nil {
-		return fmt.Errorf("unable to persist share: %v", err)
+		return err
 	}
-
 	return nil
 }
 
@@ -46,11 +46,19 @@ func testShares(t *testing.T, db *bolt.DB) {
 	}
 
 	// Fetch share A and B.
-	shareA, err := fetchShare(db, shareID(xID, shareACreatedOn))
+	aID, err := shareID(xID, shareACreatedOn)
+	if err != nil {
+		t.Fatalf("unexpected share id creation error: %v", err)
+	}
+	shareA, err := fetchShare(db, aID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching share A: %v", err)
 	}
-	shareB, err := fetchShare(db, shareID(yID, shareBCreatedOn))
+	bID, err := shareID(yID, shareBCreatedOn)
+	if err != nil {
+		t.Fatalf("unexpected share id creation error: %v", err)
+	}
+	shareB, err := fetchShare(db, bID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching share B: %v", err)
 	}
