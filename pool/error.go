@@ -51,6 +51,9 @@ const (
 	// ErrID indicates an ID related error.
 	ErrID = ErrorKind("ErrID")
 
+	// ErrValueFound indicates a an unexpected value found.
+	ErrValueFound = ErrorKind("ErrValueFound")
+
 	// ------------------------------------------
 	// Errors related to pool operations.
 	// ------------------------------------------
@@ -102,6 +105,9 @@ const (
 
 	// ErrAccountExists indicates the account being created already exists.
 	ErrAccountExists = ErrorKind("ErrAccountExists")
+
+	// ErrPaymentSource indicates a payment source error.
+	ErrPaymentSource = ErrorKind("ErrPaymentSource")
 )
 
 // Error satisfies the error interface and prints human-readable errors.

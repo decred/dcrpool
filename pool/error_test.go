@@ -27,6 +27,7 @@ func TestErrorKindStringer(t *testing.T) {
 		{ErrParse, "ErrParse"},
 		{ErrDecode, "ErrDecode"},
 		{ErrID, "ErrID"},
+		{ErrValueFound, "ErrValueFound"},
 
 		{ErrGetWork, "ErrGetWork"},
 		{ErrGetBlock, "ErrGetBlock"},
@@ -44,6 +45,7 @@ func TestErrorKindStringer(t *testing.T) {
 		{ErrDifficulty, "ErrDifficulty"},
 		{ErrWorkRejected, "ErrWorkRejected"},
 		{ErrAccountExists, "ErrAccountExists"},
+		{ErrPaymentSource, "ErrPaymentSource"},
 	}
 
 	for i, test := range tests {
