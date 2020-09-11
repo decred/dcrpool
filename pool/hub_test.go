@@ -333,12 +333,15 @@ func testHub(t *testing.T, db *bolt.DB) {
 	go hub.Run(ctx)
 
 	// Create the mined work to be confirmed.
-	work := NewAcceptedWork(
+	work, err := NewAcceptedWork(
 		"00008121c7731f9f81cae3d6279e81b9e7e7ebab94fb7bf584d16ecb70fbb9dd",
 		"000033925cfb136f209b2722c4149dd53fceb0323f74b39be753887c19edcd2c",
 		56,
 		"193c4b8fd02aaed33ab9c5418ace9bec4047f61f923767bceb5a51c6e368bfa6",
 		CPU)
+	if err != nil {
+		t.Fatalf("[NewAcceptedWork] unexpected error: %v", err)
+	}
 
 	err = work.Create(db)
 	if err != nil {

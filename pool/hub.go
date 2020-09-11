@@ -232,11 +232,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	log.Infof("Maximum work submission generation time at "+
 		"pool difficulty is %s.", maxGenTime)
 
-	var err error
-	h.poolDiffs, err = NewDifficultySet(h.cfg.ActiveNet, powLimit, maxGenTime)
-	if err != nil {
-		return nil, err
-	}
+	h.poolDiffs = NewDifficultySet(h.cfg.ActiveNet, powLimit, maxGenTime)
 
 	pCfg := &PaymentMgrConfig{
 		DB:                     h.db,
@@ -253,6 +249,8 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		FetchTxCreator:         func() TxCreator { return h.nodeConn },
 		FetchTxBroadcaster:     func() TxBroadcaster { return h.walletConn },
 	}
+
+	var err error
 	h.paymentMgr, err = NewPaymentMgr(pCfg)
 	if err != nil {
 		return nil, err
@@ -295,7 +293,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 // submitWork sends solved block data to the consensus daemon for evaluation.
 func (h *Hub) submitWork(ctx context.Context, data *string) (bool, error) {
 	if h.nodeConn == nil {
-		return false, MakeError(ErrOther, "node connection unset", nil)
+		return false, poolError(ErrDisconnected, "node disconnected")
 	}
 
 	return h.nodeConn.GetWorkSubmit(ctx, *data)
@@ -304,12 +302,12 @@ func (h *Hub) submitWork(ctx context.Context, data *string) (bool, error) {
 // getWork fetches available work from the consensus daemon.
 func (h *Hub) getWork(ctx context.Context) (string, string, error) {
 	if h.nodeConn == nil {
-		return "", "", MakeError(ErrOther, "node connection unset", nil)
+		return "", "", poolError(ErrDisconnected, "node disonnected")
 	}
-
 	work, err := h.nodeConn.GetWork(ctx)
 	if err != nil {
-		return "", "", err
+		desc := fmt.Sprintf("unable to fetch current work: %v", err)
+		return "", "", poolError(ErrGetWork, desc)
 	}
 	return work.Data, work.Target, err
 }
@@ -329,7 +327,8 @@ func (h *Hub) getTxConfNotifications(txHashes []*chainhash.Hash, stopAfter int32
 
 	err := h.notifClient.Send(req)
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("unable to fetch tx confirmations: %v", err)
+		return nil, poolError(ErrTxConf, desc)
 	}
 
 	return h.notifClient.Recv, nil
@@ -340,7 +339,8 @@ func (h *Hub) getTxConfNotifications(txHashes []*chainhash.Hash, stopAfter int32
 func (h *Hub) getBlockConfirmations(ctx context.Context, hash *chainhash.Hash) (int64, error) {
 	info, err := h.nodeConn.GetBlockVerbose(ctx, hash, false)
 	if err != nil {
-		return 0, err
+		desc := fmt.Sprintf("unable to fetch block confirmations: %v", err)
+		return 0, poolError(ErrBlockConf, desc)
 	}
 	return info.Confirmations, nil
 }
@@ -363,10 +363,15 @@ func (h *Hub) FetchLastPaymentHeight() uint32 {
 // getBlock fetches the blocks associated with the provided block hash.
 func (h *Hub) getBlock(ctx context.Context, blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
 	if h.nodeConn == nil {
-		return nil, MakeError(ErrOther, "node connection unset", nil)
+		return nil, poolError(ErrDisconnected, "node disconnected")
 	}
-
-	return h.nodeConn.GetBlock(ctx, blockHash)
+	block, err := h.nodeConn.GetBlock(ctx, blockHash)
+	if err != nil {
+		desc := fmt.Sprintf("unable to fetch block %s: %v",
+			blockHash.String(), err)
+		return nil, poolError(ErrGetBlock, desc)
+	}
+	return block, nil
 }
 
 // fetchHostConnections returns the client connection count for the
@@ -398,7 +403,8 @@ func (h *Hub) removeConnection(host string) {
 func (h *Hub) processWork(headerE string) {
 	heightD, err := hex.DecodeString(headerE[256:264])
 	if err != nil {
-		log.Errorf("failed to decode block height %s: %v", string(heightD), err)
+		log.Errorf("unable to decode block height %s: %v",
+			string(heightD), err)
 		return
 	}
 	height := binary.LittleEndian.Uint32(heightD)
@@ -416,12 +422,12 @@ func (h *Hub) processWork(headerE string) {
 	genTx2 := headerE[352:360]
 	job, err := NewJob(headerE, height)
 	if err != nil {
-		log.Errorf("failed to create job: %v", err)
+		log.Error(err)
 		return
 	}
 	err = job.Create(h.db)
 	if err != nil {
-		log.Errorf("failed to persist job: %v", err)
+		log.Error(err)
 		return
 	}
 	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
@@ -464,8 +470,9 @@ func (h *Hub) Listen() error {
 		}
 		endpoint, err := NewEndpoint(eCfg, diffInfo, port, miner)
 		if err != nil {
-			desc := fmt.Sprintf("unable to create %s listener", miner)
-			return MakeError(ErrOther, desc, err)
+			desc := fmt.Sprintf("unable to create %s endpoint on port %d",
+				miner, port)
+			return poolError(ErrListener, desc)
 		}
 		h.endpoints = append(h.endpoints, endpoint)
 	}
@@ -514,8 +521,7 @@ func (h *Hub) CreateNotificationHandlers() *rpcclient.NotificationHandlers {
 func (h *Hub) FetchWork(ctx context.Context) error {
 	work, _, err := h.getWork(ctx)
 	if err != nil {
-		desc := "unable to fetch current work"
-		return MakeError(ErrOther, desc, err)
+		return err
 	}
 	h.chainState.setCurrentWork(work)
 	return nil
@@ -533,7 +539,7 @@ func (h *Hub) backup(ctx context.Context) {
 	backupPath := filepath.Join(filepath.Dir(h.db.Path()), backupFile)
 	err := backup(h.db, backupPath)
 	if err != nil {
-		log.Errorf("unable to backup db: %v", err)
+		log.Error(err)
 	}
 	h.wg.Done()
 }
@@ -653,7 +659,7 @@ func (h *Hub) CSRFSecret() ([]byte, error) {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return MakeError(ErrBucketNotFound, desc, nil)
+			return dbError(ErrBucketNotFound, desc)
 		}
 		v := pbkt.Get(csrfSecret)
 		if v != nil {
