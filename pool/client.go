@@ -167,26 +167,32 @@ func (c *Client) shutdown() {
 // serves as proof of verifiable work contributed to the mining pool.
 func (c *Client) claimWeightedShare() error {
 	if c.cfg.SoloPool {
-		return fmt.Errorf("cannot claim shares in solo pool mode")
+		desc := "cannot claim shares in solo pool mode"
+		return poolError(ErrClaimShare, desc)
 	}
 	if c.cfg.ActiveNet.Name == chaincfg.MainNetParams().Name &&
 		c.cfg.FetchMiner() == CPU {
-		return fmt.Errorf("cannot claim shares for cpu miners on mainnet, " +
-			"reserved for testing purposes only (simnet, testnet)")
+		desc := "cannot claim shares for cpu miners on mainnet, " +
+			"reserved for testing purposes only (simnet, testnet)"
+		return poolError(ErrClaimShare, desc)
 	}
 	weight := ShareWeights[c.cfg.FetchMiner()]
-	share := NewShare(c.account, weight)
+	share, err := NewShare(c.account, weight)
+	if err != nil {
+		return err
+	}
 	return share.Create(c.cfg.DB)
 }
 
 // handleAuthorizeRequest processes authorize request messages received.
 func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 	if !allowed {
-		err := fmt.Errorf("unable to process authorize request, limit reached")
+		err := fmt.Errorf("unable to process authorize request, " +
+			"client request limit reached")
 		sErr := NewStratumError(Unknown, err)
 		resp := AuthorizeResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return err
+		return poolError(ErrLimitExceeded, err.Error())
 	}
 
 	// The client's username is expected to be of the format address.clientid
@@ -194,7 +200,6 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 	// just the client's id.
 	username, err := ParseAuthorizeRequest(req)
 	if err != nil {
-		err := fmt.Errorf("unable to parse authorize request: %v", err)
 		sErr := NewStratumError(Unknown, err)
 		resp := AuthorizeResponse(*req.ID, false, sErr)
 		c.ch <- resp
@@ -210,36 +215,15 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 			sErr := NewStratumError(Unknown, err)
 			resp := AuthorizeResponse(*req.ID, false, sErr)
 			c.ch <- resp
-			return err
+			return msgError(ErrParse, err.Error())
 		}
 
 		name := strings.TrimSpace(parts[1])
 		address := strings.TrimSpace(parts[0])
 
-		// Fetch the account of the address provided.
-		id, err := AccountID(address, c.cfg.ActiveNet)
-		if err != nil {
-			err := fmt.Errorf("unable to generate account id: %v", err)
-			sErr := NewStratumError(Unknown, err)
-			resp := AuthorizeResponse(*req.ID, false, sErr)
-			c.ch <- resp
-			return err
-		}
-		_, err = FetchAccount(c.cfg.DB, []byte(id))
-		if err != nil {
-			if !IsError(err, ErrValueNotFound) {
-				err := fmt.Errorf("unable to fetch account: %v", err)
-				sErr := NewStratumError(Unknown, err)
-				resp := AuthorizeResponse(*req.ID, false, sErr)
-				c.ch <- resp
-				return err
-			}
-		}
-
 		// Create the account if it does not already exist.
 		account, err := NewAccount(address, c.cfg.ActiveNet)
 		if err != nil {
-			err := fmt.Errorf("unable to create account: %v", err)
 			sErr := NewStratumError(Unknown, err)
 			resp := AuthorizeResponse(*req.ID, false, sErr)
 			c.ch <- resp
@@ -247,13 +231,12 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 		}
 		err = account.Create(c.cfg.DB)
 		if err != nil {
-			err := fmt.Errorf("unable to persist account: %v", err)
 			sErr := NewStratumError(Unknown, err)
 			resp := AuthorizeResponse(*req.ID, false, sErr)
 			c.ch <- resp
 			return err
 		}
-		c.account = id
+		c.account = account.UUID
 		c.name = name
 
 	case true:
@@ -272,16 +255,16 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 // handleSubscribeRequest processes subscription request messages received.
 func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 	if !allowed {
-		err := fmt.Errorf("unable to process subscribe request, limit reached")
+		err := fmt.Errorf("unable to process subscribe request, client " +
+			"request limit reached")
 		sErr := NewStratumError(Unknown, err)
 		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
 		c.ch <- resp
-		return err
+		return poolError(ErrLimitExceeded, err.Error())
 	}
 
 	_, nid, err := ParseSubscribeRequest(req)
 	if err != nil {
-		err := fmt.Errorf("unable to parse subscribe request: %v", err)
 		sErr := NewStratumError(Unknown, err)
 		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
 		c.ch <- resp
@@ -352,17 +335,17 @@ func (c *Client) setDifficulty() {
 // handleSubmitWorkRequest processes work submission request messages received.
 func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allowed bool) error {
 	if !allowed {
-		err := fmt.Errorf("unable to process submit work request, limit reached")
+		err := fmt.Errorf("unable to process submit work request, client " +
+			"request limit reached")
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return err
+		return poolError(ErrLimitExceeded, err.Error())
 	}
 
 	_, jobID, extraNonce2E, nTimeE, nonceE, err :=
 		ParseSubmitWorkRequest(req, c.cfg.FetchMiner())
 	if err != nil {
-		err := fmt.Errorf("unable to parse submit work request: %v", err)
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
@@ -370,7 +353,6 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	}
 	job, err := FetchJob(c.cfg.DB, []byte(jobID))
 	if err != nil {
-		err := fmt.Errorf("unable to fetch job: %v", err)
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
@@ -379,7 +361,6 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	header, err := GenerateSolvedBlockHeader(job.Header, c.extraNonce1,
 		extraNonce2E, nTimeE, nonceE, c.cfg.FetchMiner())
 	if err != nil {
-		err := fmt.Errorf("unable to generate solved block header: %v", err)
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
@@ -395,7 +376,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return err
+		return poolError(ErrDifficulty, err.Error())
 	}
 	hash := header.BlockHash()
 	hashTarget := new(big.Rat).SetInt(standalone.HashToBig(&hash))
@@ -413,7 +394,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		sErr := NewStratumError(LowDifficultyShare, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return err
+		return poolError(ErrDifficulty, err.Error())
 	}
 	atomic.AddInt64(&c.submissions, 1)
 
@@ -422,12 +403,11 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	if !c.cfg.SoloPool {
 		err := c.claimWeightedShare()
 		if err != nil {
-			err := fmt.Errorf("unable to claim weighted share for %v: %v",
-				c.id, err)
+			err := fmt.Errorf("%s: %v", c.id, err)
 			sErr := NewStratumError(Unknown, err)
 			resp := SubmitWorkResponse(*req.ID, false, sErr)
 			c.ch <- resp
-			return err
+			return poolError(ErrClaimShare, err.Error())
 		}
 
 		// Signal the gui cache of the claimed weighted share.
@@ -439,14 +419,14 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	if hashTarget.Cmp(target) > 0 {
 		resp := SubmitWorkResponse(*req.ID, false, nil)
 		c.ch <- resp
-		return fmt.Errorf("submitted work from %s is not less than the "+
-			"network target difficulty", c.id)
+		desc := fmt.Sprintf("submitted work from %s is not "+
+			"less than the network target difficulty", c.id)
+		return poolError(ErrDifficulty, desc)
 	}
 
 	// Generate and send the work submission.
 	headerB, err := header.Bytes()
 	if err != nil {
-		err := fmt.Errorf("unable to fetch block header bytes: %v", err)
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
@@ -459,7 +439,6 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	submission := hex.EncodeToString(submissionB)
 	accepted, err := c.cfg.SubmitWork(ctx, &submission)
 	if err != nil {
-		err := fmt.Errorf("unable to submit work request: %v", err)
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
@@ -468,25 +447,31 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 
 	if !accepted {
 		c.ch <- SubmitWorkResponse(*req.ID, false, nil)
-		return fmt.Errorf("work %s rejected by the network", hash.String())
+		desc := fmt.Sprintf("%s: work %s rejected by the network",
+			c.id, hash.String())
+		return poolError(ErrWorkRejected, desc)
 	}
 
 	// Create accepted work if the work submission is accepted
 	// by the mining node.
-	work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
+	work, err := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
 		header.Height, c.account, c.cfg.FetchMiner())
+	if err != nil {
+		sErr := NewStratumError(Unknown, err)
+		resp := SubmitWorkResponse(*req.ID, false, sErr)
+		c.ch <- resp
+		return err
+	}
 	err = work.Create(c.cfg.DB)
 	if err != nil {
 		// If the submitted accepted work already exists, ignore the
 		// submission.
-		if IsError(err, ErrWorkExists) {
-			err := fmt.Errorf("work %s already exists, ignoring", hash.String())
+		if errors.Is(err, ErrWorkExists) {
 			sErr := NewStratumError(DuplicateShare, err)
 			resp := SubmitWorkResponse(*req.ID, false, sErr)
 			c.ch <- resp
 			return err
 		}
-		err := fmt.Errorf("unable to persist accepted work: %v", err)
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
@@ -545,7 +530,7 @@ func (c *Client) read() {
 			}
 			var nErr *net.OpError
 			if !errors.As(err, &nErr) {
-				log.Errorf("%s: failed to read bytes: %v", c.id, err)
+				log.Errorf("%s: unable to read bytes: %v", c.id, err)
 				c.cancel()
 				return
 			}
@@ -559,7 +544,7 @@ func (c *Client) read() {
 				c.cancel()
 				return
 			}
-			log.Errorf("failed to read bytes: %v %T", err, err)
+			log.Errorf("unable to read bytes: %v %T", err, err)
 			c.cancel()
 			return
 		}
@@ -578,6 +563,7 @@ func (c *Client) read() {
 // after client authentication and when the client is stalling on
 // current work.
 func (c *Client) updateWork() {
+	funcName := "updateWork"
 	// Only timestamp-roll current work for authorized and subscribed clients.
 	c.authorizedMtx.Lock()
 	authorized := c.authorized
@@ -599,9 +585,23 @@ func (c *Client) updateWork() {
 	binary.LittleEndian.PutUint32(b, now)
 	timestampE := hex.EncodeToString(b)
 	buf := bytes.NewBufferString("")
-	buf.WriteString(currWorkE[:272])
-	buf.WriteString(timestampE)
-	buf.WriteString(currWorkE[280:])
+	_, err := buf.WriteString(currWorkE[:272])
+	if err != nil {
+		log.Errorf("%s: unable to write first current work slice: %v",
+			funcName, err)
+		return
+	}
+	_, err = buf.WriteString(timestampE)
+	if err != nil {
+		log.Errorf("%s: unable to write timetamp: %v", funcName, err)
+		return
+	}
+	_, err = buf.WriteString(currWorkE[280:])
+	if err != nil {
+		log.Errorf("%s: unable to write second current work slice: %v",
+			funcName, err)
+		return
+	}
 
 	updatedWorkE := buf.String()
 	blockVersion := updatedWorkE[:8]
@@ -613,19 +613,21 @@ func (c *Client) updateWork() {
 
 	heightD, err := hex.DecodeString(updatedWorkE[256:264])
 	if err != nil {
-		log.Errorf("failed to decode block height %s: %v", string(heightD), err)
+		log.Errorf("%s: unable to decode block height %s: %v", funcName,
+			string(heightD), err)
+		return
 	}
 	height := binary.LittleEndian.Uint32(heightD)
 
 	// Create a job for the timestamp-rolled current work.
 	job, err := NewJob(updatedWorkE, height)
 	if err != nil {
-		log.Errorf("failed to create job: %v", err)
+		log.Error(err)
 		return
 	}
 	err = job.Create(c.cfg.DB)
 	if err != nil {
-		log.Errorf("failed to persist job: %v", err)
+		log.Error(err)
 		return
 	}
 	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
@@ -690,8 +692,7 @@ func (c *Client) process() {
 					}
 
 				default:
-					log.Errorf("unknown request method for request: %s",
-						req.Method)
+					log.Errorf("unknown request method: %s", req.Method)
 					c.cancel()
 					continue
 				}
@@ -733,9 +734,11 @@ func reversePrevBlockWords(hashE string) string {
 
 // hexReversed reverses a hex string.
 func hexReversed(in string) (string, error) {
+	funcName := "hexReversed"
 	if len(in)%2 != 0 {
-		desc := fmt.Sprintf("expected even hex input length, got %d", len(in))
-		return "", MakeError(ErrWrongInputLength, desc, nil)
+		desc := fmt.Sprintf("%s: expected even hex input length, got %d",
+			funcName, len(in))
+		return "", dbError(ErrHexLength, desc)
 	}
 	buf := bytes.NewBufferString("")
 	for i := len(in) - 1; i > -1; i -= 2 {
@@ -747,23 +750,24 @@ func hexReversed(in string) (string, error) {
 
 // handleAntminerDR3 prepares work notifications for the Antminer DR3.
 func (c *Client) handleAntminerDR3Work(req *Request) {
+	miner := "AntminerDR3"
 	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
 		cleanJob, err := ParseWorkNotification(req)
 	if err != nil {
-		log.Errorf("unable to parse work message: %v", err)
+		log.Errorf("%s: %v", miner, err)
 	}
 
 	// The DR3 requires the nBits and nTime fields of a mining.notify message
 	// as big endian.
 	nBits, err = hexReversed(nBits)
 	if err != nil {
-		log.Errorf("unable to hex reverse nBits: %v", err)
+		log.Errorf("%s: %v for nBits", miner, err)
 		c.cancel()
 		return
 	}
 	nTime, err = hexReversed(nTime)
 	if err != nil {
-		log.Errorf("unable to hex reverse nTime: %v", err)
+		log.Errorf("%s: %v for nTime", miner, err)
 		c.cancel()
 		return
 	}
@@ -772,7 +776,7 @@ func (c *Client) handleAntminerDR3Work(req *Request) {
 		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
 	err = c.encoder.Encode(workNotif)
 	if err != nil {
-		log.Errorf("message encoding error: %v", err)
+		log.Errorf("%s: work encoding error, %v", miner, err)
 		c.cancel()
 		return
 	}
@@ -782,23 +786,24 @@ func (c *Client) handleAntminerDR3Work(req *Request) {
 
 // handleInnosiliconD9Work prepares work notifications for the Innosilicon D9.
 func (c *Client) handleInnosiliconD9Work(req *Request) {
+	miner := "InnosiliconD9"
 	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
 		cleanJob, err := ParseWorkNotification(req)
 	if err != nil {
-		log.Errorf("unable to parse work message: %v", err)
+		log.Errorf("%s: %v", miner, err)
 	}
 
 	// The D9 requires the nBits and nTime fields of a mining.notify message
 	// as big endian.
 	nBits, err = hexReversed(nBits)
 	if err != nil {
-		log.Errorf("unable to hex reverse nBits: %v", err)
+		log.Errorf("%s: %v for nBits", miner, err)
 		c.cancel()
 		return
 	}
 	nTime, err = hexReversed(nTime)
 	if err != nil {
-		log.Errorf("unable to hex reverse nTime: %v", err)
+		log.Errorf("%s: %v for nTime", miner, err)
 		c.cancel()
 		return
 	}
@@ -807,7 +812,7 @@ func (c *Client) handleInnosiliconD9Work(req *Request) {
 		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
 	err = c.encoder.Encode(workNotif)
 	if err != nil {
-		log.Errorf("message encoding error: %v", err)
+		log.Errorf("%s: work encoding error, %v", miner, err)
 		c.cancel()
 		return
 	}
@@ -817,10 +822,11 @@ func (c *Client) handleInnosiliconD9Work(req *Request) {
 
 // handleWhatsminerD1Work prepares work notifications for the Whatsminer D1.
 func (c *Client) handleWhatsminerD1Work(req *Request) {
+	miner := "WhatsminerD1"
 	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
 		cleanJob, err := ParseWorkNotification(req)
 	if err != nil {
-		log.Errorf("unable to parse work message: %v", err)
+		log.Errorf("%s: %v", miner, err)
 	}
 
 	// The D1 requires the nBits and nTime fields of a mining.notify message
@@ -831,7 +837,7 @@ func (c *Client) handleWhatsminerD1Work(req *Request) {
 		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
 	err = c.encoder.Encode(workNotif)
 	if err != nil {
-		log.Errorf("message encoding error: %v", err)
+		log.Errorf("%s: work encoding error: %v", miner, err)
 		c.cancel()
 		return
 	}
@@ -841,9 +847,10 @@ func (c *Client) handleWhatsminerD1Work(req *Request) {
 
 // handleCPUWork prepares work for the cpu miner.
 func (c *Client) handleCPUWork(req *Request) {
+	miner := "CPU"
 	err := c.encoder.Encode(req)
 	if err != nil {
-		log.Errorf("message encoding error: %v", err)
+		log.Errorf("%s: work encoding error, %v", miner, err)
 		c.cancel()
 		return
 	}
@@ -853,23 +860,24 @@ func (c *Client) handleCPUWork(req *Request) {
 
 // handleObeliskDCR1Work prepares work for the Obelisk DCR1.
 func (c *Client) handleObeliskDCR1Work(req *Request) {
+	miner := "ObeliskDCR1"
 	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
 		cleanJob, err := ParseWorkNotification(req)
 	if err != nil {
-		log.Errorf("unable to parse work message: %v", err)
+		log.Errorf("%s: %v", miner, err)
 	}
 
 	// The DCR1 requires the nBits and nTime fields of a mining.notify message
 	// as big endian.
 	nBits, err = hexReversed(nBits)
 	if err != nil {
-		log.Errorf("unable to hex reverse nBits: %v", err)
+		log.Errorf("%s: %v for nBits", miner, err)
 		c.cancel()
 		return
 	}
 	nTime, err = hexReversed(nTime)
 	if err != nil {
-		log.Errorf("unable to hex reverse nTime: %v", err)
+		log.Errorf("%s: %v for nTime", miner, err)
 		c.cancel()
 		return
 	}
@@ -879,7 +887,7 @@ func (c *Client) handleObeliskDCR1Work(req *Request) {
 		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
 	err = c.encoder.Encode(workNotif)
 	if err != nil {
-		log.Errorf("message encoding error: %v", err)
+		log.Errorf("%s: work encoding error, %v", miner, err)
 		c.cancel()
 		return
 	}
@@ -917,6 +925,8 @@ func (c *Client) FetchAccountID() string {
 	return c.account
 }
 
+// hashMonitor calculates the total number of hashes being solved by the
+// client periodically.
 func (c *Client) hashMonitor() {
 	ticker := time.NewTicker(time.Second * time.Duration(c.cfg.HashCalcThreshold))
 	defer ticker.Stop()
@@ -1000,7 +1010,8 @@ func (c *Client) send() {
 						log.Tracef("%s notified of new work", c.id)
 
 					default:
-						log.Errorf("unknown miner provided: %s", c.cfg.FetchMiner())
+						log.Errorf("unknown miner provided: %s",
+							c.cfg.FetchMiner())
 						c.cancel()
 						continue
 					}
