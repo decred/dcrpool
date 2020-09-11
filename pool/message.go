@@ -185,7 +185,7 @@ func ParseAuthorizeRequest(req *Request) (string, error) {
 
 	if len(auth) < 2 {
 		desc := fmt.Sprintf("%s: expected 2 params for authorize request, "+
-			"got %v", len(auth))
+			"got %v", funcName, len(auth))
 		return "", msgError(ErrParse, desc)
 	}
 
@@ -604,7 +604,7 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string,
 		copy(headerEB[288:304], []byte(extraNonce2E))
 
 	default:
-		desc := fmt.Sprintf("%s: miner %s is unknown", miner)
+		desc := fmt.Sprintf("miner %s is unknown", miner)
 		return nil, msgError(ErrMinerUnknown, desc)
 	}
 
@@ -684,7 +684,7 @@ func ParseSubmitWorkRequest(req *Request, miner string) (string, string, string,
 
 	nonce, ok := params[4].(string)
 	if !ok {
-		desc := fmt.Sprint("%s: unable to parse nonce parameter", funcName)
+		desc := fmt.Sprintf("%s: unable to parse nonce parameter", funcName)
 		return "", "", "", "", "", msgError(ErrParse, desc)
 	}
 
