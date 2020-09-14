@@ -213,7 +213,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		t.Fatalf("prunePayments error: %v", err)
 	}
 
-	aID, err := paymentID(paymentA.Height, paymentA.CreatedOn, paymentA.Account)
+	aID := paymentID(paymentA.Height, paymentA.CreatedOn, paymentA.Account)
 	if err != nil {
 		t.Fatalf("unexpected payment id err: %v", err)
 	}
@@ -222,7 +222,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		t.Fatalf("unexpected error fetching payment A: %v", err)
 	}
 
-	bID, err := paymentID(paymentB.Height, paymentB.CreatedOn, paymentB.Account)
+	bID := paymentID(paymentB.Height, paymentB.CreatedOn, paymentB.Account)
 	if err != nil {
 		t.Fatalf("unexpected payment id err: %v", err)
 	}
@@ -284,10 +284,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		"0004fa83b20204e0000000000002a000000a50300004348fa5d00000000" +
 		"00000000000000000000000000000000000000000000000000000000000" +
 		"00000000000008000000100000000000005a0"
-	job, err := NewJob(workE, 42)
-	if err != nil {
-		t.Fatalf("unable to create job %v", err)
-	}
+	job := NewJob(workE, 42)
 	err = job.Create(cs.cfg.DB)
 	if err != nil {
 		log.Errorf("failed to persist job %v", err)

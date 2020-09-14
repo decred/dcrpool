@@ -118,7 +118,7 @@ func NewDifficultySet(net *chaincfg.Params, powLimit *big.Rat, maxGenTime time.D
 // fetchMinerDifficulty returns the difficulty data of the provided miner,
 // if it exists.
 func (d *DifficultySet) fetchMinerDifficulty(miner string) (*DifficultyInfo, error) {
-	funcName := "fetchMinerDifficulty"
+	const funcName = "fetchMinerDifficulty"
 	d.mtx.Lock()
 	diffData, ok := d.diffs[miner]
 	d.mtx.Unlock()

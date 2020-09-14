@@ -22,16 +22,13 @@ func TestErrorKindStringer(t *testing.T) {
 		{ErrDBUpgrade, "ErrDBUpgrade"},
 		{ErrPersistEntry, "ErrPersistEntry"},
 		{ErrDeleteEntry, "ErrDeleteEntry"},
-		{ErrNotSupported, "ErrNotSupported"},
 		{ErrBackup, "ErrBackup"},
 		{ErrParse, "ErrParse"},
 		{ErrDecode, "ErrDecode"},
-		{ErrID, "ErrID"},
 		{ErrValueFound, "ErrValueFound"},
 
 		{ErrGetWork, "ErrGetWork"},
 		{ErrGetBlock, "ErrGetBlock"},
-		{ErrWorkExists, "ErrWorkExists"},
 		{ErrDisconnected, "ErrDisconnected"},
 		{ErrListener, "ErrListener"},
 		{ErrHeaderInvalid, "ErrHeaderInvalid"},
@@ -44,7 +41,6 @@ func TestErrorKindStringer(t *testing.T) {
 		{ErrLimitExceeded, "ErrLimitExceeded"},
 		{ErrDifficulty, "ErrDifficulty"},
 		{ErrWorkRejected, "ErrWorkRejected"},
-		{ErrAccountExists, "ErrAccountExists"},
 		{ErrPaymentSource, "ErrPaymentSource"},
 	}
 
@@ -149,7 +145,7 @@ func TestErrorKindIsAs(t *testing.T) {
 			continue
 		}
 
-		// Ensure the underlying error kind can be unwrapped is and is the
+		// Ensure the underlying error kind can be unwrapped and is the
 		// expected kind.
 		var kind ErrorKind
 		if !errors.As(test.err, &kind) {

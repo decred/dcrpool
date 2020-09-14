@@ -106,22 +106,14 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure fetching a non existent accepted work returns an error.
-	id, err := AcceptedWorkID(workC.BlockHash, workD.Height)
-	if err != nil {
-		t.Fatalf("unexpected work id error: %v", err)
-	}
-
+	id := AcceptedWorkID(workC.BlockHash, workD.Height)
 	_, err = FetchAcceptedWork(db, id)
 	if err == nil {
 		t.Fatalf("FetchAcceptedWork: expected a non-existent accepted work error")
 	}
 
 	// Fetch an accepted work with its id.
-	id, err = AcceptedWorkID(workC.BlockHash, workC.Height)
-	if err != nil {
-		t.Fatalf("unexpected work id error: %v", err)
-	}
-
+	id = AcceptedWorkID(workC.BlockHash, workC.Height)
 	fetchedWork, err := FetchAcceptedWork(db, id)
 	if err != nil {
 		t.Fatalf("FetchAcceptedWork error: %v", err)

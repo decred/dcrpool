@@ -31,40 +31,25 @@ func nanoToBigEndianBytes(nano int64) []byte {
 }
 
 // jobID generates a unique job id of the provided block height.
-func jobID(height uint32) (string, error) {
-	funcName := "jobID"
-	buf := bytes.Buffer{}
-	_, err := buf.Write(heightToBigEndianBytes(height))
-	if err != nil {
-		desc := fmt.Sprintf("(%s) unable to write block height: %v",
-			funcName, err)
-		return "", poolError(ErrID, desc)
-	}
+func jobID(height uint32) string {
+	var buf bytes.Buffer
+	buf.Write(heightToBigEndianBytes(height))
 	buf.Write(nanoToBigEndianBytes(time.Now().UnixNano()))
-	if err != nil {
-		desc := fmt.Sprintf("(%s) unable to write current time: %v",
-			funcName, err)
-		return "", poolError(ErrID, desc)
-	}
-	return hex.EncodeToString(buf.Bytes()), nil
+	return hex.EncodeToString(buf.Bytes())
 }
 
 // NewJob creates a job instance.
-func NewJob(header string, height uint32) (*Job, error) {
-	id, err := jobID(height)
-	if err != nil {
-		return nil, err
-	}
+func NewJob(header string, height uint32) *Job {
 	return &Job{
-		UUID:   id,
+		UUID:   jobID(height),
 		Height: height,
 		Header: header,
-	}, nil
+	}
 }
 
 // fetchJobBucket is a helper function for getting the job bucket.
 func fetchJobBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	funcName := "fetchJobBucket"
+	const funcName = "fetchJobBucket"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
@@ -82,7 +67,7 @@ func fetchJobBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 
 // FetchJob fetches the job referenced by the provided id.
 func FetchJob(db *bolt.DB, id []byte) (*Job, error) {
-	funcName := "FetchJob"
+	const funcName = "FetchJob"
 	var job Job
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchJobBucket(tx)
@@ -112,7 +97,7 @@ func FetchJob(db *bolt.DB, id []byte) (*Job, error) {
 
 // Create persists the job to the database.
 func (job *Job) Create(db *bolt.DB) error {
-	funcName := "Job.Create"
+	const funcName = "Job.Create"
 	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchJobBucket(tx)
 		if err != nil {
@@ -133,13 +118,6 @@ func (job *Job) Create(db *bolt.DB) error {
 		}
 		return nil
 	})
-}
-
-// Update is not supported for jobs.
-func (job *Job) Update(db *bolt.DB) error {
-	funcName := "Job.Update"
-	desc := fmt.Sprintf("%s: not supported", funcName)
-	return dbError(ErrNotSupported, desc)
 }
 
 // Delete removes the associated job from the database.

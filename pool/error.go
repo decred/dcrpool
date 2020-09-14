@@ -36,9 +36,6 @@ const (
 	// ErrDeleteEntry indicates a database entry delete error.
 	ErrDeleteEntry = ErrorKind("ErrDeleteEntry")
 
-	// ErrNotSupported indicates unsupported functionality.
-	ErrNotSupported = ErrorKind("ErrNotSupported")
-
 	// ErrBackup indicates database backup error.
 	ErrBackup = ErrorKind("ErrBackup")
 
@@ -47,9 +44,6 @@ const (
 
 	// ErrDecode indicates a decoding error.
 	ErrDecode = ErrorKind("ErrDecode")
-
-	// ErrID indicates an ID related error.
-	ErrID = ErrorKind("ErrID")
 
 	// ErrValueFound indicates a an unexpected value found.
 	ErrValueFound = ErrorKind("ErrValueFound")
@@ -63,9 +57,6 @@ const (
 
 	// ErrGetBlock indicates a block could not be fetched.
 	ErrGetBlock = ErrorKind("ErrGetBlock")
-
-	// ErrWorkExists indicates the work being created already exists.
-	ErrWorkExists = ErrorKind("ErrWorkExists")
 
 	// ErrDisconnected indicates a disconnected resource.
 	ErrDisconnected = ErrorKind("ErrDisconnected")
@@ -103,9 +94,6 @@ const (
 	// ErrWorkRejected indicates the rejected submitted work.
 	ErrWorkRejected = ErrorKind("ErrWorkRejected")
 
-	// ErrAccountExists indicates the account being created already exists.
-	ErrAccountExists = ErrorKind("ErrAccountExists")
-
 	// ErrPaymentSource indicates a payment source error.
 	ErrPaymentSource = ErrorKind("ErrPaymentSource")
 )
@@ -133,17 +121,21 @@ func (e Error) Unwrap() error {
 	return e.Err
 }
 
-// poolError creates an Error given a set of arguments.
+// poolError creates an Error given a set of arguments. This hould only be
+// used when creating error related to the mining pool and its processes.
 func poolError(kind ErrorKind, desc string) Error {
 	return Error{Err: kind, Description: desc}
 }
 
-// dbError creates an Error given a set of arguments.
+// dbError creates an Error given a set of arguments. This should only be
+// used when creating errors related to the database.
 func dbError(kind ErrorKind, desc string) Error {
 	return Error{Err: kind, Description: desc}
 }
 
-// msgError creates a MesssageError given a set of arguments.
+// msgError creates am Error given a set of arguments. This should only be
+// used when creating errors related to sending, receiving and processing
+// messages.
 func msgError(kind ErrorKind, desc string) Error {
 	return Error{Err: kind, Description: desc}
 }

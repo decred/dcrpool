@@ -59,7 +59,7 @@ var (
 // openDB creates a connection to the provided bolt storage, the returned
 // connection storage should always be closed after use.
 func openDB(storage string) (*bolt.DB, error) {
-	funcName := "openDB"
+	const funcName = "openDB"
 	db, err := bolt.Open(storage, 0600,
 		&bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
@@ -71,11 +71,11 @@ func openDB(storage string) (*bolt.DB, error) {
 
 // createNestedBucket creates a nested child bucket of the provided parent.
 func createNestedBucket(parent *bolt.Bucket, child []byte) error {
-	funcName := "createNestedBucket"
+	const funcName = "createNestedBucket"
 	_, err := parent.CreateBucketIfNotExists(child)
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to create %s bucket: %v",
-			string(child), funcName, err)
+			funcName, string(child), err)
 		return dbError(ErrBucketCreate, desc)
 	}
 	return nil
@@ -83,7 +83,7 @@ func createNestedBucket(parent *bolt.Bucket, child []byte) error {
 
 // createBuckets creates all storage buckets of the mining pool.
 func createBuckets(db *bolt.DB) error {
-	funcName := "createBuckets"
+	const funcName = "createBuckets"
 	err := db.Update(func(tx *bolt.Tx) error {
 		var err error
 		pbkt := tx.Bucket(poolBkt)
@@ -91,7 +91,7 @@ func createBuckets(db *bolt.DB) error {
 			pbkt, err = tx.CreateBucketIfNotExists(poolBkt)
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to create %s bucket: %v",
-					string(poolBkt), funcName, err)
+					funcName, string(poolBkt), err)
 				return dbError(ErrBucketCreate, desc)
 			}
 			vbytes := make([]byte, 4)
@@ -143,7 +143,7 @@ func backup(db *bolt.DB, file string) error {
 
 // purge removes all existing data and recreates the db.
 func purge(db *bolt.DB) error {
-	funcName := "purge"
+	const funcName = "purge"
 	err := db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
@@ -254,7 +254,7 @@ func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 // deleteEntry removes the specified key and its associated value from
 // the provided bucket.
 func deleteEntry(db *bolt.DB, bucket, key []byte) error {
-	funcName := "deleteEntry"
+	const funcName = "deleteEntry"
 	return db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
@@ -277,7 +277,7 @@ func deleteEntry(db *bolt.DB, bucket, key []byte) error {
 
 // emptyBucket deletes all k/v pairs in the provided bucket.
 func emptyBucket(db *bolt.DB, bucket []byte) error {
-	funcName := "emptyBucket"
+	const funcName = "emptyBucket"
 	return db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
