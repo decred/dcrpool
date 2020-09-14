@@ -25,21 +25,16 @@ type Account struct {
 
 // AccountID generates a unique id using provided address of the account.
 func AccountID(address string, activeNet *chaincfg.Params) (string, error) {
-	funcName := "AcccountID"
+	const funcName = "AcccountID"
 	_, err := dcrutil.DecodeAddress(address, activeNet)
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to decode address %s: %v",
 			funcName, address, err)
-		return "", poolError(ErrID, desc)
+		return "", poolError(ErrDecode, desc)
 	}
 	hasher := blake256.New()
-	_, err = hasher.Write([]byte(address))
-	if err != nil {
-		desc := fmt.Sprintf("%s: unable to write address: %v", funcName, err)
-		return "", poolError(ErrID, desc)
-	}
-	id := hex.EncodeToString(hasher.Sum(nil))
-	return id, nil
+	_, _ = hasher.Write([]byte(address))
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 // NewAccount creates a new account.
@@ -60,7 +55,7 @@ func NewAccount(address string, activeNet *chaincfg.Params) (*Account, error) {
 
 // fetchAccountBucket is a helper function for getting the account bucket.
 func fetchAccountBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	funcName := "fetchAccountBucket"
+	const funcName = "fetchAccountBucket"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
@@ -78,7 +73,7 @@ func fetchAccountBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 
 // FetchAccount fetches the account referenced by the provided id.
 func FetchAccount(db *bolt.DB, id []byte) (*Account, error) {
-	funcName := "FetchAccount"
+	const funcName = "FetchAccount"
 	var account Account
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchAccountBucket(tx)
@@ -108,7 +103,7 @@ func FetchAccount(db *bolt.DB, id []byte) (*Account, error) {
 
 // Create persists the account to the database.
 func (acc *Account) Create(db *bolt.DB) error {
-	funcName := "Account.Create"
+	const funcName = "Account.Create"
 	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchAccountBucket(tx)
 		if err != nil {
@@ -121,7 +116,7 @@ func (acc *Account) Create(db *bolt.DB) error {
 		if v != nil {
 			desc := fmt.Sprintf("%s: account %s already exists", funcName,
 				acc.UUID)
-			return dbError(ErrAccountExists, desc)
+			return dbError(ErrValueFound, desc)
 		}
 		accBytes, err := json.Marshal(acc)
 		if err != nil {
@@ -137,13 +132,6 @@ func (acc *Account) Create(db *bolt.DB) error {
 		}
 		return nil
 	})
-}
-
-// Update is not supported for accounts.
-func (acc *Account) Update(db *bolt.DB) error {
-	funcName := "Account.Update"
-	desc := fmt.Sprintf("%s: not supported", funcName)
-	return dbError(ErrNotSupported, desc)
 }
 
 // Delete purges the referenced account from the database.

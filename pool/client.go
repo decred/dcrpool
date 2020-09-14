@@ -177,10 +177,7 @@ func (c *Client) claimWeightedShare() error {
 		return poolError(ErrClaimShare, desc)
 	}
 	weight := ShareWeights[c.cfg.FetchMiner()]
-	share, err := NewShare(c.account, weight)
-	if err != nil {
-		return err
-	}
+	share := NewShare(c.account, weight)
 	return share.Create(c.cfg.DB)
 }
 
@@ -466,7 +463,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	if err != nil {
 		// If the submitted accepted work already exists, ignore the
 		// submission.
-		if errors.Is(err, ErrWorkExists) {
+		if errors.Is(err, ErrValueFound) {
 			sErr := NewStratumError(DuplicateShare, err)
 			resp := SubmitWorkResponse(*req.ID, false, sErr)
 			c.ch <- resp
@@ -563,7 +560,7 @@ func (c *Client) read() {
 // after client authentication and when the client is stalling on
 // current work.
 func (c *Client) updateWork() {
-	funcName := "updateWork"
+	const funcName = "updateWork"
 	// Only timestamp-roll current work for authorized and subscribed clients.
 	c.authorizedMtx.Lock()
 	authorized := c.authorized
@@ -584,24 +581,10 @@ func (c *Client) updateWork() {
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint32(b, now)
 	timestampE := hex.EncodeToString(b)
-	buf := bytes.NewBufferString("")
-	_, err := buf.WriteString(currWorkE[:272])
-	if err != nil {
-		log.Errorf("%s: unable to write first current work slice: %v",
-			funcName, err)
-		return
-	}
-	_, err = buf.WriteString(timestampE)
-	if err != nil {
-		log.Errorf("%s: unable to write timetamp: %v", funcName, err)
-		return
-	}
-	_, err = buf.WriteString(currWorkE[280:])
-	if err != nil {
-		log.Errorf("%s: unable to write second current work slice: %v",
-			funcName, err)
-		return
-	}
+	var buf bytes.Buffer
+	buf.WriteString(currWorkE[:272])
+	buf.WriteString(timestampE)
+	buf.WriteString(currWorkE[280:])
 
 	updatedWorkE := buf.String()
 	blockVersion := updatedWorkE[:8]
@@ -620,11 +603,7 @@ func (c *Client) updateWork() {
 	height := binary.LittleEndian.Uint32(heightD)
 
 	// Create a job for the timestamp-rolled current work.
-	job, err := NewJob(updatedWorkE, height)
-	if err != nil {
-		log.Error(err)
-		return
-	}
+	job := NewJob(updatedWorkE, height)
 	err = job.Create(c.cfg.DB)
 	if err != nil {
 		log.Error(err)
@@ -734,11 +713,11 @@ func reversePrevBlockWords(hashE string) string {
 
 // hexReversed reverses a hex string.
 func hexReversed(in string) (string, error) {
-	funcName := "hexReversed"
+	const funcName = "hexReversed"
 	if len(in)%2 != 0 {
 		desc := fmt.Sprintf("%s: expected even hex input length, got %d",
 			funcName, len(in))
-		return "", dbError(ErrHexLength, desc)
+		return "", poolError(ErrHexLength, desc)
 	}
 	buf := bytes.NewBufferString("")
 	for i := len(in) - 1; i > -1; i -= 2 {

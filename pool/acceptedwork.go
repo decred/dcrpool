@@ -45,33 +45,18 @@ func bigEndianBytesToHeight(b []byte) uint32 {
 }
 
 // AcceptedWorkID generates a unique id for work accepted by the network.
-func AcceptedWorkID(blockHash string, blockHeight uint32) ([]byte, error) {
-	funcName := "AcceptedWorkID"
-	buf := bytes.Buffer{}
-	_, err := buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(blockHeight)))
-	if err != nil {
-		desc := fmt.Sprintf("%s: unable to write block height: %v",
-			funcName, err)
-		return nil, poolError(ErrID, desc)
-	}
+func AcceptedWorkID(blockHash string, blockHeight uint32) []byte {
+	var buf bytes.Buffer
+	buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(blockHeight)))
 	buf.WriteString(blockHash)
-	if err != nil {
-		desc := fmt.Sprintf("%s: unable to write block hash: %v",
-			funcName, err)
-		return nil, poolError(ErrID, desc)
-	}
-	return buf.Bytes(), nil
+	return buf.Bytes()
 }
 
 // NewAcceptedWork creates an accepted work.
 func NewAcceptedWork(blockHash string, prevHash string, height uint32,
 	minedBy string, miner string) (*AcceptedWork, error) {
-	id, err := AcceptedWorkID(blockHash, height)
-	if err != nil {
-		return nil, err
-	}
 	return &AcceptedWork{
-		UUID:      string(id),
+		UUID:      string(AcceptedWorkID(blockHash, height)),
 		BlockHash: blockHash,
 		PrevHash:  prevHash,
 		Height:    height,
@@ -83,7 +68,7 @@ func NewAcceptedWork(blockHash string, prevHash string, height uint32,
 
 // fetchWorkBucket is a helper function for getting the work bucket.
 func fetchWorkBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	funcName := "fetchWorkBucket"
+	const funcName = "fetchWorkBucket"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
@@ -101,7 +86,7 @@ func fetchWorkBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 
 // FetchAcceptedWork fetches the accepted work referenced by the provided id.
 func FetchAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
-	funcName := "FetchAcceptedWork"
+	const funcName = "FetchAcceptedWork"
 	var work AcceptedWork
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
@@ -130,7 +115,7 @@ func FetchAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
 
 // Create persists the accepted work to the database.
 func (work *AcceptedWork) Create(db *bolt.DB) error {
-	funcName := "AcceptedWork.Create"
+	const funcName = "AcceptedWork.Create"
 	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
 		if err != nil {
@@ -143,7 +128,7 @@ func (work *AcceptedWork) Create(db *bolt.DB) error {
 		if v != nil {
 			desc := fmt.Sprintf("%s: work %s already exists", funcName,
 				work.UUID)
-			return dbError(ErrWorkExists, desc)
+			return dbError(ErrValueFound, desc)
 		}
 		workBytes, err := json.Marshal(work)
 		if err != nil {
@@ -164,7 +149,7 @@ func (work *AcceptedWork) Create(db *bolt.DB) error {
 
 // Update persists modifications to an existing work.
 func (work *AcceptedWork) Update(db *bolt.DB) error {
-	funcName := "AcceptedWork.Update"
+	const funcName = "AcceptedWork.Update"
 	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
 		if err != nil {
@@ -204,7 +189,7 @@ func (work *AcceptedWork) Delete(db *bolt.DB) error {
 //
 // List is ordered, most recent comes first.
 func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
-	funcName := "ListMinedWork"
+	const funcName = "ListMinedWork"
 	minedWork := make([]*AcceptedWork, 0)
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)

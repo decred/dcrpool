@@ -43,7 +43,7 @@ var upgrades = [...]func(tx *bolt.Tx) error{
 }
 
 func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
-	funcName := "fetchDBVersion"
+	const funcName = "fetchDBVersion"
 	pbkt := tx.Bucket(poolBkt)
 	if poolBkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
@@ -60,7 +60,7 @@ func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
 }
 
 func setDBVersion(tx *bolt.Tx, newVersion uint32) error {
-	funcName := "setDBVersion"
+	const funcName = "setDBVersion"
 	pbkt := tx.Bucket(poolBkt)
 	if poolBkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
@@ -83,7 +83,7 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 	const oldVersion = 0
 	const newVersion = 1
 
-	funcName := "transactionIDUpgrade"
+	const funcName = "transactionIDUpgrade"
 
 	dbVersion, err := fetchDBVersion(tx)
 	if err != nil {
@@ -135,7 +135,7 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return dbError(ErrPersistEntry, desc)
 		}
 	}
 
@@ -167,7 +167,7 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return dbError(ErrPersistEntry, desc)
 		}
 	}
 
@@ -178,7 +178,7 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 	const oldVersion = 1
 	const newVersion = 2
 
-	funcName := "shareIDUpgrade"
+	const funcName = "shareIDUpgrade"
 
 	dbVersion, err := fetchDBVersion(tx)
 	if err != nil {
@@ -216,10 +216,7 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 		}
 
 		createdOn := bigEndianBytesToNano(k)
-		id, err := shareID(share.Account, int64(createdOn))
-		if err != nil {
-			return err
-		}
+		id := shareID(share.Account, int64(createdOn))
 		share.UUID = string(id)
 
 		sBytes, err := json.Marshal(share)
@@ -233,7 +230,7 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist share: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return dbError(ErrPersistEntry, desc)
 		}
 
 		toDelete = append(toDelete, k)
@@ -255,7 +252,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 	const oldVersion = 2
 	const newVersion = 3
 
-	funcName := "paymentSourceUpgrade"
+	const funcName = "paymentSourceUpgrade"
 
 	dbVersion, err := fetchDBVersion(tx)
 	if err != nil {
@@ -308,10 +305,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 			return dbError(ErrParse, desc)
 		}
 
-		key, err := paymentID(payment.Height, payment.CreatedOn, payment.Account)
-		if err != nil {
-			return err
-		}
+		key := paymentID(payment.Height, payment.CreatedOn, payment.Account)
 		err = pmtbkt.Put(key, pBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
@@ -357,10 +351,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 			return dbError(ErrParse, desc)
 		}
 
-		key, err := paymentID(payment.Height, payment.CreatedOn, payment.Account)
-		if err != nil {
-			return err
-		}
+		key := paymentID(payment.Height, payment.CreatedOn, payment.Account)
 		err = abkt.Put(key, pBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
@@ -387,7 +378,7 @@ func removeTxFeeReserveUpgrade(tx *bolt.Tx) error {
 	const oldVersion = 3
 	const newVersion = 4
 
-	funcName := "removeTxFeeReserveUpgrade"
+	const funcName = "removeTxFeeReserveUpgrade"
 
 	dbVersion, err := fetchDBVersion(tx)
 	if err != nil {
@@ -410,7 +401,7 @@ func removeTxFeeReserveUpgrade(tx *bolt.Tx) error {
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to remove tx fee reserve entry",
 			funcName)
-		return dbError(ErrDBUpgrade, desc)
+		return dbError(ErrDeleteEntry, desc)
 	}
 
 	return setDBVersion(tx, newVersion)

@@ -433,7 +433,7 @@ func loadConfig() (*config, []string, error) {
 	}
 
 	// Create the home directory if it doesn't already exist.
-	funcName := "loadConfig"
+	const funcName = "loadConfig"
 	err = os.MkdirAll(cfg.HomeDir, 0700)
 	if err != nil {
 		// Show a nicer error message if it's because a symlink is

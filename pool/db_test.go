@@ -134,18 +134,17 @@ func testFetchBucketHelpers(t *testing.T) {
 		if pbkt == nil {
 			pbkt, err = tx.CreateBucketIfNotExists(poolBkt)
 			if err != nil {
-				desc := fmt.Sprintf("unable to create %s bucket: %v",
+				return fmt.Errorf("unable to create %s bucket: %v",
 					string(poolBkt), err)
-				return dbError(ErrBucketCreate, desc)
+
 			}
 			vbytes := make([]byte, 4)
 			binary.LittleEndian.PutUint32(vbytes, uint32(DBVersion))
 			err = pbkt.Put(versionK, vbytes)
 			if err != nil {
-				return err
+				return fmt.Errorf("unable to persist version: %v", err)
 			}
 		}
-
 		return nil
 	})
 	if err != nil {

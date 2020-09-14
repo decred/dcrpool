@@ -529,10 +529,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 		"000a6030000954cee5d00000000000000000000000000000000000" +
 		"000000000000000000000000000000000000000000000800000010" +
 		"0000000000005a0"
-	job, err := NewJob(workE, 41)
-	if err != nil {
-		t.Fatalf("unable to create job %v", err)
-	}
+	job := NewJob(workE, 41)
 	err = job.Create(client.cfg.DB)
 	if err != nil {
 		t.Fatalf("failed to persist job %v", err)
@@ -817,10 +814,7 @@ func testClient(t *testing.T, db *bolt.DB) {
 		"0000002e0000003b0f000005ec705e0000000000000000000000000000000000" +
 		"0000000000000000000000000000000000000000000000800000010000000000" +
 		"0005a0"
-	job, err = NewJob(workE, 46)
-	if err != nil {
-		t.Fatalf("[NewJob] unexpected error: %v", err)
-	}
+	job = NewJob(workE, 46)
 	err = job.Create(client.cfg.DB)
 	if err != nil {
 		t.Fatalf("failed to persist job %v", err)

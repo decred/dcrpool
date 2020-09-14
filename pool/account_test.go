@@ -49,12 +49,6 @@ func testAccount(t *testing.T, db *bolt.DB) {
 			accountA.UUID, fetchedAccount.UUID)
 	}
 
-	// Ensure accounts cannot be updated.
-	err = accountB.Update(db)
-	if err == nil {
-		t.Fatal("expected not supported error")
-	}
-
 	// Delete all accounts.
 	err = accountA.Delete(db)
 	if err != nil {

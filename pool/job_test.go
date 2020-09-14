@@ -8,11 +8,8 @@ import (
 )
 
 func persistJob(db *bolt.DB, header string, height uint32) (*Job, error) {
-	job, err := NewJob(header, height)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create job: %v", err)
-	}
-	err = job.Create(db)
+	job := NewJob(header, height)
+	err := job.Create(db)
 	if err != nil {
 		return nil, fmt.Errorf("unable to persist job: %v", err)
 	}
@@ -58,13 +55,6 @@ func testJob(t *testing.T, db *bolt.DB) {
 
 	if fetchedJob == nil {
 		t.Fatal("expected a non-nil job")
-	}
-
-	// Ensure jobs cannot be updated.
-	jobB.Height = 60
-	err = jobB.Update(db)
-	if err == nil {
-		t.Fatal("expected a not supported error")
 	}
 
 	// Delete jobs B and C.
