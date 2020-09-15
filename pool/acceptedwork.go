@@ -38,23 +38,17 @@ func heightToBigEndianBytes(height uint32) []byte {
 	return b
 }
 
-// bigEndianBytesToHeight returns the block height of the provided 4-byte big
-// endian representation.
-func bigEndianBytesToHeight(b []byte) uint32 {
-	return binary.BigEndian.Uint32(b[0:4])
-}
-
 // AcceptedWorkID generates a unique id for work accepted by the network.
 func AcceptedWorkID(blockHash string, blockHeight uint32) []byte {
 	var buf bytes.Buffer
-	buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(blockHeight)))
-	buf.WriteString(blockHash)
+	_, _ = buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(blockHeight)))
+	_, _ = buf.WriteString(blockHash)
 	return buf.Bytes()
 }
 
 // NewAcceptedWork creates an accepted work.
 func NewAcceptedWork(blockHash string, prevHash string, height uint32,
-	minedBy string, miner string) (*AcceptedWork, error) {
+	minedBy string, miner string) *AcceptedWork {
 	return &AcceptedWork{
 		UUID:      string(AcceptedWorkID(blockHash, height)),
 		BlockHash: blockHash,
@@ -63,7 +57,7 @@ func NewAcceptedWork(blockHash string, prevHash string, height uint32,
 		MinedBy:   minedBy,
 		Miner:     miner,
 		CreatedOn: time.Now().UnixNano(),
-	}, nil
+	}
 }
 
 // fetchWorkBucket is a helper function for getting the work bucket.

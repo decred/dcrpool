@@ -49,9 +49,6 @@ func testShares(t *testing.T, db *bolt.DB) {
 		t.Fatalf("unexpected error fetching share A: %v", err)
 	}
 	bID := shareID(yID, shareBCreatedOn)
-	if err != nil {
-		t.Fatalf("unexpected share id creation error: %v", err)
-	}
 	_, err = fetchShare(db, bID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching share B: %v", err)

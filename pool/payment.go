@@ -52,9 +52,9 @@ func NewPayment(account string, source *PaymentSource, amount dcrutil.Amount,
 // paymentID generates a unique id using the provided payment details.
 func paymentID(height uint32, createdOnNano int64, account string) []byte {
 	var buf bytes.Buffer
-	buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(height)))
-	buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOnNano)))
-	buf.WriteString(account)
+	_, _ = buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(height)))
+	_, _ = buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOnNano)))
+	_, _ = buf.WriteString(account)
 	return buf.Bytes()
 }
 

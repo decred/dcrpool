@@ -10,11 +10,8 @@ import (
 
 func persistAcceptedWork(db *bolt.DB, blockHash string, prevHash string,
 	height uint32, minedBy string, miner string) (*AcceptedWork, error) {
-	acceptedWork, err := NewAcceptedWork(blockHash, prevHash, height, minedBy, miner)
-	if err != nil {
-		return nil, err
-	}
-	err = acceptedWork.Create(db)
+	acceptedWork := NewAcceptedWork(blockHash, prevHash, height, minedBy, miner)
+	err := acceptedWork.Create(db)
 	if err != nil {
 		return nil, err
 	}
@@ -85,13 +82,10 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
-	workE, err := NewAcceptedWork(
+	workE := NewAcceptedWork(
 		"0000000000000000032e25218be722327ae3dccf9015756facb2f98931fda7b8",
 		"00000000000000000476712b2f5df31bc62b9976066262af2d639a551853c056",
 		431611, xID, "dcr1")
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Ensure updating a non persisted accepted work returns an error.
 	err = workE.Update(db)

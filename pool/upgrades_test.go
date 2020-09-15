@@ -142,8 +142,8 @@ func verifyV3Upgrade(t *testing.T, db *bolt.DB) {
 			}
 
 			if payment.Source == nil {
-				return fmt.Errorf("%s: expected a non-nil "+
-					"payment source: %v", funcName, err)
+				return fmt.Errorf("%s: expected a non-nil payment source",
+					funcName)
 			}
 		}
 
@@ -185,7 +185,8 @@ func verifyV4Upgrade(t *testing.T, db *bolt.DB) {
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
-			return fmt.Errorf("bucket %s not found", string(poolBkt))
+			return fmt.Errorf("%s: bucket %s not found", string(poolBkt),
+				funcName)
 		}
 
 		v := pbkt.Get([]byte("txfeereserve"))
