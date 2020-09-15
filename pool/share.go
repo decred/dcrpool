@@ -32,8 +32,8 @@ var ShareWeights = map[string]*big.Rat{
 // created.
 func shareID(account string, createdOn int64) []byte {
 	var buf bytes.Buffer
-	buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOn)))
-	buf.WriteString(account)
+	_, _ = buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOn)))
+	_, _ = buf.WriteString(account)
 	return buf.Bytes()
 }
 

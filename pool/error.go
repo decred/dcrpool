@@ -121,7 +121,7 @@ func (e Error) Unwrap() error {
 	return e.Err
 }
 
-// poolError creates an Error given a set of arguments. This hould only be
+// poolError creates an Error given a set of arguments. This should only be
 // used when creating error related to the mining pool and its processes.
 func poolError(kind ErrorKind, desc string) Error {
 	return Error{Err: kind, Description: desc}
@@ -133,7 +133,7 @@ func dbError(kind ErrorKind, desc string) Error {
 	return Error{Err: kind, Description: desc}
 }
 
-// msgError creates am Error given a set of arguments. This should only be
+// msgError creates an Error given a set of arguments. This should only be
 // used when creating errors related to sending, receiving and processing
 // messages.
 func msgError(kind ErrorKind, desc string) Error {

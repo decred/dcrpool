@@ -33,8 +33,8 @@ func nanoToBigEndianBytes(nano int64) []byte {
 // jobID generates a unique job id of the provided block height.
 func jobID(height uint32) string {
 	var buf bytes.Buffer
-	buf.Write(heightToBigEndianBytes(height))
-	buf.Write(nanoToBigEndianBytes(time.Now().UnixNano()))
+	_, _ = buf.Write(heightToBigEndianBytes(height))
+	_, _ = buf.Write(nanoToBigEndianBytes(time.Now().UnixNano()))
 	return hex.EncodeToString(buf.Bytes())
 }
 

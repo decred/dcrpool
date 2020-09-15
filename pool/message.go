@@ -448,7 +448,7 @@ func ParseWorkNotification(req *Request) (string, string, string, string, string
 	}
 
 	// Note that param[4] which is the list of merkle branches is not
-	// applicable for decred, the final merkle root  is already
+	// applicable for decred, the final merkle root is already
 	// included in the block.
 
 	blockVersion, ok := params[5].(string)
@@ -488,13 +488,13 @@ func ParseWorkNotification(req *Request) (string, string, string, string, string
 func GenerateBlockHeader(blockVersionE string, prevBlockE string,
 	genTx1E string, extraNonce1E string, genTx2E string) (*wire.BlockHeader, error) {
 	const funcName = "GenerateBlockHeader"
-	buf := bytes.NewBufferString("")
-	buf.WriteString(blockVersionE)
-	buf.WriteString(prevBlockE)
-	buf.WriteString(genTx1E)
-	buf.WriteString(extraNonce1E)
-	buf.WriteString(strings.Repeat("0", 56))
-	buf.WriteString(genTx2E)
+	var buf bytes.Buffer
+	_, _ = buf.WriteString(blockVersionE)
+	_, _ = buf.WriteString(prevBlockE)
+	_, _ = buf.WriteString(genTx1E)
+	_, _ = buf.WriteString(extraNonce1E)
+	_, _ = buf.WriteString(strings.Repeat("0", 56))
+	_, _ = buf.WriteString(genTx2E)
 	headerE := buf.String()
 
 	headerD, err := hex.DecodeString(headerE)

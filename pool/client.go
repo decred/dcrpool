@@ -451,7 +451,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 
 	// Create accepted work if the work submission is accepted
 	// by the mining node.
-	work, err := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
+	work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
 		header.Height, c.account, c.cfg.FetchMiner())
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
@@ -582,9 +582,9 @@ func (c *Client) updateWork() {
 	binary.LittleEndian.PutUint32(b, now)
 	timestampE := hex.EncodeToString(b)
 	var buf bytes.Buffer
-	buf.WriteString(currWorkE[:272])
-	buf.WriteString(timestampE)
-	buf.WriteString(currWorkE[280:])
+	_, _ = buf.WriteString(currWorkE[:272])
+	_, _ = buf.WriteString(timestampE)
+	_, _ = buf.WriteString(currWorkE[280:])
 
 	updatedWorkE := buf.String()
 	blockVersion := updatedWorkE[:8]
@@ -701,12 +701,12 @@ func (c *Client) process() {
 // reversePrevBlockWords reverses each 4-byte word in the provided hex encoded
 // previous block hash.
 func reversePrevBlockWords(hashE string) string {
-	buf := bytes.NewBufferString("")
+	var buf bytes.Buffer
 	for i := 0; i < len(hashE); i += 8 {
-		buf.WriteString(hashE[i+6 : i+8])
-		buf.WriteString(hashE[i+4 : i+6])
-		buf.WriteString(hashE[i+2 : i+4])
-		buf.WriteString(hashE[i : i+2])
+		_, _ = buf.WriteString(hashE[i+6 : i+8])
+		_, _ = buf.WriteString(hashE[i+4 : i+6])
+		_, _ = buf.WriteString(hashE[i+2 : i+4])
+		_, _ = buf.WriteString(hashE[i : i+2])
 	}
 	return buf.String()
 }
@@ -719,10 +719,10 @@ func hexReversed(in string) (string, error) {
 			funcName, len(in))
 		return "", poolError(ErrHexLength, desc)
 	}
-	buf := bytes.NewBufferString("")
+	var buf bytes.Buffer
 	for i := len(in) - 1; i > -1; i -= 2 {
-		buf.WriteByte(in[i-1])
-		buf.WriteByte(in[i])
+		_ = buf.WriteByte(in[i-1])
+		_ = buf.WriteByte(in[i])
 	}
 	return buf.String(), nil
 }

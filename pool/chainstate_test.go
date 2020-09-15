@@ -214,18 +214,12 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 
 	aID := paymentID(paymentA.Height, paymentA.CreatedOn, paymentA.Account)
-	if err != nil {
-		t.Fatalf("unexpected payment id err: %v", err)
-	}
 	_, err = FetchPayment(db, aID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching payment A: %v", err)
 	}
 
 	bID := paymentID(paymentB.Height, paymentB.CreatedOn, paymentB.Account)
-	if err != nil {
-		t.Fatalf("unexpected payment id err: %v", err)
-	}
 	_, err = FetchPayment(db, bID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching payment B: %v", err)
@@ -264,13 +258,10 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	go cs.handleChainUpdates(ctx)
 
 	// Create the accepted work to be confirmed.
-	work, err := NewAcceptedWork(
+	work := NewAcceptedWork(
 		"00007979602e13db87f6c760bbf27c137f4112b9e1988724bd245fb0bb7d1283",
 		"00006fb4ee4609e90196cfa41df2f1129a64553f935f21e6940b38e7e26e7dff",
 		42, xID, CPU)
-	if err != nil {
-		t.Fatalf("unexpected accepted work error: %v", err)
-	}
 	err = work.Create(cs.cfg.DB)
 	if err != nil {
 		t.Fatalf("unable to persist accepted work %v", err)
