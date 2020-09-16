@@ -185,8 +185,8 @@ func verifyV4Upgrade(t *testing.T, db *bolt.DB) {
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
-			return fmt.Errorf("%s: bucket %s not found", string(poolBkt),
-				funcName)
+			return fmt.Errorf("%s: bucket %s not found", funcName,
+				string(poolBkt))
 		}
 
 		v := pbkt.Get([]byte("txfeereserve"))

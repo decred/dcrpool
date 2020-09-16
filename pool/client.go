@@ -453,12 +453,6 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	// by the mining node.
 	work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
 		header.Height, c.account, c.cfg.FetchMiner())
-	if err != nil {
-		sErr := NewStratumError(Unknown, err)
-		resp := SubmitWorkResponse(*req.ID, false, sErr)
-		c.ch <- resp
-		return err
-	}
 	err = work.Create(c.cfg.DB)
 	if err != nil {
 		// If the submitted accepted work already exists, ignore the
