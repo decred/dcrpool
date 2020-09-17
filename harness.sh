@@ -126,7 +126,7 @@ paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
 adminpass=${ADMIN_PASS}
 guidir=${GUI_DIR}
-designation=${SESSION}
+designation=${TMUX_SESSION}
 profile=6060
 EOF
 
