@@ -340,9 +340,9 @@ func testHub(t *testing.T, db *bolt.DB) {
 		"193c4b8fd02aaed33ab9c5418ace9bec4047f61f923767bceb5a51c6e368bfa6",
 		CPU)
 
-	err = work.Create(db)
+	err = work.Persist(db)
 	if err != nil {
-		t.Fatalf("[Create] unexpected error: %v", err)
+		t.Fatalf("[Persist] unexpected error: %v", err)
 	}
 
 	port := uint32(5030)

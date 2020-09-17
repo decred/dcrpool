@@ -262,7 +262,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		"00007979602e13db87f6c760bbf27c137f4112b9e1988724bd245fb0bb7d1283",
 		"00006fb4ee4609e90196cfa41df2f1129a64553f935f21e6940b38e7e26e7dff",
 		42, xID, CPU)
-	err = work.Create(cs.cfg.DB)
+	err = work.Persist(cs.cfg.DB)
 	if err != nil {
 		t.Fatalf("unable to persist accepted work %v", err)
 	}
@@ -276,7 +276,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		"00000000000000000000000000000000000000000000000000000000000" +
 		"00000000000008000000100000000000005a0"
 	job := NewJob(workE, 42)
-	err = job.Create(cs.cfg.DB)
+	err = job.Persist(cs.cfg.DB)
 	if err != nil {
 		log.Errorf("failed to persist job %v", err)
 		return

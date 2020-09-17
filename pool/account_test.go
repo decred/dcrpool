@@ -9,7 +9,7 @@ import (
 
 func persistAccount(db *bolt.DB, address string) (*Account, error) {
 	acc := NewAccount(address)
-	err := acc.Create(db)
+	err := acc.Persist(db)
 	if err != nil {
 		return nil, err
 	}

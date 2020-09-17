@@ -86,9 +86,9 @@ func FetchAccount(db *bolt.DB, id []byte) (*Account, error) {
 	return &account, err
 }
 
-// Create persists the account to the database.
-func (acc *Account) Create(db *bolt.DB) error {
-	const funcName = "Account.Create"
+// Persist saves the account to the database.
+func (acc *Account) Persist(db *bolt.DB) error {
+	const funcName = "Account.Persist"
 	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchAccountBucket(tx)
 		if err != nil {

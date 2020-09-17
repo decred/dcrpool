@@ -21,7 +21,7 @@ func persistShare(db *bolt.DB, account string, weight *big.Rat, createdOnNano in
 		Account: account,
 		Weight:  weight,
 	}
-	err := share.Create(db)
+	err := share.Persist(db)
 	if err != nil {
 		return err
 	}

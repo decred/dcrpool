@@ -421,7 +421,7 @@ func (h *Hub) processWork(headerE string) {
 	nTime := headerE[272:280]
 	genTx2 := headerE[352:360]
 	job := NewJob(headerE, height)
-	err = job.Create(h.db)
+	err = job.Persist(h.db)
 	if err != nil {
 		log.Error(err)
 		return

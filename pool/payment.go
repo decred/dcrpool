@@ -124,9 +124,9 @@ func FetchPayment(db *bolt.DB, id []byte) (*Payment, error) {
 	return &payment, err
 }
 
-// Create persists a payment to the database.
-func (pmt *Payment) Create(db *bolt.DB) error {
-	const funcName = "Payment.Create"
+// Persist saves a payment to the database.
+func (pmt *Payment) Persist(db *bolt.DB) error {
+	const funcName = "Payment.Persist"
 	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchPaymentBucket(tx)
 		if err != nil {
@@ -151,7 +151,7 @@ func (pmt *Payment) Create(db *bolt.DB) error {
 
 // Update persists the updated payment to the database.
 func (pmt *Payment) Update(db *bolt.DB) error {
-	return pmt.Create(db)
+	return pmt.Persist(db)
 }
 
 // Delete purges the referenced payment from the database. Note that

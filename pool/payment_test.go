@@ -16,7 +16,7 @@ import (
 func persistPayment(db *bolt.DB, account string, source *PaymentSource,
 	amount dcrutil.Amount, height uint32, estMaturity uint32) (*Payment, error) {
 	pmt := NewPayment(account, source, amount, height, estMaturity)
-	err := pmt.Create(db)
+	err := pmt.Persist(db)
 	if err != nil {
 		return nil, fmt.Errorf("unable to persist payment: %v", err)
 	}
