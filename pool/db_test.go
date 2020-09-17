@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/decred/dcrd/chaincfg/v3"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -284,14 +283,12 @@ func testInitDB(t *testing.T) {
 
 func testDatabase(t *testing.T, db *bolt.DB) {
 	// Persist some accounts.
-	accountA, err := persistAccount(db, "Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru",
-		chaincfg.SimNetParams())
+	accountA, err := persistAccount(db, "Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = persistAccount(db, "SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy",
-		chaincfg.SimNetParams())
+	_, err = persistAccount(db, "SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,11 +333,11 @@ func testDatabase(t *testing.T, db *bolt.DB) {
 	}
 
 	// Recreate account X and Y.
-	_, err = persistAccount(db, xAddr, chaincfg.SimNetParams())
+	_, err = persistAccount(db, xAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = persistAccount(db, yAddr, chaincfg.SimNetParams())
+	_, err = persistAccount(db, yAddr)
 	if err != nil {
 		t.Fatal(err)
 	}

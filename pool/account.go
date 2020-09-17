@@ -10,9 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/crypto/blake256"
-	"github.com/decred/dcrd/dcrutil/v3"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -24,33 +22,20 @@ type Account struct {
 }
 
 // AccountID generates a unique id using provided address of the account.
-func AccountID(address string, activeNet *chaincfg.Params) (string, error) {
-	const funcName = "AcccountID"
-	_, err := dcrutil.DecodeAddress(address, activeNet)
-	if err != nil {
-		desc := fmt.Sprintf("%s: unable to decode address %s: %v",
-			funcName, address, err)
-		return "", poolError(ErrDecode, desc)
-	}
+func AccountID(address string) string {
 	hasher := blake256.New()
 	_, _ = hasher.Write([]byte(address))
-	return hex.EncodeToString(hasher.Sum(nil)), nil
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 // NewAccount creates a new account.
-func NewAccount(address string, activeNet *chaincfg.Params) (*Account, error) {
+func NewAccount(address string) *Account {
 	// Since an account's id is derived from the address an account
 	// can be shared by multiple pool clients.
-	id, err := AccountID(address, activeNet)
-	if err != nil {
-		return nil, err
+	return &Account{
+		UUID:    AccountID(address),
+		Address: address,
 	}
-	account := &Account{
-		UUID:      id,
-		Address:   address,
-		CreatedOn: uint64(time.Now().Unix()),
-	}
-	return account, nil
 }
 
 // fetchAccountBucket is a helper function for getting the account bucket.
@@ -118,6 +103,9 @@ func (acc *Account) Create(db *bolt.DB) error {
 				acc.UUID)
 			return dbError(ErrValueFound, desc)
 		}
+
+		acc.CreatedOn = uint64(time.Now().Unix())
+
 		accBytes, err := json.Marshal(acc)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal account bytes: %v",

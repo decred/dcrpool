@@ -24,6 +24,7 @@ import (
 
 	"github.com/decred/dcrd/blockchain/standalone"
 	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
 	bolt "go.etcd.io/bbolt"
 )
@@ -218,21 +219,28 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 		name := strings.TrimSpace(parts[1])
 		address := strings.TrimSpace(parts[0])
 
-		// Create the account if it does not already exist.
-		account, err := NewAccount(address, c.cfg.ActiveNet)
+		// Ensure the address is valid for the current network.
+		_, err = dcrutil.DecodeAddress(address, c.cfg.ActiveNet)
 		if err != nil {
 			sErr := NewStratumError(Unknown, err)
 			resp := AuthorizeResponse(*req.ID, false, sErr)
 			c.ch <- resp
 			return err
 		}
+
+		// Create the account if it does not already exist.
+		account := NewAccount(address)
 		err = account.Create(c.cfg.DB)
 		if err != nil {
-			sErr := NewStratumError(Unknown, err)
-			resp := AuthorizeResponse(*req.ID, false, sErr)
-			c.ch <- resp
-			return err
+			// Do not error if the account already exists.
+			if !errors.Is(err, ErrValueFound) {
+				sErr := NewStratumError(Unknown, err)
+				resp := AuthorizeResponse(*req.ID, false, sErr)
+				c.ch <- resp
+				return err
+			}
 		}
+
 		c.account = account.UUID
 		c.name = name
 
