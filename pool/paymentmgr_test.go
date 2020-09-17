@@ -664,7 +664,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		if pmt.Account == yID {
 			yt += pmt.Amount
 		}
-		if pmt.Account == poolFeesK {
+		if pmt.Account == PoolFeesK {
 			ft += pmt.Amount
 		}
 	}
@@ -782,7 +782,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		if pmt.Account == yID {
 			yt += pmt.Amount
 		}
-		if pmt.Account == poolFeesK {
+		if pmt.Account == PoolFeesK {
 			ft += pmt.Amount
 		}
 	}
@@ -894,7 +894,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		if pmt.Account == yID {
 			yt += pmt.Amount
 		}
-		if pmt.Account == poolFeesK {
+		if pmt.Account == PoolFeesK {
 			ft += pmt.Amount
 		}
 	}

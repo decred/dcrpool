@@ -468,7 +468,7 @@ func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *Paym
 	}
 
 	// Add a payout entry for pool fees.
-	feePayment := NewPayment(poolFeesK, source, fee, height, estMaturity)
+	feePayment := NewPayment(PoolFeesK, source, fee, height, estMaturity)
 	payments = append(payments, feePayment)
 
 	return payments, feePayment.CreatedOn, nil
@@ -838,7 +838,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 
 		// Generate the outputs paying dividends and fees.
 		for _, pmt := range set {
-			if pmt.Account == poolFeesK {
+			if pmt.Account == PoolFeesK {
 				_, ok := outputs[feeAddr.String()]
 				if !ok {
 					outputs[feeAddr.String()] = pmt.Amount

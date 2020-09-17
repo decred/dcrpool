@@ -154,6 +154,10 @@ func (ui *GUI) route() {
 	guiRouter.HandleFunc("/account/{accountID}/payments/pending", ui.paginatedPendingPaymentsByAccount).Methods("GET")
 	guiRouter.HandleFunc("/account/{accountID}/payments/archived", ui.paginatedArchivedPaymentsByAccount).Methods("GET")
 
+	// Paginated endpoints which require admin authentication.
+	guiRouter.HandleFunc("/admin/payments/pending", ui.paginatedPendingPoolPayments).Methods("GET")
+	guiRouter.HandleFunc("/admin/payments/archived", ui.paginatedArchivedPoolPayments).Methods("GET")
+
 	// Websocket endpoint allows the GUI to receive updated values.
 	guiRouter.HandleFunc("/ws", ui.websocketServer.registerClient).Methods("GET")
 }

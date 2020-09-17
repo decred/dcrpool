@@ -7,6 +7,7 @@ package gui
 import (
 	"net/http"
 
+	"github.com/decred/dcrpool/pool"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/sessions"
 )
@@ -17,6 +18,8 @@ type adminPageData struct {
 	HeaderData       headerData
 	PoolStatsData    poolStatsData
 	ConnectedClients map[string][]*client
+	ArchivedPayments []*archivedPayment
+	PendingPayments  []*pendingPayment
 }
 
 // adminPage is the handler for "GET /admin". If the current session is
@@ -31,6 +34,12 @@ func (ui *GUI) adminPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clients := ui.cache.getClients()
+
+	// Get the 10 most recent pending payments.
+	_, pendingPmts, _ := ui.cache.getPendingPayments(0, 9, pool.PoolFeesK)
+
+	// Get the 10 most recent archived payments.
+	_, archivedPmts, _ := ui.cache.getArchivedPayments(0, 9, pool.PoolFeesK)
 
 	pageData := adminPageData{
 		HeaderData: headerData{
@@ -48,6 +57,8 @@ func (ui *GUI) adminPage(w http.ResponseWriter, r *http.Request) {
 			SoloPool:          ui.cfg.SoloPool,
 		},
 		ConnectedClients: clients,
+		PendingPayments:  pendingPmts,
+		ArchivedPayments: archivedPmts,
 	}
 
 	ui.renderTemplate(w, "admin", pageData)
