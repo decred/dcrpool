@@ -95,9 +95,9 @@ func FetchJob(db *bolt.DB, id []byte) (*Job, error) {
 	return &job, err
 }
 
-// Create persists the job to the database.
-func (job *Job) Create(db *bolt.DB) error {
-	const funcName = "Job.Create"
+// Persist saves the job to the database.
+func (job *Job) Persist(db *bolt.DB) error {
+	const funcName = "Job.Persist"
 	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchJobBucket(tx)
 		if err != nil {

@@ -24,6 +24,7 @@ import (
 
 	"github.com/decred/dcrd/blockchain/standalone"
 	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
 	bolt "go.etcd.io/bbolt"
 )
@@ -178,7 +179,7 @@ func (c *Client) claimWeightedShare() error {
 	}
 	weight := ShareWeights[c.cfg.FetchMiner()]
 	share := NewShare(c.account, weight)
-	return share.Create(c.cfg.DB)
+	return share.Persist(c.cfg.DB)
 }
 
 // handleAuthorizeRequest processes authorize request messages received.
@@ -218,21 +219,28 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 		name := strings.TrimSpace(parts[1])
 		address := strings.TrimSpace(parts[0])
 
+		// Ensure the address is valid for the current network.
+		_, err = dcrutil.DecodeAddress(address, c.cfg.ActiveNet)
+		if err != nil {
+			sErr := NewStratumError(Unknown, err)
+			resp := AuthorizeResponse(*req.ID, false, sErr)
+			c.ch <- resp
+			return err
+		}
+
 		// Create the account if it does not already exist.
-		account, err := NewAccount(address, c.cfg.ActiveNet)
+		account := NewAccount(address)
+		err = account.Persist(c.cfg.DB)
 		if err != nil {
-			sErr := NewStratumError(Unknown, err)
-			resp := AuthorizeResponse(*req.ID, false, sErr)
-			c.ch <- resp
-			return err
+			// Do not error if the account already exists.
+			if !errors.Is(err, ErrValueFound) {
+				sErr := NewStratumError(Unknown, err)
+				resp := AuthorizeResponse(*req.ID, false, sErr)
+				c.ch <- resp
+				return err
+			}
 		}
-		err = account.Create(c.cfg.DB)
-		if err != nil {
-			sErr := NewStratumError(Unknown, err)
-			resp := AuthorizeResponse(*req.ID, false, sErr)
-			c.ch <- resp
-			return err
-		}
+
 		c.account = account.UUID
 		c.name = name
 
@@ -453,7 +461,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	// by the mining node.
 	work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
 		header.Height, c.account, c.cfg.FetchMiner())
-	err = work.Create(c.cfg.DB)
+	err = work.Persist(c.cfg.DB)
 	if err != nil {
 		// If the submitted accepted work already exists, ignore the
 		// submission.
@@ -598,7 +606,7 @@ func (c *Client) updateWork() {
 
 	// Create a job for the timestamp-rolled current work.
 	job := NewJob(updatedWorkE, height)
-	err = job.Create(c.cfg.DB)
+	err = job.Persist(c.cfg.DB)
 	if err != nil {
 		log.Error(err)
 		return

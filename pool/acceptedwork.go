@@ -107,9 +107,9 @@ func FetchAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
 	return &work, err
 }
 
-// Create persists the accepted work to the database.
-func (work *AcceptedWork) Create(db *bolt.DB) error {
-	const funcName = "AcceptedWork.Create"
+// Persist saves the accepted work to the database.
+func (work *AcceptedWork) Persist(db *bolt.DB) error {
+	const funcName = "AcceptedWork.Persist"
 	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchWorkBucket(tx)
 		if err != nil {

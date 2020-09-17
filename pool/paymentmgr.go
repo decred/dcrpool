@@ -489,7 +489,7 @@ func (pm *PaymentMgr) payPerShare(source *PaymentSource, amt dcrutil.Amount, hei
 		return err
 	}
 	for _, payment := range payments {
-		err := payment.Create(pm.cfg.DB)
+		err := payment.Persist(pm.cfg.DB)
 		if err != nil {
 			return err
 		}
@@ -520,7 +520,7 @@ func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amoun
 		return err
 	}
 	for _, payment := range payments {
-		err := payment.Create(pm.cfg.DB)
+		err := payment.Persist(pm.cfg.DB)
 		if err != nil {
 			return err
 		}

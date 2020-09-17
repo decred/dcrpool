@@ -9,7 +9,7 @@ import (
 
 func persistJob(db *bolt.DB, header string, height uint32) (*Job, error) {
 	job := NewJob(header, height)
-	err := job.Create(db)
+	err := job.Persist(db)
 	if err != nil {
 		return nil, fmt.Errorf("unable to persist job: %v", err)
 	}

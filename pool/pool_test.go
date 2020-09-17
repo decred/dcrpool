@@ -42,19 +42,14 @@ func setupDB() (*bolt.DB, error) {
 		return nil, err
 	}
 
-	xID, err = AccountID(xAddr, chaincfg.SimNetParams())
+	xID = AccountID(xAddr)
+	yID = AccountID(yAddr)
+
+	_, err = persistAccount(db, xAddr)
 	if err != nil {
 		return nil, err
 	}
-	yID, err = AccountID(yAddr, chaincfg.SimNetParams())
-	if err != nil {
-		return nil, err
-	}
-	_, err = persistAccount(db, xAddr, chaincfg.SimNetParams())
-	if err != nil {
-		return nil, err
-	}
-	_, err = persistAccount(db, yAddr, chaincfg.SimNetParams())
+	_, err = persistAccount(db, yAddr)
 	if err != nil {
 		return nil, err
 	}

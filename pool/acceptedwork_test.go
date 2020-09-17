@@ -11,7 +11,7 @@ import (
 func persistAcceptedWork(db *bolt.DB, blockHash string, prevHash string,
 	height uint32, minedBy string, miner string) (*AcceptedWork, error) {
 	acceptedWork := NewAcceptedWork(blockHash, prevHash, height, minedBy, miner)
-	err := acceptedWork.Create(db)
+	err := acceptedWork.Persist(db)
 	if err != nil {
 		return nil, err
 	}
@@ -94,9 +94,9 @@ func testAcceptedWork(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure creating an already existing accepted work returns an error.
-	err = workD.Create(db)
+	err = workD.Persist(db)
 	if err == nil {
-		t.Fatal("Create: expected a duplicate accepted work error")
+		t.Fatal("Persist: expected a duplicate accepted work error")
 	}
 
 	// Ensure fetching a non existent accepted work returns an error.

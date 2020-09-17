@@ -1,36 +1,39 @@
 package pool
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
-	"github.com/decred/dcrd/chaincfg/v3"
 	bolt "go.etcd.io/bbolt"
 )
 
-func persistAccount(db *bolt.DB, address string, activeNet *chaincfg.Params) (*Account, error) {
-	acc, err := NewAccount(address, activeNet)
+func persistAccount(db *bolt.DB, address string) (*Account, error) {
+	acc := NewAccount(address)
+	err := acc.Persist(db)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create account: %v", err)
-	}
-	err = acc.Create(db)
-	if err != nil {
-		return nil, fmt.Errorf("unable to persist account: %v", err)
+		return nil, err
 	}
 	return acc, nil
 }
 
 func testAccount(t *testing.T, db *bolt.DB) {
-	accountA, err := persistAccount(db, "Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru",
-		chaincfg.SimNetParams())
+	simnetAddrA := "Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru"
+	simnetAddrB := "SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy"
+
+	// Create some valid accounts.
+	accountA, err := persistAccount(db, simnetAddrA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accountB, err := persistAccount(db, simnetAddrB)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	accountB, err := persistAccount(db, "SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy",
-		chaincfg.SimNetParams())
-	if err != nil {
-		t.Fatal(err)
+	// Creating the same account twice should fail.
+	_, err = persistAccount(db, simnetAddrA)
+	if !errors.Is(err, ErrValueFound) {
+		t.Fatal("expected value found error")
 	}
 
 	// Fetch an account with its id.
@@ -60,9 +63,14 @@ func testAccount(t *testing.T, db *bolt.DB) {
 		t.Fatalf("delete accountB error: %v ", err)
 	}
 
-	// Ensure the account have been deleted.
+	// Ensure the accounts have both been deleted.
 	_, err = FetchAccount(db, []byte(accountA.UUID))
-	if err == nil {
-		t.Fatal("expected no account found error")
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatal("expected value not found error")
+	}
+
+	_, err = FetchAccount(db, []byte(accountB.UUID))
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatal("expected value not found error")
 	}
 }

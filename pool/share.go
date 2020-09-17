@@ -71,9 +71,9 @@ func fetchShareBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	return bkt, nil
 }
 
-// Create persists a share to the database.
-func (s *Share) Create(db *bolt.DB) error {
-	const funcName = "Share.Create"
+// Persist saves a share to the database.
+func (s *Share) Persist(db *bolt.DB) error {
+	const funcName = "Share.Persist"
 	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchShareBucket(tx)
 		if err != nil {

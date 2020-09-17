@@ -36,11 +36,7 @@ func (ui *GUI) account(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate the account id of the provided address.
-	accountID, err := pool.AccountID(address, ui.cfg.ActiveNet)
-	if err != nil {
-		ui.renderIndex(w, r, "Unable to generate account ID for address")
-		return
-	}
+	accountID := pool.AccountID(address)
 
 	if !ui.cfg.AccountExists(accountID) {
 		ui.renderIndex(w, r, "Nothing found for address")
@@ -84,11 +80,8 @@ func (ui *GUI) isPoolAccount(w http.ResponseWriter, r *http.Request) {
 
 	address := r.FormValue("address")
 
-	accountID, err := pool.AccountID(address, ui.cfg.ActiveNet)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+	// Generate the account ID of the provided address.
+	accountID := pool.AccountID(address)
 
 	if !ui.cfg.AccountExists(accountID) {
 		w.WriteHeader(http.StatusNotFound)
