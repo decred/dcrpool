@@ -42,6 +42,16 @@ func TestErrorKindStringer(t *testing.T) {
 		{ErrDifficulty, "ErrDifficulty"},
 		{ErrWorkRejected, "ErrWorkRejected"},
 		{ErrPaymentSource, "ErrPaymentSource"},
+		{ErrShareRatio, "ErrShareRatio"},
+		{ErrCreateHash, "ErrCreateHash"},
+		{ErrCoinbase, "ErrCoinbase"},
+		{ErrCreateTx, "ErrCreateTx"},
+		{ErrSignTx, "ErrSignTx"},
+		{ErrPublishTx, "ErrPublishTx"},
+		{ErrTxOut, "ErrTxOut"},
+		{ErrTxIn, "ErrTxIn"},
+		{ErrContextCancelled, "ErrContextCancelled"},
+		{ErrCreateAmount, "ErrCreateAmount"},
 	}
 
 	for i, test := range tests {
