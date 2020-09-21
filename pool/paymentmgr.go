@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -92,6 +93,9 @@ type PaymentMgrConfig struct {
 	// FetchTxBroadcaster returns a transaction broadcaster that allows signing
 	// and publishing of transactions.
 	FetchTxBroadcaster func() TxBroadcaster
+	// CoinbaseConfTimeout is the duration to wait for coinbase confirmations
+	// when generating a payout transaction.
+	CoinbaseConfTimeout time.Duration
 }
 
 // PaymentMgr handles generating shares and paying out dividends to
@@ -488,9 +492,11 @@ func (pm *PaymentMgr) PPLNSSharePercentages() (map[string]*big.Rat, error) {
 // calculatePayments creates the payments due participating accounts.
 func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *PaymentSource,
 	total dcrutil.Amount, poolFee float64, height uint32, estMaturity uint32) ([]*Payment, int64, error) {
+	funcName := "calculatePayments"
 	if len(ratios) == 0 {
-		return nil, 0, fmt.Errorf("valid share ratios required to" +
-			" generate payments")
+		desc := fmt.Sprintf("%s: valid share ratios required to "+
+			"generate payments", funcName)
+		return nil, 0, poolError(ErrShareRatio, desc)
 	}
 
 	// Deduct pool fee from the amount to be shared.
@@ -519,10 +525,15 @@ func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *Paym
 
 	if amtSansFees < paymentTotal {
 		diff := paymentTotal - amtSansFees
-		return nil, 0, fmt.Errorf("total payments (%s) is greater than "+
+		desc := fmt.Sprintf("%s: total payments (%s) is greater than "+
 			"the remaining coinbase amount after fees (%s). Difference is %s",
-			paymentTotal, amtSansFees, diff)
+			funcName, paymentTotal, amtSansFees, diff)
+		return nil, 0, poolError(ErrPaymentSource, desc)
 	}
+
+	// TODO: Need to check each payment to ensure its not dust if it is it
+	// should be added to the pool fee. Will be resolving this in a seperate
+	// PR.
 
 	// Add a payout entry for pool fees.
 	feePayment := NewPayment(PoolFeesK, source, fee, height, estMaturity)
@@ -789,56 +800,23 @@ func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[string][]*Paymen
 	return pmts, nil
 }
 
-	return pmts, nil
-}
-
-// PayDividends pays mature mining rewards to participating accounts.
-//
-// TODO: need to break this down into smaller funcs to make it easier to
-// test.
-func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryActive bool) error {
-	pmts, err := pm.maturePendingPayments(height)
-	if err != nil {
-		return err
-	}
-
-	if len(pmts) == 0 {
-		return nil
-	}
-
-	// The fee address is being picked at random from the set of pool fee
-	// addresses to make it difficult for third-parties wanting to track
-	// pool fees collected by the pool and ultimately determine the
-	// cumulative value accrued by pool operators.
-	feeAddr := pm.cfg.PoolFeeAddrs[rand.Intn(len(pm.cfg.PoolFeeAddrs))]
-
-	// Create the payout transaction.
-	inputs := make([]chainjson.TransactionInput, 0)
-	txHashes := make(map[string]*chainhash.Hash)
-	outputs := make(map[string]dcrutil.Amount)
-	var tIn dcrutil.Amount
-	var tOut dcrutil.Amount
-	var maxSpendableHeight uint32
-
-	txCreator := pm.cfg.FetchTxCreator()
-	if txCreator == nil {
-		return fmt.Errorf("tx creator unset")
-	}
-
-	toDelete := make([]string, 0)
+// pruneOrphanedPayments removes all orphaned payments from the provided payments.
+func (pm *PaymentMgr) pruneOrphanedPayments(ctx context.Context, pmts map[string][]*Payment) (map[string][]*Payment, error) {
+	toDelete := make([]string, 0, len(pmts))
 	for key := range pmts {
 		blockHash, err := chainhash.NewHashFromStr(key)
 		if err != nil {
-			return err
+			desc := fmt.Sprintf("unable to generate hash: %v", err)
+			return nil, poolError(ErrCreateHash, desc)
 		}
 
 		confs, err := pm.cfg.GetBlockConfirmations(ctx, blockHash)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		// If the block has no confirmations at the current height,
-		// it is an orphan. Remove payments associated with it.
+		// If the block has no confirmations for the current chain
+		// state it is an orphan. Remove payments associated with it.
 		if confs <= 0 {
 			toDelete = append(toDelete, key)
 		}
@@ -848,67 +826,193 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	for _, k := range toDelete {
 		delete(pmts, k)
 	}
+	return pmts, nil
+}
 
-	for _, set := range pmts {
-		// The coinbase output prior to
-		// [DCP0006](https://github.com/decred/dcps/pull/17)
-		// activation is at the third index position and at
-		// the second index position once DCP0006 is activated.
-		index := uint32(1)
-		if !treasuryActive {
-			index = 2
+// applyTxFees determines the trasaction fees needed for the payout transaction
+// and deducts portions of the fee from outputs of participating accounts
+// being paid to.
+//
+// The deducted portions are calculated as the percentage of fees based on
+// the ratio of the amount being paid to the total transaction output minus
+// pool fees.
+func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs map[string]dcrutil.Amount,
+	tIn dcrutil.Amount, tOut dcrutil.Amount, feeAddr dcrutil.Address) (dcrutil.Amount, dcrutil.Amount, error) {
+	funcName := "applyTxFees"
+	if len(inputs) == 0 {
+		desc := fmt.Sprint("%s: cannot create a payout transaction "+
+			"without a tx input", funcName)
+		return 0, 0, poolError(ErrTxIn, desc)
+	}
+	if len(outputs) == 0 {
+		desc := fmt.Sprint("%s:cannot create a payout transaction "+
+			"without a tx output", funcName)
+		return 0, 0, poolError(ErrTxOut, desc)
+	}
+	inSizes := make([]int, len(inputs))
+	for range inputs {
+		inSizes = append(inSizes, txsizes.RedeemP2PKHSigScriptSize)
+	}
+	outSizes := make([]int, len(outputs))
+	for range outputs {
+		outSizes = append(outSizes, txsizes.P2PKHOutputSize)
+	}
+	changeScriptSize := 0
+	estSize := txsizes.EstimateSerializeSizeFromScriptSizes(inSizes, outSizes,
+		changeScriptSize)
+	estFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, estSize)
+	sansFees := tOut - estFee
+
+	for addr, v := range outputs {
+		// Pool fee payments are excluded from tx fee deductions.
+		if addr == feeAddr.String() {
+			continue
 		}
 
-		txHash, err := chainhash.NewHashFromStr(set[0].Source.Coinbase)
+		ratio := float64(int64(sansFees)) / float64(int64(v))
+		outFee := estFee.MulF64(ratio)
+		outputs[addr] -= outFee
+	}
+
+	return sansFees, estFee, nil
+}
+
+// confirmCoinbases ensures the coinbases referenced by the provided
+// transaction hashes are spendable by the expected maximum spendable height.
+//
+// The context passed to this function must have a corresponding
+// cancellation to allow for a clean shutdown process
+func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txHashes map[string]*chainhash.Hash, spendableHeight uint32) error {
+	funcName := "confirmCoinbases"
+	hashes := make([]*chainhash.Hash, 0, len(txHashes))
+	for _, hash := range txHashes {
+		hashes = append(hashes, hash)
+	}
+
+	notifSource, err := pm.cfg.GetTxConfNotifications(hashes,
+		int32(spendableHeight))
+	if err != nil {
+		return err
+	}
+
+	// Wait for coinbase tx confirmations from the wallet.
+	maxSpendableConfs := int32(pm.cfg.ActiveNet.CoinbaseMaturity) + 1
+
+txConfs:
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debugf("existing txConfs")
+			break txConfs
+
+		default:
+			// Non-blocking receive fallthrough.
+		}
+
+		resp, err := notifSource()
 		if err != nil {
-			return err
+			desc := fmt.Sprintf("%s: unable to fetch tx confirmations: %v",
+				funcName, err)
+			return poolError(ErrTxConf, desc)
 		}
 
-		txOutResult, err := txCreator.GetTxOut(ctx, txHash, index, false)
+		// Ensure all coinbases being spent are spendable.
+		for _, coinbase := range resp.Confirmations {
+			if coinbase.Confirmations >= maxSpendableConfs {
+				hash, err := chainhash.NewHash(coinbase.TxHash)
+				if err != nil {
+					desc := fmt.Sprintf("%s: unable to create block hash: %v",
+						funcName, err)
+					return poolError(ErrCreateHash, desc)
+				}
+
+				// Remove spendable coinbase from the tx hash set. All
+				// coinbases are spendable when the tx hash set is empty.
+				delete(txHashes, hash.String())
+			}
+		}
+
+		if len(txHashes) == 0 {
+			break
+		}
+	}
+
+	if len(txHashes) != 0 {
+		log.Debugf("txHashes are %d", len(txHashes))
+		desc := fmt.Sprintf("%s: unable to confirm %d coinbase "+
+			"trasaction(s)", funcName, len(txHashes))
+		return poolError(ErrContextCancelled, desc)
+	}
+
+	return nil
+}
+
+// generatePayoutTxDetails creates the payout transaction inputs and outputs
+// from the provided payments
+func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator, payments map[string][]*Payment) ([]chainjson.TransactionInput,
+	map[string]*chainhash.Hash, map[string]dcrutil.Amount, dcrutil.Address, dcrutil.Amount, dcrutil.Amount, error) {
+	funcName := "generatePayoutTxDetails"
+
+	// The fee address is being picked at random from the set of pool fee
+	// addresses to make it difficult for third-parties wanting to track
+	// pool fees collected by the pool and ultimately determine the
+	// cumulative value accrued by pool operators.
+	feeAddr := pm.cfg.PoolFeeAddrs[rand.Intn(len(pm.cfg.PoolFeeAddrs))]
+
+	var tIn, tOut dcrutil.Amount
+	coinbaseIndex := uint32(2)
+	inputs := make([]chainjson.TransactionInput, 0)
+	inputTxHashes := make(map[string]*chainhash.Hash)
+	outputs := make(map[string]dcrutil.Amount)
+	for _, pmtSet := range payments {
+		coinbaseTx := pmtSet[0].Source.Coinbase
+		txHash, err := chainhash.NewHashFromStr(coinbaseTx)
 		if err != nil {
-			return fmt.Errorf("unable to find tx output: %v", err)
-		}
-
-		if txOutResult == nil {
-			return fmt.Errorf("no transaction output found for hash %s "+
-				"at index %d", txHash, index)
+			desc := fmt.Sprintf("%s: unable to create tx hash: %v",
+				funcName, err)
+			return nil, nil, nil, nil, 0, 0, poolError(ErrCreateHash, desc)
 		}
 
 		// Ensure the referenced prevout to be spent is a coinbase and
 		// spendable at the current height.
+		txOutResult, err := txC.GetTxOut(ctx, txHash, coinbaseIndex, false)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to find tx output: %v",
+				funcName, err)
+			return nil, nil, nil, nil, 0, 0, poolError(ErrTxOut, desc)
+		}
 		if !txOutResult.Coinbase {
-			return fmt.Errorf("expected the referenced output at index %d "+
-				"for tx %v to be a coinbase", index, txHash.String())
+			desc := fmt.Sprintf("%s: referenced output at index %d "+
+				"for tx %v is not a coinbase",
+				funcName, coinbaseIndex, txHash.String())
+			return nil, nil, nil, nil, 0, 0, poolError(ErrCoinbase, desc)
 		}
-
 		if txOutResult.Confirmations < int64(pm.cfg.ActiveNet.CoinbaseMaturity+1) {
-			return fmt.Errorf("expected the referenced coinbase at index %d "+
-				"for tx %v to be spendable", index, txHash.String())
+			desc := fmt.Sprintf("%s: referenced coinbase at "+
+				"index %d for tx %v is not spendable", funcName,
+				coinbaseIndex, txHash.String())
+			return nil, nil, nil, nil, 0, 0, poolError(ErrCoinbase, desc)
 		}
 
+		// Create the transaction input using the provided prevOut.
 		in := chainjson.TransactionInput{
 			Amount: txOutResult.Value,
 			Txid:   txHash.String(),
-			Vout:   index,
+			Vout:   coinbaseIndex,
 			Tree:   wire.TxTreeRegular,
 		}
 		inputs = append(inputs, in)
+		inputTxHashes[txHash.String()] = txHash
 
-		spendableHeight := set[0].EstimatedMaturity + 1
-		if maxSpendableHeight < spendableHeight {
-			maxSpendableHeight = spendableHeight
-		}
-
-		txHashes[txHash.String()] = txHash
-
-		outV, err := dcrutil.NewAmount(txOutResult.Value)
+		prevOutV, err := dcrutil.NewAmount(in.Amount)
 		if err != nil {
-			return err
+			desc := fmt.Sprintf("unable create the input amount: %v", err)
+			return nil, nil, nil, nil, 0, 0, poolError(ErrCreateAmount, desc)
 		}
-		tIn += outV
+		tIn += prevOutV
 
-		// Generate the outputs paying dividends and fees.
-		for _, pmt := range set {
+		// Generate the outputs paying dividends to as well as pool fees.
+		for _, pmt := range pmtSet {
 			if pmt.Account == PoolFeesK {
 				_, ok := outputs[feeAddr.String()]
 				if !ok {
@@ -923,9 +1027,8 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 
 			acc, err := FetchAccount(pm.cfg.DB, []byte(pmt.Account))
 			if err != nil {
-				return err
+				return nil, nil, nil, nil, 0, 0, err
 			}
-
 			_, ok := outputs[acc.Address]
 			if !ok {
 				outputs[acc.Address] = pmt.Amount
@@ -937,147 +1040,151 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		}
 	}
 
+	// Ensure the transaction outputs do not source more value than possible
+	// from the provided inputs and also are consuming all of the input
+	// value after rounding errors.
 	if tOut > tIn {
-		return fmt.Errorf("total output values for the transaction (%s) "+
-			"is greater than the provided inputs %s", tIn, tOut)
+		desc := fmt.Sprintf("%s: total output values for the "+
+			"transaction (%s) is greater than the provided inputs (%s)",
+			funcName, tOut, tIn)
+		return nil, nil, nil, nil, 0, 0, poolError(ErrCreateTx, desc)
 	}
 
 	diff := tIn - tOut
 	if diff > maxRoundingDiff {
-		return fmt.Errorf("difference between total output values and "+
-			"the provided inputs (%s) exceeds the maximum allowed "+
-			"for rounding errors (%s)", diff, maxRoundingDiff)
+		desc := fmt.Sprintf("%s: difference between total output "+
+			"values and the provided inputs (%s) exceeds the maximum "+
+			"allowed for rounding errors (%s)", funcName, diff, maxRoundingDiff)
+		return nil, nil, nil, nil, 0, 0, poolError(ErrCreateTx, desc)
 	}
 
-	inSizes := make([]int, len(inputs))
-	for range inputs {
-		inSizes = append(inSizes, txsizes.RedeemP2PKHSigScriptSize)
+	return inputs, inputTxHashes, outputs, feeAddr, tIn, tOut, nil
+}
+
+// PayDividends pays mature mining rewards to participating accounts.
+func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
+	funcName := "payDividends"
+	mPmts, err := pm.maturePendingPayments(height)
+	if err != nil {
+		return err
 	}
 
-	outSizes := make([]int, len(outputs))
-	for range outputs {
-		outSizes = append(outSizes, txsizes.P2PKHOutputSize)
+	// Nothing to do if there are no mature payments to process.
+	if len(mPmts) == 0 {
+		return nil
 	}
 
-	estSize := txsizes.EstimateSerializeSizeFromScriptSizes(inSizes, outSizes, 0)
-	estFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, estSize)
-	sansFees := tOut - estFee
-
-	// Deduct the portion of transaction fees being paid for by
-	// participating accounts from outputs being paid to them.
-	//
-	// It is  calculated as the percentage of fees based on the
-	// ratio of the amount being paid to the total transaction
-	// output minus pool fees.
-	for addr, v := range outputs {
-		if addr == feeAddr.String() {
-			continue
-		}
-
-		ratio := float64(int64(sansFees)) / float64(int64(v))
-		outFee := estFee.MulF64(ratio)
-		outputs[addr] -= outFee
+	txC := pm.cfg.FetchTxCreator()
+	if txC == nil {
+		desc := fmt.Sprintf("%s: tx creator cannot be nil", funcName)
+		return poolError(ErrDisconnected, desc)
 	}
 
-	// Generate the output set with decoded addresses.
+	// remove all matured orphaned payments. Since the associated blocks
+	// to these payments are not part of the main chain they will not be
+	// paid out.
+	pmts, err := pm.pruneOrphanedPayments(ctx, mPmts)
+	if err != nil {
+		return err
+	}
+
+	inputs, inputTxHashes, outputs, feeAddr, tIn, tOut, err :=
+		pm.generatePayoutTxDetails(ctx, txC, pmts)
+	if err != nil {
+		return err
+	}
+
+	_, estFee, err := pm.applyTxFees(inputs, outputs, tIn, tOut, feeAddr)
+	if err != nil {
+		return err
+	}
+
+	// Generate the transaction output set.
 	outs := make(map[dcrutil.Address]dcrutil.Amount, len(outputs))
 	for sAddr, amt := range outputs {
 		addr, err := dcrutil.DecodeAddress(sAddr, pm.cfg.ActiveNet)
 		if err != nil {
-			return fmt.Errorf("unable to decode address: %v", err)
+			desc := fmt.Sprintf("%s: unable to decode payout address: %v",
+				funcName, err)
+			return poolError(ErrDecode, desc)
 		}
-
 		outs[addr] = amt
 	}
 
-	// Ensure the wallet is aware of all the outputs to be spent by the payout
-	// transaction.
+	// Ensure the wallet is aware of all the coinbase outputs being
+	// spent by the payout transaction.
+	var maxSpendableHeight uint32
+	for _, pmtSet := range pmts {
+		spendableHeight := pmtSet[0].EstimatedMaturity + 1
+		if maxSpendableHeight < spendableHeight {
+			maxSpendableHeight = spendableHeight
+		}
+	}
 	if maxSpendableHeight < height {
 		maxSpendableHeight = height
 	}
 
-	hashes := make([]*chainhash.Hash, 0, len(txHashes))
-	for _, hash := range txHashes {
-		hashes = append(hashes, hash)
-	}
-
-	notifSource, err := pm.cfg.GetTxConfNotifications(hashes,
-		int32(maxSpendableHeight))
+	tCtx, tCancel := context.WithTimeout(ctx, pm.cfg.CoinbaseConfTimeout)
+	defer tCancel()
+	err = pm.confirmCoinbases(tCtx, inputTxHashes, maxSpendableHeight)
 	if err != nil {
-		return fmt.Errorf("unable to stream tx confirmations: %v", err)
+		// Do not error if coinbase spendable confirmatiom requests are
+		// terminated by the context cancellation.
+		if !errors.Is(err, ErrContextCancelled) {
+			return err
+		}
+
+		return nil
 	}
 
-	// Wait for coinbase tx confirmations from the wallet.
-	maxSpendableConfs := int32(pm.cfg.ActiveNet.CoinbaseMaturity) + 1
-	for {
-		resp, err := notifSource()
-		if err != nil {
-			return fmt.Errorf("tx confirmations notification error: %v", err)
-		}
-
-		// Ensure all coinbases being spent are spendable before proceeding
-		// with creating and publishing the transaction.
-		for _, coinbase := range resp.Confirmations {
-			if coinbase.Confirmations >= maxSpendableConfs {
-				cbHash, err := chainhash.NewHash(coinbase.TxHash)
-				if err != nil {
-					return fmt.Errorf("unable to create block hash: %v", err)
-				}
-
-				// Remove spendable coinbases from the tx hash set. All
-				// coinbases are spendable when the tx hash set is empty.
-				delete(txHashes, cbHash.String())
-			}
-		}
-
-		if len(txHashes) == 0 {
-			break
-		}
-	}
-
-	tx, err := txCreator.CreateRawTransaction(ctx, inputs, outs, nil, nil)
+	// Create, sign and publish the payout transaction.
+	tx, err := txC.CreateRawTransaction(ctx, inputs, outs, nil, nil)
 	if err != nil {
-		return fmt.Errorf("unable to create raw transaction: %v", err)
+		desc := fmt.Sprintf("%s: unable to create transaction: %v",
+			funcName, err)
+		return poolError(ErrCreateTx, desc)
 	}
-
-	txB, err := tx.Bytes()
+	txBytes, err := tx.Bytes()
 	if err != nil {
 		return err
 	}
 
-	txBroadcaster := pm.cfg.FetchTxBroadcaster()
-	if txBroadcaster == nil {
-		return fmt.Errorf("tx broadcaster unset")
+	txB := pm.cfg.FetchTxBroadcaster()
+	if txB == nil {
+		desc := fmt.Sprintf("%s: tx broadcaster cannot be nil", funcName)
+		return poolError(ErrDisconnected, desc)
 	}
-
-	// Sign the transaction.
 	signTxReq := &walletrpc.SignTransactionRequest{
-		SerializedTransaction: txB,
+		SerializedTransaction: txBytes,
 		Passphrase:            []byte(pm.cfg.WalletPass),
 	}
-	signedTxResp, err := txBroadcaster.SignTransaction(ctx, signTxReq)
+	signedTxResp, err := txB.SignTransaction(ctx, signTxReq)
 	if err != nil {
-		return fmt.Errorf("unable to sign transaction: %v", err)
+		desc := fmt.Sprintf("%s: unable to sign transaction: %v",
+			funcName, err)
+		return poolError(ErrSignTx, desc)
+
 	}
 
-	// Publish the transaction.
 	pubTxReq := &walletrpc.PublishTransactionRequest{
 		SignedTransaction: signedTxResp.Transaction,
 	}
-	pubTxResp, err := txBroadcaster.PublishTransaction(ctx, pubTxReq)
+	pubTxResp, err := txB.PublishTransaction(ctx, pubTxReq)
 	if err != nil {
-		return fmt.Errorf("unable to publish transaction: %v", err)
+		desc := fmt.Sprintf("%s: unable to publish transaction: %v",
+			funcName, err)
+		return poolError(ErrPublishTx, desc)
 	}
 
 	txid, err := chainhash.NewHash(pubTxResp.TransactionHash)
 	if err != nil {
-		return err
+		desc := fmt.Sprintf("unable to create transaction hash: %v", err)
+		return poolError(ErrCreateHash, desc)
 	}
-
 	fees := outputs[feeAddr.String()]
 
-	log.Infof("paid a total of %v in tx %s, including %v in pool fees.",
-		tOut, txid.String(), fees)
+	log.Infof("paid a total of %v in tx %s, including %v in pool fees. "+
+		"Tx fee: %v", tOut, txid.String(), fees, estFee)
 
 	// Update all associated payments as paid and archive them.
 	for _, set := range pmts {
@@ -1086,12 +1193,15 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 			pmt.TransactionID = txid.String()
 			err := pmt.Update(pm.cfg.DB)
 			if err != nil {
-				return fmt.Errorf("unable to update payment: %v", err)
+				desc := fmt.Sprintf("%s: unable to update payment: %v",
+					funcName, err)
+				return poolError(ErrPersistEntry, desc)
 			}
-
 			err = pmt.Archive(pm.cfg.DB)
 			if err != nil {
-				return fmt.Errorf("unable to archive payment: %v", err)
+				desc := fmt.Sprintf("%s: unable to archive payment: %v",
+					funcName, err)
+				return poolError(ErrPersistEntry, desc)
 			}
 		}
 	}
@@ -1103,13 +1213,11 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		if err != nil {
 			return err
 		}
-
 		pm.setLastPaymentPaidOn(uint64(time.Now().UnixNano()))
 		return pm.persistLastPaymentPaidOn(tx)
 	})
 	if err != nil {
 		return err
 	}
-
 	return nil
 }

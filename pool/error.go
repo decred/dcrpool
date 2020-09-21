@@ -96,6 +96,36 @@ const (
 
 	// ErrPaymentSource indicates a payment source error.
 	ErrPaymentSource = ErrorKind("ErrPaymentSource")
+
+	// ErrShareRatio indicates a share ratio error.
+	ErrShareRatio = ErrorKind("ErrShareRatio")
+
+	// ErrCreateHash indicates a hash creation error.
+	ErrCreateHash = ErrorKind("ErrCreateHash")
+
+	// ErrCoinbase indicates a coinbase related error.
+	ErrCoinbase = ErrorKind("ErrCoinbase")
+
+	// ErrCreateTx indicates a transaction creation error.
+	ErrCreateTx = ErrorKind("ErrCreateTx")
+
+	// ErrSignTx indicates a transaction signing error.
+	ErrSignTx = ErrorKind("ErrSignTx")
+
+	// ErrPublishTx indicates a transaction pubishing error.
+	ErrPublishTx = ErrorKind("ErrPublishTx")
+
+	// ErrTxOut indicates a transaction output related error.
+	ErrTxOut = ErrorKind("ErrTxOut")
+
+	// ErrTxIn indicates a transaction input related error.
+	ErrTxIn = ErrorKind("ErrTxIn")
+
+	// ErrContextCancelled indicates a context cancellation related error.
+	ErrContextCancelled = ErrorKind("ErrContextCancelled")
+
+	// ErrCreateAmount indicates an amount creation error.
+	ErrCreateAmount = ErrorKind("ErrCreateAmount")
 )
 
 // Error satisfies the error interface and prints human-readable errors.
