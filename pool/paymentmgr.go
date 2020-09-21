@@ -139,23 +139,32 @@ func (pm *PaymentMgr) fetchLastPaymentHeight() uint32 {
 
 // persistLastPaymentHeight saves the last payment height to the db.
 func (pm *PaymentMgr) persistLastPaymentHeight(tx *bolt.Tx) error {
+	funcName := "persistLastPaymentHeight"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
 		return dbError(ErrBucketNotFound, desc)
 	}
 	height := atomic.LoadUint32(&pm.lastPaymentHeight)
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint32(b, height)
 	err := pbkt.Put(lastPaymentHeight, b)
-	return err
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to persist last payment height: %v",
+			funcName, err)
+		return dbError(ErrPersistEntry, desc)
+	}
+	return nil
 }
 
 // loadLastPaymentHeight fetches the last payment height from the db.
 func (pm *PaymentMgr) loadLastPaymentHeight(tx *bolt.Tx) error {
+	funcName := "loadLastPaymentHeight"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
 		return dbError(ErrBucketNotFound, desc)
 	}
 	lastPaymentHeightB := pbkt.Get(lastPaymentHeight)
@@ -163,7 +172,13 @@ func (pm *PaymentMgr) loadLastPaymentHeight(tx *bolt.Tx) error {
 		pm.setLastPaymentHeight(0)
 		b := make([]byte, 4)
 		binary.LittleEndian.PutUint32(b, 0)
-		return pbkt.Put(lastPaymentHeight, b)
+		err := pbkt.Put(lastPaymentHeight, b)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to load last payment "+
+				"height: %v", funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+		return nil
 	}
 	pm.setLastPaymentHeight(binary.LittleEndian.Uint32(lastPaymentHeightB))
 	return nil
@@ -181,17 +196,26 @@ func (pm *PaymentMgr) fetchLastPaymentPaidOn() uint64 {
 
 // persistLastPaymentPaidOn saves the last payment paid on time to the db.
 func (pm *PaymentMgr) persistLastPaymentPaidOn(tx *bolt.Tx) error {
+	funcName := "persistLastPaymentPaidOn"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
 		return dbError(ErrBucketNotFound, desc)
 	}
-	return pbkt.Put(lastPaymentPaidOn,
+	err := pbkt.Put(lastPaymentPaidOn,
 		nanoToBigEndianBytes(int64(pm.lastPaymentPaidOn)))
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to persist last payment "+
+			"paid on time: %v", funcName, err)
+		return dbError(ErrPersistEntry, desc)
+	}
+	return nil
 }
 
 // pruneShares removes invalidated shares from the db.
 func (pm *PaymentMgr) pruneShares(tx *bolt.Tx, minNano int64) error {
+	funcName := "pruneShares"
 	minB := nanoToBigEndianBytes(minNano)
 	bkt, err := fetchShareBucket(tx)
 	if err != nil {
@@ -203,9 +227,10 @@ func (pm *PaymentMgr) pruneShares(tx *bolt.Tx, minNano int64) error {
 	for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
 		_, err := hex.Decode(createdOnB, k[:16])
 		if err != nil {
-			return err
+			desc := fmt.Sprintf("%s: unable to decode share created-on "+
+				"bytes: %v", funcName, err)
+			return dbError(ErrDecode, desc)
 		}
-
 		if bytes.Compare(minB, createdOnB) > 0 {
 			toDelete = append(toDelete, k)
 		}
@@ -221,9 +246,11 @@ func (pm *PaymentMgr) pruneShares(tx *bolt.Tx, minNano int64) error {
 
 // fetchPoolBucket is a helper function for getting the pool bucket.
 func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	funcName := "fetchPoolBucket"
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
-		desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
 		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	return pbkt, nil
@@ -237,6 +264,7 @@ func bigEndianBytesToNano(b []byte) uint64 {
 
 // loadLastPaymentPaidOn fetches the last payment paid on time from the db.
 func (pm *PaymentMgr) loadLastPaymentPaidOn(tx *bolt.Tx) error {
+	funcName := "loadLastPaymentPaidOn"
 	pbkt, err := fetchPoolBucket(tx)
 	if err != nil {
 		return err
@@ -246,7 +274,13 @@ func (pm *PaymentMgr) loadLastPaymentPaidOn(tx *bolt.Tx) error {
 		pm.setLastPaymentPaidOn(0)
 		b := make([]byte, 8)
 		binary.LittleEndian.PutUint64(b, 0)
-		return pbkt.Put(lastPaymentPaidOn, b)
+		err := pbkt.Put(lastPaymentPaidOn, b)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to load last payment "+
+				"paid-on time: %v", funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+		return nil
 	}
 	pm.setLastPaymentPaidOn(bigEndianBytesToNano(lastPaymentPaidOnB))
 	return nil
@@ -264,16 +298,24 @@ func (pm *PaymentMgr) fetchLastPaymentCreatedOn() uint64 {
 
 // persistLastPaymentCreatedOn saves the last payment created on time to the db.
 func (pm *PaymentMgr) persistLastPaymentCreatedOn(tx *bolt.Tx) error {
+	funcName := "persistLastPaymentCreatedOn"
 	pbkt, err := fetchPoolBucket(tx)
 	if err != nil {
 		return err
 	}
-	return pbkt.Put(lastPaymentCreatedOn,
+	err = pbkt.Put(lastPaymentCreatedOn,
 		nanoToBigEndianBytes(int64(pm.lastPaymentCreatedOn)))
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to persist last payment "+
+			"paid-on time: %v", funcName, err)
+		return dbError(ErrPersistEntry, desc)
+	}
+	return nil
 }
 
 // loadLastPaymentCreaedOn fetches the last payment created on time from the db.
 func (pm *PaymentMgr) loadLastPaymentCreatedOn(tx *bolt.Tx) error {
+	funcName := "loadLastPaymentCreatedOn"
 	pbkt, err := fetchPoolBucket(tx)
 	if err != nil {
 		return err
@@ -283,7 +325,13 @@ func (pm *PaymentMgr) loadLastPaymentCreatedOn(tx *bolt.Tx) error {
 		pm.setLastPaymentCreatedOn(0)
 		b := make([]byte, 8)
 		binary.LittleEndian.PutUint64(b, 0)
-		return pbkt.Put(lastPaymentCreatedOn, b)
+		err := pbkt.Put(lastPaymentCreatedOn, b)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to load last payment "+
+				"created-on time: %v", funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+		return nil
 	}
 	pm.setLastPaymentCreatedOn(bigEndianBytesToNano(lastPaymentCreatedOnB))
 	return nil
@@ -321,6 +369,7 @@ func (pm *PaymentMgr) sharePercentages(shares []*Share) (map[string]*big.Rat, er
 // PPSEligibleShares fetches all shares created before or at the provided
 // time.
 func (pm *PaymentMgr) PPSEligibleShares(max []byte) ([]*Share, error) {
+	funcName := "PPSEligibleShares"
 	eligibleShares := make([]*Share, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchShareBucket(tx)
@@ -332,19 +381,22 @@ func (pm *PaymentMgr) PPSEligibleShares(max []byte) ([]*Share, error) {
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			_, err := hex.Decode(createdOnB, k[:16])
 			if err != nil {
-				return err
+				desc := fmt.Sprintf("%s: unable to decode share "+
+					"created-on bytes: %v", funcName, err)
+				return dbError(ErrDecode, desc)
 			}
 
 			if bytes.Compare(createdOnB, max) <= 0 {
 				var share Share
 				err := json.Unmarshal(v, &share)
 				if err != nil {
-					return err
+					desc := fmt.Sprintf("%s: unable to unmarshal share: %v",
+						funcName, err)
+					return dbError(ErrParse, desc)
 				}
 				eligibleShares = append(eligibleShares, &share)
 			}
 		}
-
 		return nil
 	})
 	if err != nil {
@@ -375,6 +427,7 @@ func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.
 // PPLNSEligibleShares fetches all shares keyed greater than the provided
 // minimum.
 func (pm *PaymentMgr) PPLNSEligibleShares(min []byte) ([]*Share, error) {
+	funcName := "PPLNSEligibleShares"
 	eligibleShares := make([]*Share, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchShareBucket(tx)
@@ -386,14 +439,18 @@ func (pm *PaymentMgr) PPLNSEligibleShares(min []byte) ([]*Share, error) {
 		for k, v := c.Last(); k != nil; k, v = c.Prev() {
 			_, err := hex.Decode(createdOnB, k[:16])
 			if err != nil {
-				return err
+				desc := fmt.Sprintf("%s: unable to decode share "+
+					"created-on bytes: %v", funcName, err)
+				return dbError(ErrDecode, desc)
 			}
 
 			if bytes.Compare(createdOnB, min) > 0 {
 				var share Share
 				err := json.Unmarshal(v, &share)
 				if err != nil {
-					return err
+					desc := fmt.Sprintf("%s: unable to unmarshal "+
+						"share: %v", funcName, err)
+					return dbError(ErrParse, desc)
 				}
 				eligibleShares = append(eligibleShares, &share)
 			}
@@ -555,6 +612,7 @@ func (pm *PaymentMgr) generatePayments(height uint32, source *PaymentSource, amt
 
 // pendingPayments fetches all unpaid payments.
 func (pm *PaymentMgr) pendingPayments() ([]*Payment, error) {
+	funcName := "pendingPayments"
 	payments := make([]*Payment, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchPaymentBucket(tx)
@@ -566,9 +624,10 @@ func (pm *PaymentMgr) pendingPayments() ([]*Payment, error) {
 			var payment Payment
 			err := json.Unmarshal(v, &payment)
 			if err != nil {
-				return err
+				desc := fmt.Sprintf("%s: unable to unmarshal "+
+					"payment: %v", funcName, err)
+				return dbError(ErrParse, desc)
 			}
-
 			if payment.PaidOnHeight == 0 {
 				payments = append(payments, &payment)
 			}
@@ -583,6 +642,7 @@ func (pm *PaymentMgr) pendingPayments() ([]*Payment, error) {
 
 // pendingPaymentsAtHeight fetches all pending payments at the provided height.
 func (pm *PaymentMgr) pendingPaymentsAtHeight(height uint32) ([]*Payment, error) {
+	funcName := "pendingPaymentsAtHeight"
 	payments := make([]*Payment, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchPaymentBucket(tx)
@@ -596,16 +656,19 @@ func (pm *PaymentMgr) pendingPaymentsAtHeight(height uint32) ([]*Payment, error)
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
 			_, err := hex.Decode(paymentHeightB, k[:8])
 			if err != nil {
-				return err
+				desc := fmt.Sprintf("%s: unable to decode payment "+
+					"height: %v", funcName, err)
+				return dbError(ErrDecode, desc)
 			}
 
 			if bytes.Compare(heightBE, paymentHeightB) > 0 {
 				var payment Payment
 				err := json.Unmarshal(v, &payment)
 				if err != nil {
-					return err
+					desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
+						funcName, err)
+					return dbError(ErrParse, desc)
 				}
-
 				if payment.PaidOnHeight == 0 {
 					payments = append(payments, &payment)
 				}
@@ -622,6 +685,7 @@ func (pm *PaymentMgr) pendingPaymentsAtHeight(height uint32) ([]*Payment, error)
 // pendingPaymentsForBlockHash returns the number of  pending payments with
 // the provided block hash as their source.
 func (pm *PaymentMgr) pendingPaymentsForBlockHash(blockHash string) (uint32, error) {
+	funcName := "pendingPaymentsForBlockHash"
 	var count uint32
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchPaymentBucket(tx)
@@ -634,9 +698,10 @@ func (pm *PaymentMgr) pendingPaymentsForBlockHash(blockHash string) (uint32, err
 			var payment Payment
 			err := json.Unmarshal(v, &payment)
 			if err != nil {
-				return err
+				desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
+					funcName, err)
+				return dbError(ErrParse, desc)
 			}
-
 			if payment.PaidOnHeight == 0 {
 				if payment.Source.BlockHash == blockHash {
 					count++
@@ -654,6 +719,7 @@ func (pm *PaymentMgr) pendingPaymentsForBlockHash(blockHash string) (uint32, err
 // archivedPayments fetches all archived payments. List is ordered, most
 // recent comes first.
 func (pm *PaymentMgr) archivedPayments() ([]*Payment, error) {
+	funcName := "archivedPayments"
 	pmts := make([]*Payment, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
 		abkt, err := fetchPaymentArchiveBucket(tx)
@@ -666,7 +732,9 @@ func (pm *PaymentMgr) archivedPayments() ([]*Payment, error) {
 			var payment Payment
 			err := json.Unmarshal(v, &payment)
 			if err != nil {
-				return err
+				desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
+					funcName, err)
+				return dbError(ErrParse, desc)
 			}
 			pmts = append(pmts, &payment)
 		}
@@ -681,6 +749,7 @@ func (pm *PaymentMgr) archivedPayments() ([]*Payment, error) {
 // maturePendingPayments fetches all mature pending payments at the
 // provided height.
 func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[string][]*Payment, error) {
+	funcName := "maturePendingPayments"
 	payments := make([]*Payment, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchPaymentBucket(tx)
@@ -693,9 +762,10 @@ func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[string][]*Paymen
 			var payment Payment
 			err := json.Unmarshal(v, &payment)
 			if err != nil {
-				return err
+				desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
+					funcName, err)
+				return dbError(ErrParse, desc)
 			}
-
 			spendableHeight := payment.EstimatedMaturity + 1
 			if payment.PaidOnHeight == 0 && spendableHeight <= height {
 				payments = append(payments, &payment)
@@ -713,10 +783,11 @@ func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[string][]*Paymen
 		if !ok {
 			set = make([]*Payment, 0)
 		}
-
 		set = append(set, pmt)
 		pmts[pmt.Source.BlockHash] = set
 	}
+	return pmts, nil
+}
 
 	return pmts, nil
 }
