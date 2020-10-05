@@ -9,13 +9,14 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/decred/dcrd/blockchain/standalone"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
 	bolt "go.etcd.io/bbolt"
 )
 
-var (
+const (
 	// bufferSize represents the block notification buffer size.
 	bufferSize = 128
 )
@@ -28,7 +29,7 @@ type ChainStateConfig struct {
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
 	// PayDividends pays mature mining rewards to participating accounts.
-	PayDividends func(context.Context, uint32) error
+	PayDividends func(context.Context, uint32, bool) error
 	// GeneratePayments creates payments for participating accounts in pool
 	// mining mode based on the configured payment scheme.
 	GeneratePayments func(uint32, *PaymentSource, dcrutil.Amount, int64) error
@@ -269,6 +270,18 @@ func (cs *ChainState) pruneJobs(height uint32) error {
 	return err
 }
 
+// isTreasuryActive checks the provided coinbase transaction if
+// the treasury agenda is active.
+func isTreasuryActive(tx *wire.MsgTx) bool {
+	if !standalone.IsCoinBaseTx(tx) {
+		return false
+	}
+	if tx.Version < wire.TxVersionTreasury {
+		return false
+	}
+	return true
+}
+
 // handleChainUpdates processes connected and disconnected block
 // notifications from the consensus daemon.
 func (cs *ChainState) handleChainUpdates(ctx context.Context) {
@@ -333,8 +346,24 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				}
 			}
 
+			block, err := cs.cfg.GetBlock(ctx, &header.PrevBlock)
+			if err != nil {
+				// Errors generated fetching blocks of confirmed mined
+				// work are curently fatal because payments are
+				// sourced from coinbases. The chainstate process will be
+				// terminated as a result.
+				log.Errorf("unable to fetch block with hash %x: %v",
+					header.PrevBlock, err)
+				close(msg.Done)
+				cs.cfg.Cancel()
+				continue
+			}
+
+			coinbaseTx := block.Transactions[0]
+			treasuryActive := isTreasuryActive(coinbaseTx)
+
 			// Process mature payments.
-			err = cs.cfg.PayDividends(ctx, header.Height)
+			err = cs.cfg.PayDividends(ctx, header.Height, treasuryActive)
 			if err != nil {
 				log.Errorf("unable to process payments: %v", err)
 				close(msg.Done)
@@ -399,28 +428,21 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					continue
 				}
 
-				// TODO: look into keeping track of payment processing for
-				// confirmed mined work to facilitate recovery when the
-				// getblock calls err.
-				block, err := cs.cfg.GetBlock(ctx, &header.PrevBlock)
-				if err != nil {
-					// Errors generated fetching blocks of confirmed mined
-					// work are curently fatal because payments are
-					// sourced from coinbases. The chainstate process will be
-					// terminated as a result.
-					log.Errorf("unable to fetch block with hash %x: %v",
-						header.PrevBlock, err)
-					close(msg.Done)
-					cs.cfg.Cancel()
-					continue
-				}
-
 				// Generate payments for the confirmed block.
 				source := &PaymentSource{
 					BlockHash: block.BlockHash().String(),
-					Coinbase:  block.Transactions[0].TxHash().String(),
+					Coinbase:  coinbaseTx.TxHash().String(),
 				}
-				amt := dcrutil.Amount(block.Transactions[0].TxOut[2].Value)
+
+				// The coinbase output prior to
+				// [DCP0006](https://github.com/decred/dcps/pull/17)
+				// activation is at the third index position and at
+				// the second index position once DCP0006 is activated.
+				amt := dcrutil.Amount(coinbaseTx.TxOut[1].Value)
+				if !treasuryActive {
+					amt = dcrutil.Amount(coinbaseTx.TxOut[2].Value)
+				}
+
 				err = cs.cfg.GeneratePayments(block.Header.Height, source,
 					amt, work.CreatedOn)
 				if err != nil {
