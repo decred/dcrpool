@@ -15,11 +15,13 @@ import (
 // adminPageData contains all of the necessary information to render the admin
 // template.
 type adminPageData struct {
-	HeaderData       headerData
-	PoolStatsData    poolStatsData
-	ConnectedClients map[string][]*client
-	ArchivedPayments []*archivedPayment
-	PendingPayments  []*pendingPayment
+	HeaderData            headerData
+	PoolStatsData         poolStatsData
+	ConnectedClients      map[string][]*client
+	ArchivedPaymentsTotal string
+	ArchivedPayments      []*archivedPayment
+	PendingPaymentsTotal  string
+	PendingPayments       []*pendingPayment
 }
 
 // adminPage is the handler for "GET /admin". If the current session is
@@ -34,6 +36,12 @@ func (ui *GUI) adminPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clients := ui.cache.getClients()
+
+	totalPending := ui.cache.getPendingPaymentsTotal(pool.PoolFeesK)
+	totalArchived := ui.cache.getArchivedPaymentsTotal(pool.PoolFeesK)
+
+	// We don't need to handle errors on the following cache access because we
+	// are passing hard-coded, good params.
 
 	// Get the 10 most recent pending payments.
 	_, pendingPmts, _ := ui.cache.getPendingPayments(0, 9, pool.PoolFeesK)
@@ -56,9 +64,11 @@ func (ui *GUI) adminPage(w http.ResponseWriter, r *http.Request) {
 			PoolFee:           ui.cfg.PoolFee,
 			SoloPool:          ui.cfg.SoloPool,
 		},
-		ConnectedClients: clients,
-		PendingPayments:  pendingPmts,
-		ArchivedPayments: archivedPmts,
+		ConnectedClients:      clients,
+		PendingPaymentsTotal:  totalPending,
+		PendingPayments:       pendingPmts,
+		ArchivedPaymentsTotal: totalArchived,
+		ArchivedPayments:      archivedPmts,
 	}
 
 	ui.renderTemplate(w, "admin", pageData)

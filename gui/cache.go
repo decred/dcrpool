@@ -10,6 +10,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrpool/pool"
 )
 
@@ -68,19 +69,21 @@ type archivedPayment struct {
 // access. Data returned by the getters is already formatted for display in the
 // GUI, so the formatting does not need to be repeated.
 type Cache struct {
-	blockExplorerURL    string
-	minedWork           []*minedWork
-	minedWorkMtx        sync.RWMutex
-	rewardQuotas        []*rewardQuota
-	rewardQuotasMtx     sync.RWMutex
-	poolHash            string
-	poolHashMtx         sync.RWMutex
-	clients             map[string][]*client
-	clientsMtx          sync.RWMutex
-	pendingPayments     map[string][]*pendingPayment
-	pendingPaymentsMtx  sync.RWMutex
-	archivedPayments    map[string][]*archivedPayment
-	archivedPaymentsMtx sync.RWMutex
+	blockExplorerURL      string
+	minedWork             []*minedWork
+	minedWorkMtx          sync.RWMutex
+	rewardQuotas          []*rewardQuota
+	rewardQuotasMtx       sync.RWMutex
+	poolHash              string
+	poolHashMtx           sync.RWMutex
+	clients               map[string][]*client
+	clientsMtx            sync.RWMutex
+	pendingPayments       map[string][]*pendingPayment
+	pendingPaymentTotals  map[string]dcrutil.Amount
+	pendingPaymentsMtx    sync.RWMutex
+	archivedPayments      map[string][]*archivedPayment
+	archivedPaymentTotals map[string]dcrutil.Amount
+	archivedPaymentsMtx   sync.RWMutex
 }
 
 // InitCache initialises and returns a cache for use in the GUI.
@@ -281,6 +284,7 @@ func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool
 		return pendingPmts[i].Height > pendingPmts[j].Height
 	})
 
+	pendingPaymentTotals := make(map[string]dcrutil.Amount)
 	pendingPayments := make(map[string][]*pendingPayment)
 	for _, p := range pendingPmts {
 		accountID := p.Account
@@ -292,9 +296,14 @@ func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool
 				CreatedOn:     formatUnixTime(p.CreatedOn),
 			},
 		)
+		if _, ok := pendingPaymentTotals[accountID]; !ok {
+			pendingPaymentTotals[accountID] = dcrutil.Amount(0)
+		}
+		pendingPaymentTotals[accountID] += p.Amount
 	}
 
 	c.pendingPaymentsMtx.Lock()
+	c.pendingPaymentTotals = pendingPaymentTotals
 	c.pendingPayments = pendingPayments
 	c.pendingPaymentsMtx.Unlock()
 
@@ -303,6 +312,7 @@ func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool
 		return archivedPmts[i].Height > archivedPmts[j].Height
 	})
 
+	archivedPaymentTotals := make(map[string]dcrutil.Amount)
 	archivedPayments := make(map[string][]*archivedPayment)
 	for _, p := range archivedPmts {
 		accountID := p.Account
@@ -317,15 +327,21 @@ func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool
 				TxURL:         txURL(c.blockExplorerURL, p.TransactionID),
 				TxID:          fmt.Sprintf("%.10s...", p.TransactionID),
 			})
+		if _, ok := archivedPaymentTotals[accountID]; !ok {
+			archivedPaymentTotals[accountID] = dcrutil.Amount(0)
+		}
+		archivedPaymentTotals[accountID] += p.Amount
 	}
 
 	c.archivedPaymentsMtx.Lock()
+	c.archivedPaymentTotals = archivedPaymentTotals
 	c.archivedPayments = archivedPayments
 	c.archivedPaymentsMtx.Unlock()
 }
 
-// getPendingPayments retrieves the cached list of unpaid payments for a given
-// account ID.
+// getArchivedPayments accesses the cached list of unpaid payments for a given
+// account ID. Returns the total number of payments and the set of payments
+// requested with first and last params.
 func (c *Cache) getPendingPayments(first, last int, accountID string) (int, []*pendingPayment, error) {
 	c.pendingPaymentsMtx.RLock()
 	defer c.pendingPaymentsMtx.RUnlock()
@@ -345,8 +361,9 @@ func (c *Cache) getPendingPayments(first, last int, accountID string) (int, []*p
 	return count, pendingPmts[first:min(last, count)], nil
 }
 
-// getArchivedPayments retrieves the cached list of paid payments for a given
-// account ID.
+// getArchivedPayments accesses the cached list of paid payments for a given
+// account ID. Returns the total number of payments and the set of payments
+// requested with first and last params.
 func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, []*archivedPayment, error) {
 	c.archivedPaymentsMtx.RLock()
 	defer c.archivedPaymentsMtx.RUnlock()
@@ -364,4 +381,14 @@ func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, []*
 	}
 
 	return count, archivedPmts[first:min(last, count)], nil
+}
+
+func (c *Cache) getArchivedPaymentsTotal(accountID string) string {
+	total := c.archivedPaymentTotals[accountID]
+	return amount(total)
+}
+
+func (c *Cache) getPendingPaymentsTotal(accountID string) string {
+	total := c.pendingPaymentTotals[accountID]
+	return amount(total)
 }

@@ -5,7 +5,13 @@
         <div class="col-12 p-3">
             <div class="block__content">
 
-                <h1>Pending Payments</h1>
+                <div class="d-flex flex-wrap">
+                    <h1 class="mr-auto text-nowrap">Pending Payments</h1>
+                    
+                    <h2 class="row mr-1">
+                        Total:&nbsp;{{ .PendingPaymentsTotal }}
+                    </h2>
+                </div>
                 
                 <table class="table">
                     <thead>
@@ -37,8 +43,15 @@
     <div class="row">
         <div class="col-12 p-3">
             <div class="block__content">
-                <h1>Payments Received</h1>
-                
+
+                <div class="d-flex flex-wrap">
+                    <h1 class="mr-auto text-nowrap">Payments Received</h1>
+                    
+                    <h2 class="row mr-1">
+                        Total:&nbsp;{{ .ArchivedPaymentsTotal }}
+                    </h2>
+                </div>
+
                 <table class="table">
                     <thead>
                         <tr>
