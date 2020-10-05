@@ -38,7 +38,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		t.Fatalf("unexpected serialization error: %v", err)
 	}
 
-	payDividends := func(context.Context, uint32) error {
+	payDividends := func(context.Context, uint32, bool) error {
 		return nil
 	}
 	generatePayments := func(uint32, *PaymentSource, dcrutil.Amount, int64) error {

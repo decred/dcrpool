@@ -725,7 +725,7 @@ func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[string][]*Paymen
 //
 // TODO: need to break this down into smaller funcs to make it easier to
 // test.
-func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
+func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryActive bool) error {
 	pmts, err := pm.maturePendingPayments(height)
 	if err != nil {
 		return err
@@ -779,7 +779,15 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 	}
 
 	for _, set := range pmts {
-		index := uint32(2)
+		// The coinbase output prior to
+		// [DCP0006](https://github.com/decred/dcps/pull/17)
+		// activation is at the third index position and at
+		// the second index position once DCP0006 is activated.
+		index := uint32(1)
+		if !treasuryActive {
+			index = 2
+		}
+
 		txHash, err := chainhash.NewHashFromStr(set[0].Source.Coinbase)
 		if err != nil {
 			return err
@@ -788,6 +796,11 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 		txOutResult, err := txCreator.GetTxOut(ctx, txHash, index, false)
 		if err != nil {
 			return fmt.Errorf("unable to find tx output: %v", err)
+		}
+
+		if txOutResult == nil {
+			return fmt.Errorf("no transaction output found for hash %s "+
+				"at index %d", txHash, index)
 		}
 
 		// Ensure the referenced prevout to be spent is a coinbase and
