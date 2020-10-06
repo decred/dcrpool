@@ -110,25 +110,85 @@ type PaymentMgr struct {
 
 // NewPaymentMgr creates a new payment manager.
 func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
+	funcName := "newPaymentManager"
+
 	pm := &PaymentMgr{
 		cfg: pCfg,
 	}
 	rand.Seed(time.Now().UnixNano())
+
 	err := pm.cfg.DB.Update(func(tx *bolt.Tx) error {
-		err := pm.loadLastPaymentHeight(tx)
+		pbkt, err := fetchPoolBucket(tx)
 		if err != nil {
 			return err
 		}
-		err = pm.loadLastPaymentPaidOn(tx)
-		if err != nil {
-			return err
+
+		// Initialize the last payment paid-on time.
+		lastPaymentPaidOnB := pbkt.Get(lastPaymentPaidOn)
+		if lastPaymentPaidOnB == nil {
+			b := make([]byte, 8)
+			binary.LittleEndian.PutUint64(b, 0)
+			err := pbkt.Put(lastPaymentPaidOn, b)
+			if err != nil {
+				desc := fmt.Sprintf("%s: unable to load last payment "+
+					"paid-on time: %v", funcName, err)
+				return dbError(ErrPersistEntry, desc)
+			}
+			pm.setLastPaymentPaidOn(0)
+		} else {
+			pm.setLastPaymentPaidOn(bigEndianBytesToNano(lastPaymentPaidOnB))
 		}
-		return pm.loadLastPaymentCreatedOn(tx)
+
+		// Initialize the last payment height.
+		lastPaymentHeightB := pbkt.Get(lastPaymentHeight)
+		if lastPaymentHeightB == nil {
+			b := make([]byte, 4)
+			binary.LittleEndian.PutUint32(b, 0)
+			err := pbkt.Put(lastPaymentHeight, b)
+			if err != nil {
+				desc := fmt.Sprintf("%s: unable to load last payment "+
+					"height: %v", funcName, err)
+				return dbError(ErrPersistEntry, desc)
+			}
+			pm.setLastPaymentHeight(0)
+		} else {
+			pm.setLastPaymentHeight(binary.LittleEndian.Uint32(lastPaymentHeightB))
+		}
+
+		// Initialize the last payment created-on time.
+		lastPaymentCreatedOnB := pbkt.Get(lastPaymentCreatedOn)
+		if lastPaymentCreatedOnB == nil {
+			b := make([]byte, 8)
+			binary.LittleEndian.PutUint64(b, 0)
+			err := pbkt.Put(lastPaymentCreatedOn, b)
+			if err != nil {
+				desc := fmt.Sprintf("%s: unable to load last payment "+
+					"created-on time: %v", funcName, err)
+				return dbError(ErrPersistEntry, desc)
+			}
+			pm.setLastPaymentCreatedOn(0)
+		} else {
+			pm.setLastPaymentCreatedOn(bigEndianBytesToNano(lastPaymentCreatedOnB))
+		}
+
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	return pm, nil
+}
+
+// fetchPoolBucket is a helper function for getting the pool bucket.
+func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	funcName := "fetchPoolBucket"
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
+	}
+	return pbkt, nil
 }
 
 // setLastPaymentHeight updates the last payment height.
@@ -144,16 +204,14 @@ func (pm *PaymentMgr) fetchLastPaymentHeight() uint32 {
 // persistLastPaymentHeight saves the last payment height to the db.
 func (pm *PaymentMgr) persistLastPaymentHeight(tx *bolt.Tx) error {
 	funcName := "persistLastPaymentHeight"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return dbError(ErrBucketNotFound, desc)
+	pbkt, err := fetchPoolBucket(tx)
+	if err != nil {
+		return err
 	}
 	height := atomic.LoadUint32(&pm.lastPaymentHeight)
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint32(b, height)
-	err := pbkt.Put(lastPaymentHeight, b)
+	err = pbkt.Put(lastPaymentHeight, b)
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to persist last payment height: %v",
 			funcName, err)
@@ -165,24 +223,14 @@ func (pm *PaymentMgr) persistLastPaymentHeight(tx *bolt.Tx) error {
 // loadLastPaymentHeight fetches the last payment height from the db.
 func (pm *PaymentMgr) loadLastPaymentHeight(tx *bolt.Tx) error {
 	funcName := "loadLastPaymentHeight"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return dbError(ErrBucketNotFound, desc)
+	pbkt, err := fetchPoolBucket(tx)
+	if err != nil {
+		return err
 	}
 	lastPaymentHeightB := pbkt.Get(lastPaymentHeight)
 	if lastPaymentHeightB == nil {
-		pm.setLastPaymentHeight(0)
-		b := make([]byte, 4)
-		binary.LittleEndian.PutUint32(b, 0)
-		err := pbkt.Put(lastPaymentHeight, b)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to load last payment "+
-				"height: %v", funcName, err)
-			return dbError(ErrPersistEntry, desc)
-		}
-		return nil
+		desc := fmt.Sprintf("%s: last payment height not initialized", funcName)
+		return dbError(ErrFetchEntry, desc)
 	}
 	pm.setLastPaymentHeight(binary.LittleEndian.Uint32(lastPaymentHeightB))
 	return nil
@@ -201,13 +249,11 @@ func (pm *PaymentMgr) fetchLastPaymentPaidOn() uint64 {
 // persistLastPaymentPaidOn saves the last payment paid on time to the db.
 func (pm *PaymentMgr) persistLastPaymentPaidOn(tx *bolt.Tx) error {
 	funcName := "persistLastPaymentPaidOn"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return dbError(ErrBucketNotFound, desc)
+	pbkt, err := fetchPoolBucket(tx)
+	if err != nil {
+		return err
 	}
-	err := pbkt.Put(lastPaymentPaidOn,
+	err = pbkt.Put(lastPaymentPaidOn,
 		nanoToBigEndianBytes(int64(pm.lastPaymentPaidOn)))
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to persist last payment "+
@@ -248,18 +294,6 @@ func (pm *PaymentMgr) pruneShares(tx *bolt.Tx, minNano int64) error {
 	return nil
 }
 
-// fetchPoolBucket is a helper function for getting the pool bucket.
-func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	funcName := "fetchPoolBucket"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	return pbkt, nil
-}
-
 // bigEndianBytesToNano returns nanosecond time from the provided
 // big endian bytes.
 func bigEndianBytesToNano(b []byte) uint64 {
@@ -275,16 +309,8 @@ func (pm *PaymentMgr) loadLastPaymentPaidOn(tx *bolt.Tx) error {
 	}
 	lastPaymentPaidOnB := pbkt.Get(lastPaymentPaidOn)
 	if lastPaymentPaidOnB == nil {
-		pm.setLastPaymentPaidOn(0)
-		b := make([]byte, 8)
-		binary.LittleEndian.PutUint64(b, 0)
-		err := pbkt.Put(lastPaymentPaidOn, b)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to load last payment "+
-				"paid-on time: %v", funcName, err)
-			return dbError(ErrPersistEntry, desc)
-		}
-		return nil
+		desc := fmt.Sprintf("%s: last payment paid-on not initialized", funcName)
+		return dbError(ErrFetchEntry, desc)
 	}
 	pm.setLastPaymentPaidOn(bigEndianBytesToNano(lastPaymentPaidOnB))
 	return nil
@@ -317,7 +343,7 @@ func (pm *PaymentMgr) persistLastPaymentCreatedOn(tx *bolt.Tx) error {
 	return nil
 }
 
-// loadLastPaymentCreaedOn fetches the last payment created on time from the db.
+// loadLastPaymentCreatedOn fetches the last payment created on time from the db.
 func (pm *PaymentMgr) loadLastPaymentCreatedOn(tx *bolt.Tx) error {
 	funcName := "loadLastPaymentCreatedOn"
 	pbkt, err := fetchPoolBucket(tx)
@@ -326,16 +352,9 @@ func (pm *PaymentMgr) loadLastPaymentCreatedOn(tx *bolt.Tx) error {
 	}
 	lastPaymentCreatedOnB := pbkt.Get(lastPaymentCreatedOn)
 	if lastPaymentCreatedOnB == nil {
-		pm.setLastPaymentCreatedOn(0)
-		b := make([]byte, 8)
-		binary.LittleEndian.PutUint64(b, 0)
-		err := pbkt.Put(lastPaymentCreatedOn, b)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to load last payment "+
-				"created-on time: %v", funcName, err)
-			return dbError(ErrPersistEntry, desc)
-		}
-		return nil
+		desc := fmt.Sprintf("%s: last payment created-on not initialized",
+			funcName)
+		return dbError(ErrFetchEntry, desc)
 	}
 	pm.setLastPaymentCreatedOn(bigEndianBytesToNano(lastPaymentCreatedOnB))
 	return nil
@@ -829,7 +848,7 @@ func (pm *PaymentMgr) pruneOrphanedPayments(ctx context.Context, pmts map[string
 	return pmts, nil
 }
 
-// applyTxFees determines the trasaction fees needed for the payout transaction
+// applyTxFees determines the transaction fees needed for the payout transaction
 // and deducts portions of the fee from outputs of participating accounts
 // being paid to.
 //
@@ -837,7 +856,7 @@ func (pm *PaymentMgr) pruneOrphanedPayments(ctx context.Context, pmts map[string
 // the ratio of the amount being paid to the total transaction output minus
 // pool fees.
 func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs map[string]dcrutil.Amount,
-	tIn dcrutil.Amount, tOut dcrutil.Amount, feeAddr dcrutil.Address) (dcrutil.Amount, dcrutil.Amount, error) {
+	tOut dcrutil.Amount, feeAddr dcrutil.Address) (dcrutil.Amount, dcrutil.Amount, error) {
 	funcName := "applyTxFees"
 	if len(inputs) == 0 {
 		desc := fmt.Sprint("%s: cannot create a payout transaction "+
@@ -902,7 +921,6 @@ txConfs:
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debugf("existing txConfs")
 			break txConfs
 
 		default:
@@ -921,7 +939,7 @@ txConfs:
 			if coinbase.Confirmations >= maxSpendableConfs {
 				hash, err := chainhash.NewHash(coinbase.TxHash)
 				if err != nil {
-					desc := fmt.Sprintf("%s: unable to create block hash: %v",
+					desc := fmt.Sprintf("%s: unable to create tx hash: %v",
 						funcName, err)
 					return poolError(ErrCreateHash, desc)
 				}
@@ -938,9 +956,8 @@ txConfs:
 	}
 
 	if len(txHashes) != 0 {
-		log.Debugf("txHashes are %d", len(txHashes))
-		desc := fmt.Sprintf("%s: unable to confirm %d coinbase "+
-			"trasaction(s)", funcName, len(txHashes))
+		desc := fmt.Sprintf("%s: cancelled confirming %d coinbase "+
+			"transaction(s)", funcName, len(txHashes))
 		return poolError(ErrContextCancelled, desc)
 	}
 
@@ -949,18 +966,20 @@ txConfs:
 
 // generatePayoutTxDetails creates the payout transaction inputs and outputs
 // from the provided payments
-func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator, payments map[string][]*Payment) ([]chainjson.TransactionInput,
-	map[string]*chainhash.Hash, map[string]dcrutil.Amount, dcrutil.Address, dcrutil.Amount, dcrutil.Amount, error) {
+func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator, feeAddr dcrutil.Address, payments map[string][]*Payment, treasuryActive bool) ([]chainjson.TransactionInput,
+	map[string]*chainhash.Hash, map[string]dcrutil.Amount, dcrutil.Amount, error) {
 	funcName := "generatePayoutTxDetails"
 
-	// The fee address is being picked at random from the set of pool fee
-	// addresses to make it difficult for third-parties wanting to track
-	// pool fees collected by the pool and ultimately determine the
-	// cumulative value accrued by pool operators.
-	feeAddr := pm.cfg.PoolFeeAddrs[rand.Intn(len(pm.cfg.PoolFeeAddrs))]
+	// The coinbase output prior to
+	// [DCP0006](https://github.com/decred/dcps/pull/17)
+	// activation is at the third index position and at
+	// the second index position once DCP0006 is activated.
+	coinbaseIndex := uint32(1)
+	if !treasuryActive {
+		coinbaseIndex = 2
+	}
 
 	var tIn, tOut dcrutil.Amount
-	coinbaseIndex := uint32(2)
 	inputs := make([]chainjson.TransactionInput, 0)
 	inputTxHashes := make(map[string]*chainhash.Hash)
 	outputs := make(map[string]dcrutil.Amount)
@@ -970,28 +989,22 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to create tx hash: %v",
 				funcName, err)
-			return nil, nil, nil, nil, 0, 0, poolError(ErrCreateHash, desc)
+			return nil, nil, nil, 0, poolError(ErrCreateHash, desc)
 		}
 
-		// Ensure the referenced prevout to be spent is a coinbase and
-		// spendable at the current height.
+		// Ensure the referenced prevout to be spent is spendable at
+		// the current height.
 		txOutResult, err := txC.GetTxOut(ctx, txHash, coinbaseIndex, false)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to find tx output: %v",
 				funcName, err)
-			return nil, nil, nil, nil, 0, 0, poolError(ErrTxOut, desc)
-		}
-		if !txOutResult.Coinbase {
-			desc := fmt.Sprintf("%s: referenced output at index %d "+
-				"for tx %v is not a coinbase",
-				funcName, coinbaseIndex, txHash.String())
-			return nil, nil, nil, nil, 0, 0, poolError(ErrCoinbase, desc)
+			return nil, nil, nil, 0, poolError(ErrTxOut, desc)
 		}
 		if txOutResult.Confirmations < int64(pm.cfg.ActiveNet.CoinbaseMaturity+1) {
 			desc := fmt.Sprintf("%s: referenced coinbase at "+
 				"index %d for tx %v is not spendable", funcName,
 				coinbaseIndex, txHash.String())
-			return nil, nil, nil, nil, 0, 0, poolError(ErrCoinbase, desc)
+			return nil, nil, nil, 0, poolError(ErrCoinbase, desc)
 		}
 
 		// Create the transaction input using the provided prevOut.
@@ -1006,12 +1019,13 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 
 		prevOutV, err := dcrutil.NewAmount(in.Amount)
 		if err != nil {
-			desc := fmt.Sprintf("unable create the input amount: %v", err)
-			return nil, nil, nil, nil, 0, 0, poolError(ErrCreateAmount, desc)
+			desc := fmt.Sprintf("%s: unable create the input amount: %v",
+				funcName, err)
+			return nil, nil, nil, 0, poolError(ErrCreateAmount, desc)
 		}
 		tIn += prevOutV
 
-		// Generate the outputs paying dividends to as well as pool fees.
+		// Generate the outputs paying dividends as well as pool fees.
 		for _, pmt := range pmtSet {
 			if pmt.Account == PoolFeesK {
 				_, ok := outputs[feeAddr.String()]
@@ -1027,7 +1041,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 
 			acc, err := FetchAccount(pm.cfg.DB, []byte(pmt.Account))
 			if err != nil {
-				return nil, nil, nil, nil, 0, 0, err
+				return nil, nil, nil, 0, err
 			}
 			_, ok := outputs[acc.Address]
 			if !ok {
@@ -1047,7 +1061,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 		desc := fmt.Sprintf("%s: total output values for the "+
 			"transaction (%s) is greater than the provided inputs (%s)",
 			funcName, tOut, tIn)
-		return nil, nil, nil, nil, 0, 0, poolError(ErrCreateTx, desc)
+		return nil, nil, nil, 0, poolError(ErrCreateTx, desc)
 	}
 
 	diff := tIn - tOut
@@ -1055,14 +1069,14 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 		desc := fmt.Sprintf("%s: difference between total output "+
 			"values and the provided inputs (%s) exceeds the maximum "+
 			"allowed for rounding errors (%s)", funcName, diff, maxRoundingDiff)
-		return nil, nil, nil, nil, 0, 0, poolError(ErrCreateTx, desc)
+		return nil, nil, nil, 0, poolError(ErrCreateTx, desc)
 	}
 
-	return inputs, inputTxHashes, outputs, feeAddr, tIn, tOut, nil
+	return inputs, inputTxHashes, outputs, tOut, nil
 }
 
 // PayDividends pays mature mining rewards to participating accounts.
-func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
+func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryActive bool) error {
 	funcName := "payDividends"
 	mPmts, err := pm.maturePendingPayments(height)
 	if err != nil {
@@ -1088,13 +1102,19 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 		return err
 	}
 
-	inputs, inputTxHashes, outputs, feeAddr, tIn, tOut, err :=
-		pm.generatePayoutTxDetails(ctx, txC, pmts)
+	// The fee address is being picked at random from the set of pool fee
+	// addresses to make it difficult for third-parties wanting to track
+	// pool fees collected by the pool and ultimately determine the
+	// cumulative value accrued by pool operators.
+	feeAddr := pm.cfg.PoolFeeAddrs[rand.Intn(len(pm.cfg.PoolFeeAddrs))]
+
+	inputs, inputTxHashes, outputs, tOut, err :=
+		pm.generatePayoutTxDetails(ctx, txC, feeAddr, pmts, treasuryActive)
 	if err != nil {
 		return err
 	}
 
-	_, estFee, err := pm.applyTxFees(inputs, outputs, tIn, tOut, feeAddr)
+	_, estFee, err := pm.applyTxFees(inputs, outputs, tOut, feeAddr)
 	if err != nil {
 		return err
 	}
@@ -1128,7 +1148,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32) error {
 	defer tCancel()
 	err = pm.confirmCoinbases(tCtx, inputTxHashes, maxSpendableHeight)
 	if err != nil {
-		// Do not error if coinbase spendable confirmatiom requests are
+		// Do not error if coinbase spendable confirmation requests are
 		// terminated by the context cancellation.
 		if !errors.Is(err, ErrContextCancelled) {
 			return err
