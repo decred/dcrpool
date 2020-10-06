@@ -55,6 +55,7 @@ const (
 	defaultDesignation           = "YourPoolNameHere"
 	defaultMaxConnectionsPerHost = 100 // 100 connected clients per host
 	defaultWalletAccount         = 0
+	defaultCoinbaseConfTimeout   = time.Minute * 5 // one block time
 )
 
 var (
@@ -114,6 +115,7 @@ type config struct {
 	DR5Port               uint32        `long:"dr5port" ini-name:"dr5port" description:"Antminer DR5 connection port."`
 	D1Port                uint32        `long:"d1port" ini-name:"d1port" description:"Whatsminer D1 connection port."`
 	DCR1Port              uint32        `long:"dcr1port" ini-name:"dcr1port" description:"Obelisk DCR1 connection port."`
+	CoinbaseConfTimeout   time.Duration `long:"conftimeout" ini-name:"conftimeout" description:"The duration to wait for coinbase confirmations."`
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
 	net                   *params
@@ -345,6 +347,7 @@ func loadConfig() (*config, []string, error) {
 		D1Port:                defaultD1Port,
 		DCR1Port:              defaultDCR1Port,
 		WalletAccount:         defaultWalletAccount,
+		CoinbaseConfTimeout:   defaultCoinbaseConfTimeout,
 	}
 
 	// Service options which are only added on Windows.

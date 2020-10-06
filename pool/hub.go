@@ -135,6 +135,7 @@ type HubConfig struct {
 	MinerPorts            map[string]uint32
 	MaxConnectionsPerHost uint32
 	WalletAccount         uint32
+	CoinbaseConfTimeout   time.Duration
 }
 
 // Hub maintains the set of active clients and facilitates message broadcasting
@@ -248,6 +249,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		GetTxConfNotifications: h.getTxConfNotifications,
 		FetchTxCreator:         func() TxCreator { return h.nodeConn },
 		FetchTxBroadcaster:     func() TxBroadcaster { return h.walletConn },
+		CoinbaseConfTimeout:    h.cfg.CoinbaseConfTimeout,
 	}
 
 	var err error
