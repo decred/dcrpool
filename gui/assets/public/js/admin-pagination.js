@@ -11,7 +11,7 @@ if ($('#pending-payments-page-select').length) {
             var html = '';
             if (data.length > 0) {
                 $.each(data, function (_, item) {
-                    html += '<tr><td><a href="' +  item.workheighturl + '" rel="noopener noreferrer">' +  item.workheight + '</a></td><td>' +  item.createdon + '</td><td>' +  item.amount + '</td></tr>';
+                    html += '<tr><td><a href="' +  item.workheighturl + '" rel="noopener noreferrer">' +  item.workheight + '</a></td><td>' +  item.estimatedpaymentheight + '</td><td>' +  item.amount + '</td></tr>';
                 });
             } else {
                 html += '<tr><td colspan="100%"><span class="no-data">No pending payments</span></td></tr>';
@@ -28,7 +28,7 @@ if ($('#archived-payments-page-select').length) {
             var html = '';
             if (data.length > 0) {
                 $.each(data, function (_, item) {
-                    html += '<tr><td><a href="' +  item.workheighturl + '" rel="noopener noreferrer">' +  item.workheight + '</a></td><td><a href="' +  item.paidheighturl + '" rel="noopener noreferrer">' +  item.paidheight + '</a></td><td>' +  item.createdon + '</td><td>' +  item.amount + '</td><td><a href="' +  item.txurl + '" rel="noopener noreferrer">' +  item.txid + '</a></td></tr>';
+                    html += '<tr><td><a href="' +  item.workheighturl + '" rel="noopener noreferrer">' +  item.workheight + '</a></td><td><a href="' +  item.paidheighturl + '" rel="noopener noreferrer">' +  item.paidheight + '</a></td><td>' +  item.amount + '</td><td><a href="' +  item.txurl + '" rel="noopener noreferrer">' +  item.txid + '</a></td></tr>';
                 });
             } else {
                 html += '<tr><td colspan="100%"><span class="no-data">No received payments</span></td></tr>';

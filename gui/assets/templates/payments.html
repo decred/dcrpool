@@ -1,8 +1,8 @@
 {{define "payments"}}
     
-    {{ if .PendingPayments }}
     <div class="row">
-        <div class="col-12 p-3">
+        {{ if .PendingPayments }}
+        <div class="col-xl p-3">
             <div class="block__content">
 
                 <div class="d-flex flex-wrap">
@@ -17,7 +17,7 @@
                     <thead>
                         <tr>
                             <th>Work Height</th>
-                            <th>Created On</th>
+                            <th>Est. Payment Height</th>
                             <th>Amount</th>
                         </tr>
                     </thead>
@@ -26,7 +26,7 @@
                         <tr>
                             <td><a href="{{ .WorkHeightURL }}"
                                     rel="noopener noreferrer">{{ .WorkHeight }}</a></td>
-                            <td>{{ .CreatedOn }}</td>
+                            <td>{{ .EstimatedPaymentHeight }}</td>
                             <td>{{ .Amount }}</td>
                         </tr>
                         {{end}}
@@ -37,11 +37,9 @@
 
             </div>
         </div>
-    </div>
-    {{end}}
+        {{end}}
 
-    <div class="row">
-        <div class="col-12 p-3">
+        <div class="col-xl p-3">
             <div class="block__content">
 
                 <div class="d-flex flex-wrap">
@@ -57,7 +55,6 @@
                         <tr>
                             <th>Work Height</th>
                             <th>Payment Height</th>
-                            <th>Created On</th>
                             <th>Amount</th>
                             <th>Tx ID</th>
                         </tr>
@@ -69,7 +66,6 @@
                                     rel="noopener noreferrer">{{ .WorkHeight }}</a></td>
                             <td><a href="{{ .PaidHeightURL }}"
                                     rel="noopener noreferrer">{{ .PaidHeight }}</a></td>
-                            <td>{{ .CreatedOn }}</td>
                             <td>{{ .Amount }}</td>
                             <td><a href="{{ .TxURL }}"
                                     rel="noopener noreferrer">{{ .TxID }}</a>
