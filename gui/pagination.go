@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/decred/dcrpool/pool"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
 )
 
 type paginationPayload struct {
@@ -201,6 +203,74 @@ func (ui *GUI) paginatedArchivedPaymentsByAccount(w http.ResponseWriter, r *http
 	accountID := mux.Vars(r)["accountID"]
 
 	count, payments, err := ui.cache.getArchivedPayments(first, last, accountID)
+	if err != nil {
+		log.Warn(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	sendJSONResponse(w, paginationPayload{
+		Count: count,
+		Data:  payments,
+	})
+}
+
+// paginatedArchivedPoolPayments is the handler for "GET
+// /admin/payments/archived". It uses parameters pageNumber, pageSize and
+// accountID to prepare a json payload describing payments made to the pool, as
+// well as the total count of all paid payments.
+// Returns an error if the current session is not authenticated as an admin.
+func (ui *GUI) paginatedArchivedPoolPayments(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(sessionKey).(*sessions.Session)
+
+	if session.Values["IsAdmin"] != true {
+		log.Warn("Unauthorized access")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	first, last, err := getPaginationParams(r)
+	if err != nil {
+		log.Warn(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	count, payments, err := ui.cache.getArchivedPayments(first, last, pool.PoolFeesK)
+	if err != nil {
+		log.Warn(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	sendJSONResponse(w, paginationPayload{
+		Count: count,
+		Data:  payments,
+	})
+}
+
+// paginatedPendingPoolPayments is the handler for "GET
+// /admin/payments/pending". It uses parameters pageNumber, pageSize and
+// accountID to prepare a json payload describing unpaid payments due to the
+// pool, as well as the total count of all unpaid payments.
+// Returns an error if the current session is not authenticated as an admin.
+func (ui *GUI) paginatedPendingPoolPayments(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(sessionKey).(*sessions.Session)
+
+	if session.Values["IsAdmin"] != true {
+		log.Warn("Unauthorized access")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	first, last, err := getPaginationParams(r)
+	if err != nil {
+		log.Warn(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	count, payments, err := ui.cache.getPendingPayments(first, last, pool.PoolFeesK)
 	if err != nil {
 		log.Warn(err)
 		w.WriteHeader(http.StatusBadRequest)

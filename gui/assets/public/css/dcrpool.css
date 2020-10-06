@@ -8781,6 +8781,11 @@ table td {
   padding-bottom: 10px;
 }
 
+.block__content h2 {
+  color: #3D5873;
+  font-size: 22px;
+}
+
 .dcr-label {
   background: #D3F0FD 0% 0% no-repeat padding-box;
   border-radius: 3px;

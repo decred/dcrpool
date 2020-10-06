@@ -50,8 +50,8 @@ var (
 	soloPool = []byte("solopool")
 	// csrfSecret is the CSRF secret key.
 	csrfSecret = []byte("csrfsecret")
-	// poolFeesK is the key used to track pool fee payouts.
-	poolFeesK = "fees"
+	// PoolFeesK is the key used to track pool fee payouts.
+	PoolFeesK = "fees"
 	// backup is the database backup file name.
 	backupFile = "backup.kv"
 )

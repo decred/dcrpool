@@ -1,0 +1,93 @@
+{{define "payments"}}
+    
+    {{ if .PendingPayments }}
+    <div class="row">
+        <div class="col-12 p-3">
+            <div class="block__content">
+
+                <div class="d-flex flex-wrap">
+                    <h1 class="mr-auto text-nowrap">Pending Payments</h1>
+                    
+                    <h2 class="row mr-1">
+                        Total:&nbsp;{{ .PendingPaymentsTotal }}
+                    </h2>
+                </div>
+                
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Work Height</th>
+                            <th>Created On</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pending-payments-table">
+                        {{ range .PendingPayments }}
+                        <tr>
+                            <td><a href="{{ .WorkHeightURL }}"
+                                    rel="noopener noreferrer">{{ .WorkHeight }}</a></td>
+                            <td>{{ .CreatedOn }}</td>
+                            <td>{{ .Amount }}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+
+                <div id="pending-payments-page-select" class="page-select"></div>
+
+            </div>
+        </div>
+    </div>
+    {{end}}
+
+    <div class="row">
+        <div class="col-12 p-3">
+            <div class="block__content">
+
+                <div class="d-flex flex-wrap">
+                    <h1 class="mr-auto text-nowrap">Payments Received</h1>
+                    
+                    <h2 class="row mr-1">
+                        Total:&nbsp;{{ .ArchivedPaymentsTotal }}
+                    </h2>
+                </div>
+
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Work Height</th>
+                            <th>Payment Height</th>
+                            <th>Created On</th>
+                            <th>Amount</th>
+                            <th>Tx ID</th>
+                        </tr>
+                    </thead>
+                    <tbody id="archived-payments-table">
+                        {{ range .ArchivedPayments }}
+                        <tr>
+                            <td><a href="{{ .WorkHeightURL }}"
+                                    rel="noopener noreferrer">{{ .WorkHeight }}</a></td>
+                            <td><a href="{{ .PaidHeightURL }}"
+                                    rel="noopener noreferrer">{{ .PaidHeight }}</a></td>
+                            <td>{{ .CreatedOn }}</td>
+                            <td>{{ .Amount }}</td>
+                            <td><a href="{{ .TxURL }}"
+                                    rel="noopener noreferrer">{{ .TxID }}</a>
+                            </td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td colspan="100%"><span class="no-data">No payments received</span></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+                
+                <div id="archived-payments-page-select" class="page-select"></div>
+
+            </div>
+        </div>
+
+    </div>
+   
+{{end}}

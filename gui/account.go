@@ -14,14 +14,16 @@ import (
 // accountPageData contains all of the necessary information to render the
 // account template.
 type accountPageData struct {
-	HeaderData       headerData
-	MinedWork        []*minedWork
-	ArchivedPayments []*archivedPayment
-	PendingPayments  []*pendingPayment
-	ConnectedClients []*client
-	AccountID        string
-	Address          string
-	BlockExplorerURL string
+	HeaderData            headerData
+	MinedWork             []*minedWork
+	ArchivedPaymentsTotal string
+	ArchivedPayments      []*archivedPayment
+	PendingPaymentsTotal  string
+	PendingPayments       []*pendingPayment
+	ConnectedClients      []*client
+	AccountID             string
+	Address               string
+	BlockExplorerURL      string
 }
 
 // account is the handler for "GET /account". Renders the account template if
@@ -43,6 +45,12 @@ func (ui *GUI) account(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	totalPending := ui.cache.getPendingPaymentsTotal(accountID)
+	totalArchived := ui.cache.getArchivedPaymentsTotal(accountID)
+
+	// We don't need to handle errors on the following cache access because we
+	// are passing hard-coded, good params.
+
 	// Get the 10 most recently mined blocks by this account.
 	_, recentWork, _ := ui.cache.getMinedWorkByAccount(0, 9, accountID)
 
@@ -61,13 +69,15 @@ func (ui *GUI) account(w http.ResponseWriter, r *http.Request) {
 			Designation: ui.cfg.Designation,
 			ShowMenu:    true,
 		},
-		MinedWork:        recentWork,
-		PendingPayments:  pendingPmts,
-		ArchivedPayments: archivedPmts,
-		ConnectedClients: clients,
-		AccountID:        accountID,
-		Address:          address,
-		BlockExplorerURL: ui.cfg.BlockExplorerURL,
+		MinedWork:             recentWork,
+		PendingPaymentsTotal:  totalPending,
+		PendingPayments:       pendingPmts,
+		ArchivedPaymentsTotal: totalArchived,
+		ArchivedPayments:      archivedPmts,
+		ConnectedClients:      clients,
+		AccountID:             accountID,
+		Address:               address,
+		BlockExplorerURL:      ui.cfg.BlockExplorerURL,
 	}
 
 	ui.renderTemplate(w, "account", data)
