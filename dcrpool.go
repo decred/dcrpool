@@ -107,6 +107,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		MinerPorts:            minerPorts,
 		MaxConnectionsPerHost: cfg.MaxConnectionsPerHost,
 		WalletAccount:         cfg.WalletAccount,
+		CoinbaseConfTimeout:   cfg.CoinbaseConfTimeout,
 	}
 	p.hub, err = pool.NewHub(p.cancel, hcfg)
 	if err != nil {
