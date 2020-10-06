@@ -22,6 +22,7 @@ func TestErrorKindStringer(t *testing.T) {
 		{ErrDBUpgrade, "ErrDBUpgrade"},
 		{ErrPersistEntry, "ErrPersistEntry"},
 		{ErrDeleteEntry, "ErrDeleteEntry"},
+		{ErrFetchEntry, "ErrFetchEntry"},
 		{ErrBackup, "ErrBackup"},
 		{ErrParse, "ErrParse"},
 		{ErrDecode, "ErrDecode"},

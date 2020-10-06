@@ -36,6 +36,9 @@ const (
 	// ErrDeleteEntry indicates a database entry delete error.
 	ErrDeleteEntry = ErrorKind("ErrDeleteEntry")
 
+	// ErrFetchEntry indicates a database entry fetching error.
+	ErrFetchEntry = ErrorKind("ErrFetchEntry")
+
 	// ErrBackup indicates database backup error.
 	ErrBackup = ErrorKind("ErrBackup")
 

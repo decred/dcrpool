@@ -537,8 +537,8 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
-	// Ensure backed up values to the database persist and load as expected.
-	err = db.Update(func(tx *bolt.Tx) error {
+	// Ensure backed up values to the database load as expected.
+	err = db.View(func(tx *bolt.Tx) error {
 		err = mgr.loadLastPaymentHeight(tx)
 		if err != nil {
 			return fmt.Errorf("unable to load last payment height: %v", err)
@@ -547,7 +547,11 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		if err != nil {
 			return fmt.Errorf("unable to load last payment created on: %v", err)
 		}
-		return mgr.loadLastPaymentPaidOn(tx)
+		err = mgr.loadLastPaymentPaidOn(tx)
+		if err != nil {
+			return fmt.Errorf("unable to load last payment paid on: %v", err)
+		}
+		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1080,7 +1084,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	tOut := tIn
 
 	_, txFee, err := mgr.applyTxFees([]chainjson.TransactionInput{in},
-		out, tIn, tOut, poolFeeAddrs)
+		out, tOut, poolFeeAddrs)
 	if err != nil {
 		t.Fatalf("unexpected applyTxFees error: %v", err)
 	}
@@ -1104,14 +1108,14 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure providing no tx inputs triggers an error.
 	_, _, err = mgr.applyTxFees([]chainjson.TransactionInput{},
-		out, tIn, tOut, poolFeeAddrs)
+		out, tOut, poolFeeAddrs)
 	if !errors.Is(err, ErrTxIn) {
 		t.Fatalf("expected a tx input error: %v", err)
 	}
 
 	// Ensure providing no tx outputs triggers an error.
 	_, _, err = mgr.applyTxFees([]chainjson.TransactionInput{in},
-		make(map[string]dcrutil.Amount), tIn, tOut, poolFeeAddrs)
+		make(map[string]dcrutil.Amount), tOut, poolFeeAddrs)
 	if !errors.Is(err, ErrTxOut) {
 		cancel()
 		t.Fatalf("expected a tx output error: %v", err)
@@ -1219,6 +1223,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mPmts[zeroSource.Coinbase] = []*Payment{pmtA}
 	pmtB = NewPayment(yID, randSource, amt, height, estMaturity)
 	mPmts[randSource.Coinbase] = []*Payment{pmtB}
+	treasuryActive := true
 
 	// Ensure generating payout tx details returns an error if fetching txOut
 	// information fails.
@@ -1227,29 +1232,11 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 			return nil, fmt.Errorf("unable to fetch txOut")
 		},
 	}
-	_, _, _, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, mPmts)
+	_, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, poolFeeAddrs,
+		mPmts, treasuryActive)
 	if err == nil {
 		cancel()
 		t.Fatalf("expected a fetch txOut error")
-	}
-
-	// Ensure generating payout tx details returns an error if the returned
-	// output is not a coinbase.
-	txC = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
-			return &chainjson.GetTxOutResult{
-				BestBlock:     chainhash.Hash{0}.String(),
-				Confirmations: 50,
-				Value:         5,
-				Coinbase:      false,
-			}, nil
-		},
-	}
-
-	_, _, _, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, mPmts)
-	if !errors.Is(err, ErrCoinbase) {
-		cancel()
-		t.Fatalf("expected a coinbase txOut error")
 	}
 
 	// Ensure generating payout tx details returns an error if the returned
@@ -1265,7 +1252,8 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		},
 	}
 
-	_, _, _, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, mPmts)
+	_, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, poolFeeAddrs,
+		mPmts, treasuryActive)
 	if !errors.Is(err, ErrCoinbase) {
 		cancel()
 		t.Fatalf("expected a spendable error")
@@ -1288,7 +1276,8 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		},
 	}
 
-	_, _, _, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, mPmts)
+	_, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, poolFeeAddrs,
+		mPmts, treasuryActive)
 	if !errors.Is(err, ErrValueNotFound) {
 		cancel()
 		t.Fatalf("expected an account not found error")
@@ -1308,7 +1297,8 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		},
 	}
 
-	_, _, _, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, mPmts)
+	_, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, poolFeeAddrs,
+		mPmts, treasuryActive)
 	if !errors.Is(err, ErrCreateTx) {
 		cancel()
 		t.Fatalf("expected an input output mismatch error")
@@ -1328,7 +1318,8 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		},
 	}
 
-	_, _, _, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, mPmts)
+	_, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, poolFeeAddrs,
+		mPmts, treasuryActive)
 	if !errors.Is(err, ErrCreateTx) {
 		cancel()
 		t.Fatalf("expected an unclaimed input value error, got %v", err)
@@ -1346,7 +1337,9 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		},
 	}
 
-	inputs, inputTxHashes, outputs, _, _, _, err := mgr.generatePayoutTxDetails(ctx, txC, mPmts)
+	inputs, inputTxHashes, outputs, _, err := mgr.generatePayoutTxDetails(ctx,
+		txC, poolFeeAddrs,
+		mPmts, treasuryActive)
 	if err != nil {
 		cancel()
 		t.Fatalf("unexpected payout tx details error, got %v", err)
@@ -1413,7 +1406,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure dividend payments returns no error if there are no mature
 	// payments to work with.
-	err = mgr.payDividends(ctx, estMaturity-1)
+	err = mgr.payDividends(ctx, estMaturity-1, treasuryActive)
 	if err != nil {
 		cancel()
 		t.Fatal("expected no error since there are no mature payments")
@@ -1425,7 +1418,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		return nil
 	}
 
-	err = mgr.payDividends(ctx, estMaturity+1)
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if !errors.Is(err, ErrDisconnected) {
 		cancel()
 		t.Fatalf("expected a nil tx creator error, got %v", err)
@@ -1440,7 +1433,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		return -1, fmt.Errorf("unable to confirm blocks")
 	}
 
-	err = mgr.payDividends(ctx, estMaturity+1)
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if err == nil {
 		cancel()
 		t.Fatalf("expected a prune orphan payments error")
@@ -1459,7 +1452,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		return 16, nil
 	}
 
-	err = mgr.payDividends(ctx, estMaturity+1)
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if !errors.Is(err, ErrTxOut) {
 		cancel()
 		t.Fatalf("expected a generate payout tx details error, got %v", err)
@@ -1473,7 +1466,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		return -1, nil
 	}
 
-	err = mgr.payDividends(ctx, estMaturity+1)
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if !errors.Is(err, ErrTxIn) {
 		cancel()
 		t.Fatalf("expected an apply tx fee error, got %v", err)
@@ -1499,7 +1492,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		return nil, fmt.Errorf("unable to fetch tx conf notification source")
 	}
 
-	err = mgr.payDividends(ctx, estMaturity+1)
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if err == nil {
 		cancel()
 		t.Fatalf("expected a coinbase confirmation error, got %v", err)
@@ -1551,7 +1544,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		}, nil
 	}
 
-	err = mgr.payDividends(ctx, estMaturity+1)
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if err == nil {
 		cancel()
 		t.Fatal("expected a create transaction error")
@@ -1589,7 +1582,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		}, nil
 	}
 
-	err = mgr.payDividends(ctx, estMaturity+1)
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if !errors.Is(err, ErrDisconnected) {
 		cancel()
 		t.Fatalf("expected a fetch tx broadcaster error, got %v", err)
@@ -1620,7 +1613,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		}
 	}
 
-	err = mgr.payDividends(ctx, estMaturity+1)
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if !errors.Is(err, ErrSignTx) {
 		cancel()
 		t.Fatalf("expected a signing error, got %v", err)
@@ -1649,7 +1642,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		}
 	}
 
-	err = mgr.payDividends(ctx, estMaturity+1)
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if !errors.Is(err, ErrPublishTx) {
 		cancel()
 		t.Fatalf("expected a publish error, got %v", err)
@@ -1672,7 +1665,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		}
 	}
 
-	err = mgr.payDividends(ctx, estMaturity+1)
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if err != nil {
 		cancel()
 		t.Fatalf("unexpected dividend payment error, got %v", err)
