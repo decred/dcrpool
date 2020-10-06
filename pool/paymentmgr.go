@@ -59,6 +59,12 @@ type TxBroadcaster interface {
 	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
 }
 
+// confNotifMsg represents a tx confirmation notification messege.
+type confNotifMsg struct {
+	resp *walletrpc.ConfirmationNotificationsResponse
+	err  error
+}
+
 // PaymentMgrConfig contains all of the configuration values which should be
 // provided when creating a new instance of PaymentMgr.
 type PaymentMgrConfig struct {
@@ -896,6 +902,34 @@ func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs m
 	return sansFees, estFee, nil
 }
 
+// fetchTxConfNotifications is a helper function for fetching tx confirmation
+// notifications without blocking.
+func fetchTxConfNotifications(ctx context.Context, notifSource func() (*walletrpc.ConfirmationNotificationsResponse, error)) (*walletrpc.ConfirmationNotificationsResponse, error) {
+	funcName := "fetchTxConfNotifications"
+	notifCh := make(chan confNotifMsg)
+	go func(ch chan confNotifMsg) {
+		resp, err := notifSource()
+		ch <- confNotifMsg{
+			resp: resp,
+			err:  err,
+		}
+	}(notifCh)
+
+	select {
+	case <-ctx.Done():
+		log.Tracef("%s: unable to fx tx confirmation notifications", funcName)
+		return nil, ErrContextCancelled
+	case notif := <-notifCh:
+		close(notifCh)
+		if notif.err != nil {
+			desc := fmt.Sprintf("%s: unable to fetch tx confirmation "+
+				"notifications, %s", funcName, notif.err)
+			return nil, poolError(ErrTxConf, desc)
+		}
+		return notif.resp, nil
+	}
+}
+
 // confirmCoinbases ensures the coinbases referenced by the provided
 // transaction hashes are spendable by the expected maximum spendable height.
 //
@@ -927,11 +961,13 @@ txConfs:
 			// Non-blocking receive fallthrough.
 		}
 
-		resp, err := notifSource()
+		resp, err := fetchTxConfNotifications(ctx, notifSource)
 		if err != nil {
-			desc := fmt.Sprintf("%s: unable to fetch tx confirmations: %v",
-				funcName, err)
-			return poolError(ErrTxConf, desc)
+			if errors.Is(err, ErrContextCancelled) {
+				// Terminate the tx confirmation process.
+				continue
+			}
+			return err
 		}
 
 		// Ensure all coinbases being spent are spendable.
