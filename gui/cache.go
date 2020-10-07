@@ -45,10 +45,10 @@ type rewardQuota struct {
 // pendingPayment represents an unpaid reward payment. It is json annotated so
 // it can easily be encoded and sent over a websocket or pagination request.
 type pendingPayment struct {
-	WorkHeight    string `json:"workheight"`
-	WorkHeightURL string `json:"workheighturl"`
-	Amount        string `json:"amount"`
-	CreatedOn     string `json:"createdon"`
+	WorkHeight             string `json:"workheight"`
+	WorkHeightURL          string `json:"workheighturl"`
+	Amount                 string `json:"amount"`
+	EstimatedPaymentHeight string `json:"estimatedpaymentheight"`
 }
 
 // archivedPayment represents a paid reward payment. It is json annotated so it
@@ -57,7 +57,6 @@ type archivedPayment struct {
 	WorkHeight    string `json:"workheight"`
 	WorkHeightURL string `json:"workheighturl"`
 	Amount        string `json:"amount"`
-	CreatedOn     string `json:"createdon"`
 	PaidHeight    string `json:"paidheight"`
 	PaidHeightURL string `json:"paidheighturl"`
 	TxURL         string `json:"txurl"`
@@ -290,10 +289,10 @@ func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool
 		accountID := p.Account
 		pendingPayments[accountID] = append(pendingPayments[accountID],
 			&pendingPayment{
-				WorkHeight:    fmt.Sprint(p.Height),
-				WorkHeightURL: blockURL(c.blockExplorerURL, p.Height),
-				Amount:        amount(p.Amount),
-				CreatedOn:     formatUnixTime(p.CreatedOn),
+				WorkHeight:             fmt.Sprint(p.Height),
+				WorkHeightURL:          blockURL(c.blockExplorerURL, p.Height),
+				Amount:                 amount(p.Amount),
+				EstimatedPaymentHeight: fmt.Sprint(p.EstimatedMaturity + 1),
 			},
 		)
 		if _, ok := pendingPaymentTotals[accountID]; !ok {
@@ -321,7 +320,6 @@ func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool
 				WorkHeight:    fmt.Sprint(p.Height),
 				WorkHeightURL: blockURL(c.blockExplorerURL, p.Height),
 				Amount:        amount(p.Amount),
-				CreatedOn:     formatUnixTime(p.CreatedOn),
 				PaidHeight:    fmt.Sprint(p.PaidOnHeight),
 				PaidHeightURL: blockURL(c.blockExplorerURL, p.PaidOnHeight),
 				TxURL:         txURL(c.blockExplorerURL, p.TransactionID),
