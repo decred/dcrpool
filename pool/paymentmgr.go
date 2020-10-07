@@ -59,7 +59,7 @@ type TxBroadcaster interface {
 	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
 }
 
-// confNotifMsg represents a tx confirmation notification messege.
+// confNotifMsg represents a tx confirmation notification message.
 type confNotifMsg struct {
 	resp *walletrpc.ConfirmationNotificationsResponse
 	err  error
@@ -136,7 +136,7 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 			binary.LittleEndian.PutUint64(b, 0)
 			err := pbkt.Put(lastPaymentPaidOn, b)
 			if err != nil {
-				desc := fmt.Sprintf("%s: unable to load last payment "+
+				desc := fmt.Sprintf("%s: unable to persist last payment "+
 					"paid-on time: %v", funcName, err)
 				return dbError(ErrPersistEntry, desc)
 			}
@@ -152,7 +152,7 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 			binary.LittleEndian.PutUint32(b, 0)
 			err := pbkt.Put(lastPaymentHeight, b)
 			if err != nil {
-				desc := fmt.Sprintf("%s: unable to load last payment "+
+				desc := fmt.Sprintf("%s: unable to persist last payment "+
 					"height: %v", funcName, err)
 				return dbError(ErrPersistEntry, desc)
 			}
@@ -168,7 +168,7 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 			binary.LittleEndian.PutUint64(b, 0)
 			err := pbkt.Put(lastPaymentCreatedOn, b)
 			if err != nil {
-				desc := fmt.Sprintf("%s: unable to load last payment "+
+				desc := fmt.Sprintf("%s: unable to persist last payment "+
 					"created-on time: %v", funcName, err)
 				return dbError(ErrPersistEntry, desc)
 			}
@@ -903,7 +903,9 @@ func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs m
 }
 
 // fetchTxConfNotifications is a helper function for fetching tx confirmation
-// notifications without blocking.
+// notifications. It will return when either a notification or error is
+// received from the provided notification source, or when the provided
+// context is cancelled.
 func fetchTxConfNotifications(ctx context.Context, notifSource func() (*walletrpc.ConfirmationNotificationsResponse, error)) (*walletrpc.ConfirmationNotificationsResponse, error) {
 	funcName := "fetchTxConfNotifications"
 	notifCh := make(chan confNotifMsg)
@@ -917,7 +919,8 @@ func fetchTxConfNotifications(ctx context.Context, notifSource func() (*walletrp
 
 	select {
 	case <-ctx.Done():
-		log.Tracef("%s: unable to fx tx confirmation notifications", funcName)
+		log.Tracef("%s: unable to fetch tx confirmation notifications",
+			funcName)
 		return nil, ErrContextCancelled
 	case notif := <-notifCh:
 		close(notifCh)
@@ -951,21 +954,13 @@ func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txHashes map[string]
 	// Wait for coinbase tx confirmations from the wallet.
 	maxSpendableConfs := int32(pm.cfg.ActiveNet.CoinbaseMaturity) + 1
 
-txConfs:
 	for {
-		select {
-		case <-ctx.Done():
-			break txConfs
-
-		default:
-			// Non-blocking receive fallthrough.
-		}
-
 		resp, err := fetchTxConfNotifications(ctx, notifSource)
 		if err != nil {
 			if errors.Is(err, ErrContextCancelled) {
-				// Terminate the tx confirmation process.
-				continue
+				desc := fmt.Sprintf("%s: cancelled confirming %d coinbase "+
+					"transaction(s)", funcName, len(txHashes))
+				return poolError(ErrContextCancelled, desc)
 			}
 			return err
 		}
@@ -987,17 +982,9 @@ txConfs:
 		}
 
 		if len(txHashes) == 0 {
-			break
+			return nil
 		}
 	}
-
-	if len(txHashes) != 0 {
-		desc := fmt.Sprintf("%s: cancelled confirming %d coinbase "+
-			"transaction(s)", funcName, len(txHashes))
-		return poolError(ErrContextCancelled, desc)
-	}
-
-	return nil
 }
 
 // generatePayoutTxDetails creates the payout transaction inputs and outputs
