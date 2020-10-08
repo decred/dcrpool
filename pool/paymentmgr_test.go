@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"decred.org/dcrwallet/rpc/walletrpc"
+	txrules "decred.org/dcrwallet/wallet/txrules"
+	"decred.org/dcrwallet/wallet/txsizes"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
@@ -817,7 +819,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	// payment entry.
 	pmts, err = mgr.pendingPayments()
 	if err != nil {
-		t.Fatalf("[PPLNS] fetchPendingPayments error: %v", err)
+		t.Fatalf("[PPLNS] pendingPayments error: %v", err)
 	}
 
 	xt = dcrutil.Amount(0)
@@ -1669,6 +1671,118 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	cancel()
+
+	// Reset backed up values to their defaults.
+	mgr.setLastPaymentHeight(0)
+	mgr.setLastPaymentPaidOn(0)
+	mgr.setLastPaymentCreatedOn(0)
+	err = db.Update(func(tx *bolt.Tx) error {
+		err := mgr.persistLastPaymentHeight(tx)
+		if err != nil {
+			return fmt.Errorf("unable to persist default last "+
+				"payment height: %v", err)
+		}
+		err = mgr.persistLastPaymentPaidOn(tx)
+		if err != nil {
+			return fmt.Errorf("unable to persist default last "+
+				"payment paid on: %v", err)
+		}
+		err = mgr.persistLastPaymentCreatedOn(tx)
+		if err != nil {
+			return fmt.Errorf("unable to persist default last "+
+				"payment created on: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure dust payments are forfeited by their originating accounts and
+	// added to the pool fee payout.
+	now = time.Now()
+	pCfg.PaymentMethod = PPLNS
+	coinbaseValue = 1
+	mul := 100000
+	yWeight := new(big.Rat).Mul(weight, new(big.Rat).SetInt64(int64(mul)))
+
+	// Create shares for account x and y.
+	err = persistShare(db, xID, weight, now.UnixNano())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = persistShare(db, yID, yWeight, now.UnixNano())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	coinbase, err = dcrutil.NewAmount(float64(coinbaseValue))
+	if err != nil {
+		t.Fatalf("[NewAmount] unexpected error: %v", err)
+	}
+
+	// Ensure the expected payout amount for account x is dust.
+	expectedDustAmt := coinbase.MulF64(1 / float64(mul))
+	if !txrules.IsDustAmount(expectedDustAmt, txsizes.P2PKHOutputSize,
+		txrules.DefaultRelayFeePerKb) {
+		t.Fatal("expected dust amount for account x")
+	}
+
+	err = mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
+	if err != nil {
+		t.Fatalf("unable to generate payments: %v", err)
+	}
+
+	// Ensure the payments created are for accounts x, y and a fee
+	// payment entry.
+	pmts, err = mgr.pendingPayments()
+	if err != nil {
+		t.Fatalf("pendingPayments error: %v", err)
+	}
+
+	// Ensure only two pending payments were generated.
+	if len(pmts) != 2 {
+		t.Fatalf("expected 2 pending payments, got %d", len(pmts))
+	}
+
+	xt = dcrutil.Amount(0)
+	yt = dcrutil.Amount(0)
+	ft = dcrutil.Amount(0)
+	for _, pmt := range pmts {
+		if pmt.Account == xID {
+			xt += pmt.Amount
+		}
+		if pmt.Account == yID {
+			yt += pmt.Amount
+		}
+		if pmt.Account == PoolFeesK {
+			ft += pmt.Amount
+		}
+	}
+
+	// Ensure account x has no payments for it since it generated dust.
+	if xt != dcrutil.Amount(0) {
+		t.Fatalf("expected no payment amounts for account x, got %v", xt)
+	}
+
+	// Ensure the updated pool fee includes the dust amount from account x.
+	expectedFeeAmt = coinbase.MulF64(mgr.cfg.PoolFee)
+	if ft-maxRoundingDiff < expectedFeeAmt {
+		t.Fatalf("expected the updated pool fee (%v) to be greater "+
+			"than the initial (%v)", ft, expectedFeeAmt)
+	}
+
+	// Empty the share bucket.
+	err = emptyBucket(db, shareBkt)
+	if err != nil {
+		t.Fatalf("emptyBucket error: %v", err)
+	}
+
+	// Empty the payment bucket.
+	err = emptyBucket(db, paymentBkt)
+	if err != nil {
+		t.Fatalf("emptyBucket error: %v", err)
+	}
 
 	// Reset backed up values to their defaults.
 	mgr.setLastPaymentHeight(0)
