@@ -1733,7 +1733,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("unable to generate payments: %v", err)
 	}
 
-	// Ensure the payments created are for accounts x, y and a fee
+	// Ensure the payments created are for account y and a fee
 	// payment entry.
 	pmts, err = mgr.pendingPayments()
 	if err != nil {
