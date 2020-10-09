@@ -174,7 +174,7 @@ Dust payments render payout transactions non-standard causing it to fail, also
 making participating accounts forfeit dust payments serves as a good deterrent 
 to accounts that contribute intermittent, sporadic work. Participating accounts 
 become compelled to commit and contribute enough resources to the pool worth 
-more than dust outputs to quarantee recieving dividends whenever the pool 
+more than dust outputs to guarantee receiving dividends whenever the pool 
 mines a block. 
 
 ## Testing
