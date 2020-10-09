@@ -39,18 +39,18 @@ func heightToBigEndianBytes(height uint32) []byte {
 }
 
 // AcceptedWorkID generates a unique id for work accepted by the network.
-func AcceptedWorkID(blockHash string, blockHeight uint32) []byte {
+func AcceptedWorkID(blockHash string, blockHeight uint32) string {
 	var buf bytes.Buffer
 	_, _ = buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(blockHeight)))
 	_, _ = buf.WriteString(blockHash)
-	return buf.Bytes()
+	return buf.String()
 }
 
 // NewAcceptedWork creates an accepted work.
 func NewAcceptedWork(blockHash string, prevHash string, height uint32,
 	minedBy string, miner string) *AcceptedWork {
 	return &AcceptedWork{
-		UUID:      string(AcceptedWorkID(blockHash, height)),
+		UUID:      AcceptedWorkID(blockHash, height),
 		BlockHash: blockHash,
 		PrevHash:  prevHash,
 		Height:    height,
@@ -79,7 +79,7 @@ func fetchWorkBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 }
 
 // FetchAcceptedWork fetches the accepted work referenced by the provided id.
-func FetchAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
+func FetchAcceptedWork(db *bolt.DB, id string) (*AcceptedWork, error) {
 	const funcName = "FetchAcceptedWork"
 	var work AcceptedWork
 	err := db.View(func(tx *bolt.Tx) error {
@@ -87,10 +87,9 @@ func FetchAcceptedWork(db *bolt.DB, id []byte) (*AcceptedWork, error) {
 		if err != nil {
 			return err
 		}
-		v := bkt.Get(id)
+		v := bkt.Get([]byte(id))
 		if v == nil {
-			desc := fmt.Sprintf("%s: no value for key %s",
-				funcName, string(id))
+			desc := fmt.Sprintf("%s: no value for key %s", funcName, id)
 			return dbError(ErrValueNotFound, desc)
 		}
 		err = json.Unmarshal(v, &work)
@@ -175,7 +174,7 @@ func (work *AcceptedWork) Update(db *bolt.DB) error {
 
 // Delete removes the associated accepted work from the database.
 func (work *AcceptedWork) Delete(db *bolt.DB) error {
-	return deleteEntry(db, workBkt, []byte(work.UUID))
+	return deleteEntry(db, workBkt, work.UUID)
 }
 
 // ListMinedWork returns work data associated with all blocks mined by the pool

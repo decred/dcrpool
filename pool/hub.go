@@ -642,7 +642,7 @@ func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 
 // AccountExists checks if the provided account id references a pool account.
 func (h *Hub) AccountExists(accountID string) bool {
-	_, err := FetchAccount(h.db, []byte(accountID))
+	_, err := FetchAccount(h.db, accountID)
 	if err != nil {
 		log.Tracef("Unable to fetch account for id: %s", accountID)
 		return false

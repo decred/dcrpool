@@ -6,7 +6,6 @@ package pool
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -253,7 +252,7 @@ func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 
 // deleteEntry removes the specified key and its associated value from
 // the provided bucket.
-func deleteEntry(db *bolt.DB, bucket, key []byte) error {
+func deleteEntry(db *bolt.DB, bucket []byte, key string) error {
 	const funcName = "deleteEntry"
 	return db.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
@@ -264,11 +263,10 @@ func deleteEntry(db *bolt.DB, bucket, key []byte) error {
 		}
 		b := pbkt.Bucket(bucket)
 
-		err := b.Delete(key)
+		err := b.Delete([]byte(key))
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to delete entry with "+
-				"key %s from bucket %s", funcName, hex.EncodeToString(key),
-				string(poolBkt))
+				"key %s from bucket %s", funcName, key, string(poolBkt))
 			return dbError(ErrDeleteEntry, desc)
 		}
 		return nil

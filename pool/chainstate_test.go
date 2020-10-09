@@ -123,11 +123,11 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure job A has been pruned with job B remaining.
-	_, err = FetchJob(db, []byte(jobA.UUID))
+	_, err = FetchJob(db, jobA.UUID)
 	if err == nil {
 		t.Fatal("expected a value not found error")
 	}
-	_, err = FetchJob(db, []byte(jobB.UUID))
+	_, err = FetchJob(db, jobB.UUID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching job B: %v", err)
 	}
@@ -168,11 +168,11 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure work A did not get pruned but work B did.
-	_, err = FetchAcceptedWork(db, []byte(workA.UUID))
+	_, err = FetchAcceptedWork(db, workA.UUID)
 	if err != nil {
 		t.Fatalf("expected a valid accepted work, got: %v", err)
 	}
-	_, err = FetchAcceptedWork(db, []byte(workB.UUID))
+	_, err = FetchAcceptedWork(db, workB.UUID)
 	if err == nil {
 		t.Fatal("expected a no value found error")
 	}
@@ -338,7 +338,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	<-confMsg.Done
 
 	// Ensure the accepted work is now confirmed mined.
-	confirmedWork, err := FetchAcceptedWork(cs.cfg.DB, []byte(work.UUID))
+	confirmedWork, err := FetchAcceptedWork(cs.cfg.DB, work.UUID)
 	if err != nil {
 		t.Fatalf("unable to confirm accepted work: %v", err)
 	}
@@ -361,7 +361,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	<-discMinedMsg.Done
 
 	// Ensure the mined work is no longer confirmed mined.
-	discMinedWork, err := FetchAcceptedWork(cs.cfg.DB, []byte(work.UUID))
+	discMinedWork, err := FetchAcceptedWork(cs.cfg.DB, work.UUID)
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}

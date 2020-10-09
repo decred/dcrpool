@@ -216,8 +216,7 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 		}
 
 		createdOn := bigEndianBytesToNano(k)
-		id := shareID(share.Account, int64(createdOn))
-		share.UUID = string(id)
+		share.UUID = shareID(share.Account, int64(createdOn))
 
 		sBytes, err := json.Marshal(share)
 		if err != nil {
@@ -306,7 +305,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 		}
 
 		key := paymentID(payment.Height, payment.CreatedOn, payment.Account)
-		err = pmtbkt.Put(key, pBytes)
+		err = pmtbkt.Put([]byte(key), pBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)
@@ -352,7 +351,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 		}
 
 		key := paymentID(payment.Height, payment.CreatedOn, payment.Account)
-		err = abkt.Put(key, pBytes)
+		err = abkt.Put([]byte(key), pBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)

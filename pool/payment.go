@@ -50,12 +50,12 @@ func NewPayment(account string, source *PaymentSource, amount dcrutil.Amount,
 }
 
 // paymentID generates a unique id using the provided payment details.
-func paymentID(height uint32, createdOnNano int64, account string) []byte {
+func paymentID(height uint32, createdOnNano int64, account string) string {
 	var buf bytes.Buffer
 	_, _ = buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(height)))
 	_, _ = buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOnNano)))
 	_, _ = buf.WriteString(account)
-	return buf.Bytes()
+	return buf.String()
 }
 
 // fetchPaymentBucket is a helper function for getting the payment bucket.
@@ -96,7 +96,7 @@ func fetchPaymentArchiveBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 }
 
 // FetchPayment fetches the payment referenced by the provided id.
-func FetchPayment(db *bolt.DB, id []byte) (*Payment, error) {
+func FetchPayment(db *bolt.DB, id string) (*Payment, error) {
 	const funcName = "FetchPayment"
 	var payment Payment
 	err := db.View(func(tx *bolt.Tx) error {
@@ -104,10 +104,9 @@ func FetchPayment(db *bolt.DB, id []byte) (*Payment, error) {
 		if err != nil {
 			return err
 		}
-		v := bkt.Get(id)
+		v := bkt.Get([]byte(id))
 		if v == nil {
-			desc := fmt.Sprintf("%s: no payment found for id %s",
-				funcName, string(id))
+			desc := fmt.Sprintf("%s: no payment found for id %s", funcName, id)
 			return dbError(ErrValueNotFound, desc)
 		}
 		err = json.Unmarshal(v, &payment)
@@ -139,7 +138,7 @@ func (pmt *Payment) Persist(db *bolt.DB) error {
 			return dbError(ErrParse, desc)
 		}
 		id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
-		err = bkt.Put(id, b)
+		err = bkt.Put([]byte(id), b)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment bytes: %v",
 				funcName, err)
@@ -176,7 +175,7 @@ func (pmt *Payment) Archive(db *bolt.DB) error {
 
 		// Remove the active payment record.
 		id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
-		err = pbkt.Delete(id)
+		err = pbkt.Delete([]byte(id))
 		if err != nil {
 			return err
 		}
@@ -191,7 +190,7 @@ func (pmt *Payment) Archive(db *bolt.DB) error {
 		}
 
 		id = paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
-		err = abkt.Put(id, pmtB)
+		err = abkt.Put([]byte(id), pmtB)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to archive payment entry: %v",
 				funcName, err)

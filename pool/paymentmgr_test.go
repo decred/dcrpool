@@ -59,16 +59,16 @@ func (txB *txBroadcasterImpl) PublishTransaction(ctx context.Context, req *walle
 }
 
 // fetchShare fetches the share referenced by the provided id.
-func fetchShare(db *bolt.DB, id []byte) (*Share, error) {
+func fetchShare(db *bolt.DB, id string) (*Share, error) {
 	var share Share
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchShareBucket(tx)
 		if err != nil {
 			return err
 		}
-		v := bkt.Get(id)
+		v := bkt.Get([]byte(id))
 		if v == nil {
-			return fmt.Errorf("no share found for id %s", string(id))
+			return fmt.Errorf("no share found for id %s", id)
 		}
 		err = json.Unmarshal(v, &share)
 		return err

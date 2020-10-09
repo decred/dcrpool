@@ -111,7 +111,7 @@ func testFetchBucketHelpers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = deleteEntry(db, paymentBkt, []byte("k"))
+	err = deleteEntry(db, paymentBkt, "k")
 	if err == nil {
 		t.Fatal(expectedNotFoundErr)
 	}
@@ -294,13 +294,13 @@ func testDatabase(t *testing.T, db *bolt.DB) {
 	}
 
 	// delete the created account.
-	err = deleteEntry(db, accountBkt, []byte(accountA.UUID))
+	err = deleteEntry(db, accountBkt, accountA.UUID)
 	if err != nil {
 		t.Fatalf("emptyBucket error: %v", err)
 	}
 
 	// Ensure the accountA has been removed.
-	_, err = FetchAccount(db, []byte(accountA.UUID))
+	_, err = FetchAccount(db, accountA.UUID)
 	if !errors.Is(err, ErrValueNotFound) {
 		t.Fatalf("expected no value found error: %v", err)
 	}
@@ -312,11 +312,11 @@ func testDatabase(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure the account X and Y have been removed.
-	_, err = FetchAccount(db, []byte(xID))
+	_, err = FetchAccount(db, xID)
 	if err == nil {
 		t.Fatalf("expected no value found error for %s", xID)
 	}
-	_, err = FetchAccount(db, []byte(yID))
+	_, err = FetchAccount(db, yID)
 	if err == nil {
 		t.Fatalf("expected no value found error for %s", yID)
 	}

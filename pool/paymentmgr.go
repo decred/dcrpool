@@ -1062,7 +1062,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 				continue
 			}
 
-			acc, err := FetchAccount(pm.cfg.DB, []byte(pmt.Account))
+			acc, err := FetchAccount(pm.cfg.DB, pmt.Account)
 			if err != nil {
 				return nil, nil, nil, 0, err
 			}

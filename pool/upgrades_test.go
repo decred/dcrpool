@@ -135,8 +135,8 @@ func verifyV3Upgrade(t *testing.T, db *bolt.DB) {
 			}
 
 			id := paymentID(payment.Height, payment.CreatedOn, payment.Account)
-			if !bytes.Equal(k, id) {
-				return fmt.Errorf("%s: expected payment id (%x) to be "+
+			if !bytes.Equal(k, []byte(id)) {
+				return fmt.Errorf("%s: expected payment id (%s) to be "+
 					"the same as its key (%x)", funcName, id, k)
 
 			}
@@ -163,9 +163,9 @@ func verifyV3Upgrade(t *testing.T, db *bolt.DB) {
 			}
 
 			id := paymentID(payment.Height, payment.CreatedOn, payment.Account)
-			if !bytes.Equal(k, id) {
+			if !bytes.Equal(k, []byte(id)) {
 				return fmt.Errorf("%s: expected archived payment id "+
-					"(%x) to be the same as its key (%x)", funcName, id, k)
+					"(%s) to be the same as its key (%x)", funcName, id, k)
 			}
 
 			if payment.Source == nil {

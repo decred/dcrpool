@@ -48,7 +48,7 @@ func testJob(t *testing.T, db *bolt.DB) {
 	}
 
 	// Fetch a job using its id.
-	fetchedJob, err := FetchJob(db, []byte(jobA.UUID))
+	fetchedJob, err := FetchJob(db, jobA.UUID)
 	if err != nil {
 		t.Fatalf("FetchJob err: %v", err)
 	}
@@ -69,11 +69,11 @@ func testJob(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure the jobs were deleted.
-	_, err = FetchJob(db, []byte(jobB.UUID))
+	_, err = FetchJob(db, jobB.UUID)
 	if err == nil {
 		t.Fatalf("expected a value not found error: %v", err)
 	}
-	_, err = FetchJob(db, []byte(jobC.UUID))
+	_, err = FetchJob(db, jobC.UUID)
 	if err == nil {
 		t.Fatalf("expected a value not found error: %v", err)
 	}
