@@ -22,7 +22,7 @@ func listMinedWorkByAccount(db *bolt.DB, accountID string) ([]*AcceptedWork, err
 	minedWork := make([]*AcceptedWork, 0)
 
 	err := db.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchWorkBucket(tx)
+		bkt, err := fetchBucket(tx, workBkt)
 		if err != nil {
 			return err
 		}

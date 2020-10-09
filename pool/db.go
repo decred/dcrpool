@@ -300,3 +300,21 @@ func emptyBucket(db *bolt.DB, bucket []byte) error {
 		return nil
 	})
 }
+
+// fetchBucket is a helper function for getting the requested bucket.
+func fetchBucket(tx *bolt.Tx, bucketID []byte) (*bolt.Bucket, error) {
+	const funcName = "fetchBucket"
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
+	}
+	bkt := pbkt.Bucket(bucketID)
+	if bkt == nil {
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(bucketID))
+		return nil, dbError(ErrBucketNotFound, desc)
+	}
+	return bkt, nil
+}

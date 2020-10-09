@@ -58,49 +58,12 @@ func paymentID(height uint32, createdOnNano int64, account string) []byte {
 	return buf.Bytes()
 }
 
-// fetchPaymentBucket is a helper function for getting the payment bucket.
-func fetchPaymentBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	const funcName = "fetchPaymentBucket"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	bkt := pbkt.Bucket(paymentBkt)
-	if bkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(paymentBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	return bkt, nil
-}
-
-// fetchPaymentArchiveBucket is a helper function for getting the
-// payment archive bucket.
-func fetchPaymentArchiveBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	const funcName = "fetchPaymentArchiveBucket"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	bkt := pbkt.Bucket(paymentArchiveBkt)
-	if bkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(paymentArchiveBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	return bkt, nil
-}
-
 // FetchPayment fetches the payment referenced by the provided id.
 func FetchPayment(db *bolt.DB, id []byte) (*Payment, error) {
 	const funcName = "FetchPayment"
 	var payment Payment
 	err := db.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchPaymentBucket(tx)
+		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
 		}
@@ -128,7 +91,7 @@ func FetchPayment(db *bolt.DB, id []byte) (*Payment, error) {
 func (pmt *Payment) Persist(db *bolt.DB) error {
 	const funcName = "Payment.Persist"
 	return db.Update(func(tx *bolt.Tx) error {
-		bkt, err := fetchPaymentBucket(tx)
+		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
 		}
@@ -165,11 +128,11 @@ func (pmt *Payment) Delete(db *bolt.DB) error {
 func (pmt *Payment) Archive(db *bolt.DB) error {
 	const funcName = "Payment.Archive"
 	return db.Update(func(tx *bolt.Tx) error {
-		pbkt, err := fetchPaymentBucket(tx)
+		pbkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
 		}
-		abkt, err := fetchPaymentArchiveBucket(tx)
+		abkt, err := fetchBucket(tx, paymentArchiveBkt)
 		if err != nil {
 			return err
 		}

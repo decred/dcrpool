@@ -47,30 +47,12 @@ func NewJob(header string, height uint32) *Job {
 	}
 }
 
-// fetchJobBucket is a helper function for getting the job bucket.
-func fetchJobBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	const funcName = "fetchJobBucket"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	bkt := pbkt.Bucket(jobBkt)
-	if bkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(jobBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	return bkt, nil
-}
-
 // FetchJob fetches the job referenced by the provided id.
 func FetchJob(db *bolt.DB, id []byte) (*Job, error) {
 	const funcName = "FetchJob"
 	var job Job
 	err := db.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchJobBucket(tx)
+		bkt, err := fetchBucket(tx, jobBkt)
 		if err != nil {
 			return err
 		}
@@ -99,7 +81,7 @@ func FetchJob(db *bolt.DB, id []byte) (*Job, error) {
 func (job *Job) Persist(db *bolt.DB) error {
 	const funcName = "Job.Persist"
 	return db.Update(func(tx *bolt.Tx) error {
-		bkt, err := fetchJobBucket(tx)
+		bkt, err := fetchBucket(tx, jobBkt)
 		if err != nil {
 			return err
 		}

@@ -53,29 +53,11 @@ func NewShare(account string, weight *big.Rat) *Share {
 	}
 }
 
-// fetchShareBucket is a helper function for getting the share bucket.
-func fetchShareBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	const funcName = "fetchShareBucket"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	bkt := pbkt.Bucket(shareBkt)
-	if bkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(shareBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	return bkt, nil
-}
-
 // Persist saves a share to the database.
 func (s *Share) Persist(db *bolt.DB) error {
 	const funcName = "Share.Persist"
 	return db.Update(func(tx *bolt.Tx) error {
-		bkt, err := fetchShareBucket(tx)
+		bkt, err := fetchBucket(tx, shareBkt)
 		if err != nil {
 			return err
 		}
