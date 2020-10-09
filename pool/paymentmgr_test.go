@@ -1063,9 +1063,9 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// applyTxFee tests.
-	tIn, _ := dcrutil.NewAmount(100)
+	outV, _ := dcrutil.NewAmount(100)
 	in := chainjson.TransactionInput{
-		Amount: float64(tIn),
+		Amount: float64(outV),
 		Txid:   chainhash.Hash{1}.String(),
 		Vout:   2,
 		Tree:   wire.TxTreeRegular,
@@ -1081,18 +1081,16 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	out[yAddr] = yValue
 	out[feeAddr] = poolFeeValue
 
-	tOut := tIn
-
 	_, txFee, err := mgr.applyTxFees([]chainjson.TransactionInput{in},
-		out, tOut, poolFeeAddrs)
+		out, outV, poolFeeAddrs)
 	if err != nil {
 		t.Fatalf("unexpected applyTxFees error: %v", err)
 	}
 
 	// Ensure the pool fee payment was exempted from tx fee deductions.
-	if out[feeAddr] != amt.MulF64(0.1) {
+	if out[feeAddr] != poolFeeValue {
 		t.Fatalf("expected pool fee payment to be %v, got %v",
-			txFee, out[feeAddr])
+			poolFeeValue, out[feeAddr])
 	}
 
 	// Ensure the difference between initial account payments and updated
@@ -1108,17 +1106,16 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure providing no tx inputs triggers an error.
 	_, _, err = mgr.applyTxFees([]chainjson.TransactionInput{},
-		out, tOut, poolFeeAddrs)
+		out, outV, poolFeeAddrs)
 	if !errors.Is(err, ErrTxIn) {
-		t.Fatalf("expected a tx input error: %v", err)
+		t.Fatalf("expected a tx input error, got %v", err)
 	}
 
 	// Ensure providing no tx outputs triggers an error.
 	_, _, err = mgr.applyTxFees([]chainjson.TransactionInput{in},
-		make(map[string]dcrutil.Amount), tOut, poolFeeAddrs)
+		make(map[string]dcrutil.Amount), outV, poolFeeAddrs)
 	if !errors.Is(err, ErrTxOut) {
-		cancel()
-		t.Fatalf("expected a tx output error: %v", err)
+		t.Fatalf("expected a tx output error, got %v", err)
 	}
 
 	// confirmCoinbases tests.
@@ -1234,9 +1231,9 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 	_, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, poolFeeAddrs,
 		mPmts, treasuryActive)
-	if err == nil {
+	if !errors.Is(err, ErrTxOut) {
 		cancel()
-		t.Fatalf("expected a fetch txOut error")
+		t.Fatalf("expected a fetch txOut error, got %v", err)
 	}
 
 	// Ensure generating payout tx details returns an error if the returned
@@ -1671,6 +1668,8 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("unexpected dividend payment error, got %v", err)
 	}
 
+	cancel()
+
 	// Reset backed up values to their defaults.
 	mgr.setLastPaymentHeight(0)
 	mgr.setLastPaymentPaidOn(0)
@@ -1696,6 +1695,4 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	cancel()
 }
