@@ -63,7 +63,7 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		return -1, nil
 	}
 
-	pendingPaymentsForBlockHash := func(string) (uint32, error) {
+	pendingPaymentsForBlockHash := func(*bolt.DB, string) (uint32, error) {
 		return 0, nil
 	}
 

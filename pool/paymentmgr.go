@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -395,51 +394,12 @@ func (pm *PaymentMgr) sharePercentages(shares []*Share) (map[string]*big.Rat, er
 	return percentages, nil
 }
 
-// PPSEligibleShares fetches all shares created before or at the provided
-// time.
-func (pm *PaymentMgr) PPSEligibleShares(max []byte) ([]*Share, error) {
-	funcName := "PPSEligibleShares"
-	eligibleShares := make([]*Share, 0)
-	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchBucket(tx, shareBkt)
-		if err != nil {
-			return err
-		}
-		c := bkt.Cursor()
-		createdOnB := make([]byte, 8)
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			_, err := hex.Decode(createdOnB, k[:16])
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to decode share "+
-					"created-on bytes: %v", funcName, err)
-				return dbError(ErrDecode, desc)
-			}
-
-			if bytes.Compare(createdOnB, max) <= 0 {
-				var share Share
-				err := json.Unmarshal(v, &share)
-				if err != nil {
-					desc := fmt.Sprintf("%s: unable to unmarshal share: %v",
-						funcName, err)
-					return dbError(ErrParse, desc)
-				}
-				eligibleShares = append(eligibleShares, &share)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return eligibleShares, err
-}
-
 // PPSSharePercentages calculates the current mining reward percentages
 // due participating pool accounts based on work performed measured by
 // the PPS payment scheme.
 func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.Rat, error) {
 	max := nanoToBigEndianBytes(workCreatedOn)
-	shares, err := pm.PPSEligibleShares(max)
+	shares, err := PPSEligibleShares(pm.cfg.DB, max)
 	if err != nil {
 		return nil, err
 	}
@@ -453,51 +413,12 @@ func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.
 	return percentages, nil
 }
 
-// PPLNSEligibleShares fetches all shares keyed greater than the provided
-// minimum.
-func (pm *PaymentMgr) PPLNSEligibleShares(min []byte) ([]*Share, error) {
-	funcName := "PPLNSEligibleShares"
-	eligibleShares := make([]*Share, 0)
-	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchBucket(tx, shareBkt)
-		if err != nil {
-			return err
-		}
-		c := bkt.Cursor()
-		createdOnB := make([]byte, 8)
-		for k, v := c.Last(); k != nil; k, v = c.Prev() {
-			_, err := hex.Decode(createdOnB, k[:16])
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to decode share "+
-					"created-on bytes: %v", funcName, err)
-				return dbError(ErrDecode, desc)
-			}
-
-			if bytes.Compare(createdOnB, min) > 0 {
-				var share Share
-				err := json.Unmarshal(v, &share)
-				if err != nil {
-					desc := fmt.Sprintf("%s: unable to unmarshal "+
-						"share: %v", funcName, err)
-					return dbError(ErrParse, desc)
-				}
-				eligibleShares = append(eligibleShares, &share)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return eligibleShares, err
-}
-
 // PPLNSSharePercentages calculates the current mining reward percentages due pool
 // accounts based on work performed measured by the PPLNS payment scheme.
 func (pm *PaymentMgr) PPLNSSharePercentages() (map[string]*big.Rat, error) {
 	now := time.Now()
 	min := now.Add(-pm.cfg.LastNPeriod)
-	shares, err := pm.PPLNSEligibleShares(nanoToBigEndianBytes(min.UnixNano()))
+	shares, err := PPLNSEligibleShares(pm.cfg.DB, nanoToBigEndianBytes(min.UnixNano()))
 	if err != nil {
 		return nil, err
 	}
@@ -661,143 +582,6 @@ func (pm *PaymentMgr) generatePayments(height uint32, source *PaymentSource, amt
 	default:
 		return fmt.Errorf("unknown payment method provided %v", pm.cfg.PaymentMethod)
 	}
-}
-
-// pendingPayments fetches all unpaid payments.
-func (pm *PaymentMgr) pendingPayments() ([]*Payment, error) {
-	funcName := "pendingPayments"
-	payments := make([]*Payment, 0)
-	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchBucket(tx, paymentBkt)
-		if err != nil {
-			return err
-		}
-		cursor := bkt.Cursor()
-		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			var payment Payment
-			err := json.Unmarshal(v, &payment)
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to unmarshal "+
-					"payment: %v", funcName, err)
-				return dbError(ErrParse, desc)
-			}
-			if payment.PaidOnHeight == 0 {
-				payments = append(payments, &payment)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return payments, nil
-}
-
-// pendingPaymentsForBlockHash returns the number of  pending payments with
-// the provided block hash as their source.
-func (pm *PaymentMgr) pendingPaymentsForBlockHash(blockHash string) (uint32, error) {
-	funcName := "pendingPaymentsForBlockHash"
-	var count uint32
-	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchBucket(tx, paymentBkt)
-		if err != nil {
-			return err
-		}
-
-		cursor := bkt.Cursor()
-		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			var payment Payment
-			err := json.Unmarshal(v, &payment)
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
-					funcName, err)
-				return dbError(ErrParse, desc)
-			}
-			if payment.PaidOnHeight == 0 {
-				if payment.Source.BlockHash == blockHash {
-					count++
-				}
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-// archivedPayments fetches all archived payments. List is ordered, most
-// recent comes first.
-func (pm *PaymentMgr) archivedPayments() ([]*Payment, error) {
-	funcName := "archivedPayments"
-	pmts := make([]*Payment, 0)
-	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		abkt, err := fetchBucket(tx, paymentArchiveBkt)
-		if err != nil {
-			return err
-		}
-
-		c := abkt.Cursor()
-		for k, v := c.Last(); k != nil; k, v = c.Prev() {
-			var payment Payment
-			err := json.Unmarshal(v, &payment)
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
-					funcName, err)
-				return dbError(ErrParse, desc)
-			}
-			pmts = append(pmts, &payment)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return pmts, nil
-}
-
-// maturePendingPayments fetches all mature pending payments at the
-// provided height.
-func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[string][]*Payment, error) {
-	funcName := "maturePendingPayments"
-	payments := make([]*Payment, 0)
-	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchBucket(tx, paymentBkt)
-		if err != nil {
-			return err
-		}
-
-		cursor := bkt.Cursor()
-		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			var payment Payment
-			err := json.Unmarshal(v, &payment)
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
-					funcName, err)
-				return dbError(ErrParse, desc)
-			}
-			spendableHeight := payment.EstimatedMaturity + 1
-			if payment.PaidOnHeight == 0 && spendableHeight <= height {
-				payments = append(payments, &payment)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	pmts := make(map[string][]*Payment)
-	for _, pmt := range payments {
-		set, ok := pmts[pmt.Source.BlockHash]
-		if !ok {
-			set = make([]*Payment, 0)
-		}
-		set = append(set, pmt)
-		pmts[pmt.Source.BlockHash] = set
-	}
-	return pmts, nil
 }
 
 // pruneOrphanedPayments removes all orphaned payments from the provided payments.
@@ -1076,7 +860,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 // PayDividends pays mature mining rewards to participating accounts.
 func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryActive bool) error {
 	funcName := "payDividends"
-	mPmts, err := pm.maturePendingPayments(height)
+	mPmts, err := MaturePendingPayments(pm.cfg.DB, height)
 	if err != nil {
 		return err
 	}
