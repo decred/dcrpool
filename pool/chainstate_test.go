@@ -63,12 +63,6 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		return -1, nil
 	}
 
-	pendingPaymentsAtHeight := func(uint32) ([]*Payment, error) {
-		return []*Payment{
-			{Account: xID, Amount: dcrutil.Amount(100)},
-		}, nil
-	}
-
 	pendingPaymentsForBlockHash := func(string) (uint32, error) {
 		return 0, nil
 	}
@@ -86,7 +80,6 @@ func testChainState(t *testing.T, db *bolt.DB) {
 		GeneratePayments:            generatePayments,
 		GetBlock:                    getBlock,
 		GetBlockConfirmations:       getBlockConfirmations,
-		PendingPaymentsAtHeight:     pendingPaymentsAtHeight,
 		PendingPaymentsForBlockHash: pendingPaymentsForBlockHash,
 		SignalCache:                 signalCache,
 		Cancel:                      cancel,

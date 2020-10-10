@@ -255,7 +255,6 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		DB:                          h.db,
 		SoloPool:                    h.cfg.SoloPool,
 		PayDividends:                h.paymentMgr.payDividends,
-		PendingPaymentsAtHeight:     h.paymentMgr.pendingPaymentsAtHeight,
 		PendingPaymentsForBlockHash: h.paymentMgr.pendingPaymentsForBlockHash,
 		GeneratePayments:            h.paymentMgr.generatePayments,
 		GetBlock:                    h.getBlock,

@@ -693,48 +693,6 @@ func (pm *PaymentMgr) pendingPayments() ([]*Payment, error) {
 	return payments, nil
 }
 
-// pendingPaymentsAtHeight fetches all pending payments at the provided height.
-func (pm *PaymentMgr) pendingPaymentsAtHeight(height uint32) ([]*Payment, error) {
-	funcName := "pendingPaymentsAtHeight"
-	payments := make([]*Payment, 0)
-	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchBucket(tx, paymentBkt)
-		if err != nil {
-			return err
-		}
-
-		heightBE := heightToBigEndianBytes(height)
-		paymentHeightB := make([]byte, 8)
-		cursor := bkt.Cursor()
-		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			_, err := hex.Decode(paymentHeightB, k[:8])
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to decode payment "+
-					"height: %v", funcName, err)
-				return dbError(ErrDecode, desc)
-			}
-
-			if bytes.Compare(heightBE, paymentHeightB) > 0 {
-				var payment Payment
-				err := json.Unmarshal(v, &payment)
-				if err != nil {
-					desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
-						funcName, err)
-					return dbError(ErrParse, desc)
-				}
-				if payment.PaidOnHeight == 0 {
-					payments = append(payments, &payment)
-				}
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return payments, nil
-}
-
 // pendingPaymentsForBlockHash returns the number of  pending payments with
 // the provided block hash as their source.
 func (pm *PaymentMgr) pendingPaymentsForBlockHash(blockHash string) (uint32, error) {
