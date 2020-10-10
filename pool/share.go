@@ -30,11 +30,11 @@ var ShareWeights = map[string]*big.Rat{
 
 // shareID generates a unique share id using the provided account and time
 // created.
-func shareID(account string, createdOn int64) []byte {
+func shareID(account string, createdOn int64) string {
 	var buf bytes.Buffer
 	_, _ = buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOn)))
 	_, _ = buf.WriteString(account)
-	return buf.Bytes()
+	return buf.String()
 }
 
 // Share represents verifiable work performed by a pool client.
@@ -47,7 +47,7 @@ type Share struct {
 // NewShare creates a share with the provided account and weight.
 func NewShare(account string, weight *big.Rat) *Share {
 	return &Share{
-		UUID:    string(shareID(account, time.Now().UnixNano())),
+		UUID:    shareID(account, time.Now().UnixNano()),
 		Account: account,
 		Weight:  weight,
 	}

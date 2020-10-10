@@ -57,7 +57,7 @@ func fetchAccountBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 }
 
 // FetchAccount fetches the account referenced by the provided id.
-func FetchAccount(db *bolt.DB, id []byte) (*Account, error) {
+func FetchAccount(db *bolt.DB, id string) (*Account, error) {
 	const funcName = "FetchAccount"
 	var account Account
 	err := db.View(func(tx *bolt.Tx) error {
@@ -66,10 +66,9 @@ func FetchAccount(db *bolt.DB, id []byte) (*Account, error) {
 			return err
 		}
 
-		v := bkt.Get(id)
+		v := bkt.Get([]byte(id))
 		if v == nil {
-			desc := fmt.Sprintf("%s: no account found for id %s", funcName,
-				string(id))
+			desc := fmt.Sprintf("%s: no account found for id %s", funcName, id)
 			return dbError(ErrValueNotFound, desc)
 		}
 		err = json.Unmarshal(v, &account)
@@ -124,5 +123,5 @@ func (acc *Account) Persist(db *bolt.DB) error {
 
 // Delete purges the referenced account from the database.
 func (acc *Account) Delete(db *bolt.DB) error {
-	return deleteEntry(db, accountBkt, []byte(acc.UUID))
+	return deleteEntry(db, accountBkt, acc.UUID)
 }

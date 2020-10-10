@@ -66,7 +66,7 @@ func fetchJobBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 }
 
 // FetchJob fetches the job referenced by the provided id.
-func FetchJob(db *bolt.DB, id []byte) (*Job, error) {
+func FetchJob(db *bolt.DB, id string) (*Job, error) {
 	const funcName = "FetchJob"
 	var job Job
 	err := db.View(func(tx *bolt.Tx) error {
@@ -75,10 +75,9 @@ func FetchJob(db *bolt.DB, id []byte) (*Job, error) {
 			return err
 		}
 
-		v := bkt.Get(id)
+		v := bkt.Get([]byte(id))
 		if v == nil {
-			desc := fmt.Sprintf("%s: no job found for id %s", funcName,
-				string(id))
+			desc := fmt.Sprintf("%s: no job found for id %s", funcName, id)
 			return dbError(ErrValueNotFound, desc)
 		}
 		err = json.Unmarshal(v, &job)
@@ -122,5 +121,5 @@ func (job *Job) Persist(db *bolt.DB) error {
 
 // Delete removes the associated job from the database.
 func (job *Job) Delete(db *bolt.DB) error {
-	return deleteEntry(db, jobBkt, []byte(job.UUID))
+	return deleteEntry(db, jobBkt, job.UUID)
 }

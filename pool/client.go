@@ -356,7 +356,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.ch <- resp
 		return err
 	}
-	job, err := FetchJob(c.cfg.DB, []byte(jobID))
+	job, err := FetchJob(c.cfg.DB, jobID)
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)

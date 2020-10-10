@@ -37,7 +37,7 @@ func testAccount(t *testing.T, db *bolt.DB) {
 	}
 
 	// Fetch an account with its id.
-	fetchedAccount, err := FetchAccount(db, []byte(accountA.UUID))
+	fetchedAccount, err := FetchAccount(db, accountA.UUID)
 	if err != nil {
 		t.Fatalf("FetchAccount error: %v", err)
 	}
@@ -64,12 +64,12 @@ func testAccount(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure the accounts have both been deleted.
-	_, err = FetchAccount(db, []byte(accountA.UUID))
+	_, err = FetchAccount(db, accountA.UUID)
 	if !errors.Is(err, ErrValueNotFound) {
 		t.Fatal("expected value not found error")
 	}
 
-	_, err = FetchAccount(db, []byte(accountB.UUID))
+	_, err = FetchAccount(db, accountB.UUID)
 	if !errors.Is(err, ErrValueNotFound) {
 		t.Fatal("expected value not found error")
 	}
