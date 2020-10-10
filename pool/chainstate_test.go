@@ -117,9 +117,9 @@ func testChainState(t *testing.T, db *bolt.DB) {
 	}
 
 	// Prune jobs below height 57.
-	err = cs.pruneJobs(57)
+	err = PruneJobs(db, 57)
 	if err != nil {
-		t.Fatalf("pruneJobs error: %v", err)
+		t.Fatalf("PruneJobs error: %v", err)
 	}
 
 	// Ensure job A has been pruned with job B remaining.

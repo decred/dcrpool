@@ -105,3 +105,36 @@ func (job *Job) Persist(db *bolt.DB) error {
 func (job *Job) Delete(db *bolt.DB) error {
 	return deleteEntry(db, jobBkt, job.UUID)
 }
+
+// PruneJobs removes all jobs with heights less than the provided height.
+func PruneJobs(db *bolt.DB, height uint32) error {
+	return db.Update(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, jobBkt)
+		if err != nil {
+			return err
+		}
+
+		heightBE := heightToBigEndianBytes(height)
+		toDelete := [][]byte{}
+		c := bkt.Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			heightB, err := hex.DecodeString(string(k[:8]))
+			if err != nil {
+				return err
+			}
+
+			if bytes.Compare(heightB, heightBE) < 0 {
+				toDelete = append(toDelete, k)
+			}
+		}
+
+		for _, entry := range toDelete {
+			err := bkt.Delete(entry)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}

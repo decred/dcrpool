@@ -162,3 +162,40 @@ func (pmt *Payment) Archive(db *bolt.DB) error {
 		return nil
 	})
 }
+
+// FetchOrphanedPayments returns all payments sourcing from orphaned blocks at
+// the provided height.
+func FetchOrphanedPayments(db *bolt.DB, height uint32) ([]*Payment, error) {
+	toReturn := make([]*Payment, 0)
+	err := db.Update(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, paymentBkt)
+		if err != nil {
+			return err
+		}
+
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			var payment Payment
+			err := json.Unmarshal(v, &payment)
+			if err != nil {
+				return err
+			}
+
+			if payment.PaidOnHeight == 0 {
+				// If a payment is spendable but does not get processed it
+				// becomes eligible for pruning.
+				spendableHeight := payment.EstimatedMaturity + 1
+				if height > spendableHeight {
+					toReturn = append(toReturn, &payment)
+				}
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return toReturn, nil
+}
