@@ -74,41 +74,14 @@ func testFetchBucketHelpers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Ensure fetch bucket helpers return an error when the
+	// Ensure fetch bucket helper returns an error when the
 	// pool bucket cannot be found.
 	err = db.View(func(tx *bolt.Tx) error {
-		_, err := fetchWorkBucket(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		_, err = fetchAccountBucket(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		_, err = fetchWorkBucket(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		_, err = fetchJobBucket(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		_, err = fetchPaymentBucket(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		_, err = fetchPaymentArchiveBucket(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		_, err = fetchShareBucket(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		return nil
+		_, err := fetchBucket(tx, workBkt)
+		return err
 	})
-	if err != nil {
-		t.Fatal(err)
+	if !errors.Is(err, ErrBucketNotFound) {
+		t.Fatalf("expected bucket not found error, got %v", err)
 	}
 
 	err = deleteEntry(db, paymentBkt, "k")
@@ -150,44 +123,14 @@ func testFetchBucketHelpers(t *testing.T) {
 		t.Fatalf("db update error: %v", err)
 	}
 
-	expectedNestedNotFoundErr := fmt.Errorf("expected nested bucket not found error")
-
-	// Ensure fetch bucket helpers return an error if the
+	// Ensure fetch bucket helper returns an error if the
 	// required nested bucket cannot be found.
 	err = db.View(func(tx *bolt.Tx) error {
-		_, err := fetchWorkBucket(tx)
-		if err == nil {
-			return expectedNestedNotFoundErr
-		}
-		_, err = fetchAccountBucket(tx)
-		if err == nil {
-			return expectedNestedNotFoundErr
-		}
-		_, err = fetchWorkBucket(tx)
-		if err == nil {
-			return expectedNestedNotFoundErr
-		}
-		_, err = fetchJobBucket(tx)
-		if err == nil {
-			return expectedNestedNotFoundErr
-		}
-		_, err = fetchPaymentBucket(tx)
-		if err == nil {
-			return expectedNestedNotFoundErr
-		}
-		_, err = fetchPaymentArchiveBucket(tx)
-		if err == nil {
-			return expectedNestedNotFoundErr
-		}
-		_, err = fetchShareBucket(tx)
-		if err == nil {
-			return expectedNestedNotFoundErr
-		}
-
-		return nil
+		_, err := fetchBucket(tx, workBkt)
+		return err
 	})
-	if err != nil {
-		t.Fatal(err)
+	if !errors.Is(err, ErrBucketNotFound) {
+		t.Fatalf("expected bucket not found error, got %v", err)
 	}
 
 }

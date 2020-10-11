@@ -108,7 +108,7 @@ func (cs *ChainState) fetchCurrentWork() string {
 func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) error {
 	toDelete := make([]*AcceptedWork, 0)
 	err := cs.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchWorkBucket(tx)
+		bkt, err := fetchBucket(tx, workBkt)
 		if err != nil {
 			return err
 		}
@@ -182,7 +182,7 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
 	toDelete := make([]*Payment, 0)
 	err := cs.cfg.DB.Update(func(tx *bolt.Tx) error {
-		bkt, err := fetchPaymentBucket(tx)
+		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
 		}
@@ -238,7 +238,7 @@ func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
 // pruneJobs removes all jobs with heights less than the provided height.
 func (cs *ChainState) pruneJobs(height uint32) error {
 	err := cs.cfg.DB.Update(func(tx *bolt.Tx) error {
-		bkt, err := fetchJobBucket(tx)
+		bkt, err := fetchBucket(tx, jobBkt)
 		if err != nil {
 			return err
 		}

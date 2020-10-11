@@ -273,7 +273,7 @@ func (pm *PaymentMgr) persistLastPaymentPaidOn(tx *bolt.Tx) error {
 func (pm *PaymentMgr) pruneShares(tx *bolt.Tx, minNano int64) error {
 	funcName := "pruneShares"
 	minB := nanoToBigEndianBytes(minNano)
-	bkt, err := fetchShareBucket(tx)
+	bkt, err := fetchBucket(tx, shareBkt)
 	if err != nil {
 		return err
 	}
@@ -401,7 +401,7 @@ func (pm *PaymentMgr) PPSEligibleShares(max []byte) ([]*Share, error) {
 	funcName := "PPSEligibleShares"
 	eligibleShares := make([]*Share, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchShareBucket(tx)
+		bkt, err := fetchBucket(tx, shareBkt)
 		if err != nil {
 			return err
 		}
@@ -459,7 +459,7 @@ func (pm *PaymentMgr) PPLNSEligibleShares(min []byte) ([]*Share, error) {
 	funcName := "PPLNSEligibleShares"
 	eligibleShares := make([]*Share, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchShareBucket(tx)
+		bkt, err := fetchBucket(tx, shareBkt)
 		if err != nil {
 			return err
 		}
@@ -668,7 +668,7 @@ func (pm *PaymentMgr) pendingPayments() ([]*Payment, error) {
 	funcName := "pendingPayments"
 	payments := make([]*Payment, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchPaymentBucket(tx)
+		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
 		}
@@ -698,7 +698,7 @@ func (pm *PaymentMgr) pendingPaymentsAtHeight(height uint32) ([]*Payment, error)
 	funcName := "pendingPaymentsAtHeight"
 	payments := make([]*Payment, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchPaymentBucket(tx)
+		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
 		}
@@ -741,7 +741,7 @@ func (pm *PaymentMgr) pendingPaymentsForBlockHash(blockHash string) (uint32, err
 	funcName := "pendingPaymentsForBlockHash"
 	var count uint32
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchPaymentBucket(tx)
+		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
 		}
@@ -775,7 +775,7 @@ func (pm *PaymentMgr) archivedPayments() ([]*Payment, error) {
 	funcName := "archivedPayments"
 	pmts := make([]*Payment, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		abkt, err := fetchPaymentArchiveBucket(tx)
+		abkt, err := fetchBucket(tx, paymentArchiveBkt)
 		if err != nil {
 			return err
 		}
@@ -805,7 +805,7 @@ func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[string][]*Paymen
 	funcName := "maturePendingPayments"
 	payments := make([]*Payment, 0)
 	err := pm.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchPaymentBucket(tx)
+		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
 		}

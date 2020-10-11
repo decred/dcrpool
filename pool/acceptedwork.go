@@ -60,30 +60,12 @@ func NewAcceptedWork(blockHash string, prevHash string, height uint32,
 	}
 }
 
-// fetchWorkBucket is a helper function for getting the work bucket.
-func fetchWorkBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	const funcName = "fetchWorkBucket"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	bkt := pbkt.Bucket(workBkt)
-	if bkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(workBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	return bkt, nil
-}
-
 // FetchAcceptedWork fetches the accepted work referenced by the provided id.
 func FetchAcceptedWork(db *bolt.DB, id string) (*AcceptedWork, error) {
 	const funcName = "FetchAcceptedWork"
 	var work AcceptedWork
 	err := db.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchWorkBucket(tx)
+		bkt, err := fetchBucket(tx, workBkt)
 		if err != nil {
 			return err
 		}
@@ -110,7 +92,7 @@ func FetchAcceptedWork(db *bolt.DB, id string) (*AcceptedWork, error) {
 func (work *AcceptedWork) Persist(db *bolt.DB) error {
 	const funcName = "AcceptedWork.Persist"
 	return db.Update(func(tx *bolt.Tx) error {
-		bkt, err := fetchWorkBucket(tx)
+		bkt, err := fetchBucket(tx, workBkt)
 		if err != nil {
 			return err
 		}
@@ -144,7 +126,7 @@ func (work *AcceptedWork) Persist(db *bolt.DB) error {
 func (work *AcceptedWork) Update(db *bolt.DB) error {
 	const funcName = "AcceptedWork.Update"
 	return db.Update(func(tx *bolt.Tx) error {
-		bkt, err := fetchWorkBucket(tx)
+		bkt, err := fetchBucket(tx, workBkt)
 		if err != nil {
 			return err
 		}
@@ -185,7 +167,7 @@ func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
 	const funcName = "ListMinedWork"
 	minedWork := make([]*AcceptedWork, 0)
 	err := db.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchWorkBucket(tx)
+		bkt, err := fetchBucket(tx, workBkt)
 		if err != nil {
 			return err
 		}

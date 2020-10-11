@@ -38,30 +38,12 @@ func NewAccount(address string) *Account {
 	}
 }
 
-// fetchAccountBucket is a helper function for getting the account bucket.
-func fetchAccountBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	const funcName = "fetchAccountBucket"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	bkt := pbkt.Bucket(accountBkt)
-	if bkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(accountBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	return bkt, nil
-}
-
 // FetchAccount fetches the account referenced by the provided id.
 func FetchAccount(db *bolt.DB, id string) (*Account, error) {
 	const funcName = "FetchAccount"
 	var account Account
 	err := db.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchAccountBucket(tx)
+		bkt, err := fetchBucket(tx, accountBkt)
 		if err != nil {
 			return err
 		}
@@ -89,7 +71,7 @@ func FetchAccount(db *bolt.DB, id string) (*Account, error) {
 func (acc *Account) Persist(db *bolt.DB) error {
 	const funcName = "Account.Persist"
 	return db.Update(func(tx *bolt.Tx) error {
-		bkt, err := fetchAccountBucket(tx)
+		bkt, err := fetchBucket(tx, accountBkt)
 		if err != nil {
 			return err
 		}

@@ -64,7 +64,7 @@ func (txB *txBroadcasterImpl) PublishTransaction(ctx context.Context, req *walle
 func fetchShare(db *bolt.DB, id string) (*Share, error) {
 	var share Share
 	err := db.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchShareBucket(tx)
+		bkt, err := fetchBucket(tx, shareBkt)
 		if err != nil {
 			return err
 		}
