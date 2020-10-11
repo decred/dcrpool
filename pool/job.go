@@ -106,8 +106,8 @@ func (job *Job) Delete(db *bolt.DB) error {
 	return deleteEntry(db, jobBkt, job.UUID)
 }
 
-// PruneJobs removes all jobs with heights less than the provided height.
-func PruneJobs(db *bolt.DB, height uint32) error {
+// DeleteJobsBeforeHeight removes all jobs with heights less than the provided height.
+func DeleteJobsBeforeHeight(db *bolt.DB, height uint32) error {
 	return db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, jobBkt)
 		if err != nil {
