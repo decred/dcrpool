@@ -77,9 +77,9 @@ func (s *Share) Persist(db *bolt.DB) error {
 	})
 }
 
-// PPSEligibleShares fetches all shares created before or at the provided time.
-func PPSEligibleShares(db *bolt.DB, max []byte) ([]*Share, error) {
-	funcName := "PPSEligibleShares"
+// ppsEligibleShares fetches all shares created before or at the provided time.
+func ppsEligibleShares(db *bolt.DB, max []byte) ([]*Share, error) {
+	funcName := "ppsEligibleShares"
 	eligibleShares := make([]*Share, 0)
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, shareBkt)
@@ -115,10 +115,10 @@ func PPSEligibleShares(db *bolt.DB, max []byte) ([]*Share, error) {
 	return eligibleShares, err
 }
 
-// PPLNSEligibleShares fetches all shares keyed greater than the provided
+// pplnsEligibleShares fetches all shares keyed greater than the provided
 // minimum.
-func PPLNSEligibleShares(db *bolt.DB, min []byte) ([]*Share, error) {
-	funcName := "PPLNSEligibleShares"
+func pplnsEligibleShares(db *bolt.DB, min []byte) ([]*Share, error) {
+	funcName := "pplnsEligibleShares"
 	eligibleShares := make([]*Share, 0)
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, shareBkt)

@@ -399,7 +399,7 @@ func (pm *PaymentMgr) sharePercentages(shares []*Share) (map[string]*big.Rat, er
 // the PPS payment scheme.
 func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.Rat, error) {
 	max := nanoToBigEndianBytes(workCreatedOn)
-	shares, err := PPSEligibleShares(pm.cfg.DB, max)
+	shares, err := ppsEligibleShares(pm.cfg.DB, max)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +418,7 @@ func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.
 func (pm *PaymentMgr) PPLNSSharePercentages() (map[string]*big.Rat, error) {
 	now := time.Now()
 	min := now.Add(-pm.cfg.LastNPeriod)
-	shares, err := PPLNSEligibleShares(pm.cfg.DB, nanoToBigEndianBytes(min.UnixNano()))
+	shares, err := pplnsEligibleShares(pm.cfg.DB, nanoToBigEndianBytes(min.UnixNano()))
 	if err != nil {
 		return nil, err
 	}
@@ -860,7 +860,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 // PayDividends pays mature mining rewards to participating accounts.
 func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryActive bool) error {
 	funcName := "payDividends"
-	mPmts, err := MaturePendingPayments(pm.cfg.DB, height)
+	mPmts, err := maturePendingPayments(pm.cfg.DB, height)
 	if err != nil {
 		return err
 	}

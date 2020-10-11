@@ -255,7 +255,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		DB:                          h.db,
 		SoloPool:                    h.cfg.SoloPool,
 		PayDividends:                h.paymentMgr.payDividends,
-		PendingPaymentsForBlockHash: PendingPaymentsForBlockHash,
+		PendingPaymentsForBlockHash: pendingPaymentsForBlockHash,
 		GeneratePayments:            h.paymentMgr.generatePayments,
 		GetBlock:                    h.getBlock,
 		GetBlockConfirmations:       h.getBlockConfirmations,
@@ -577,12 +577,12 @@ func (h *Hub) FetchClients() []*Client {
 
 // FetchPendingPayments fetches all unpaid payments.
 func (h *Hub) FetchPendingPayments() ([]*Payment, error) {
-	return FetchPendingPayments(h.db)
+	return fetchPendingPayments(h.db)
 }
 
 // FetchArchivedPayments fetches all paid payments.
 func (h *Hub) FetchArchivedPayments() ([]*Payment, error) {
-	return ArchivedPayments(h.db)
+	return archivedPayments(h.db)
 }
 
 // FetchMinedWork returns work data associated with all blocks mined by the pool
