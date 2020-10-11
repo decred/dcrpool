@@ -102,13 +102,13 @@ func (cs *ChainState) fetchCurrentWork() string {
 
 // pruneJobs removes all jobs with heights less than the provided height.
 func (cs *ChainState) pruneJobs(height uint32) error {
-	return DeleteJobsBeforeHeight(cs.cfg.DB, height)
+	return deleteJobsBeforeHeight(cs.cfg.DB, height)
 }
 
 // pruneAcceptedWork removes all accepted work not confirmed as mined work
 // with heights less than the provided height.
 func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) error {
-	toDelete, err := FetchUnconfirmedWork(cs.cfg.DB, height)
+	toDelete, err := fetchUnconfirmedWork(cs.cfg.DB, height)
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 // prunePayments removes all spendable payments sourcing from
 // orphaned blocks at the provided height.
 func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
-	toDelete, err := FetchOrphanedPayments(cs.cfg.DB, height)
+	toDelete, err := fetchOrphanedPayments(cs.cfg.DB, height)
 	if err != nil {
 		return err
 	}

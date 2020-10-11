@@ -163,9 +163,9 @@ func (pmt *Payment) Archive(db *bolt.DB) error {
 	})
 }
 
-// FetchOrphanedPayments returns all payments sourcing from orphaned blocks at
+// fetchOrphanedPayments returns all payments sourcing from orphaned blocks at
 // the provided height.
-func FetchOrphanedPayments(db *bolt.DB, height uint32) ([]*Payment, error) {
+func fetchOrphanedPayments(db *bolt.DB, height uint32) ([]*Payment, error) {
 	toReturn := make([]*Payment, 0)
 	err := db.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, paymentBkt)

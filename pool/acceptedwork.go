@@ -191,9 +191,9 @@ func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
 	return minedWork, nil
 }
 
-// FetchUnconfirmedWork returns all work which is not confirmed as mined with
+// fetchUnconfirmedWork returns all work which is not confirmed as mined with
 // height less than the provided height.
-func FetchUnconfirmedWork(db *bolt.DB, height uint32) ([]*AcceptedWork, error) {
+func fetchUnconfirmedWork(db *bolt.DB, height uint32) ([]*AcceptedWork, error) {
 	toReturn := make([]*AcceptedWork, 0)
 	err := db.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, workBkt)
