@@ -35,12 +35,9 @@ type ChainStateConfig struct {
 	// GetBlockConfirmations fetches the block confirmations with the provided
 	// block hash.
 	GetBlockConfirmations func(context.Context, *chainhash.Hash) (int64, error)
-	// PendingPaymentsAtHeight fetches all pending payments at
-	// the provided height.
-	PendingPaymentsAtHeight func(uint32) ([]*Payment, error)
 	// PendingPaymentsForBlockHash returns the number of pending payments
 	// with the provided block hash as their source.
-	PendingPaymentsForBlockHash func(blockHash string) (uint32, error)
+	PendingPaymentsForBlockHash func(db *bolt.DB, blockHash string) (uint32, error)
 	// Cancel represents the pool's context cancellation function.
 	Cancel context.CancelFunc
 	// SignalCache sends the provided cache update event to the gui cache.
@@ -321,7 +318,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 
 			if !cs.cfg.SoloPool {
-				count, err := cs.cfg.PendingPaymentsForBlockHash(parentHash)
+				count, err := cs.cfg.PendingPaymentsForBlockHash(cs.cfg.DB, parentHash)
 				if err != nil {
 					// Errors generated looking up pending payments
 					// indicates an underlying issue accessing the database.

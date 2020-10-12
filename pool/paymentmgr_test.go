@@ -396,8 +396,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("emptyBucket error: %v", err)
 	}
 
-	// Test pendingPayments, pendingPaymentsAtHeight,
-	// maturePendingPayments, archivedPayments and
+	// Test pendingPayments, maturePendingPayments, archivedPayments and
 	// pendingPaymentsForBlockHash.
 	height := uint32(10)
 	estMaturity := uint32(26)
@@ -455,26 +454,6 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	if len(pmts) != 2 {
 		t.Fatalf("expected 2 pending payments, got %d", len(pmts))
-	}
-
-	// Ensure there are two pending payments at height 15.
-	pmts, err = mgr.pendingPaymentsAtHeight(15)
-	if err != nil {
-		t.Fatalf("pendingPaymentsAtHeight error: %v", err)
-	}
-
-	if len(pmts) != 2 {
-		t.Fatalf("expected 2 pending payments at height 15, got %d", len(pmts))
-	}
-
-	// Ensure there are no pending payments at height 8.
-	pmts, err = mgr.pendingPaymentsAtHeight(8)
-	if err != nil {
-		t.Fatalf("pendingPaymentsAtHeight error: %v", err)
-	}
-
-	if len(pmts) != 0 {
-		t.Fatalf("expected no pending payments at height 8, got %d", len(pmts))
 	}
 
 	// Ensure there are two archived payments (payment C and D).

@@ -76,3 +76,80 @@ func (s *Share) Persist(db *bolt.DB) error {
 		return nil
 	})
 }
+
+// ppsEligibleShares fetches all shares created before or at the provided time.
+func ppsEligibleShares(db *bolt.DB, max []byte) ([]*Share, error) {
+	funcName := "ppsEligibleShares"
+	eligibleShares := make([]*Share, 0)
+	err := db.View(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, shareBkt)
+		if err != nil {
+			return err
+		}
+		c := bkt.Cursor()
+		createdOnB := make([]byte, 8)
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			_, err := hex.Decode(createdOnB, k[:16])
+			if err != nil {
+				desc := fmt.Sprintf("%s: unable to decode share "+
+					"created-on bytes: %v", funcName, err)
+				return dbError(ErrDecode, desc)
+			}
+
+			if bytes.Compare(createdOnB, max) <= 0 {
+				var share Share
+				err := json.Unmarshal(v, &share)
+				if err != nil {
+					desc := fmt.Sprintf("%s: unable to unmarshal share: %v",
+						funcName, err)
+					return dbError(ErrParse, desc)
+				}
+				eligibleShares = append(eligibleShares, &share)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return eligibleShares, err
+}
+
+// pplnsEligibleShares fetches all shares keyed greater than the provided
+// minimum.
+func pplnsEligibleShares(db *bolt.DB, min []byte) ([]*Share, error) {
+	funcName := "pplnsEligibleShares"
+	eligibleShares := make([]*Share, 0)
+	err := db.View(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, shareBkt)
+		if err != nil {
+			return err
+		}
+		c := bkt.Cursor()
+		createdOnB := make([]byte, 8)
+		for k, v := c.Last(); k != nil; k, v = c.Prev() {
+			_, err := hex.Decode(createdOnB, k[:16])
+			if err != nil {
+				desc := fmt.Sprintf("%s: unable to decode share "+
+					"created-on bytes: %v", funcName, err)
+				return dbError(ErrDecode, desc)
+			}
+
+			if bytes.Compare(createdOnB, min) > 0 {
+				var share Share
+				err := json.Unmarshal(v, &share)
+				if err != nil {
+					desc := fmt.Sprintf("%s: unable to unmarshal "+
+						"share: %v", funcName, err)
+					return dbError(ErrParse, desc)
+				}
+				eligibleShares = append(eligibleShares, &share)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return eligibleShares, err
+}
