@@ -206,7 +206,7 @@ func (pm *PaymentMgr) fetchLastPaymentHeight() uint32 {
 
 // persistLastPaymentHeight saves the last payment height to the db.
 func (pm *PaymentMgr) persistLastPaymentHeight() error {
-	height := atomic.LoadUint32(&pm.lastPaymentHeight)
+	height := pm.fetchLastPaymentHeight()
 	return persistLastPaymentHeight(pm.cfg.DB, height)
 }
 
@@ -232,7 +232,8 @@ func (pm *PaymentMgr) fetchLastPaymentPaidOn() uint64 {
 
 // persistLastPaymentPaidOn saves the last payment paid on time to the db.
 func (pm *PaymentMgr) persistLastPaymentPaidOn() error {
-	return persistLastPaymentPaidOn(pm.cfg.DB, int64(pm.lastPaymentPaidOn))
+	paidOn := pm.fetchLastPaymentPaidOn()
+	return persistLastPaymentPaidOn(pm.cfg.DB, int64(paidOn))
 }
 
 // pruneShares removes invalidated shares from the db.
@@ -269,7 +270,8 @@ func (pm *PaymentMgr) fetchLastPaymentCreatedOn() uint64 {
 
 // persistLastPaymentCreatedOn saves the last payment created on time to the db.
 func (pm *PaymentMgr) persistLastPaymentCreatedOn() error {
-	return persistLastPaymentCreatedOn(pm.cfg.DB, int64(pm.lastPaymentCreatedOn))
+	createdOn := pm.fetchLastPaymentCreatedOn()
+	return persistLastPaymentCreatedOn(pm.cfg.DB, int64(createdOn))
 }
 
 // loadLastPaymentCreatedOn fetches the last payment created on time from the db.
