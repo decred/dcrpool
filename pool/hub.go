@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -193,14 +194,6 @@ func (h *Hub) SetTxConfNotifClient(conn walletrpc.WalletService_ConfirmationNoti
 	h.notifClient = conn
 }
 
-// persistPoolMode saves the pool mode to the db.
-func (h *Hub) persistPoolMode(tx *bolt.Tx, mode uint32) error {
-	pbkt := tx.Bucket(poolBkt)
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, mode)
-	return pbkt.Put(soloPool, b)
-}
-
 // generateBlake256Pad creates the extra padding needed for work
 // submissions over the getwork RPC.
 func generateBlake256Pad() []byte {
@@ -273,19 +266,15 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	}
 	h.chainState = NewChainState(sCfg)
 
+	mode := uint32(0)
 	if !h.cfg.SoloPool {
 		log.Infof("Payment method is %s.", strings.ToUpper(hcfg.PaymentMethod))
 	} else {
+		mode = 1
 		log.Infof("Solo pool mode active.")
 	}
 
-	err = h.db.Update(func(tx *bolt.Tx) error {
-		mode := uint32(0)
-		if h.cfg.SoloPool {
-			mode = 1
-		}
-		return h.persistPoolMode(tx, mode)
-	})
+	err = persistPoolMode(h.db, mode)
 	if err != nil {
 		return nil, err
 	}
@@ -652,35 +641,27 @@ func (h *Hub) AccountExists(accountID string) bool {
 
 // CSRFSecret fetches a persisted secret or generates a new one.
 func (h *Hub) CSRFSecret() ([]byte, error) {
-	var secret []byte
-	err := h.db.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		if pbkt == nil {
-			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return dbError(ErrBucketNotFound, desc)
-		}
-		v := pbkt.Get(csrfSecret)
-		if v != nil {
-			secret = make([]byte, len(v))
-			copy(secret, v)
-			return nil
-		}
+	secret, err := fetchCSRFSecret(h.db)
 
-		var err error
-		secret = make([]byte, 32)
-		_, err = rand.Read(secret)
-		if err != nil {
-			return err
-		}
-		err = pbkt.Put(csrfSecret, secret)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrValueNotFound) {
+			// If the database doesnt contain a CSRF secret, generate one and
+			// persist it.
+			secret = make([]byte, 32)
+			_, err = rand.Read(secret)
+			if err != nil {
+				return nil, err
+			}
+
+			err = persistCSRFSecret(h.db, secret)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
+
 	return secret, nil
 }
 

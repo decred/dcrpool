@@ -316,3 +316,52 @@ func fetchBucket(tx *bolt.Tx, bucketID []byte) (*bolt.Bucket, error) {
 	}
 	return bkt, nil
 }
+
+func persistPoolMode(db *bolt.DB, mode uint32) error {
+	return db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(poolBkt)
+		b := make([]byte, 4)
+		binary.LittleEndian.PutUint32(b, mode)
+		return pbkt.Put(soloPool, b)
+	})
+}
+
+func fetchCSRFSecret(db *bolt.DB) ([]byte, error) {
+	var secret []byte
+
+	err := db.View(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(poolBkt)
+		if pbkt == nil {
+			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+			return dbError(ErrBucketNotFound, desc)
+		}
+		v := pbkt.Get(csrfSecret)
+		if v == nil {
+			return dbError(ErrValueNotFound, "No csrf secret found")
+		}
+
+		// Byte slices returned from Bolt are only valid during a transaction.
+		// Need to make a copy.
+		secret = make([]byte, len(v))
+		copy(secret, v)
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return secret, nil
+}
+
+func persistCSRFSecret(db *bolt.DB, secret []byte) error {
+	return db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(poolBkt)
+		if pbkt == nil {
+			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
+			return dbError(ErrBucketNotFound, desc)
+		}
+
+		return pbkt.Put(csrfSecret, secret)
+	})
+}
