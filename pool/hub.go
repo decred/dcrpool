@@ -577,12 +577,12 @@ func (h *Hub) FetchClients() []*Client {
 
 // FetchPendingPayments fetches all unpaid payments.
 func (h *Hub) FetchPendingPayments() ([]*Payment, error) {
-	return fetchPendingPayments(h.db)
+	return h.paymentMgr.pendingPayments()
 }
 
 // FetchArchivedPayments fetches all paid payments.
 func (h *Hub) FetchArchivedPayments() ([]*Payment, error) {
-	return archivedPayments(h.db)
+	return h.paymentMgr.archivedPayments()
 }
 
 // FetchMinedWork returns work data associated with all blocks mined by the pool

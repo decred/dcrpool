@@ -232,7 +232,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("expected value not found error")
 	}
 
-	// Test ppsEligibleShares and pplnsEligibleShares.
+	// Test PPSEligibleShares and PPLNSEligibleShares.
 	now = time.Now()
 	sixtyBefore = now.Add(-(time.Second * 60)).UnixNano()
 	eightyBefore = now.Add(-(time.Second * 80)).UnixNano()
@@ -266,9 +266,9 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	// nowB := nanoToBigEndianBytes(minimum)
 
 	// Fetch eligible shares at minimum time.
-	shares, err := ppsEligibleShares(db, sixtyBeforeB)
+	shares, err := mgr.PPSEligibleShares(sixtyBeforeB)
 	if err != nil {
-		t.Fatalf("ppsEligibleShares: unexpected error: %v", err)
+		t.Fatalf("PPSEligibleShares: unexpected error: %v", err)
 	}
 
 	// Ensure the returned share count is as expected.
@@ -349,7 +349,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
-	shares, err = pplnsEligibleShares(db, sixtyBeforeB)
+	shares, err = mgr.PPLNSEligibleShares(sixtyBeforeB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("emptyBucket error: %v", err)
 	}
 
-	// Test fetchPendingPayments, maturePendingPayments, archivedPayments and
+	// Test pendingPayments, maturePendingPayments, archivedPayments and
 	// pendingPaymentsForBlockHash.
 	height := uint32(10)
 	estMaturity := uint32(26)
@@ -447,9 +447,9 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure there are two pending payments.
-	pmts, err := fetchPendingPayments(db)
+	pmts, err := mgr.pendingPayments()
 	if err != nil {
-		t.Fatalf("fetchPendingPayments error: %v", err)
+		t.Fatalf("pendingPayments error: %v", err)
 	}
 
 	if len(pmts) != 2 {
@@ -457,7 +457,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure there are two archived payments (payment C and D).
-	pmts, err = archivedPayments(db)
+	pmts, err = mgr.archivedPayments()
 	if err != nil {
 		t.Fatalf("archivedPayments error: %v", err)
 	}
@@ -467,7 +467,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure there are two mature payments at height 28 (payment A and B).
-	pmtSet, err := maturePendingPayments(db, 28)
+	pmtSet, err := mgr.maturePendingPayments(28)
 	if err != nil {
 		t.Fatalf("maturePendingPayments error: %v", err)
 	}
@@ -488,7 +488,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure there are no mature payments at height 27 (payment A and B).
-	pmtSet, err = maturePendingPayments(db, 27)
+	pmtSet, err = mgr.maturePendingPayments(27)
 	if err != nil {
 		t.Fatalf("maturePendingPayments error: %v", err)
 	}
@@ -498,7 +498,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure there are two pending payments for the zero hash.
-	count, err := pendingPaymentsForBlockHash(db, zeroSource.BlockHash)
+	count, err := mgr.pendingPaymentsForBlockHash(zeroSource.BlockHash)
 	if err != nil {
 		t.Fatalf("pendingPaymentsForBlockHash error: %v", err)
 	}
@@ -680,7 +680,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure the payments created are for accounts x, y and a fee
 	// payment entry.
-	pmts, err = fetchPendingPayments(db)
+	pmts, err = mgr.pendingPayments()
 	if err != nil {
 		t.Error(err)
 	}
@@ -796,9 +796,9 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure the payments created are for accounts x, y and a fee
 	// payment entry.
-	pmts, err = fetchPendingPayments(db)
+	pmts, err = mgr.pendingPayments()
 	if err != nil {
-		t.Fatalf("[PPLNS] fetchPendingPayments error: %v", err)
+		t.Fatalf("[PPLNS] pendingPayments error: %v", err)
 	}
 
 	xt = dcrutil.Amount(0)
@@ -898,7 +898,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure payments for account x, y and fees were created.
-	pmtSets, err := maturePendingPayments(db, paymentMaturity)
+	pmtSets, err := mgr.maturePendingPayments(paymentMaturity)
 	if err != nil {
 		t.Fatalf("[maturePendingPayments] unexpected error: %v", err)
 	}
@@ -1714,9 +1714,9 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 
 	// Ensure the payments created are for account y and a fee
 	// payment entry.
-	pmts, err = fetchPendingPayments(db)
+	pmts, err = mgr.pendingPayments()
 	if err != nil {
-		t.Fatalf("fetchPendingPayments error: %v", err)
+		t.Fatalf("pendingPayments error: %v", err)
 	}
 
 	// Ensure only two pending payments were generated.

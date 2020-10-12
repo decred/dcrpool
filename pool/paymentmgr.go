@@ -394,12 +394,18 @@ func (pm *PaymentMgr) sharePercentages(shares []*Share) (map[string]*big.Rat, er
 	return percentages, nil
 }
 
+// PPSEligibleShares fetches all shares created before or at the provided
+// time.
+func (pm *PaymentMgr) PPSEligibleShares(max []byte) ([]*Share, error) {
+	return ppsEligibleShares(pm.cfg.DB, max)
+}
+
 // PPSSharePercentages calculates the current mining reward percentages
 // due participating pool accounts based on work performed measured by
 // the PPS payment scheme.
 func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.Rat, error) {
 	max := nanoToBigEndianBytes(workCreatedOn)
-	shares, err := ppsEligibleShares(pm.cfg.DB, max)
+	shares, err := pm.PPSEligibleShares(max)
 	if err != nil {
 		return nil, err
 	}
@@ -413,12 +419,18 @@ func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.
 	return percentages, nil
 }
 
+// PPLNSEligibleShares fetches all shares keyed greater than the provided
+// minimum.
+func (pm *PaymentMgr) PPLNSEligibleShares(min []byte) ([]*Share, error) {
+	return pplnsEligibleShares(pm.cfg.DB, min)
+}
+
 // PPLNSSharePercentages calculates the current mining reward percentages due pool
 // accounts based on work performed measured by the PPLNS payment scheme.
 func (pm *PaymentMgr) PPLNSSharePercentages() (map[string]*big.Rat, error) {
 	now := time.Now()
 	min := now.Add(-pm.cfg.LastNPeriod)
-	shares, err := pplnsEligibleShares(pm.cfg.DB, nanoToBigEndianBytes(min.UnixNano()))
+	shares, err := pm.PPLNSEligibleShares(nanoToBigEndianBytes(min.UnixNano()))
 	if err != nil {
 		return nil, err
 	}
@@ -582,6 +594,29 @@ func (pm *PaymentMgr) generatePayments(height uint32, source *PaymentSource, amt
 	default:
 		return fmt.Errorf("unknown payment method provided %v", pm.cfg.PaymentMethod)
 	}
+}
+
+// pendingPayments fetches all unpaid payments.
+func (pm *PaymentMgr) pendingPayments() ([]*Payment, error) {
+	return fetchPendingPayments(pm.cfg.DB)
+}
+
+// pendingPaymentsForBlockHash returns the number of  pending payments with
+// the provided block hash as their source.
+func (pm *PaymentMgr) pendingPaymentsForBlockHash(blockHash string) (uint32, error) {
+	return pendingPaymentsForBlockHash(pm.cfg.DB, blockHash)
+}
+
+// archivedPayments fetches all archived payments. List is ordered, most
+// recent comes first.
+func (pm *PaymentMgr) archivedPayments() ([]*Payment, error) {
+	return archivedPayments(pm.cfg.DB)
+}
+
+// maturePendingPayments fetches all mature pending payments at the
+// provided height.
+func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[string][]*Payment, error) {
+	return maturePendingPayments(pm.cfg.DB, height)
 }
 
 // pruneOrphanedPayments removes all orphaned payments from the provided payments.
@@ -860,7 +895,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 // PayDividends pays mature mining rewards to participating accounts.
 func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryActive bool) error {
 	funcName := "payDividends"
-	mPmts, err := maturePendingPayments(pm.cfg.DB, height)
+	mPmts, err := pm.maturePendingPayments(height)
 	if err != nil {
 		return err
 	}
