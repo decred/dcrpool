@@ -190,3 +190,42 @@ func ListMinedWork(db *bolt.DB) ([]*AcceptedWork, error) {
 	}
 	return minedWork, nil
 }
+
+// fetchUnconfirmedWork returns all work which is not confirmed as mined with
+// height less than the provided height.
+func fetchUnconfirmedWork(db *bolt.DB, height uint32) ([]*AcceptedWork, error) {
+	toReturn := make([]*AcceptedWork, 0)
+	err := db.View(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, workBkt)
+		if err != nil {
+			return err
+		}
+
+		heightBE := heightToBigEndianBytes(height)
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			heightB, err := hex.DecodeString(string(k[:8]))
+			if err != nil {
+				return err
+			}
+
+			if bytes.Compare(heightBE, heightB) > 0 {
+				var work AcceptedWork
+				err := json.Unmarshal(v, &work)
+				if err != nil {
+					return err
+				}
+
+				if !work.Confirmed {
+					toReturn = append(toReturn, &work)
+				}
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return toReturn, nil
+}

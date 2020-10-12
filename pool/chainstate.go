@@ -1,10 +1,7 @@
 package pool
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -103,39 +100,15 @@ func (cs *ChainState) fetchCurrentWork() string {
 	return work
 }
 
+// pruneJobs removes all jobs with heights less than the provided height.
+func (cs *ChainState) pruneJobs(height uint32) error {
+	return deleteJobsBeforeHeight(cs.cfg.DB, height)
+}
+
 // pruneAcceptedWork removes all accepted work not confirmed as mined work
 // with heights less than the provided height.
 func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) error {
-	toDelete := make([]*AcceptedWork, 0)
-	err := cs.cfg.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchBucket(tx, workBkt)
-		if err != nil {
-			return err
-		}
-
-		heightBE := heightToBigEndianBytes(height)
-		cursor := bkt.Cursor()
-		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			heightB, err := hex.DecodeString(string(k[:8]))
-			if err != nil {
-				return err
-			}
-
-			if bytes.Compare(heightBE, heightB) > 0 {
-				var work AcceptedWork
-				err := json.Unmarshal(v, &work)
-				if err != nil {
-					return err
-				}
-
-				if !work.Confirmed {
-					toDelete = append(toDelete, &work)
-				}
-			}
-		}
-
-		return nil
-	})
+	toDelete, err := fetchUnconfirmedWork(cs.cfg.DB, height)
 	if err != nil {
 		return err
 	}
@@ -177,36 +150,10 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 	return nil
 }
 
-// prunePayments removes all spendabe payments sourcing from
+// prunePayments removes all spendable payments sourcing from
 // orphaned blocks at the provided height.
 func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
-	toDelete := make([]*Payment, 0)
-	err := cs.cfg.DB.Update(func(tx *bolt.Tx) error {
-		bkt, err := fetchBucket(tx, paymentBkt)
-		if err != nil {
-			return err
-		}
-
-		cursor := bkt.Cursor()
-		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			var payment Payment
-			err := json.Unmarshal(v, &payment)
-			if err != nil {
-				return err
-			}
-
-			if payment.PaidOnHeight == 0 {
-				// If a payment is spendable but does not get processed it
-				// becomes eligible for pruning.
-				spendableHeight := payment.EstimatedMaturity + 1
-				if height > spendableHeight {
-					toDelete = append(toDelete, &payment)
-				}
-			}
-		}
-
-		return nil
-	})
+	toDelete, err := fetchPaymentsAtHeight(cs.cfg.DB, height)
 	if err != nil {
 		return err
 	}
@@ -233,41 +180,6 @@ func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
 	}
 
 	return nil
-}
-
-// pruneJobs removes all jobs with heights less than the provided height.
-func (cs *ChainState) pruneJobs(height uint32) error {
-	err := cs.cfg.DB.Update(func(tx *bolt.Tx) error {
-		bkt, err := fetchBucket(tx, jobBkt)
-		if err != nil {
-			return err
-		}
-
-		heightBE := heightToBigEndianBytes(height)
-		toDelete := [][]byte{}
-		c := bkt.Cursor()
-		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			heightB, err := hex.DecodeString(string(k[:8]))
-			if err != nil {
-				return err
-			}
-
-			if bytes.Compare(heightB, heightBE) < 0 {
-				toDelete = append(toDelete, k)
-			}
-		}
-
-		for _, entry := range toDelete {
-			err := bkt.Delete(entry)
-			if err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
-
-	return err
 }
 
 // isTreasuryActive checks the provided coinbase transaction if
