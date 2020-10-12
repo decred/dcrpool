@@ -199,9 +199,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatal(err)
 	}
 
-	err = mgr.cfg.DB.Update(func(tx *bolt.Tx) error {
-		return mgr.pruneShares(tx, sixtyBefore)
-	})
+	err = mgr.pruneShares(sixtyBefore)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,9 +217,7 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 		t.Fatalf("unexpected error fetching share B: %v", err)
 	}
 
-	err = mgr.cfg.DB.Update(func(tx *bolt.Tx) error {
-		return mgr.pruneShares(tx, tenAfter)
-	})
+	err = mgr.pruneShares(tenAfter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,24 +515,19 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	}
 
 	// Ensure backed up values to the database load as expected.
-	err = db.View(func(tx *bolt.Tx) error {
-		err = mgr.loadLastPaymentHeight(tx)
-		if err != nil {
-			return fmt.Errorf("unable to load last payment height: %v", err)
-		}
-		err = mgr.loadLastPaymentCreatedOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to load last payment created on: %v", err)
-		}
-		err = mgr.loadLastPaymentPaidOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to load last payment paid on: %v", err)
-		}
-		return nil
-	})
+	err = mgr.loadLastPaymentHeight()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unable to load last payment height: %v", err)
 	}
+	err = mgr.loadLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("unable to load last payment created on: %v", err)
+	}
+	err = mgr.loadLastPaymentPaidOn()
+	if err != nil {
+		t.Fatalf("unable to load last payment paid on: %v", err)
+	}
+
 	initialLastPaymentHeight := mgr.fetchLastPaymentHeight()
 	initialLastPaymentPaidOn := mgr.fetchLastPaymentPaidOn()
 	initialLastPaymentCreatedOn := mgr.fetchLastPaymentCreatedOn()
@@ -559,42 +550,30 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mgr.setLastPaymentPaidOn(lastPaymentPaidOn)
 	lastPaymentCreatedOn := uint64(time.Now().UnixNano())
 	mgr.setLastPaymentCreatedOn(lastPaymentCreatedOn)
-	err = db.Update(func(tx *bolt.Tx) error {
-		err := mgr.persistLastPaymentHeight(tx)
-		if err != nil {
-			return fmt.Errorf("[persistLastPaymentHeight] unable to persist last payment height: %v", err)
-		}
-		err = mgr.persistLastPaymentPaidOn(tx)
-		if err != nil {
-			return fmt.Errorf("[persistLastPaymentPaidOn] unable to persist last payment paid on: %v", err)
-		}
-		err = mgr.persistLastPaymentCreatedOn(tx)
-		if err != nil {
-			return fmt.Errorf("[persistLastPaymentCreatedOn] unable to persist last payment created on: %v", err)
-		}
-		return nil
-	})
+	err = mgr.persistLastPaymentHeight()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("[persistLastPaymentHeight] unable to persist last payment height: %v", err)
+	}
+	err = mgr.persistLastPaymentPaidOn()
+	if err != nil {
+		t.Fatalf("[persistLastPaymentPaidOn] unable to persist last payment paid on: %v", err)
+	}
+	err = mgr.persistLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("[persistLastPaymentCreatedOn] unable to persist last payment created on: %v", err)
 	}
 
-	err = db.View(func(tx *bolt.Tx) error {
-		err := mgr.loadLastPaymentHeight(tx)
-		if err != nil {
-			return fmt.Errorf("[loadLastPaymentHeight] unable to load last payment height: %v", err)
-		}
-		err = mgr.loadLastPaymentPaidOn(tx)
-		if err != nil {
-			return fmt.Errorf("[loadLastPaymentPaidOn] unable to load last payment paid on: %v", err)
-		}
-		err = mgr.loadLastPaymentCreatedOn(tx)
-		if err != nil {
-			return fmt.Errorf("[loadLastPaymentCreatedOn] unable to load last payment created on: %v", err)
-		}
-		return nil
-	})
+	err = mgr.loadLastPaymentHeight()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("[loadLastPaymentHeight] unable to load last payment height: %v", err)
+	}
+	err = mgr.loadLastPaymentPaidOn()
+	if err != nil {
+		t.Fatalf("[loadLastPaymentPaidOn] unable to load last payment paid on: %v", err)
+	}
+	err = mgr.loadLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("[loadLastPaymentCreatedOn] unable to load last payment created on: %v", err)
 	}
 
 	paymentHeight := mgr.fetchLastPaymentHeight()
@@ -617,23 +596,17 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mgr.setLastPaymentHeight(0)
 	mgr.setLastPaymentPaidOn(0)
 	mgr.setLastPaymentCreatedOn(0)
-	err = db.Update(func(tx *bolt.Tx) error {
-		err := mgr.persistLastPaymentHeight(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment height: %v", err)
-		}
-		err = mgr.persistLastPaymentPaidOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment paid on: %v", err)
-		}
-		err = mgr.persistLastPaymentCreatedOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment created on: %v", err)
-		}
-		return nil
-	})
+	err = mgr.persistLastPaymentHeight()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unable to persist default last payment height: %v", err)
+	}
+	err = mgr.persistLastPaymentPaidOn()
+	if err != nil {
+		t.Fatalf("unable to persist default last payment paid on: %v", err)
+	}
+	err = mgr.persistLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
 
 	// Ensure Pay-Per-Share (PPS) works as expected.
@@ -735,23 +708,17 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mgr.setLastPaymentHeight(0)
 	mgr.setLastPaymentPaidOn(0)
 	mgr.setLastPaymentCreatedOn(0)
-	err = db.Update(func(tx *bolt.Tx) error {
-		err := mgr.persistLastPaymentHeight(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment height: %v", err)
-		}
-		err = mgr.persistLastPaymentPaidOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment paid on: %v", err)
-		}
-		err = mgr.persistLastPaymentCreatedOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment created on: %v", err)
-		}
-		return nil
-	})
+	err = mgr.persistLastPaymentHeight()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unable to persist default last payment height: %v", err)
+	}
+	err = mgr.persistLastPaymentPaidOn()
+	if err != nil {
+		t.Fatalf("unable to persist default last payment paid on: %v", err)
+	}
+	err = mgr.persistLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
 
 	// Ensure Pay-Per-Last-N-Shares (PPLNS) works as expected.
@@ -853,23 +820,17 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mgr.setLastPaymentHeight(0)
 	mgr.setLastPaymentPaidOn(0)
 	mgr.setLastPaymentCreatedOn(0)
-	err = db.Update(func(tx *bolt.Tx) error {
-		err := mgr.persistLastPaymentHeight(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment height: %v", err)
-		}
-		err = mgr.persistLastPaymentPaidOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment paid on: %v", err)
-		}
-		err = mgr.persistLastPaymentCreatedOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment created on: %v", err)
-		}
-		return nil
-	})
+	err = mgr.persistLastPaymentHeight()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unable to persist default last payment height: %v", err)
+	}
+	err = mgr.persistLastPaymentPaidOn()
+	if err != nil {
+		t.Fatalf("unable to persist default last payment paid on: %v", err)
+	}
+	err = mgr.persistLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
 
 	now = time.Now()
@@ -956,23 +917,17 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mgr.setLastPaymentHeight(0)
 	mgr.setLastPaymentPaidOn(0)
 	mgr.setLastPaymentCreatedOn(0)
-	err = db.Update(func(tx *bolt.Tx) error {
-		err := mgr.persistLastPaymentHeight(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment height: %v", err)
-		}
-		err = mgr.persistLastPaymentPaidOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment paid on: %v", err)
-		}
-		err = mgr.persistLastPaymentCreatedOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last payment created on: %v", err)
-		}
-		return nil
-	})
+	err = mgr.persistLastPaymentHeight()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unable to persist default last payment height: %v", err)
+	}
+	err = mgr.persistLastPaymentPaidOn()
+	if err != nil {
+		t.Fatalf("unable to persist default last payment paid on: %v", err)
+	}
+	err = mgr.persistLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
 
 	// pruneOrphanedPayments tests.
@@ -1655,26 +1610,17 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mgr.setLastPaymentHeight(0)
 	mgr.setLastPaymentPaidOn(0)
 	mgr.setLastPaymentCreatedOn(0)
-	err = db.Update(func(tx *bolt.Tx) error {
-		err := mgr.persistLastPaymentHeight(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last "+
-				"payment height: %v", err)
-		}
-		err = mgr.persistLastPaymentPaidOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last "+
-				"payment paid on: %v", err)
-		}
-		err = mgr.persistLastPaymentCreatedOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last "+
-				"payment created on: %v", err)
-		}
-		return nil
-	})
+	err = mgr.persistLastPaymentHeight()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unable to persist default last payment height: %v", err)
+	}
+	err = mgr.persistLastPaymentPaidOn()
+	if err != nil {
+		t.Fatalf("unable to persist default last payment paid on: %v", err)
+	}
+	err = mgr.persistLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
 
 	// Ensure dust payments are forfeited by their originating accounts and
@@ -1767,25 +1713,16 @@ func testPaymentMgr(t *testing.T, db *bolt.DB) {
 	mgr.setLastPaymentHeight(0)
 	mgr.setLastPaymentPaidOn(0)
 	mgr.setLastPaymentCreatedOn(0)
-	err = db.Update(func(tx *bolt.Tx) error {
-		err := mgr.persistLastPaymentHeight(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last "+
-				"payment height: %v", err)
-		}
-		err = mgr.persistLastPaymentPaidOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last "+
-				"payment paid on: %v", err)
-		}
-		err = mgr.persistLastPaymentCreatedOn(tx)
-		if err != nil {
-			return fmt.Errorf("unable to persist default last "+
-				"payment created on: %v", err)
-		}
-		return nil
-	})
+	err = mgr.persistLastPaymentHeight()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unable to persist default last payment height: %v", err)
+	}
+	err = mgr.persistLastPaymentPaidOn()
+	if err != nil {
+		t.Fatalf("unable to persist default last payment paid on: %v", err)
+	}
+	err = mgr.persistLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
 }

@@ -1,10 +1,8 @@
 package pool
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -207,37 +205,18 @@ func (pm *PaymentMgr) fetchLastPaymentHeight() uint32 {
 }
 
 // persistLastPaymentHeight saves the last payment height to the db.
-func (pm *PaymentMgr) persistLastPaymentHeight(tx *bolt.Tx) error {
-	funcName := "persistLastPaymentHeight"
-	pbkt, err := fetchPoolBucket(tx)
-	if err != nil {
-		return err
-	}
+func (pm *PaymentMgr) persistLastPaymentHeight() error {
 	height := atomic.LoadUint32(&pm.lastPaymentHeight)
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, height)
-	err = pbkt.Put(lastPaymentHeight, b)
-	if err != nil {
-		desc := fmt.Sprintf("%s: unable to persist last payment height: %v",
-			funcName, err)
-		return dbError(ErrPersistEntry, desc)
-	}
-	return nil
+	return persistLastPaymentHeight(pm.cfg.DB, height)
 }
 
 // loadLastPaymentHeight fetches the last payment height from the db.
-func (pm *PaymentMgr) loadLastPaymentHeight(tx *bolt.Tx) error {
-	funcName := "loadLastPaymentHeight"
-	pbkt, err := fetchPoolBucket(tx)
+func (pm *PaymentMgr) loadLastPaymentHeight() error {
+	height, err := loadLastPaymentHeight(pm.cfg.DB)
 	if err != nil {
 		return err
 	}
-	lastPaymentHeightB := pbkt.Get(lastPaymentHeight)
-	if lastPaymentHeightB == nil {
-		desc := fmt.Sprintf("%s: last payment height not initialized", funcName)
-		return dbError(ErrFetchEntry, desc)
-	}
-	pm.setLastPaymentHeight(binary.LittleEndian.Uint32(lastPaymentHeightB))
+	pm.setLastPaymentHeight(height)
 	return nil
 }
 
@@ -252,51 +231,13 @@ func (pm *PaymentMgr) fetchLastPaymentPaidOn() uint64 {
 }
 
 // persistLastPaymentPaidOn saves the last payment paid on time to the db.
-func (pm *PaymentMgr) persistLastPaymentPaidOn(tx *bolt.Tx) error {
-	funcName := "persistLastPaymentPaidOn"
-	pbkt, err := fetchPoolBucket(tx)
-	if err != nil {
-		return err
-	}
-	err = pbkt.Put(lastPaymentPaidOn,
-		nanoToBigEndianBytes(int64(pm.lastPaymentPaidOn)))
-	if err != nil {
-		desc := fmt.Sprintf("%s: unable to persist last payment "+
-			"paid on time: %v", funcName, err)
-		return dbError(ErrPersistEntry, desc)
-	}
-	return nil
+func (pm *PaymentMgr) persistLastPaymentPaidOn() error {
+	return persistLastPaymentPaidOn(pm.cfg.DB, int64(pm.lastPaymentPaidOn))
 }
 
 // pruneShares removes invalidated shares from the db.
-func (pm *PaymentMgr) pruneShares(tx *bolt.Tx, minNano int64) error {
-	funcName := "pruneShares"
-	minB := nanoToBigEndianBytes(minNano)
-	bkt, err := fetchBucket(tx, shareBkt)
-	if err != nil {
-		return err
-	}
-	toDelete := [][]byte{}
-	cursor := bkt.Cursor()
-	createdOnB := make([]byte, 8)
-	for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
-		_, err := hex.Decode(createdOnB, k[:16])
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to decode share created-on "+
-				"bytes: %v", funcName, err)
-			return dbError(ErrDecode, desc)
-		}
-		if bytes.Compare(minB, createdOnB) > 0 {
-			toDelete = append(toDelete, k)
-		}
-	}
-	for _, entry := range toDelete {
-		err := bkt.Delete(entry)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+func (pm *PaymentMgr) pruneShares(minNano int64) error {
+	return pruneShares(pm.cfg.DB, minNano)
 }
 
 // bigEndianBytesToNano returns nanosecond time from the provided
@@ -306,18 +247,13 @@ func bigEndianBytesToNano(b []byte) uint64 {
 }
 
 // loadLastPaymentPaidOn fetches the last payment paid on time from the db.
-func (pm *PaymentMgr) loadLastPaymentPaidOn(tx *bolt.Tx) error {
-	funcName := "loadLastPaymentPaidOn"
-	pbkt, err := fetchPoolBucket(tx)
+func (pm *PaymentMgr) loadLastPaymentPaidOn() error {
+	paidOn, err := loadLastPaymentPaidOn(pm.cfg.DB)
 	if err != nil {
 		return err
 	}
-	lastPaymentPaidOnB := pbkt.Get(lastPaymentPaidOn)
-	if lastPaymentPaidOnB == nil {
-		desc := fmt.Sprintf("%s: last payment paid-on not initialized", funcName)
-		return dbError(ErrFetchEntry, desc)
-	}
-	pm.setLastPaymentPaidOn(bigEndianBytesToNano(lastPaymentPaidOnB))
+
+	pm.setLastPaymentPaidOn(paidOn)
 	return nil
 }
 
@@ -332,36 +268,17 @@ func (pm *PaymentMgr) fetchLastPaymentCreatedOn() uint64 {
 }
 
 // persistLastPaymentCreatedOn saves the last payment created on time to the db.
-func (pm *PaymentMgr) persistLastPaymentCreatedOn(tx *bolt.Tx) error {
-	funcName := "persistLastPaymentCreatedOn"
-	pbkt, err := fetchPoolBucket(tx)
-	if err != nil {
-		return err
-	}
-	err = pbkt.Put(lastPaymentCreatedOn,
-		nanoToBigEndianBytes(int64(pm.lastPaymentCreatedOn)))
-	if err != nil {
-		desc := fmt.Sprintf("%s: unable to persist last payment "+
-			"paid-on time: %v", funcName, err)
-		return dbError(ErrPersistEntry, desc)
-	}
-	return nil
+func (pm *PaymentMgr) persistLastPaymentCreatedOn() error {
+	return persistLastPaymentCreatedOn(pm.cfg.DB, int64(pm.lastPaymentCreatedOn))
 }
 
 // loadLastPaymentCreatedOn fetches the last payment created on time from the db.
-func (pm *PaymentMgr) loadLastPaymentCreatedOn(tx *bolt.Tx) error {
-	funcName := "loadLastPaymentCreatedOn"
-	pbkt, err := fetchPoolBucket(tx)
+func (pm *PaymentMgr) loadLastPaymentCreatedOn() error {
+	createdOn, err := loadLastPaymentCreatedOn(pm.cfg.DB)
 	if err != nil {
 		return err
 	}
-	lastPaymentCreatedOnB := pbkt.Get(lastPaymentCreatedOn)
-	if lastPaymentCreatedOnB == nil {
-		desc := fmt.Sprintf("%s: last payment created-on not initialized",
-			funcName)
-		return dbError(ErrFetchEntry, desc)
-	}
-	pm.setLastPaymentCreatedOn(bigEndianBytesToNano(lastPaymentCreatedOnB))
+	pm.setLastPaymentCreatedOn(createdOn)
 	return nil
 }
 
@@ -538,15 +455,12 @@ func (pm *PaymentMgr) payPerShare(source *PaymentSource, amt dcrutil.Amount, hei
 		}
 	}
 	pm.setLastPaymentCreatedOn(uint64(lastPmtCreatedOn))
-	err = pm.cfg.DB.Update(func(tx *bolt.Tx) error {
-		// Update the last payment created on time and prune invalidated shares.
-		err := pm.persistLastPaymentCreatedOn(tx)
-		if err != nil {
-			return err
-		}
-		return pm.pruneShares(tx, workCreatedOn)
-	})
-	return err
+	// Update the last payment created on time and prune invalidated shares.
+	err = pm.persistLastPaymentCreatedOn()
+	if err != nil {
+		return err
+	}
+	return pruneShares(pm.cfg.DB, workCreatedOn)
 }
 
 // payPerLastNShares generates a payment bundle comprised of payments to all
@@ -569,16 +483,13 @@ func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amoun
 		}
 	}
 	pm.setLastPaymentCreatedOn(uint64(lastPmtCreatedOn))
-	err = pm.cfg.DB.Update(func(tx *bolt.Tx) error {
-		// Update the last payment created on time and prune invalidated shares.
-		err := pm.persistLastPaymentCreatedOn(tx)
-		if err != nil {
-			return err
-		}
-		minNano := time.Now().Add(-pm.cfg.LastNPeriod).UnixNano()
-		return pm.pruneShares(tx, minNano)
-	})
-	return err
+	// Update the last payment created on time and prune invalidated shares.
+	err = pm.persistLastPaymentCreatedOn()
+	if err != nil {
+		return err
+	}
+	minNano := time.Now().Add(-pm.cfg.LastNPeriod).UnixNano()
+	return pruneShares(pm.cfg.DB, minNano)
 }
 
 // generatePayments creates payments for participating accounts. This should
@@ -1044,15 +955,14 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	}
 
 	// Update payments metadata.
-	err = pm.cfg.DB.Update(func(tx *bolt.Tx) error {
-		pm.setLastPaymentHeight(height)
-		err = pm.persistLastPaymentHeight(tx)
-		if err != nil {
-			return err
-		}
-		pm.setLastPaymentPaidOn(uint64(time.Now().UnixNano()))
-		return pm.persistLastPaymentPaidOn(tx)
-	})
+	pm.setLastPaymentHeight(height)
+	err = pm.persistLastPaymentHeight()
+	if err != nil {
+		return err
+	}
+
+	pm.setLastPaymentPaidOn(uint64(time.Now().UnixNano()))
+	err = pm.persistLastPaymentPaidOn()
 	if err != nil {
 		return err
 	}

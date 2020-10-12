@@ -38,40 +38,31 @@ func testFetchBucketHelpers(t *testing.T) {
 
 	expectedNotFoundErr := fmt.Errorf("expected main bucket not found error")
 
-	pmtMgr := &PaymentMgr{}
-
 	// Ensure payment manager helpers return an error when the
 	// pool bucket cannot be found.
-	err = db.View(func(tx *bolt.Tx) error {
-		err = pmtMgr.loadLastPaymentCreatedOn(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		err = pmtMgr.loadLastPaymentHeight(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		err = pmtMgr.loadLastPaymentPaidOn(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		err = pmtMgr.persistLastPaymentCreatedOn(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		err = pmtMgr.persistLastPaymentHeight(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-		err = pmtMgr.persistLastPaymentPaidOn(tx)
-		if err == nil {
-			return expectedNotFoundErr
-		}
-
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
+	_, err = loadLastPaymentCreatedOn(db)
+	if err == nil {
+		t.Fatal(expectedNotFoundErr)
+	}
+	_, err = loadLastPaymentHeight(db)
+	if err == nil {
+		t.Fatal(expectedNotFoundErr)
+	}
+	_, err = loadLastPaymentPaidOn(db)
+	if err == nil {
+		t.Fatal(expectedNotFoundErr)
+	}
+	err = persistLastPaymentCreatedOn(db, 0)
+	if err == nil {
+		t.Fatal(expectedNotFoundErr)
+	}
+	err = persistLastPaymentHeight(db, 0)
+	if err == nil {
+		t.Fatal(expectedNotFoundErr)
+	}
+	err = persistLastPaymentPaidOn(db, 0)
+	if err == nil {
+		t.Fatal(expectedNotFoundErr)
 	}
 
 	// Ensure fetch bucket helper returns an error when the
