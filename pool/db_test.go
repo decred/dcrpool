@@ -44,11 +44,7 @@ func testFetchBucketHelpers(t *testing.T) {
 	if err == nil {
 		t.Fatal(expectedNotFoundErr)
 	}
-	_, err = loadLastPaymentHeight(db)
-	if err == nil {
-		t.Fatal(expectedNotFoundErr)
-	}
-	_, err = loadLastPaymentPaidOn(db)
+	_, _, err = loadLastPaymentInfo(db)
 	if err == nil {
 		t.Fatal(expectedNotFoundErr)
 	}
@@ -56,11 +52,7 @@ func testFetchBucketHelpers(t *testing.T) {
 	if err == nil {
 		t.Fatal(expectedNotFoundErr)
 	}
-	err = persistLastPaymentHeight(db, 0)
-	if err == nil {
-		t.Fatal(expectedNotFoundErr)
-	}
-	err = persistLastPaymentPaidOn(db, 0)
+	err = persistLastPaymentInfo(db, 0, 0)
 	if err == nil {
 		t.Fatal(expectedNotFoundErr)
 	}

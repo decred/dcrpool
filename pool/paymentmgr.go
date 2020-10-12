@@ -204,19 +204,21 @@ func (pm *PaymentMgr) fetchLastPaymentHeight() uint32 {
 	return atomic.LoadUint32(&pm.lastPaymentHeight)
 }
 
-// persistLastPaymentHeight saves the last payment height to the db.
-func (pm *PaymentMgr) persistLastPaymentHeight() error {
+// persistLastPaymentInfo saves the last payment height and time to the db.
+func (pm *PaymentMgr) persistLastPaymentInfo() error {
 	height := pm.fetchLastPaymentHeight()
-	return persistLastPaymentHeight(pm.cfg.DB, height)
+	paidOn := pm.fetchLastPaymentPaidOn()
+	return persistLastPaymentInfo(pm.cfg.DB, height, int64(paidOn))
 }
 
-// loadLastPaymentHeight fetches the last payment height from the db.
-func (pm *PaymentMgr) loadLastPaymentHeight() error {
-	height, err := loadLastPaymentHeight(pm.cfg.DB)
+// loadLastPaymentInfo fetches the last payment height and time from the db.
+func (pm *PaymentMgr) loadLastPaymentInfo() error {
+	height, paidOn, err := loadLastPaymentInfo(pm.cfg.DB)
 	if err != nil {
 		return err
 	}
 	pm.setLastPaymentHeight(height)
+	pm.setLastPaymentPaidOn(paidOn)
 	return nil
 }
 
@@ -230,12 +232,6 @@ func (pm *PaymentMgr) fetchLastPaymentPaidOn() uint64 {
 	return atomic.LoadUint64(&pm.lastPaymentPaidOn)
 }
 
-// persistLastPaymentPaidOn saves the last payment paid on time to the db.
-func (pm *PaymentMgr) persistLastPaymentPaidOn() error {
-	paidOn := pm.fetchLastPaymentPaidOn()
-	return persistLastPaymentPaidOn(pm.cfg.DB, int64(paidOn))
-}
-
 // pruneShares removes invalidated shares from the db.
 func (pm *PaymentMgr) pruneShares(minNano int64) error {
 	return pruneShares(pm.cfg.DB, minNano)
@@ -245,17 +241,6 @@ func (pm *PaymentMgr) pruneShares(minNano int64) error {
 // big endian bytes.
 func bigEndianBytesToNano(b []byte) uint64 {
 	return binary.BigEndian.Uint64(b)
-}
-
-// loadLastPaymentPaidOn fetches the last payment paid on time from the db.
-func (pm *PaymentMgr) loadLastPaymentPaidOn() error {
-	paidOn, err := loadLastPaymentPaidOn(pm.cfg.DB)
-	if err != nil {
-		return err
-	}
-
-	pm.setLastPaymentPaidOn(paidOn)
-	return nil
 }
 
 // setLastPaymentCreatedOn updates the last payment created on time.
@@ -958,15 +943,12 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 
 	// Update payments metadata.
 	pm.setLastPaymentHeight(height)
-	err = pm.persistLastPaymentHeight()
+	pm.setLastPaymentPaidOn(uint64(time.Now().UnixNano()))
+
+	err = pm.persistLastPaymentInfo()
 	if err != nil {
 		return err
 	}
 
-	pm.setLastPaymentPaidOn(uint64(time.Now().UnixNano()))
-	err = pm.persistLastPaymentPaidOn()
-	if err != nil {
-		return err
-	}
 	return nil
 }
