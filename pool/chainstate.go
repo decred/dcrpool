@@ -153,7 +153,7 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 // prunePayments removes all spendable payments sourcing from
 // orphaned blocks at the provided height.
 func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
-	toDelete, err := fetchOrphanedPayments(cs.cfg.DB, height)
+	toDelete, err := fetchPaymentsAtHeight(cs.cfg.DB, height)
 	if err != nil {
 		return err
 	}
