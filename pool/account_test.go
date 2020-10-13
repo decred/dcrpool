@@ -16,7 +16,7 @@ func persistAccount(db *bolt.DB, address string) (*Account, error) {
 	return acc, nil
 }
 
-func testAccount(t *testing.T, db *bolt.DB) {
+func testAccount(t *testing.T) {
 	simnetAddrA := "Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru"
 	simnetAddrB := "SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy"
 

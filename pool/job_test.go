@@ -16,7 +16,7 @@ func persistJob(db *bolt.DB, header string, height uint32) (*Job, error) {
 	return job, nil
 }
 
-func testJob(t *testing.T, db *bolt.DB) {
+func testJob(t *testing.T) {
 	jobA, err := persistJob(db, "0700000093bdee7083c6e02147cf76724a685f0148636"+
 		"b2faf96353d1cbf5c0a954100007991153ad03eb0e31ead44b75ebc9f760870098431d4e6"+
 		"aa85e742cbad517ebd853b9bf059e8eeb91591e4a7d4005acc62e92bfd27b17309a5a41dd"+

@@ -23,7 +23,7 @@ func persistPayment(db *bolt.DB, account string, source *PaymentSource,
 	return pmt, nil
 }
 
-func testPayment(t *testing.T, db *bolt.DB) {
+func testPayment(t *testing.T) {
 	height := uint32(10)
 	estMaturity := uint32(26)
 	zeroSource := &PaymentSource{
@@ -105,17 +105,5 @@ func testPayment(t *testing.T, db *bolt.DB) {
 
 	if fetchedPayment != nil {
 		t.Fatal("expected a nil payment")
-	}
-
-	// Empty the payment bucket.
-	err = emptyBucket(db, paymentBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Empty the payment archive bucket.
-	err = emptyBucket(db, paymentArchiveBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
 	}
 }

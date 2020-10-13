@@ -81,7 +81,7 @@ func fetchShare(db *bolt.DB, id string) (*Share, error) {
 	return &share, err
 }
 
-func testPaymentMgr(t *testing.T, db *bolt.DB) {
+func testPaymentMgr(t *testing.T) {
 	activeNet := chaincfg.SimNetParams()
 
 	getBlockConfirmations := func(context.Context, *chainhash.Hash) (int64, error) {

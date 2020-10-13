@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/v3"
-	bolt "go.etcd.io/bbolt"
 )
 
 func makeConn(listener *net.TCPListener, serverCh chan net.Conn) (net.Conn, net.Conn, error) {
@@ -25,7 +24,7 @@ func makeConn(listener *net.TCPListener, serverCh chan net.Conn) (net.Conn, net.
 	return conn, server, nil
 }
 
-func testEndpoint(t *testing.T, db *bolt.DB) {
+func testEndpoint(t *testing.T) {
 	miner := CPU
 	powLimit := chaincfg.SimNetParams().PowLimit
 	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
