@@ -34,6 +34,10 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 	// Get the first 10 next reward payment percentages.
 	_, rewardQuotas, _ := ui.cache.getRewardQuotas(0, 9)
 
+	// TODO: This func also returns last payment paid-on time and created-on
+	// time, but the GUI doesn't use them yet.
+	lastPaymentHeight, _, _ := ui.cache.getLastPaymentInfo()
+
 	data := indexPageData{
 		HeaderData: headerData{
 			CSRF:        csrf.TemplateField(r),
@@ -42,7 +46,7 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 		},
 		PoolStatsData: poolStatsData{
 			LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
-			LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
+			LastPaymentHeight: lastPaymentHeight,
 			PoolHashRate:      ui.cache.getPoolHash(),
 			PaymentMethod:     ui.cfg.PaymentMethod,
 			Network:           ui.cfg.ActiveNet.Name,

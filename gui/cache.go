@@ -83,18 +83,24 @@ type Cache struct {
 	archivedPayments      map[string][]*archivedPayment
 	archivedPaymentTotals map[string]dcrutil.Amount
 	archivedPaymentsMtx   sync.RWMutex
+	lastPaymentHeight     uint32
+	lastPaymentPaidOn     int64
+	lastPaymentCreatedOn  int64
+	lastPaymentInfoMtx    sync.RWMutex
 }
 
 // InitCache initialises and returns a cache for use in the GUI.
 func InitCache(work []*pool.AcceptedWork, quotas []*pool.Quota,
 	clients []*pool.Client, pendingPmts []*pool.Payment,
-	archivedPmts []*pool.Payment, blockExplorerURL string) *Cache {
+	archivedPmts []*pool.Payment, blockExplorerURL string,
+	lastPmtHeight uint32, lastPmtPaidOn, lastPmtCreatedOn int64) *Cache {
 
 	cache := Cache{blockExplorerURL: blockExplorerURL}
 	cache.updateMinedWork(work)
 	cache.updateRewardQuotas(quotas)
 	cache.updateClients(clients)
 	cache.updatePayments(pendingPmts, archivedPmts)
+	cache.updateLastPaymentInfo(lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn)
 	return &cache
 }
 
@@ -335,6 +341,21 @@ func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool
 	c.archivedPaymentTotals = archivedPaymentTotals
 	c.archivedPayments = archivedPayments
 	c.archivedPaymentsMtx.Unlock()
+}
+
+func (c *Cache) updateLastPaymentInfo(height uint32, paidOn, createdOn int64) {
+	c.lastPaymentInfoMtx.Lock()
+	defer c.lastPaymentInfoMtx.Unlock()
+
+	c.lastPaymentHeight = height
+	c.lastPaymentPaidOn = paidOn
+	c.lastPaymentCreatedOn = createdOn
+}
+
+func (c *Cache) getLastPaymentInfo() (uint32, int64, int64) {
+	c.lastPaymentInfoMtx.RLock()
+	defer c.lastPaymentInfoMtx.RUnlock()
+	return c.lastPaymentHeight, c.lastPaymentPaidOn, c.lastPaymentCreatedOn
 }
 
 // getArchivedPayments accesses the cached list of unpaid payments for a given

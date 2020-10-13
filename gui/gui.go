@@ -65,8 +65,9 @@ type Config struct {
 	WithinLimit func(string, int) bool
 	// FetchLastWorkHeight returns the last work height of the pool.
 	FetchLastWorkHeight func() uint32
-	// FetchLastPaymentheight returns the last payment height of the pool.
-	FetchLastPaymentHeight func() uint32
+	// FetchLastPaymentInfo returns the height, paid on time, and created on time,
+	// for the last payment made by the pool.
+	FetchLastPaymentInfo func() (uint32, int64, int64, error)
 	// FetchMinedWork returns all blocks mined by the pool.
 	FetchMinedWork func() ([]*pool.AcceptedWork, error)
 	// FetchWorkQuotas returns the reward distribution to pool accounts
@@ -346,7 +347,14 @@ func (ui *GUI) Run(ctx context.Context) {
 		return
 	}
 
-	ui.cache = InitCache(work, quotas, clients, pendingPayments, archivedPayments, ui.cfg.BlockExplorerURL)
+	lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn, err := ui.cfg.FetchLastPaymentInfo()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	ui.cache = InitCache(work, quotas, clients, pendingPayments, archivedPayments,
+		ui.cfg.BlockExplorerURL, lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn)
 
 	// Use a ticker to periodically update cached data and push updates through
 	// any established websockets
@@ -407,8 +415,16 @@ func (ui *GUI) Run(ctx context.Context) {
 					}
 
 					ui.cache.updatePayments(pendingPayments, archivedPayments)
+
+					lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn, err := ui.cfg.FetchLastPaymentInfo()
+					if err != nil {
+						log.Error(err)
+						continue
+					}
+					ui.cache.updateLastPaymentInfo(lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn)
+
 					ui.websocketServer.send(payload{
-						LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
+						LastPaymentHeight: lastPmtHeight,
 					})
 
 				default:

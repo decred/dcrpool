@@ -368,10 +368,10 @@ func persistLastPaymentInfo(db *bolt.DB, height uint32, paidOn int64) error {
 	})
 }
 
-func loadLastPaymentInfo(db *bolt.DB) (uint32, uint64, error) {
+func loadLastPaymentInfo(db *bolt.DB) (uint32, int64, error) {
 	funcName := "loadLastPaymentInfo"
 	var height uint32
-	var paidOn uint64
+	var paidOn int64
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt, err := fetchPoolBucket(tx)
 		if err != nil {
@@ -390,7 +390,7 @@ func loadLastPaymentInfo(db *bolt.DB) (uint32, uint64, error) {
 			desc := fmt.Sprintf("%s: last payment paid-on not initialized", funcName)
 			return dbError(ErrFetchEntry, desc)
 		}
-		paidOn = bigEndianBytesToNano(lastPaymentPaidOnB)
+		paidOn = int64(bigEndianBytesToNano(lastPaymentPaidOnB))
 
 		return nil
 	})
@@ -419,9 +419,9 @@ func persistLastPaymentCreatedOn(db *bolt.DB, createdOn int64) error {
 	})
 }
 
-func loadLastPaymentCreatedOn(db *bolt.DB) (uint64, error) {
+func loadLastPaymentCreatedOn(db *bolt.DB) (int64, error) {
 	funcName := "loadLastPaymentCreatedOn"
-	var createdOn uint64
+	var createdOn int64
 	err := db.View(func(tx *bolt.Tx) error {
 		pbkt, err := fetchPoolBucket(tx)
 		if err != nil {
@@ -433,7 +433,7 @@ func loadLastPaymentCreatedOn(db *bolt.DB) (uint64, error) {
 				funcName)
 			return dbError(ErrFetchEntry, desc)
 		}
-		createdOn = bigEndianBytesToNano(lastPaymentCreatedOnB)
+		createdOn = int64(bigEndianBytesToNano(lastPaymentCreatedOnB))
 		return nil
 	})
 

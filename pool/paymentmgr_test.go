@@ -515,18 +515,15 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Ensure backed up values to the database load as expected.
-	err = mgr.loadLastPaymentInfo()
+	initialLastPaymentHeight, initialLastPaymentPaidOn, err := mgr.loadLastPaymentInfo()
 	if err != nil {
 		t.Fatalf("unable to load last payment info: %v", err)
 	}
-	err = mgr.loadLastPaymentCreatedOn()
+	initialLastPaymentCreatedOn, err := mgr.loadLastPaymentCreatedOn()
 	if err != nil {
 		t.Fatalf("unable to load last payment created on: %v", err)
 	}
 
-	initialLastPaymentHeight := mgr.fetchLastPaymentHeight()
-	initialLastPaymentPaidOn := mgr.fetchLastPaymentPaidOn()
-	initialLastPaymentCreatedOn := mgr.fetchLastPaymentCreatedOn()
 	if initialLastPaymentHeight != 0 {
 		t.Fatalf("[fetchLastPaymentHeight] expected last payment height of "+
 			" %d, got %d", 0, initialLastPaymentHeight)
@@ -541,54 +538,47 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	lastPaymentHeight := uint32(1)
-	mgr.setLastPaymentHeight(lastPaymentHeight)
-	lastPaymentPaidOn := uint64(time.Now().UnixNano())
-	mgr.setLastPaymentPaidOn(lastPaymentPaidOn)
-	lastPaymentCreatedOn := uint64(time.Now().UnixNano())
-	mgr.setLastPaymentCreatedOn(lastPaymentCreatedOn)
-	err = mgr.persistLastPaymentInfo()
+	lastPaymentPaidOn := time.Now().UnixNano()
+	lastPaymentCreatedOn := time.Now().UnixNano()
+
+	err = mgr.persistLastPaymentInfo(lastPaymentHeight, lastPaymentPaidOn)
 	if err != nil {
 		t.Fatalf("[persistLastPaymentInfo] unable to persist last payment info: %v", err)
 	}
-	err = mgr.persistLastPaymentCreatedOn()
+	err = mgr.persistLastPaymentCreatedOn(lastPaymentCreatedOn)
 	if err != nil {
 		t.Fatalf("[persistLastPaymentCreatedOn] unable to persist last payment created on: %v", err)
 	}
 
-	err = mgr.loadLastPaymentInfo()
+	paymentHeight, paymentPaidOn, err := mgr.loadLastPaymentInfo()
 	if err != nil {
 		t.Fatalf("[loadLastPaymentInfo] unable to load last payment info: %v", err)
 	}
-	err = mgr.loadLastPaymentCreatedOn()
+	paymentCreatedOn, err := mgr.loadLastPaymentCreatedOn()
 	if err != nil {
 		t.Fatalf("[loadLastPaymentCreatedOn] unable to load last payment created on: %v", err)
 	}
 
-	paymentHeight := mgr.fetchLastPaymentHeight()
 	if lastPaymentHeight != paymentHeight {
 		t.Fatalf("[fetchLastPaymentHeight] expected last payment height to be %d, got %d",
 			paymentHeight, paymentHeight)
 	}
-	paymentPaidOn := mgr.fetchLastPaymentPaidOn()
+
 	if lastPaymentPaidOn != paymentPaidOn {
 		t.Fatalf("[fetchLastPaymentPaidOn] expected last payment paid on to be %d, got %d",
 			lastPaymentPaidOn, paymentPaidOn)
 	}
-	paymentCreatedOn := mgr.fetchLastPaymentCreatedOn()
 	if lastPaymentCreatedOn != paymentCreatedOn {
 		t.Fatalf("[fetchLastPaymentCreatedOn] expected last payment created on to be %d, got %d",
 			lastPaymentCreatedOn, paymentCreatedOn)
 	}
 
 	// Reset backed up values to their defaults.
-	mgr.setLastPaymentHeight(0)
-	mgr.setLastPaymentPaidOn(0)
-	mgr.setLastPaymentCreatedOn(0)
-	err = mgr.persistLastPaymentInfo()
+	err = mgr.persistLastPaymentInfo(0, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment info: %v", err)
 	}
-	err = mgr.persistLastPaymentCreatedOn()
+	err = mgr.persistLastPaymentCreatedOn(0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
@@ -619,12 +609,18 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Ensure the last payment created on time was updated.
-	previousPaymentCreatedOn := int64(mgr.fetchLastPaymentCreatedOn())
+	previousPaymentCreatedOn, err := mgr.loadLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("[PPS] unable to get previous payment created-on: %v", err)
+	}
 	err = mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
 	if err != nil {
 		t.Fatalf("[PPS] unable to generate payments: %v", err)
 	}
-	currentPaymentCreatedOn := int64(mgr.fetchLastPaymentCreatedOn())
+	currentPaymentCreatedOn, err := mgr.loadLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("[PPS] unable to get current payment created-on: %v", err)
+	}
 	if currentPaymentCreatedOn < now.UnixNano() {
 		t.Fatalf("[PPS] expected last payment created on time to "+
 			"be greater than %v,got %v", now, currentPaymentCreatedOn)
@@ -689,14 +685,11 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Reset backed up values to their defaults.
-	mgr.setLastPaymentHeight(0)
-	mgr.setLastPaymentPaidOn(0)
-	mgr.setLastPaymentCreatedOn(0)
-	err = mgr.persistLastPaymentInfo()
+	err = mgr.persistLastPaymentInfo(0, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment info: %v", err)
 	}
-	err = mgr.persistLastPaymentCreatedOn()
+	err = mgr.persistLastPaymentCreatedOn(0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
@@ -725,12 +718,18 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Ensure the last payment created on time was updated.
-	previousPaymentCreatedOn = int64(mgr.fetchLastPaymentCreatedOn())
+	previousPaymentCreatedOn, err = mgr.loadLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("[PPLNS] unable to get previous payment created-on: %v", err)
+	}
 	err = mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
 	if err != nil {
 		t.Fatalf("[PPLNS] unable to generate payments: %v", err)
 	}
-	currentPaymentCreatedOn = int64(mgr.fetchLastPaymentCreatedOn())
+	currentPaymentCreatedOn, err = mgr.loadLastPaymentCreatedOn()
+	if err != nil {
+		t.Fatalf("[PPLNS] unable to get current payment created-on: %v", err)
+	}
 	if currentPaymentCreatedOn < now.UnixNano() {
 		t.Fatalf("[PPLNS] expected last payment created on time "+
 			"to be greater than %v,got %v", now, currentPaymentCreatedOn)
@@ -797,14 +796,11 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Reset backed up values to their defaults.
-	mgr.setLastPaymentHeight(0)
-	mgr.setLastPaymentPaidOn(0)
-	mgr.setLastPaymentCreatedOn(0)
-	err = mgr.persistLastPaymentInfo()
+	err = mgr.persistLastPaymentInfo(0, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment info: %v", err)
 	}
-	err = mgr.persistLastPaymentCreatedOn()
+	err = mgr.persistLastPaymentCreatedOn(0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
@@ -890,14 +886,11 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Reset backed up values to their defaults.
-	mgr.setLastPaymentHeight(0)
-	mgr.setLastPaymentPaidOn(0)
-	mgr.setLastPaymentCreatedOn(0)
-	err = mgr.persistLastPaymentInfo()
+	err = mgr.persistLastPaymentInfo(0, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment info: %v", err)
 	}
-	err = mgr.persistLastPaymentCreatedOn()
+	err = mgr.persistLastPaymentCreatedOn(0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
@@ -1579,14 +1572,11 @@ func testPaymentMgr(t *testing.T) {
 	cancel()
 
 	// Reset backed up values to their defaults.
-	mgr.setLastPaymentHeight(0)
-	mgr.setLastPaymentPaidOn(0)
-	mgr.setLastPaymentCreatedOn(0)
-	err = mgr.persistLastPaymentInfo()
+	err = mgr.persistLastPaymentInfo(0, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment info: %v", err)
 	}
-	err = mgr.persistLastPaymentCreatedOn()
+	err = mgr.persistLastPaymentCreatedOn(0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
@@ -1678,14 +1668,11 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Reset backed up values to their defaults.
-	mgr.setLastPaymentHeight(0)
-	mgr.setLastPaymentPaidOn(0)
-	mgr.setLastPaymentCreatedOn(0)
-	err = mgr.persistLastPaymentInfo()
+	err = mgr.persistLastPaymentInfo(0, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment info: %v", err)
 	}
-	err = mgr.persistLastPaymentCreatedOn()
+	err = mgr.persistLastPaymentCreatedOn(0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
