@@ -228,118 +228,6 @@ func testPaymentMgr(t *testing.T) {
 		t.Fatalf("expected value not found error")
 	}
 
-	// Test pendingPayments, maturePendingPayments, archivedPayments and
-	// pendingPaymentsForBlockHash.
-	height := uint32(10)
-	estMaturity := uint32(26)
-	zeroHash := chainhash.Hash{0}
-	zeroSource := &PaymentSource{
-		BlockHash: zeroHash.String(),
-		Coinbase:  zeroHash.String(),
-	}
-	amt, _ := dcrutil.NewAmount(5)
-	_, err = persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pmtC, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pmtC.PaidOnHeight = estMaturity + 1
-	pmtC.TransactionID = zeroHash.String()
-	err = pmtC.Update(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = pmtC.Archive(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pmtD, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pmtD.PaidOnHeight = estMaturity + 1
-	pmtD.TransactionID = chainhash.Hash{0}.String()
-	err = pmtD.Update(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = pmtD.Archive(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Ensure there are two pending payments.
-	pmts, err := mgr.pendingPayments()
-	if err != nil {
-		t.Fatalf("pendingPayments error: %v", err)
-	}
-
-	if len(pmts) != 2 {
-		t.Fatalf("expected 2 pending payments, got %d", len(pmts))
-	}
-
-	// Ensure there are two archived payments (payment C and D).
-	pmts, err = mgr.archivedPayments()
-	if err != nil {
-		t.Fatalf("archivedPayments error: %v", err)
-	}
-
-	if len(pmts) != 2 {
-		t.Fatalf("expected 2 archived payments, got %d", len(pmts))
-	}
-
-	// Ensure there are two mature payments at height 28 (payment A and B).
-	pmtSet, err := mgr.maturePendingPayments(28)
-	if err != nil {
-		t.Fatalf("maturePendingPayments error: %v", err)
-	}
-
-	if len(pmtSet) != 1 {
-		t.Fatalf("expected 1 payment set, got %d", len(pmtSet))
-	}
-
-	set, ok := pmtSet[zeroSource.BlockHash]
-	if !ok {
-		t.Fatalf("expected pending payments at height %d to be "+
-			"mature at height %d", height+1, 28)
-	}
-
-	if len(set) != 2 {
-		t.Fatalf("expected 2 mature pending payments from "+
-			"height %d, got %d", height+1, len(set))
-	}
-
-	// Ensure there are no mature payments at height 27 (payment A and B).
-	pmtSet, err = mgr.maturePendingPayments(27)
-	if err != nil {
-		t.Fatalf("maturePendingPayments error: %v", err)
-	}
-
-	if len(pmtSet) != 0 {
-		t.Fatalf("expected no payment sets, got %d", len(pmtSet))
-	}
-
-	// Ensure there are two pending payments for the zero hash.
-	count, err := mgr.pendingPaymentsForBlockHash(zeroSource.BlockHash)
-	if err != nil {
-		t.Fatalf("pendingPaymentsForBlockHash error: %v", err)
-	}
-
-	if count != 2 {
-		t.Fatalf("expected 2 mature pending payments with "+
-			"block hash %s, got %d", zeroSource.BlockHash, count)
-	}
-
 	// Empty the payments and archived payment buckets.
 	err = emptyBucket(db, paymentArchiveBkt)
 	if err != nil {
@@ -425,7 +313,7 @@ func testPaymentMgr(t *testing.T) {
 	thirtyBefore = now.Add(-(time.Second * 30)).UnixNano()
 	shareCount := 10
 	coinbaseValue := 80
-	height = uint32(20)
+	height := uint32(20)
 
 	// Create shares for account x and y.
 	for i := 0; i < shareCount; i++ {
@@ -442,6 +330,12 @@ func testPaymentMgr(t *testing.T) {
 	coinbase, err := dcrutil.NewAmount(float64(coinbaseValue))
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	zeroHash := chainhash.Hash{0}
+	zeroSource := &PaymentSource{
+		BlockHash: zeroHash.String(),
+		Coinbase:  zeroHash.String(),
 	}
 
 	// Ensure the last payment created on time was updated.
@@ -469,7 +363,7 @@ func testPaymentMgr(t *testing.T) {
 
 	// Ensure the payments created are for accounts x, y and a fee
 	// payment entry.
-	pmts, err = mgr.pendingPayments()
+	pmts, err := fetchPendingPayments(db)
 	if err != nil {
 		t.Error(err)
 	}
@@ -578,7 +472,7 @@ func testPaymentMgr(t *testing.T) {
 
 	// Ensure the payments created are for accounts x, y and a fee
 	// payment entry.
-	pmts, err = mgr.pendingPayments()
+	pmts, err = fetchPendingPayments(db)
 	if err != nil {
 		t.Fatalf("[PPLNS] pendingPayments error: %v", err)
 	}
@@ -667,7 +561,7 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Ensure payments for account x, y and fees were created.
-	pmtSets, err := mgr.maturePendingPayments(paymentMaturity)
+	pmtSets, err := maturePendingPayments(db, paymentMaturity)
 	if err != nil {
 		t.Fatalf("[maturePendingPayments] unexpected error: %v", err)
 	}
@@ -676,7 +570,7 @@ func testPaymentMgr(t *testing.T) {
 		t.Fatal("[maturePendingPayments] expected mature payments")
 	}
 
-	_, ok = pmtSets[zeroSource.BlockHash]
+	_, ok := pmtSets[zeroSource.BlockHash]
 	if !ok {
 		t.Fatalf("[maturePendingPayments] expected mature payments "+
 			"at height %d", height)
@@ -738,12 +632,13 @@ func testPaymentMgr(t *testing.T) {
 		t.Fatalf("unable to generate random bytes: %v", err)
 	}
 
+	estMaturity := uint32(26)
 	randHash := chainhash.HashH(randBytes[:])
 	randSource := &PaymentSource{
 		BlockHash: randHash.String(),
 		Coinbase:  randHash.String(),
 	}
-	amt, _ = dcrutil.NewAmount(5)
+	amt, _ := dcrutil.NewAmount(5)
 	mPmts := make(map[string][]*Payment)
 	pmtA := NewPayment(xID, zeroSource, amt, height, estMaturity)
 	mPmts[zeroSource.Coinbase] = []*Payment{pmtA}
@@ -788,7 +683,7 @@ func testPaymentMgr(t *testing.T) {
 
 	// Ensure orphaned payments pruning accurately prunes payments
 	// sourcing from orphaned blocks.
-	pmtSet, err = mgr.pruneOrphanedPayments(ctx, mPmts)
+	pmtSet, err := mgr.pruneOrphanedPayments(ctx, mPmts)
 	if err != nil {
 		cancel()
 		t.Fatalf("unexpected pruneOrphanPayments error: %v", err)
@@ -997,7 +892,7 @@ func testPaymentMgr(t *testing.T) {
 	// referenced by a payment cannot be found.
 	unknownID := "abcd"
 	unknownIDCoinbase := chainhash.Hash{'u'}
-	pmtD = NewPayment(unknownID, randSource, amt, height, estMaturity)
+	pmtD := NewPayment(unknownID, randSource, amt, height, estMaturity)
 	mPmts[unknownIDCoinbase.String()] = []*Payment{pmtD}
 	txC = &txCreatorImpl{
 		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
@@ -1454,7 +1349,7 @@ func testPaymentMgr(t *testing.T) {
 
 	// Ensure the payments created are for account y and a fee
 	// payment entry.
-	pmts, err = mgr.pendingPayments()
+	pmts, err = fetchPendingPayments(db)
 	if err != nil {
 		t.Fatalf("pendingPayments error: %v", err)
 	}

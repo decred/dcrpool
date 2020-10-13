@@ -429,29 +429,6 @@ func (pm *PaymentMgr) generatePayments(height uint32, source *PaymentSource, amt
 	}
 }
 
-// pendingPayments fetches all unpaid payments.
-func (pm *PaymentMgr) pendingPayments() ([]*Payment, error) {
-	return fetchPendingPayments(pm.cfg.DB)
-}
-
-// pendingPaymentsForBlockHash returns the number of  pending payments with
-// the provided block hash as their source.
-func (pm *PaymentMgr) pendingPaymentsForBlockHash(blockHash string) (uint32, error) {
-	return pendingPaymentsForBlockHash(pm.cfg.DB, blockHash)
-}
-
-// archivedPayments fetches all archived payments. List is ordered, most
-// recent comes first.
-func (pm *PaymentMgr) archivedPayments() ([]*Payment, error) {
-	return archivedPayments(pm.cfg.DB)
-}
-
-// maturePendingPayments fetches all mature pending payments at the
-// provided height.
-func (pm *PaymentMgr) maturePendingPayments(height uint32) (map[string][]*Payment, error) {
-	return maturePendingPayments(pm.cfg.DB, height)
-}
-
 // pruneOrphanedPayments removes all orphaned payments from the provided payments.
 func (pm *PaymentMgr) pruneOrphanedPayments(ctx context.Context, pmts map[string][]*Payment) (map[string][]*Payment, error) {
 	toDelete := make([]string, 0, len(pmts))
@@ -728,7 +705,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 // PayDividends pays mature mining rewards to participating accounts.
 func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryActive bool) error {
 	funcName := "payDividends"
-	mPmts, err := pm.maturePendingPayments(height)
+	mPmts, err := maturePendingPayments(pm.cfg.DB, height)
 	if err != nil {
 		return err
 	}

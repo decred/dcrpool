@@ -109,6 +109,7 @@ func TestPool(t *testing.T) {
 		"testPPSEligibleShares":      testPPSEligibleShares,
 		"testPPLNSEligibleShares":    testPPLNSEligibleShares,
 		"testPayment":                testPayment,
+		"testPaymentAccessors":       testPaymentAccessors,
 		"testEndpoint":               testEndpoint,
 		"testClient":                 testClient,
 		"testPaymentMgr":             testPaymentMgr,

@@ -107,3 +107,117 @@ func testPayment(t *testing.T) {
 		t.Fatal("expected a nil payment")
 	}
 }
+
+// testPaymentAccessors tests fetchPendingPayments, maturePendingPayments,
+// archivedPayments and pendingPaymentsForBlockHash.
+func testPaymentAccessors(t *testing.T) {
+	height := uint32(10)
+	estMaturity := uint32(26)
+	zeroHash := chainhash.Hash{0}
+	zeroSource := &PaymentSource{
+		BlockHash: zeroHash.String(),
+		Coinbase:  zeroHash.String(),
+	}
+	amt, _ := dcrutil.NewAmount(5)
+	_, err := persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pmtC, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pmtC.PaidOnHeight = estMaturity + 1
+	pmtC.TransactionID = zeroHash.String()
+	err = pmtC.Update(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = pmtC.Archive(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pmtD, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pmtD.PaidOnHeight = estMaturity + 1
+	pmtD.TransactionID = chainhash.Hash{0}.String()
+	err = pmtD.Update(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = pmtD.Archive(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure there are two pending payments.
+	pmts, err := fetchPendingPayments(db)
+	if err != nil {
+		t.Fatalf("pendingPayments error: %v", err)
+	}
+
+	if len(pmts) != 2 {
+		t.Fatalf("expected 2 pending payments, got %d", len(pmts))
+	}
+
+	// Ensure there are two archived payments (payment C and D).
+	pmts, err = archivedPayments(db)
+	if err != nil {
+		t.Fatalf("archivedPayments error: %v", err)
+	}
+
+	if len(pmts) != 2 {
+		t.Fatalf("expected 2 archived payments, got %d", len(pmts))
+	}
+
+	// Ensure there are two mature payments at height 28 (payment A and B).
+	pmtSet, err := maturePendingPayments(db, 28)
+	if err != nil {
+		t.Fatalf("maturePendingPayments error: %v", err)
+	}
+
+	if len(pmtSet) != 1 {
+		t.Fatalf("expected 1 payment set, got %d", len(pmtSet))
+	}
+
+	set, ok := pmtSet[zeroSource.BlockHash]
+	if !ok {
+		t.Fatalf("expected pending payments at height %d to be "+
+			"mature at height %d", height+1, 28)
+	}
+
+	if len(set) != 2 {
+		t.Fatalf("expected 2 mature pending payments from "+
+			"height %d, got %d", height+1, len(set))
+	}
+
+	// Ensure there are no mature payments at height 27 (payment A and B).
+	pmtSet, err = maturePendingPayments(db, 27)
+	if err != nil {
+		t.Fatalf("maturePendingPayments error: %v", err)
+	}
+
+	if len(pmtSet) != 0 {
+		t.Fatalf("expected no payment sets, got %d", len(pmtSet))
+	}
+
+	// Ensure there are two pending payments for the zero hash.
+	count, err := pendingPaymentsForBlockHash(db, zeroSource.BlockHash)
+	if err != nil {
+		t.Fatalf("pendingPaymentsForBlockHash error: %v", err)
+	}
+
+	if count != 2 {
+		t.Fatalf("expected 2 mature pending payments with "+
+			"block hash %s, got %d", zeroSource.BlockHash, count)
+	}
+}
