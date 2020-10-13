@@ -88,49 +88,6 @@ func testChainState(t *testing.T) {
 
 	cs := NewChainState(cCfg)
 
-	// Test pruneJobs.
-	jobA, err := persistJob(db, "0700000093bdee7083c6e02147cf76724a685f0148636"+
-		"b2faf96353d1cbf5c0a954100007991153ad03eb0e31ead44b75ebc9f760870098431d4e6"+
-		"aa85e742cbad517ebd853b9bf059e8eeb91591e4a7d4005acc62e92bfd27b17309a5a41dd"+
-		"24016428f0100000000000000000000003c000000dd742920204e00000000000038000000"+
-		"66010000f171cc5d000000000000000000000000000000000000000000000000000000000"+
-		"000000000000000000000008000000100000000000005a0", 56)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	jobB, err := persistJob(db, "0700000047e9425eabcf920eecf0c00c7bc46c6062049"+
-		"071c59edcb0e55c0226690800005695619a600321a8389d1bee5b3a207efc81e05c111d38"+
-		"1e960c8bf05ca336b55b528e9d5044c52aa0c713ae152f3fdb592f6ee82fa1776440ca72a"+
-		"2fc9f77760100000000000000000000003c000000dd742920204e00000000000039000000"+
-		"a6030000f171cc5d000000000000000000000000000000000000000000000000000000000"+
-		"000000000000000000000008000000100000000000005a0", 57)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Prune jobs below height 57.
-	err = cs.pruneJobs(57)
-	if err != nil {
-		t.Fatalf("pruneJobs error: %v", err)
-	}
-
-	// Ensure job A has been pruned with job B remaining.
-	_, err = FetchJob(db, jobA.UUID)
-	if err == nil {
-		t.Fatal("expected a value not found error")
-	}
-	_, err = FetchJob(db, jobB.UUID)
-	if err != nil {
-		t.Fatalf("unexpected error fetching job B: %v", err)
-	}
-
-	// Delete job B.
-	err = jobB.Delete(db)
-	if err != nil {
-		t.Fatalf("unexpected error deleting job B: %v", err)
-	}
-
 	// Test pruneAcceptedWork.
 	workA, err := persistAcceptedWork(db,
 		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",

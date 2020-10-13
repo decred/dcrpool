@@ -98,21 +98,22 @@ func TestPool(t *testing.T) {
 
 	// All sub-tests to run.
 	tests := map[string]func(*testing.T){
-		"testFetchBucketHelpers":  testFetchBucketHelpers,
-		"testInitDB":              testInitDB,
-		"testDatabase":            testDatabase,
-		"testAcceptedWork":        testAcceptedWork,
-		"testAccount":             testAccount,
-		"testJob":                 testJob,
-		"testShares":              testShares,
-		"testPPSEligibleShares":   testPPSEligibleShares,
-		"testPPLNSEligibleShares": testPPLNSEligibleShares,
-		"testPayment":             testPayment,
-		"testEndpoint":            testEndpoint,
-		"testClient":              testClient,
-		"testPaymentMgr":          testPaymentMgr,
-		"testChainState":          testChainState,
-		"testHub":                 testHub,
+		"testFetchBucketHelpers":     testFetchBucketHelpers,
+		"testInitDB":                 testInitDB,
+		"testDatabase":               testDatabase,
+		"testAcceptedWork":           testAcceptedWork,
+		"testAccount":                testAccount,
+		"testJob":                    testJob,
+		"testDeleteJobsBeforeHeight": testDeleteJobsBeforeHeight,
+		"testShares":                 testShares,
+		"testPPSEligibleShares":      testPPSEligibleShares,
+		"testPPLNSEligibleShares":    testPPLNSEligibleShares,
+		"testPayment":                testPayment,
+		"testEndpoint":               testEndpoint,
+		"testClient":                 testClient,
+		"testPaymentMgr":             testPaymentMgr,
+		"testChainState":             testChainState,
+		"testHub":                    testHub,
 	}
 
 	for testName, test := range tests {

@@ -97,11 +97,6 @@ func (cs *ChainState) fetchCurrentWork() string {
 	return work
 }
 
-// pruneJobs removes all jobs with heights less than the provided height.
-func (cs *ChainState) pruneJobs(height uint32) error {
-	return deleteJobsBeforeHeight(cs.cfg.DB, height)
-}
-
 // pruneAcceptedWork removes all accepted work not confirmed as mined work
 // with heights less than the provided height.
 func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) error {
@@ -216,7 +211,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			// Prune invalidated jobs and accepted work.
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit
-				err := cs.pruneJobs(pruneLimit)
+				err := deleteJobsBeforeHeight(cs.cfg.DB, pruneLimit)
 				if err != nil {
 					// Errors generated pruning invalidated jobs indicate an
 					// underlying issue accessing the database. The chainstate
