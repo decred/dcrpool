@@ -248,18 +248,11 @@ func (pm *PaymentMgr) sharePercentages(shares []*Share) (map[string]*big.Rat, er
 	return percentages, nil
 }
 
-// PPSEligibleShares fetches all shares created before or at the provided
-// time.
-func (pm *PaymentMgr) PPSEligibleShares(max []byte) ([]*Share, error) {
-	return ppsEligibleShares(pm.cfg.DB, max)
-}
-
 // PPSSharePercentages calculates the current mining reward percentages
 // due participating pool accounts based on work performed measured by
 // the PPS payment scheme.
 func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.Rat, error) {
-	max := nanoToBigEndianBytes(workCreatedOn)
-	shares, err := pm.PPSEligibleShares(max)
+	shares, err := ppsEligibleShares(pm.cfg.DB, workCreatedOn)
 	if err != nil {
 		return nil, err
 	}
@@ -273,18 +266,12 @@ func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.
 	return percentages, nil
 }
 
-// PPLNSEligibleShares fetches all shares keyed greater than the provided
-// minimum.
-func (pm *PaymentMgr) PPLNSEligibleShares(min []byte) ([]*Share, error) {
-	return pplnsEligibleShares(pm.cfg.DB, min)
-}
-
 // PPLNSSharePercentages calculates the current mining reward percentages due pool
 // accounts based on work performed measured by the PPLNS payment scheme.
 func (pm *PaymentMgr) PPLNSSharePercentages() (map[string]*big.Rat, error) {
 	now := time.Now()
 	min := now.Add(-pm.cfg.LastNPeriod)
-	shares, err := pm.PPLNSEligibleShares(nanoToBigEndianBytes(min.UnixNano()))
+	shares, err := pplnsEligibleShares(pm.cfg.DB, min.UnixNano())
 	if err != nil {
 		return nil, err
 	}

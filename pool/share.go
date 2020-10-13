@@ -78,7 +78,7 @@ func (s *Share) Persist(db *bolt.DB) error {
 }
 
 // ppsEligibleShares fetches all shares created before or at the provided time.
-func ppsEligibleShares(db *bolt.DB, max []byte) ([]*Share, error) {
+func ppsEligibleShares(db *bolt.DB, max int64) ([]*Share, error) {
 	funcName := "ppsEligibleShares"
 	eligibleShares := make([]*Share, 0)
 	err := db.View(func(tx *bolt.Tx) error {
@@ -96,7 +96,7 @@ func ppsEligibleShares(db *bolt.DB, max []byte) ([]*Share, error) {
 				return dbError(ErrDecode, desc)
 			}
 
-			if bytes.Compare(createdOnB, max) <= 0 {
+			if bytes.Compare(createdOnB, nanoToBigEndianBytes(max)) <= 0 {
 				var share Share
 				err := json.Unmarshal(v, &share)
 				if err != nil {
@@ -117,7 +117,7 @@ func ppsEligibleShares(db *bolt.DB, max []byte) ([]*Share, error) {
 
 // pplnsEligibleShares fetches all shares keyed greater than the provided
 // minimum.
-func pplnsEligibleShares(db *bolt.DB, min []byte) ([]*Share, error) {
+func pplnsEligibleShares(db *bolt.DB, min int64) ([]*Share, error) {
 	funcName := "pplnsEligibleShares"
 	eligibleShares := make([]*Share, 0)
 	err := db.View(func(tx *bolt.Tx) error {
@@ -135,7 +135,7 @@ func pplnsEligibleShares(db *bolt.DB, min []byte) ([]*Share, error) {
 				return dbError(ErrDecode, desc)
 			}
 
-			if bytes.Compare(createdOnB, min) > 0 {
+			if bytes.Compare(createdOnB, nanoToBigEndianBytes(min)) > 0 {
 				var share Share
 				err := json.Unmarshal(v, &share)
 				if err != nil {
