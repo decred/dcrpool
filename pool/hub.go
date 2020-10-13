@@ -345,9 +345,18 @@ func (h *Hub) FetchLastWorkHeight() uint32 {
 	return h.chainState.fetchLastWorkHeight()
 }
 
-// FetchLastPaymentHeight returns the last payment height of the pool.
-func (h *Hub) FetchLastPaymentHeight() uint32 {
-	return h.paymentMgr.fetchLastPaymentHeight()
+// FetchLastPaymentInfo returns the height, paid on time, and created on time,
+// for the last payment made by the pool.
+func (h *Hub) FetchLastPaymentInfo() (uint32, int64, int64, error) {
+	height, paidOn, err := loadLastPaymentInfo(h.cfg.DB)
+	if err != nil {
+		return 0, 0, 0, nil
+	}
+	createdOn, err := loadLastPaymentCreatedOn(h.cfg.DB)
+	if err != nil {
+		return 0, 0, 0, nil
+	}
+	return height, paidOn, createdOn, nil
 }
 
 // getBlock fetches the blocks associated with the provided block hash.

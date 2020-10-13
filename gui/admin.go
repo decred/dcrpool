@@ -49,6 +49,10 @@ func (ui *GUI) adminPage(w http.ResponseWriter, r *http.Request) {
 	// Get the 10 most recent archived payments.
 	_, archivedPmts, _ := ui.cache.getArchivedPayments(0, 9, pool.PoolFeesK)
 
+	// TODO: This func also returns last payment paid-on time and created-on
+	// time, but the GUI doesn't use them yet.
+	lastPaymentHeight, _, _ := ui.cache.getLastPaymentInfo()
+
 	pageData := adminPageData{
 		HeaderData: headerData{
 			CSRF:        csrf.TemplateField(r),
@@ -57,7 +61,7 @@ func (ui *GUI) adminPage(w http.ResponseWriter, r *http.Request) {
 		},
 		PoolStatsData: poolStatsData{
 			LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),
-			LastPaymentHeight: ui.cfg.FetchLastPaymentHeight(),
+			LastPaymentHeight: lastPaymentHeight,
 			PoolHashRate:      ui.cache.getPoolHash(),
 			PaymentMethod:     ui.cfg.PaymentMethod,
 			Network:           ui.cfg.ActiveNet.Name,
