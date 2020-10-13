@@ -345,11 +345,10 @@ func (c *Cache) updatePayments(pendingPmts []*pool.Payment, archivedPmts []*pool
 
 func (c *Cache) updateLastPaymentInfo(height uint32, paidOn, createdOn int64) {
 	c.lastPaymentInfoMtx.Lock()
-	defer c.lastPaymentInfoMtx.Unlock()
-
 	c.lastPaymentHeight = height
 	c.lastPaymentPaidOn = paidOn
 	c.lastPaymentCreatedOn = createdOn
+	c.lastPaymentInfoMtx.Unlock()
 }
 
 func (c *Cache) getLastPaymentInfo() (uint32, int64, int64) {
@@ -404,16 +403,14 @@ func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, []*
 
 func (c *Cache) getArchivedPaymentsTotal(accountID string) string {
 	c.archivedPaymentsMtx.RLock()
-	defer c.archivedPaymentsMtx.RUnlock()
-
 	total := c.archivedPaymentTotals[accountID]
+	c.archivedPaymentsMtx.RUnlock()
 	return amount(total)
 }
 
 func (c *Cache) getPendingPaymentsTotal(accountID string) string {
 	c.pendingPaymentsMtx.RLock()
-	defer c.pendingPaymentsMtx.RUnlock()
-
 	total := c.pendingPaymentTotals[accountID]
+	c.pendingPaymentsMtx.RUnlock()
 	return amount(total)
 }
