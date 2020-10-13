@@ -382,11 +382,17 @@ func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, []*
 }
 
 func (c *Cache) getArchivedPaymentsTotal(accountID string) string {
+	c.archivedPaymentsMtx.RLock()
+	defer c.archivedPaymentsMtx.RUnlock()
+
 	total := c.archivedPaymentTotals[accountID]
 	return amount(total)
 }
 
 func (c *Cache) getPendingPaymentsTotal(accountID string) string {
+	c.pendingPaymentsMtx.RLock()
+	defer c.pendingPaymentsMtx.RUnlock()
+
 	total := c.pendingPaymentTotals[accountID]
 	return amount(total)
 }
