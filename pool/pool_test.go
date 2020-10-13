@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -60,6 +61,32 @@ func setupDB() (*bolt.DB, error) {
 func teardownDB(db *bolt.DB, dbPath string) error {
 	db.Close()
 	return os.Remove(dbPath)
+}
+
+// emptyBucket deletes all k/v pairs in the provided bucket.
+func emptyBucket(db *bolt.DB, bucket []byte) error {
+	const funcName = "emptyBucket"
+	return db.Update(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(poolBkt)
+		if pbkt == nil {
+			desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+				string(poolBkt))
+			return dbError(ErrBucketNotFound, desc)
+		}
+		b := pbkt.Bucket(bucket)
+		toDelete := [][]byte{}
+		c := b.Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			toDelete = append(toDelete, k)
+		}
+		for _, k := range toDelete {
+			err := b.Delete(k)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // TestPool runs all pool related tests.
