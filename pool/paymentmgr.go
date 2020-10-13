@@ -180,38 +180,10 @@ func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	return pbkt, nil
 }
 
-// persistLastPaymentInfo saves the last payment height and time to the db.
-func (pm *PaymentMgr) persistLastPaymentInfo(height uint32, paidOn int64) error {
-	return persistLastPaymentInfo(pm.cfg.DB, height, paidOn)
-}
-
-// loadLastPaymentInfo fetches the last payment height and time from the db.
-func (pm *PaymentMgr) loadLastPaymentInfo() (uint32, int64, error) {
-	height, paidOn, err := loadLastPaymentInfo(pm.cfg.DB)
-	if err != nil {
-		return 0, 0, err
-	}
-	return height, paidOn, nil
-}
-
 // bigEndianBytesToNano returns nanosecond time from the provided
 // big endian bytes.
 func bigEndianBytesToNano(b []byte) uint64 {
 	return binary.BigEndian.Uint64(b)
-}
-
-// persistLastPaymentCreatedOn saves the last payment created on time to the db.
-func (pm *PaymentMgr) persistLastPaymentCreatedOn(createdOn int64) error {
-	return persistLastPaymentCreatedOn(pm.cfg.DB, createdOn)
-}
-
-// loadLastPaymentCreatedOn fetches the last payment created on time from the db.
-func (pm *PaymentMgr) loadLastPaymentCreatedOn() (int64, error) {
-	createdOn, err := loadLastPaymentCreatedOn(pm.cfg.DB)
-	if err != nil {
-		return 0, err
-	}
-	return createdOn, nil
 }
 
 // sharePercentages calculates the percentages due each participating account
@@ -374,7 +346,7 @@ func (pm *PaymentMgr) payPerShare(source *PaymentSource, amt dcrutil.Amount, hei
 		}
 	}
 	// Update the last payment created on time and prune invalidated shares.
-	err = pm.persistLastPaymentCreatedOn(lastPmtCreatedOn)
+	err = persistLastPaymentCreatedOn(pm.cfg.DB, lastPmtCreatedOn)
 	if err != nil {
 		return err
 	}
@@ -401,7 +373,7 @@ func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amoun
 		}
 	}
 	// Update the last payment created on time and prune invalidated shares.
-	err = pm.persistLastPaymentCreatedOn(lastPmtCreatedOn)
+	err = persistLastPaymentCreatedOn(pm.cfg.DB, lastPmtCreatedOn)
 	if err != nil {
 		return err
 	}
@@ -849,7 +821,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	}
 
 	// Update payments metadata.
-	err = pm.persistLastPaymentInfo(height, time.Now().UnixNano())
+	err = persistLastPaymentInfo(pm.cfg.DB, height, time.Now().UnixNano())
 	if err != nil {
 		return err
 	}

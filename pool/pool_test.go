@@ -101,6 +101,8 @@ func TestPool(t *testing.T) {
 		"testFetchBucketHelpers":     testFetchBucketHelpers,
 		"testInitDB":                 testInitDB,
 		"testDatabase":               testDatabase,
+		"testLastPaymentInfo":        testLastPaymentInfo,
+		"testLastPaymentCreatedOn":   testLastPaymentCreatedOn,
 		"testAcceptedWork":           testAcceptedWork,
 		"testAccount":                testAccount,
 		"testJob":                    testJob,

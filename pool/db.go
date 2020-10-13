@@ -379,17 +379,14 @@ func loadLastPaymentInfo(db *bolt.DB) (uint32, int64, error) {
 		}
 
 		lastPaymentHeightB := pbkt.Get(lastPaymentHeight)
-		if lastPaymentHeightB == nil {
-			desc := fmt.Sprintf("%s: last payment height not initialized", funcName)
-			return dbError(ErrFetchEntry, desc)
-		}
-		height = binary.LittleEndian.Uint32(lastPaymentHeightB)
-
 		lastPaymentPaidOnB := pbkt.Get(lastPaymentPaidOn)
-		if lastPaymentPaidOnB == nil {
-			desc := fmt.Sprintf("%s: last payment paid-on not initialized", funcName)
-			return dbError(ErrFetchEntry, desc)
+
+		if lastPaymentHeightB == nil || lastPaymentPaidOnB == nil {
+			desc := fmt.Sprintf("%s: last payment info not initialized", funcName)
+			return dbError(ErrValueNotFound, desc)
 		}
+
+		height = binary.LittleEndian.Uint32(lastPaymentHeightB)
 		paidOn = int64(bigEndianBytesToNano(lastPaymentPaidOnB))
 
 		return nil
@@ -431,7 +428,7 @@ func loadLastPaymentCreatedOn(db *bolt.DB) (int64, error) {
 		if lastPaymentCreatedOnB == nil {
 			desc := fmt.Sprintf("%s: last payment created-on not initialized",
 				funcName)
-			return dbError(ErrFetchEntry, desc)
+			return dbError(ErrValueNotFound, desc)
 		}
 		createdOn = int64(bigEndianBytesToNano(lastPaymentCreatedOnB))
 		return nil
