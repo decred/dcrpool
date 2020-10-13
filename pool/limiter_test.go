@@ -2,7 +2,7 @@ package pool
 
 import "testing"
 
-func testLimiter(t *testing.T) {
+func TestLimiter(t *testing.T) {
 	limiter := NewRateLimiter()
 	guiLimiterIP := "127.0.0.1"
 
