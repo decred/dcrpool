@@ -25,6 +25,8 @@ var (
 	poolFeeAddrs, _ = dcrutil.DecodeAddress(
 		"SsnbEmxCVXskgTHXvf3rEa17NA39qQuGHwQ",
 		chaincfg.SimNetParams())
+
+	db *bolt.DB
 )
 
 // setupDB initializes the pool database.
@@ -91,31 +93,40 @@ func emptyBucket(db *bolt.DB, bucket []byte) error {
 
 // TestPool runs all pool related tests.
 func TestPool(t *testing.T) {
-	db, err := setupDB()
-	if err != nil {
-		t.Fatalf("setup error: %v", err)
+
+	// All sub-tests to run.
+	tests := map[string]func(*testing.T){
+		"testFetchBucketHelpers": testFetchBucketHelpers,
+		"testInitDB":             testInitDB,
+		"testDatabase":           testDatabase,
+		"testAcceptedWork":       testAcceptedWork,
+		"testAccount":            testAccount,
+		"testJob":                testJob,
+		"testShares":             testShares,
+		"testPayment":            testPayment,
+		"testEndpoint":           testEndpoint,
+		"testClient":             testClient,
+		"testPaymentMgr":         testPaymentMgr,
+		"testChainState":         testChainState,
+		"testHub":                testHub,
 	}
 
-	td := func() {
+	for testName, test := range tests {
+		// Create a new blank database for each sub-test.
+		var err error
+		db, err = setupDB()
+		if err != nil {
+			t.Fatalf("setup error: %v", err)
+		}
+
+		// Run the sub-test.
+		t.Run(testName, test)
+
+		// Remove database.
 		err = teardownDB(db, testDB)
 		if err != nil {
 			t.Fatalf("teardown error: %v", err)
 		}
 	}
 
-	defer td()
-
-	testFetchBucketHelpers(t)
-	testInitDB(t)
-	testDatabase(t, db)
-	testAcceptedWork(t, db)
-	testAccount(t, db)
-	testJob(t, db)
-	testShares(t, db)
-	testPayment(t, db)
-	testEndpoint(t, db)
-	testClient(t, db)
-	testPaymentMgr(t, db)
-	testChainState(t, db)
-	testHub(t, db)
 }

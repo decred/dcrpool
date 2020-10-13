@@ -49,7 +49,7 @@ func listMinedWorkByAccount(db *bolt.DB, accountID string) ([]*AcceptedWork, err
 	return minedWork, nil
 }
 
-func testAcceptedWork(t *testing.T, db *bolt.DB) {
+func testAcceptedWork(t *testing.T) {
 	workA, err := persistAcceptedWork(db,
 		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
 		"000000000000000007301a21efa98033e06f7eba836990394fff9f765f1556b1",

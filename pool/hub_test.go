@@ -22,7 +22,6 @@ import (
 	"github.com/decred/dcrd/dcrutil/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
-	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 )
 
@@ -223,7 +222,7 @@ func (t *tNodeConnection) NotifyBlocks(context.Context) error {
 
 func (t *tNodeConnection) Shutdown() {}
 
-func testHub(t *testing.T, db *bolt.DB) {
+func testHub(t *testing.T) {
 	activeNet := chaincfg.SimNetParams()
 	powLimit := chaincfg.SimNetParams().PowLimit
 	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
@@ -487,24 +486,6 @@ func testHub(t *testing.T, db *bolt.DB) {
 	}
 	if len(body) == 0 {
 		t.Fatal("expected a response body with data")
-	}
-
-	// Empty the share bucket.
-	err = emptyBucket(db, shareBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Empty the accepted work bucket.
-	err = emptyBucket(db, workBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Empty the payment bucket.
-	err = emptyBucket(db, paymentBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
 	}
 
 	backup := filepath.Join(filepath.Dir(db.Path()), backupFile)

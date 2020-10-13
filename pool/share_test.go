@@ -28,7 +28,7 @@ func persistShare(db *bolt.DB, account string, weight *big.Rat, createdOnNano in
 	return nil
 }
 
-func testShares(t *testing.T, db *bolt.DB) {
+func testShares(t *testing.T) {
 	shareACreatedOn := time.Now().Add(-(time.Second * 10)).UnixNano()
 	shareBCreatedOn := time.Now().Add(-(time.Second * 20)).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
@@ -52,11 +52,5 @@ func testShares(t *testing.T, db *bolt.DB) {
 	_, err = fetchShare(db, bID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching share B: %v", err)
-	}
-
-	// Empty the share bucket.
-	err = emptyBucket(db, shareBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
 	}
 }

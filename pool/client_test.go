@@ -18,10 +18,9 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/v3"
-	bolt "go.etcd.io/bbolt"
 )
 
-func testClient(t *testing.T, db *bolt.DB) {
+func testClient(t *testing.T) {
 	port := uint32(3030)
 	laddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", "127.0.0.1", port))
 	if err != nil {
@@ -1399,24 +1398,6 @@ func testClient(t *testing.T, db *bolt.DB) {
 
 	// Trigger a client timeout by waiting.
 	time.Sleep(time.Millisecond * 5300)
-
-	// Empty the job bucket.
-	err = emptyBucket(db, jobBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Empty the share bucket.
-	err = emptyBucket(db, shareBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Empty the accepted work bucket.
-	err = emptyBucket(db, workBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
 
 	client.cfg.EndpointWg.Wait()
 }

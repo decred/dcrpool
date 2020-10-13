@@ -207,7 +207,7 @@ func testInitDB(t *testing.T) {
 	}
 }
 
-func testDatabase(t *testing.T, db *bolt.DB) {
+func testDatabase(t *testing.T) {
 	// Persist some accounts.
 	accountA, err := persistAccount(db, "Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru")
 	if err != nil {

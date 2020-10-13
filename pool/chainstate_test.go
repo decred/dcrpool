@@ -14,7 +14,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-func testChainState(t *testing.T, db *bolt.DB) {
+func testChainState(t *testing.T) {
 	var minedHeader wire.BlockHeader
 
 	// Create mined work header.
