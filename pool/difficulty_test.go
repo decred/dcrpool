@@ -7,7 +7,7 @@ import (
 	"github.com/decred/dcrd/chaincfg/v3"
 )
 
-func testDifficulty(t *testing.T) {
+func TestDifficulty(t *testing.T) {
 	// Test calculate pool target.
 	poolTgts := []struct {
 		hashRate       *big.Int
