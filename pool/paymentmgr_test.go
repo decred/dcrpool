@@ -81,37 +81,8 @@ func fetchShare(db *bolt.DB, id string) (*Share, error) {
 	return &share, err
 }
 
-func testPaymentMgr(t *testing.T) {
-	activeNet := chaincfg.SimNetParams()
-
-	getBlockConfirmations := func(context.Context, *chainhash.Hash) (int64, error) {
-		return -1, nil
-	}
-
-	fetchTxCreator := func() TxCreator {
-		return nil
-	}
-
-	fetchTxBroadcaster := func() TxBroadcaster {
-		return nil
-	}
-
-	pCfg := &PaymentMgrConfig{
-		DB:                    db,
-		ActiveNet:             activeNet,
-		PoolFee:               0.1,
-		LastNPeriod:           time.Second * 120,
-		SoloPool:              false,
-		PaymentMethod:         PPS,
-		GetBlockConfirmations: getBlockConfirmations,
-		FetchTxCreator:        fetchTxCreator,
-		FetchTxBroadcaster:    fetchTxBroadcaster,
-		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
-	}
-	mgr, err := NewPaymentMgr(pCfg)
-	if err != nil {
-		t.Fatalf("[NewPaymentMgr] unexpected error: %v", err)
-	}
+func TestSharePercentages(t *testing.T) {
+	mgr := PaymentMgr{}
 
 	// Test sharePercentages.
 	shareSet := map[string]struct {
@@ -179,6 +150,39 @@ func testPaymentMgr(t *testing.T) {
 					"expected %v.", name, account, actual[account], dividend)
 			}
 		}
+	}
+}
+
+func testPaymentMgr(t *testing.T) {
+	activeNet := chaincfg.SimNetParams()
+
+	getBlockConfirmations := func(context.Context, *chainhash.Hash) (int64, error) {
+		return -1, nil
+	}
+
+	fetchTxCreator := func() TxCreator {
+		return nil
+	}
+
+	fetchTxBroadcaster := func() TxBroadcaster {
+		return nil
+	}
+
+	pCfg := &PaymentMgrConfig{
+		DB:                    db,
+		ActiveNet:             activeNet,
+		PoolFee:               0.1,
+		LastNPeriod:           time.Second * 120,
+		SoloPool:              false,
+		PaymentMethod:         PPS,
+		GetBlockConfirmations: getBlockConfirmations,
+		FetchTxCreator:        fetchTxCreator,
+		FetchTxBroadcaster:    fetchTxBroadcaster,
+		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
+	}
+	mgr, err := NewPaymentMgr(pCfg)
+	if err != nil {
+		t.Fatalf("[NewPaymentMgr] unexpected error: %v", err)
 	}
 
 	// Test pruneShares.
