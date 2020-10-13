@@ -365,3 +365,107 @@ func persistCSRFSecret(db *bolt.DB, secret []byte) error {
 		return pbkt.Put(csrfSecret, secret)
 	})
 }
+
+func persistLastPaymentInfo(db *bolt.DB, height uint32, paidOn int64) error {
+	funcName := "persistLastPaymentInfo"
+	return db.Update(func(tx *bolt.Tx) error {
+		pbkt, err := fetchPoolBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		b := make([]byte, 4)
+		binary.LittleEndian.PutUint32(b, height)
+		err = pbkt.Put(lastPaymentHeight, b)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist last payment height: %v",
+				funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+
+		err = pbkt.Put(lastPaymentPaidOn, nanoToBigEndianBytes(paidOn))
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist last payment "+
+				"paid on time: %v", funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+
+		return nil
+	})
+}
+
+func loadLastPaymentInfo(db *bolt.DB) (uint32, uint64, error) {
+	funcName := "loadLastPaymentInfo"
+	var height uint32
+	var paidOn uint64
+	err := db.View(func(tx *bolt.Tx) error {
+		pbkt, err := fetchPoolBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		lastPaymentHeightB := pbkt.Get(lastPaymentHeight)
+		if lastPaymentHeightB == nil {
+			desc := fmt.Sprintf("%s: last payment height not initialized", funcName)
+			return dbError(ErrFetchEntry, desc)
+		}
+		height = binary.LittleEndian.Uint32(lastPaymentHeightB)
+
+		lastPaymentPaidOnB := pbkt.Get(lastPaymentPaidOn)
+		if lastPaymentPaidOnB == nil {
+			desc := fmt.Sprintf("%s: last payment paid-on not initialized", funcName)
+			return dbError(ErrFetchEntry, desc)
+		}
+		paidOn = bigEndianBytesToNano(lastPaymentPaidOnB)
+
+		return nil
+	})
+
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return height, paidOn, nil
+}
+
+func persistLastPaymentCreatedOn(db *bolt.DB, createdOn int64) error {
+	funcName := "persistLastPaymentCreatedOn"
+	return db.Update(func(tx *bolt.Tx) error {
+		pbkt, err := fetchPoolBucket(tx)
+		if err != nil {
+			return err
+		}
+		err = pbkt.Put(lastPaymentCreatedOn, nanoToBigEndianBytes(createdOn))
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist last payment "+
+				"created-on time: %v", funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+		return nil
+	})
+}
+
+func loadLastPaymentCreatedOn(db *bolt.DB) (uint64, error) {
+	funcName := "loadLastPaymentCreatedOn"
+	var createdOn uint64
+	err := db.View(func(tx *bolt.Tx) error {
+		pbkt, err := fetchPoolBucket(tx)
+		if err != nil {
+			return err
+		}
+		lastPaymentCreatedOnB := pbkt.Get(lastPaymentCreatedOn)
+		if lastPaymentCreatedOnB == nil {
+			desc := fmt.Sprintf("%s: last payment created-on not initialized",
+				funcName)
+			return dbError(ErrFetchEntry, desc)
+		}
+		createdOn = bigEndianBytesToNano(lastPaymentCreatedOnB)
+		return nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return createdOn, nil
+}

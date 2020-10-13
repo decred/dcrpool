@@ -153,3 +153,37 @@ func pplnsEligibleShares(db *bolt.DB, min []byte) ([]*Share, error) {
 	}
 	return eligibleShares, err
 }
+
+// pruneShares removes invalidated shares from the db.
+func pruneShares(db *bolt.DB, minNano int64) error {
+	funcName := "pruneShares"
+	minB := nanoToBigEndianBytes(minNano)
+
+	return db.Update(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, shareBkt)
+		if err != nil {
+			return err
+		}
+		toDelete := [][]byte{}
+		cursor := bkt.Cursor()
+		createdOnB := make([]byte, 8)
+		for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
+			_, err := hex.Decode(createdOnB, k[:16])
+			if err != nil {
+				desc := fmt.Sprintf("%s: unable to decode share created-on "+
+					"bytes: %v", funcName, err)
+				return dbError(ErrDecode, desc)
+			}
+			if bytes.Compare(minB, createdOnB) > 0 {
+				toDelete = append(toDelete, k)
+			}
+		}
+		for _, entry := range toDelete {
+			err := bkt.Delete(entry)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
