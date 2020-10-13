@@ -185,63 +185,6 @@ func testPaymentMgr(t *testing.T) {
 		t.Fatalf("[NewPaymentMgr] unexpected error: %v", err)
 	}
 
-	// Test pruneShares.
-	now := time.Now()
-	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
-	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
-	eightyBefore := now.Add(-(time.Second * 80)).UnixNano()
-	tenAfter := now.Add(time.Second * 10).UnixNano()
-	weight := new(big.Rat).SetFloat64(1.0)
-
-	err = persistShare(db, xID, weight, eightyBefore) // Share A
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = persistShare(db, yID, weight, thirtyBefore) // Share B
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = mgr.pruneShares(sixtyBefore)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Ensure share A got pruned with share B remaining.
-	shareAID := shareID(xID, eightyBefore)
-	_, err = fetchShare(db, shareAID)
-	if err == nil {
-		t.Fatal("expected value not found error")
-	}
-
-	shareBID := shareID(yID, thirtyBefore)
-	_, err = fetchShare(db, shareBID)
-	if err != nil {
-		t.Fatalf("unexpected error fetching share B: %v", err)
-	}
-
-	err = mgr.pruneShares(tenAfter)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Ensure share B got pruned.
-	_, err = fetchShare(db, shareBID)
-	if err == nil {
-		t.Fatalf("expected value not found error")
-	}
-
-	// Empty the payments and archived payment buckets.
-	err = emptyBucket(db, paymentArchiveBkt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = emptyBucket(db, paymentBkt)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// Ensure backed up values to the database load as expected.
 	initialLastPaymentHeight, initialLastPaymentPaidOn, err := mgr.loadLastPaymentInfo()
 	if err != nil {
@@ -312,12 +255,13 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Ensure Pay-Per-Share (PPS) works as expected.
-	now = time.Now()
-	sixtyBefore = now.Add(-(time.Second * 60)).UnixNano()
-	thirtyBefore = now.Add(-(time.Second * 30)).UnixNano()
+	now := time.Now()
+	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
+	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
 	shareCount := 10
 	coinbaseValue := 80
 	height := uint32(20)
+	weight := new(big.Rat).SetFloat64(1.0)
 
 	// Create shares for account x and y.
 	for i := 0; i < shareCount; i++ {

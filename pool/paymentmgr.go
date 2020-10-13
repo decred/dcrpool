@@ -194,11 +194,6 @@ func (pm *PaymentMgr) loadLastPaymentInfo() (uint32, int64, error) {
 	return height, paidOn, nil
 }
 
-// pruneShares removes invalidated shares from the db.
-func (pm *PaymentMgr) pruneShares(minNano int64) error {
-	return pruneShares(pm.cfg.DB, minNano)
-}
-
 // bigEndianBytesToNano returns nanosecond time from the provided
 // big endian bytes.
 func bigEndianBytesToNano(b []byte) uint64 {

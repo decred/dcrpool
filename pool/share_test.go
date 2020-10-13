@@ -215,3 +215,51 @@ func testPPLNSEligibleShares(t *testing.T) {
 			"got %v (for x), %v (for y).", shareCount, forAccX, forAccY)
 	}
 }
+
+func testPruneShares(t *testing.T) {
+	now := time.Now()
+	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
+	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
+	eightyBefore := now.Add(-(time.Second * 80)).UnixNano()
+	tenAfter := now.Add(time.Second * 10).UnixNano()
+	weight := new(big.Rat).SetFloat64(1.0)
+
+	err := persistShare(db, xID, weight, eightyBefore) // Share A
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = persistShare(db, yID, weight, thirtyBefore) // Share B
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = pruneShares(db, sixtyBefore)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure share A got pruned with share B remaining.
+	shareAID := shareID(xID, eightyBefore)
+	_, err = fetchShare(db, shareAID)
+	if err == nil {
+		t.Fatal("expected value not found error")
+	}
+
+	shareBID := shareID(yID, thirtyBefore)
+	_, err = fetchShare(db, shareBID)
+	if err != nil {
+		t.Fatalf("unexpected error fetching share B: %v", err)
+	}
+
+	err = pruneShares(db, tenAfter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure share B got pruned.
+	_, err = fetchShare(db, shareBID)
+	if err == nil {
+		t.Fatalf("expected value not found error")
+	}
+}
