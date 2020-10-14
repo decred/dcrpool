@@ -88,6 +88,7 @@ func ppsEligibleShares(db *bolt.DB, max int64) ([]*Share, error) {
 		}
 		c := bkt.Cursor()
 		createdOnB := make([]byte, 8)
+		maxB := nanoToBigEndianBytes(max)
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			_, err := hex.Decode(createdOnB, k[:16])
 			if err != nil {
@@ -96,7 +97,7 @@ func ppsEligibleShares(db *bolt.DB, max int64) ([]*Share, error) {
 				return dbError(ErrDecode, desc)
 			}
 
-			if bytes.Compare(createdOnB, nanoToBigEndianBytes(max)) <= 0 {
+			if bytes.Compare(createdOnB, maxB) <= 0 {
 				var share Share
 				err := json.Unmarshal(v, &share)
 				if err != nil {
@@ -127,6 +128,7 @@ func pplnsEligibleShares(db *bolt.DB, min int64) ([]*Share, error) {
 		}
 		c := bkt.Cursor()
 		createdOnB := make([]byte, 8)
+		minB := nanoToBigEndianBytes(min)
 		for k, v := c.Last(); k != nil; k, v = c.Prev() {
 			_, err := hex.Decode(createdOnB, k[:16])
 			if err != nil {
@@ -135,7 +137,7 @@ func pplnsEligibleShares(db *bolt.DB, min int64) ([]*Share, error) {
 				return dbError(ErrDecode, desc)
 			}
 
-			if bytes.Compare(createdOnB, nanoToBigEndianBytes(min)) > 0 {
+			if bytes.Compare(createdOnB, minB) > 0 {
 				var share Share
 				err := json.Unmarshal(v, &share)
 				if err != nil {
