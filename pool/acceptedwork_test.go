@@ -1,8 +1,6 @@
 package pool
 
 import (
-	"encoding/json"
-	"strings"
 	"testing"
 
 	bolt "go.etcd.io/bbolt"
@@ -16,37 +14,6 @@ func persistAcceptedWork(db *bolt.DB, blockHash string, prevHash string,
 		return nil, err
 	}
 	return acceptedWork, nil
-}
-
-func listMinedWorkByAccount(db *bolt.DB, accountID string) ([]*AcceptedWork, error) {
-	minedWork := make([]*AcceptedWork, 0)
-
-	err := db.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchBucket(tx, workBkt)
-		if err != nil {
-			return err
-		}
-
-		cursor := bkt.Cursor()
-		for k, v := cursor.Last(); k != nil; k, v = cursor.Prev() {
-			var work AcceptedWork
-			err := json.Unmarshal(v, &work)
-			if err != nil {
-				return err
-			}
-
-			if strings.Compare(work.MinedBy, accountID) == 0 && work.Confirmed {
-				minedWork = append(minedWork, &work)
-			}
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return minedWork, nil
 }
 
 func testAcceptedWork(t *testing.T) {
@@ -169,12 +136,19 @@ func testAcceptedWork(t *testing.T) {
 	}
 
 	// Ensure account Y has only one associated mined work.
-	minedWork, err = listMinedWorkByAccount(db, yID)
+	allWork, err := ListMinedWork(db)
 	if err != nil {
 		t.Fatalf("ListMinedWork error: %v", err)
 	}
 
-	if len(minedWork) != 1 {
+	minedWorkByAccount := make([]*AcceptedWork, 0)
+	for _, work := range allWork {
+		if work.MinedBy == yID && work.Confirmed {
+			minedWorkByAccount = append(minedWorkByAccount, work)
+		}
+	}
+
+	if len(minedWorkByAccount) != 1 {
 		t.Fatalf("expected %v mined work for account %v, got %v", 1,
 			yID, len(minedWork))
 	}
