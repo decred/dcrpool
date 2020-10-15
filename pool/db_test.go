@@ -12,30 +12,21 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-func initBlankDB(dbFile string) (*bolt.DB, error) {
-	os.Remove(dbFile)
-	db, err := openDB(dbFile)
-	if err != nil {
-		return nil, err
-	}
-
-	return db, nil
-}
-
-func testFetchBucketHelpers(t *testing.T) {
+func TestFetchBucketHelpers(t *testing.T) {
+	// Create a new empty database.
 	dbPath := "tdb"
-	db, err := initBlankDB(dbPath)
+	os.Remove(dbPath)
+	db, err := openDB(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	td := func() {
+	defer func() {
 		err = teardownDB(db, dbPath)
 		if err != nil {
 			t.Fatalf("teardown error: %v", err)
 		}
-	}
-	defer td()
+	}()
 
 	expectedNotFoundErr := fmt.Errorf("expected main bucket not found error")
 
@@ -116,23 +107,22 @@ func testFetchBucketHelpers(t *testing.T) {
 	if !errors.Is(err, ErrBucketNotFound) {
 		t.Fatalf("expected bucket not found error, got %v", err)
 	}
-
 }
 
-func testInitDB(t *testing.T) {
+func TestInitDB(t *testing.T) {
 	dbPath := "tdb"
+	os.Remove(dbPath)
 	db, err := InitDB(dbPath, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	td := func() {
+	defer func() {
 		err = teardownDB(db, dbPath)
 		if err != nil {
 			t.Fatalf("teardown error: %v", err)
 		}
-	}
-	defer td()
+	}()
 
 	// Ensure the db buckets have been created.
 	err = db.View(func(tx *bolt.Tx) error {
