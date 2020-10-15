@@ -252,16 +252,15 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	}
 
 	sCfg := &ChainStateConfig{
-		DB:                          h.db,
-		SoloPool:                    h.cfg.SoloPool,
-		PayDividends:                h.paymentMgr.payDividends,
-		PendingPaymentsForBlockHash: pendingPaymentsForBlockHash,
-		GeneratePayments:            h.paymentMgr.generatePayments,
-		GetBlock:                    h.getBlock,
-		GetBlockConfirmations:       h.getBlockConfirmations,
-		Cancel:                      h.cancel,
-		SignalCache:                 h.SignalCache,
-		HubWg:                       h.wg,
+		DB:                    h.db,
+		SoloPool:              h.cfg.SoloPool,
+		PayDividends:          h.paymentMgr.payDividends,
+		GeneratePayments:      h.paymentMgr.generatePayments,
+		GetBlock:              h.getBlock,
+		GetBlockConfirmations: h.getBlockConfirmations,
+		Cancel:                h.cancel,
+		SignalCache:           h.SignalCache,
+		HubWg:                 h.wg,
 	}
 	h.chainState = NewChainState(sCfg)
 

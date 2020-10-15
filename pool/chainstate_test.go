@@ -11,7 +11,6 @@ import (
 	"github.com/decred/dcrd/dcrjson/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
-	bolt "go.etcd.io/bbolt"
 )
 
 func testChainState(t *testing.T) {
@@ -63,10 +62,6 @@ func testChainState(t *testing.T) {
 		return -1, nil
 	}
 
-	pendingPaymentsForBlockHash := func(*bolt.DB, string) (uint32, error) {
-		return 0, nil
-	}
-
 	signalCache := func(_ CacheUpdateEvent) {
 		// Do nothing.
 	}
@@ -74,16 +69,15 @@ func testChainState(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var confHeader wire.BlockHeader
 	cCfg := &ChainStateConfig{
-		DB:                          db,
-		SoloPool:                    false,
-		PayDividends:                payDividends,
-		GeneratePayments:            generatePayments,
-		GetBlock:                    getBlock,
-		GetBlockConfirmations:       getBlockConfirmations,
-		PendingPaymentsForBlockHash: pendingPaymentsForBlockHash,
-		SignalCache:                 signalCache,
-		Cancel:                      cancel,
-		HubWg:                       new(sync.WaitGroup),
+		DB:                    db,
+		SoloPool:              false,
+		PayDividends:          payDividends,
+		GeneratePayments:      generatePayments,
+		GetBlock:              getBlock,
+		GetBlockConfirmations: getBlockConfirmations,
+		SignalCache:           signalCache,
+		Cancel:                cancel,
+		HubWg:                 new(sync.WaitGroup),
 	}
 
 	cs := NewChainState(cCfg)
