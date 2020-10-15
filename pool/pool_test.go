@@ -91,24 +91,33 @@ func emptyBucket(db *bolt.DB, bucket []byte) error {
 	})
 }
 
-// TestPool runs all pool related tests.
+// TestPool runs all pool related tests which require a real database.
+// An clean instance of bbolt is created and initialized with buckets before
+// each test.
 func TestPool(t *testing.T) {
 
 	// All sub-tests to run.
 	tests := map[string]func(*testing.T){
-		"testFetchBucketHelpers": testFetchBucketHelpers,
-		"testInitDB":             testInitDB,
-		"testDatabase":           testDatabase,
-		"testAcceptedWork":       testAcceptedWork,
-		"testAccount":            testAccount,
-		"testJob":                testJob,
-		"testShares":             testShares,
-		"testPayment":            testPayment,
-		"testEndpoint":           testEndpoint,
-		"testClient":             testClient,
-		"testPaymentMgr":         testPaymentMgr,
-		"testChainState":         testChainState,
-		"testHub":                testHub,
+		"testFetchBucketHelpers":     testFetchBucketHelpers,
+		"testInitDB":                 testInitDB,
+		"testDatabase":               testDatabase,
+		"testLastPaymentInfo":        testLastPaymentInfo,
+		"testLastPaymentCreatedOn":   testLastPaymentCreatedOn,
+		"testAcceptedWork":           testAcceptedWork,
+		"testAccount":                testAccount,
+		"testJob":                    testJob,
+		"testDeleteJobsBeforeHeight": testDeleteJobsBeforeHeight,
+		"testShares":                 testShares,
+		"testPPSEligibleShares":      testPPSEligibleShares,
+		"testPPLNSEligibleShares":    testPPLNSEligibleShares,
+		"testPruneShares":            testPruneShares,
+		"testPayment":                testPayment,
+		"testPaymentAccessors":       testPaymentAccessors,
+		"testEndpoint":               testEndpoint,
+		"testClient":                 testClient,
+		"testPaymentMgr":             testPaymentMgr,
+		"testChainState":             testChainState,
+		"testHub":                    testHub,
 	}
 
 	for testName, test := range tests {

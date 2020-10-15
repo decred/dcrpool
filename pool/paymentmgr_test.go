@@ -81,37 +81,8 @@ func fetchShare(db *bolt.DB, id string) (*Share, error) {
 	return &share, err
 }
 
-func testPaymentMgr(t *testing.T) {
-	activeNet := chaincfg.SimNetParams()
-
-	getBlockConfirmations := func(context.Context, *chainhash.Hash) (int64, error) {
-		return -1, nil
-	}
-
-	fetchTxCreator := func() TxCreator {
-		return nil
-	}
-
-	fetchTxBroadcaster := func() TxBroadcaster {
-		return nil
-	}
-
-	pCfg := &PaymentMgrConfig{
-		DB:                    db,
-		ActiveNet:             activeNet,
-		PoolFee:               0.1,
-		LastNPeriod:           time.Second * 120,
-		SoloPool:              false,
-		PaymentMethod:         PPS,
-		GetBlockConfirmations: getBlockConfirmations,
-		FetchTxCreator:        fetchTxCreator,
-		FetchTxBroadcaster:    fetchTxBroadcaster,
-		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
-	}
-	mgr, err := NewPaymentMgr(pCfg)
-	if err != nil {
-		t.Fatalf("[NewPaymentMgr] unexpected error: %v", err)
-	}
+func TestSharePercentages(t *testing.T) {
+	mgr := PaymentMgr{}
 
 	// Test sharePercentages.
 	shareSet := map[string]struct {
@@ -180,416 +151,48 @@ func testPaymentMgr(t *testing.T) {
 			}
 		}
 	}
+}
 
-	// Test pruneShares.
-	now := time.Now()
-	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
-	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
-	eightyBefore := now.Add(-(time.Second * 80)).UnixNano()
-	tenAfter := now.Add(time.Second * 10).UnixNano()
-	weight := new(big.Rat).SetFloat64(1.0)
+func testPaymentMgr(t *testing.T) {
+	activeNet := chaincfg.SimNetParams()
 
-	err = persistShare(db, xID, weight, eightyBefore) // Share A
+	getBlockConfirmations := func(context.Context, *chainhash.Hash) (int64, error) {
+		return -1, nil
+	}
+
+	fetchTxCreator := func() TxCreator {
+		return nil
+	}
+
+	fetchTxBroadcaster := func() TxBroadcaster {
+		return nil
+	}
+
+	pCfg := &PaymentMgrConfig{
+		DB:                    db,
+		ActiveNet:             activeNet,
+		PoolFee:               0.1,
+		LastNPeriod:           time.Second * 120,
+		SoloPool:              false,
+		PaymentMethod:         PPS,
+		GetBlockConfirmations: getBlockConfirmations,
+		FetchTxCreator:        fetchTxCreator,
+		FetchTxBroadcaster:    fetchTxBroadcaster,
+		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
+	}
+	mgr, err := NewPaymentMgr(pCfg)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = persistShare(db, yID, weight, thirtyBefore) // Share B
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = mgr.pruneShares(sixtyBefore)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Ensure share A got pruned with share B remaining.
-	shareAID := shareID(xID, eightyBefore)
-	_, err = fetchShare(db, shareAID)
-	if err == nil {
-		t.Fatal("expected value not found error")
-	}
-
-	shareBID := shareID(yID, thirtyBefore)
-	_, err = fetchShare(db, shareBID)
-	if err != nil {
-		t.Fatalf("unexpected error fetching share B: %v", err)
-	}
-
-	err = mgr.pruneShares(tenAfter)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Ensure share B got pruned.
-	_, err = fetchShare(db, shareBID)
-	if err == nil {
-		t.Fatalf("expected value not found error")
-	}
-
-	// Test PPSEligibleShares and PPLNSEligibleShares.
-	now = time.Now()
-	sixtyBefore = now.Add(-(time.Second * 60)).UnixNano()
-	eightyBefore = now.Add(-(time.Second * 80)).UnixNano()
-	tenAfter = now.Add(time.Second * 10).UnixNano()
-	weight = new(big.Rat).SetFloat64(1.0)
-
-	shareCount := 1
-	expectedShareCount := 2
-
-	err = persistShare(db, xID, weight, eightyBefore) // Share A
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = persistShare(db, xID, weight, tenAfter) // Share B
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = persistShare(db, yID, weight, sixtyBefore) // Share C
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = persistShare(db, yID, weight, tenAfter) // Share D
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sixtyBeforeB := nanoToBigEndianBytes(sixtyBefore)
-	// nowB := nanoToBigEndianBytes(minimum)
-
-	// Fetch eligible shares at minimum time.
-	shares, err := mgr.PPSEligibleShares(sixtyBeforeB)
-	if err != nil {
-		t.Fatalf("PPSEligibleShares: unexpected error: %v", err)
-	}
-
-	// Ensure the returned share count is as expected.
-	if len(shares) != expectedShareCount {
-		t.Fatalf("PPS error: expected %v eligible PPS shares, got %v",
-			expectedShareCount, len(shares))
-	}
-
-	forAccX := 0
-	forAccY := 0
-	for _, share := range shares {
-		if share.Account == xID {
-			forAccX++
-		}
-
-		if share.Account == yID {
-			forAccY++
-		}
-	}
-
-	// Ensure account x and account y both have shares returned.
-	if forAccX == 0 || forAccY == 0 {
-		t.Fatalf("PPS error: expected shares for account X and Y, "+
-			"got %v (for x), %v (for y).", forAccX, forAccY)
-	}
-
-	// Ensure account x and account y have equal number of shares.
-	if forAccX != forAccY {
-		t.Fatalf("PPS error: expected equal shares for account X and Y, "+
-			"got %v (for x), %v (for y).", forAccX, forAccY)
-	}
-
-	// Ensure account x and account y have shares equal to the share count.
-	if forAccX != shareCount || forAccY != shareCount {
-		t.Fatalf("PPS error: expected share counts of %v for account X and Y, "+
-			"got %v (for x), %v (for y).", shareCount, forAccX, forAccY)
-	}
-
-	// Empty the share bucket.
-	err = emptyBucket(db, shareBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Create a share below the minimum exclusive PPLNS time for account x.
-	err = persistShare(db, xID, weight, eightyBefore)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a share below the minimum exclusive PPLNS time for account y.
-	err = persistShare(db, yID, weight, eightyBefore)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a share at minimum exclusive PPLNS time for account x.
-	err = persistShare(db, xID, weight, sixtyBefore)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a share at minimum exclusive PPLNS time for account y.
-	err = persistShare(db, yID, weight, sixtyBefore)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a share above minimum exclusive PPLNS time for account x.
-	err = persistShare(db, xID, weight, now.UnixNano())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a share above minimum exclusive PPLNS time for account y.
-	err = persistShare(db, yID, weight, tenAfter)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	shares, err = mgr.PPLNSEligibleShares(sixtyBeforeB)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Ensure the returned number of shares is as expected.
-	if len(shares) != expectedShareCount {
-		t.Fatalf("PPLNS error: expected %v eligible PPLNS shares, got %v",
-			expectedShareCount, len(shares))
-	}
-
-	forAccX = 0
-	forAccY = 0
-	for _, share := range shares {
-		if share.Account == xID {
-			forAccX++
-		}
-
-		if share.Account == yID {
-			forAccY++
-		}
-	}
-
-	// Ensure account x and account y both have shares returned.
-	if forAccX == 0 || forAccY == 0 {
-		t.Fatalf("PPLNS error: expected shares for account X and Y, "+
-			"got %v (for x), %v (for y).", forAccX, forAccY)
-	}
-
-	// Ensure account x and account y have equal number of shares.
-	if forAccX != forAccY {
-		t.Fatalf("PPLNS error: expected equal shares for account X and Y, "+
-			"got %v (for x), %v (for y).", forAccX, forAccY)
-	}
-
-	// Ensure account x and account y have shares equal to the share count.
-	if forAccX != shareCount || forAccY != shareCount {
-		t.Fatalf("PPLNS error: expected share counts of %v for account X and Y, "+
-			"got %v (for x), %v (for y).", shareCount, forAccX, forAccY)
-	}
-
-	// Empty the share bucket.
-	err = emptyBucket(db, shareBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Test pendingPayments, maturePendingPayments, archivedPayments and
-	// pendingPaymentsForBlockHash.
-	height := uint32(10)
-	estMaturity := uint32(26)
-	zeroHash := chainhash.Hash{0}
-	zeroSource := &PaymentSource{
-		BlockHash: zeroHash.String(),
-		Coinbase:  zeroHash.String(),
-	}
-	amt, _ := dcrutil.NewAmount(5)
-	_, err = persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pmtC, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pmtC.PaidOnHeight = estMaturity + 1
-	pmtC.TransactionID = zeroHash.String()
-	err = pmtC.Update(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = pmtC.Archive(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pmtD, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pmtD.PaidOnHeight = estMaturity + 1
-	pmtD.TransactionID = chainhash.Hash{0}.String()
-	err = pmtD.Update(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = pmtD.Archive(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Ensure there are two pending payments.
-	pmts, err := mgr.pendingPayments()
-	if err != nil {
-		t.Fatalf("pendingPayments error: %v", err)
-	}
-
-	if len(pmts) != 2 {
-		t.Fatalf("expected 2 pending payments, got %d", len(pmts))
-	}
-
-	// Ensure there are two archived payments (payment C and D).
-	pmts, err = mgr.archivedPayments()
-	if err != nil {
-		t.Fatalf("archivedPayments error: %v", err)
-	}
-
-	if len(pmts) != 2 {
-		t.Fatalf("expected 2 archived payments, got %d", len(pmts))
-	}
-
-	// Ensure there are two mature payments at height 28 (payment A and B).
-	pmtSet, err := mgr.maturePendingPayments(28)
-	if err != nil {
-		t.Fatalf("maturePendingPayments error: %v", err)
-	}
-
-	if len(pmtSet) != 1 {
-		t.Fatalf("expected 1 payment set, got %d", len(pmtSet))
-	}
-
-	set, ok := pmtSet[zeroSource.BlockHash]
-	if !ok {
-		t.Fatalf("expected pending payments at height %d to be "+
-			"mature at height %d", height+1, 28)
-	}
-
-	if len(set) != 2 {
-		t.Fatalf("expected 2 mature pending payments from "+
-			"height %d, got %d", height+1, len(set))
-	}
-
-	// Ensure there are no mature payments at height 27 (payment A and B).
-	pmtSet, err = mgr.maturePendingPayments(27)
-	if err != nil {
-		t.Fatalf("maturePendingPayments error: %v", err)
-	}
-
-	if len(pmtSet) != 0 {
-		t.Fatalf("expected no payment sets, got %d", len(pmtSet))
-	}
-
-	// Ensure there are two pending payments for the zero hash.
-	count, err := mgr.pendingPaymentsForBlockHash(zeroSource.BlockHash)
-	if err != nil {
-		t.Fatalf("pendingPaymentsForBlockHash error: %v", err)
-	}
-
-	if count != 2 {
-		t.Fatalf("expected 2 mature pending payments with "+
-			"block hash %s, got %d", zeroSource.BlockHash, count)
-	}
-
-	// Empty the payments and archived payment buckets.
-	err = emptyBucket(db, paymentArchiveBkt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = emptyBucket(db, paymentBkt)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Ensure backed up values to the database load as expected.
-	initialLastPaymentHeight, initialLastPaymentPaidOn, err := mgr.loadLastPaymentInfo()
-	if err != nil {
-		t.Fatalf("unable to load last payment info: %v", err)
-	}
-	initialLastPaymentCreatedOn, err := mgr.loadLastPaymentCreatedOn()
-	if err != nil {
-		t.Fatalf("unable to load last payment created on: %v", err)
-	}
-
-	if initialLastPaymentHeight != 0 {
-		t.Fatalf("[fetchLastPaymentHeight] expected last payment height of "+
-			" %d, got %d", 0, initialLastPaymentHeight)
-	}
-	if initialLastPaymentPaidOn != 0 {
-		t.Fatalf("[fetchLastPaymentPaidOn] expected last payment paid on of "+
-			" %d, got %d", 0, initialLastPaymentPaidOn)
-	}
-	if initialLastPaymentCreatedOn != 0 {
-		t.Fatalf("[fetchLastPaymentCreatedOn] expected last payment created "+
-			"on of %d, got %d", 0, initialLastPaymentCreatedOn)
-	}
-
-	lastPaymentHeight := uint32(1)
-	lastPaymentPaidOn := time.Now().UnixNano()
-	lastPaymentCreatedOn := time.Now().UnixNano()
-
-	err = mgr.persistLastPaymentInfo(lastPaymentHeight, lastPaymentPaidOn)
-	if err != nil {
-		t.Fatalf("[persistLastPaymentInfo] unable to persist last payment info: %v", err)
-	}
-	err = mgr.persistLastPaymentCreatedOn(lastPaymentCreatedOn)
-	if err != nil {
-		t.Fatalf("[persistLastPaymentCreatedOn] unable to persist last payment created on: %v", err)
-	}
-
-	paymentHeight, paymentPaidOn, err := mgr.loadLastPaymentInfo()
-	if err != nil {
-		t.Fatalf("[loadLastPaymentInfo] unable to load last payment info: %v", err)
-	}
-	paymentCreatedOn, err := mgr.loadLastPaymentCreatedOn()
-	if err != nil {
-		t.Fatalf("[loadLastPaymentCreatedOn] unable to load last payment created on: %v", err)
-	}
-
-	if lastPaymentHeight != paymentHeight {
-		t.Fatalf("[fetchLastPaymentHeight] expected last payment height to be %d, got %d",
-			paymentHeight, paymentHeight)
-	}
-
-	if lastPaymentPaidOn != paymentPaidOn {
-		t.Fatalf("[fetchLastPaymentPaidOn] expected last payment paid on to be %d, got %d",
-			lastPaymentPaidOn, paymentPaidOn)
-	}
-	if lastPaymentCreatedOn != paymentCreatedOn {
-		t.Fatalf("[fetchLastPaymentCreatedOn] expected last payment created on to be %d, got %d",
-			lastPaymentCreatedOn, paymentCreatedOn)
-	}
-
-	// Reset backed up values to their defaults.
-	err = mgr.persistLastPaymentInfo(0, 0)
-	if err != nil {
-		t.Fatalf("unable to persist default last payment info: %v", err)
-	}
-	err = mgr.persistLastPaymentCreatedOn(0)
-	if err != nil {
-		t.Fatalf("unable to persist default last payment created on: %v", err)
+		t.Fatalf("[NewPaymentMgr] unexpected error: %v", err)
 	}
 
 	// Ensure Pay-Per-Share (PPS) works as expected.
-	now = time.Now()
-	sixtyBefore = now.Add(-(time.Second * 60)).UnixNano()
-	thirtyBefore = now.Add(-(time.Second * 30)).UnixNano()
-	shareCount = 10
+	now := time.Now()
+	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
+	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
+	shareCount := 10
 	coinbaseValue := 80
-	height = uint32(20)
+	height := uint32(20)
+	weight := new(big.Rat).SetFloat64(1.0)
 
 	// Create shares for account x and y.
 	for i := 0; i < shareCount; i++ {
@@ -608,8 +211,14 @@ func testPaymentMgr(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	zeroHash := chainhash.Hash{0}
+	zeroSource := &PaymentSource{
+		BlockHash: zeroHash.String(),
+		Coinbase:  zeroHash.String(),
+	}
+
 	// Ensure the last payment created on time was updated.
-	previousPaymentCreatedOn, err := mgr.loadLastPaymentCreatedOn()
+	previousPaymentCreatedOn, err := loadLastPaymentCreatedOn(db)
 	if err != nil {
 		t.Fatalf("[PPS] unable to get previous payment created-on: %v", err)
 	}
@@ -617,7 +226,7 @@ func testPaymentMgr(t *testing.T) {
 	if err != nil {
 		t.Fatalf("[PPS] unable to generate payments: %v", err)
 	}
-	currentPaymentCreatedOn, err := mgr.loadLastPaymentCreatedOn()
+	currentPaymentCreatedOn, err := loadLastPaymentCreatedOn(db)
 	if err != nil {
 		t.Fatalf("[PPS] unable to get current payment created-on: %v", err)
 	}
@@ -633,7 +242,7 @@ func testPaymentMgr(t *testing.T) {
 
 	// Ensure the payments created are for accounts x, y and a fee
 	// payment entry.
-	pmts, err = mgr.pendingPayments()
+	pmts, err := fetchPendingPayments(db)
 	if err != nil {
 		t.Error(err)
 	}
@@ -685,11 +294,11 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Reset backed up values to their defaults.
-	err = mgr.persistLastPaymentInfo(0, 0)
+	err = persistLastPaymentInfo(db, 0, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment info: %v", err)
 	}
-	err = mgr.persistLastPaymentCreatedOn(0)
+	err = persistLastPaymentCreatedOn(db, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
@@ -718,7 +327,7 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Ensure the last payment created on time was updated.
-	previousPaymentCreatedOn, err = mgr.loadLastPaymentCreatedOn()
+	previousPaymentCreatedOn, err = loadLastPaymentCreatedOn(db)
 	if err != nil {
 		t.Fatalf("[PPLNS] unable to get previous payment created-on: %v", err)
 	}
@@ -726,7 +335,7 @@ func testPaymentMgr(t *testing.T) {
 	if err != nil {
 		t.Fatalf("[PPLNS] unable to generate payments: %v", err)
 	}
-	currentPaymentCreatedOn, err = mgr.loadLastPaymentCreatedOn()
+	currentPaymentCreatedOn, err = loadLastPaymentCreatedOn(db)
 	if err != nil {
 		t.Fatalf("[PPLNS] unable to get current payment created-on: %v", err)
 	}
@@ -742,7 +351,7 @@ func testPaymentMgr(t *testing.T) {
 
 	// Ensure the payments created are for accounts x, y and a fee
 	// payment entry.
-	pmts, err = mgr.pendingPayments()
+	pmts, err = fetchPendingPayments(db)
 	if err != nil {
 		t.Fatalf("[PPLNS] pendingPayments error: %v", err)
 	}
@@ -796,11 +405,11 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Reset backed up values to their defaults.
-	err = mgr.persistLastPaymentInfo(0, 0)
+	err = persistLastPaymentInfo(db, 0, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment info: %v", err)
 	}
-	err = mgr.persistLastPaymentCreatedOn(0)
+	err = persistLastPaymentCreatedOn(db, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
@@ -831,7 +440,7 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Ensure payments for account x, y and fees were created.
-	pmtSets, err := mgr.maturePendingPayments(paymentMaturity)
+	pmtSets, err := maturePendingPayments(db, paymentMaturity)
 	if err != nil {
 		t.Fatalf("[maturePendingPayments] unexpected error: %v", err)
 	}
@@ -840,7 +449,7 @@ func testPaymentMgr(t *testing.T) {
 		t.Fatal("[maturePendingPayments] expected mature payments")
 	}
 
-	_, ok = pmtSets[zeroSource.BlockHash]
+	_, ok := pmtSets[zeroSource.BlockHash]
 	if !ok {
 		t.Fatalf("[maturePendingPayments] expected mature payments "+
 			"at height %d", height)
@@ -886,11 +495,11 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Reset backed up values to their defaults.
-	err = mgr.persistLastPaymentInfo(0, 0)
+	err = persistLastPaymentInfo(db, 0, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment info: %v", err)
 	}
-	err = mgr.persistLastPaymentCreatedOn(0)
+	err = persistLastPaymentCreatedOn(db, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
@@ -902,12 +511,13 @@ func testPaymentMgr(t *testing.T) {
 		t.Fatalf("unable to generate random bytes: %v", err)
 	}
 
+	estMaturity := uint32(26)
 	randHash := chainhash.HashH(randBytes[:])
 	randSource := &PaymentSource{
 		BlockHash: randHash.String(),
 		Coinbase:  randHash.String(),
 	}
-	amt, _ = dcrutil.NewAmount(5)
+	amt, _ := dcrutil.NewAmount(5)
 	mPmts := make(map[string][]*Payment)
 	pmtA := NewPayment(xID, zeroSource, amt, height, estMaturity)
 	mPmts[zeroSource.Coinbase] = []*Payment{pmtA}
@@ -952,7 +562,7 @@ func testPaymentMgr(t *testing.T) {
 
 	// Ensure orphaned payments pruning accurately prunes payments
 	// sourcing from orphaned blocks.
-	pmtSet, err = mgr.pruneOrphanedPayments(ctx, mPmts)
+	pmtSet, err := mgr.pruneOrphanedPayments(ctx, mPmts)
 	if err != nil {
 		cancel()
 		t.Fatalf("unexpected pruneOrphanPayments error: %v", err)
@@ -1161,7 +771,7 @@ func testPaymentMgr(t *testing.T) {
 	// referenced by a payment cannot be found.
 	unknownID := "abcd"
 	unknownIDCoinbase := chainhash.Hash{'u'}
-	pmtD = NewPayment(unknownID, randSource, amt, height, estMaturity)
+	pmtD := NewPayment(unknownID, randSource, amt, height, estMaturity)
 	mPmts[unknownIDCoinbase.String()] = []*Payment{pmtD}
 	txC = &txCreatorImpl{
 		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
@@ -1572,11 +1182,11 @@ func testPaymentMgr(t *testing.T) {
 	cancel()
 
 	// Reset backed up values to their defaults.
-	err = mgr.persistLastPaymentInfo(0, 0)
+	err = persistLastPaymentInfo(db, 0, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment info: %v", err)
 	}
-	err = mgr.persistLastPaymentCreatedOn(0)
+	err = persistLastPaymentCreatedOn(db, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
@@ -1618,7 +1228,7 @@ func testPaymentMgr(t *testing.T) {
 
 	// Ensure the payments created are for account y and a fee
 	// payment entry.
-	pmts, err = mgr.pendingPayments()
+	pmts, err = fetchPendingPayments(db)
 	if err != nil {
 		t.Fatalf("pendingPayments error: %v", err)
 	}
@@ -1668,11 +1278,11 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Reset backed up values to their defaults.
-	err = mgr.persistLastPaymentInfo(0, 0)
+	err = persistLastPaymentInfo(db, 0, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment info: %v", err)
 	}
-	err = mgr.persistLastPaymentCreatedOn(0)
+	err = persistLastPaymentCreatedOn(db, 0)
 	if err != nil {
 		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
