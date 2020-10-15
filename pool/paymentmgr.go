@@ -108,63 +108,39 @@ type PaymentMgr struct {
 
 // NewPaymentMgr creates a new payment manager.
 func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
-	funcName := "newPaymentManager"
-
 	pm := &PaymentMgr{
 		cfg: pCfg,
 	}
 	rand.Seed(time.Now().UnixNano())
 
-	err := pm.cfg.DB.Update(func(tx *bolt.Tx) error {
-		pbkt, err := fetchPoolBucket(tx)
-		if err != nil {
-			return err
-		}
-
-		// Initialize the last payment paid-on time.
-		lastPaymentPaidOnB := pbkt.Get(lastPaymentPaidOn)
-		if lastPaymentPaidOnB == nil {
-			b := make([]byte, 8)
-			binary.LittleEndian.PutUint64(b, 0)
-			err := pbkt.Put(lastPaymentPaidOn, b)
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to persist last payment "+
-					"paid-on time: %v", funcName, err)
-				return dbError(ErrPersistEntry, desc)
-			}
-		}
-
-		// Initialize the last payment height.
-		lastPaymentHeightB := pbkt.Get(lastPaymentHeight)
-		if lastPaymentHeightB == nil {
-			b := make([]byte, 4)
-			binary.LittleEndian.PutUint32(b, 0)
-			err := pbkt.Put(lastPaymentHeight, b)
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to persist last payment "+
-					"height: %v", funcName, err)
-				return dbError(ErrPersistEntry, desc)
-			}
-		}
-
-		// Initialize the last payment created-on time.
-		lastPaymentCreatedOnB := pbkt.Get(lastPaymentCreatedOn)
-		if lastPaymentCreatedOnB == nil {
-			b := make([]byte, 8)
-			binary.LittleEndian.PutUint64(b, 0)
-			err := pbkt.Put(lastPaymentCreatedOn, b)
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to persist last payment "+
-					"created-on time: %v", funcName, err)
-				return dbError(ErrPersistEntry, desc)
-			}
-		}
-
-		return nil
-	})
+	// Initialize last payment info (height and paid-on).
+	_, _, err := loadLastPaymentInfo(pm.cfg.DB)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrValueNotFound) {
+			// Initialize with zeros.
+			err = persistLastPaymentInfo(pm.cfg.DB, 0, 0)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
+
+	// Initialize last payment created-on.
+	_, err = loadLastPaymentCreatedOn(pm.cfg.DB)
+	if err != nil {
+		if errors.Is(err, ErrValueNotFound) {
+			// Initialize with zero.
+			err = persistLastPaymentCreatedOn(pm.cfg.DB, 0)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+
 	return pm, nil
 }
 
