@@ -279,11 +279,9 @@ func deleteEntry(db *bolt.DB, bucket []byte, key string) error {
 // fetchBucket is a helper function for getting the requested bucket.
 func fetchBucket(tx *bolt.Tx, bucketID []byte) (*bolt.Bucket, error) {
 	const funcName = "fetchBucket"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
+	pbkt, err := fetchPoolBucket(tx)
+	if err != nil {
+		return nil, err
 	}
 	bkt := pbkt.Bucket(bucketID)
 	if bkt == nil {
@@ -292,6 +290,18 @@ func fetchBucket(tx *bolt.Tx, bucketID []byte) (*bolt.Bucket, error) {
 		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	return bkt, nil
+}
+
+// fetchPoolBucket is a helper function for getting the pool bucket.
+func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	funcName := "fetchPoolBucket"
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
+	}
+	return pbkt, nil
 }
 
 func persistPoolMode(db *bolt.DB, mode uint32) error {

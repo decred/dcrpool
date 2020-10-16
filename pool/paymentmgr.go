@@ -144,18 +144,6 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	return pm, nil
 }
 
-// fetchPoolBucket is a helper function for getting the pool bucket.
-func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	funcName := "fetchPoolBucket"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
-	}
-	return pbkt, nil
-}
-
 // bigEndianBytesToNano returns nanosecond time from the provided
 // big endian bytes.
 func bigEndianBytesToNano(b []byte) uint64 {
