@@ -130,10 +130,12 @@ func createBuckets(db *bolt.DB) error {
 	return err
 }
 
-// backup saves a copy of the db to file.
-func backup(db *bolt.DB, file string) error {
+// backup saves a copy of the db to file. The file will be saved in the same
+// directory as the current db file.
+func backup(db *bolt.DB, backupFileName string) error {
+	backupPath := filepath.Join(filepath.Dir(db.Path()), backupFileName)
 	return db.View(func(tx *bolt.Tx) error {
-		err := tx.CopyFile(file, 0600)
+		err := tx.CopyFile(backupPath, 0600)
 		if err != nil {
 			desc := fmt.Sprintf("unable to backup db: %v", err)
 			return poolError(ErrBackup, desc)
@@ -237,8 +239,7 @@ func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 
 	if switchMode {
 		// Backup the current database and wipe it.
-		backupPath := filepath.Join(filepath.Dir(db.Path()), backupFile)
-		err := backup(db, backupPath)
+		err := backup(db, backupFile)
 		if err != nil {
 			return nil, err
 		}

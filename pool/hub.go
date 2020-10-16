@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -525,18 +524,6 @@ func (h *Hub) HasClients() bool {
 	return atomic.LoadInt32(&h.clients) > 0
 }
 
-// backup persists a copy of the database to file  on shutdown.
-func (h *Hub) backup(ctx context.Context) {
-	<-ctx.Done()
-	log.Tracef("backing up db.")
-	backupPath := filepath.Join(filepath.Dir(h.db.Path()), backupFile)
-	err := backup(h.db, backupPath)
-	if err != nil {
-		log.Error(err)
-	}
-	h.wg.Done()
-}
-
 // shutdown tears down the hub and releases resources used.
 func (h *Hub) shutdown() error {
 	if !h.cfg.SoloPool {
@@ -562,8 +549,18 @@ func (h *Hub) Run(ctx context.Context) {
 	go h.chainState.handleChainUpdates(ctx)
 	h.wg.Add(1)
 
-	go h.backup(ctx)
-	h.wg.Add(1)
+	// Start a goroutine which will wait for the application context to be
+	// cancelled, and then write a database backup.
+	go func() {
+		h.wg.Add(1)
+		<-ctx.Done()
+		log.Tracef("backing up db.")
+		err := backup(h.db, backupFile)
+		if err != nil {
+			log.Error(err)
+		}
+		h.wg.Done()
+	}()
 
 	h.wg.Wait()
 	_ = h.shutdown()
