@@ -6,7 +6,10 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/big"
 	"net/http"
@@ -135,12 +138,23 @@ func newPool(cfg *config) (*miningPool, error) {
 	// Establish a connection to the wallet if the pool is mining as a
 	// publicly available mining pool.
 	if !cfg.SoloPool {
-		creds, err := credentials.
-			NewClientTLSFromFile(cfg.WalletRPCCert, "localhost")
+		serverCAs := x509.NewCertPool()
+		serverCert, err := ioutil.ReadFile(cfg.WalletRPCCert)
 		if err != nil {
 			return nil, err
 		}
-
+		if !serverCAs.AppendCertsFromPEM(serverCert) {
+			return nil, fmt.Errorf("no certificates found in %s",
+				cfg.WalletRPCCert)
+		}
+		keypair, err := tls.LoadX509KeyPair(cfg.WalletTLSCert, cfg.WalletTLSKey)
+		if err != nil {
+			return nil, fmt.Errorf("unable to read keypair: %v", err)
+		}
+		creds := credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{keypair},
+			RootCAs:      serverCAs,
+		})
 		grpc, err := grpc.Dial(cfg.WalletGRPCHost,
 			grpc.WithTransportCredentials(creds))
 		if err != nil {

@@ -37,6 +37,8 @@ const (
 	defaultDBFilename            = "dcrpool.kv"
 	defaultTLSCertFilename       = "dcrpool.cert"
 	defaultTLSKeyFilename        = "dcrpool.key"
+	defaultWalletTLSCertFilename = "wallet.cert"
+	defaultWalletTLSKeyFilename  = "wallet.key"
 	defaultDcrdRPCHost           = "127.0.0.1"
 	defaultWalletGRPCHost        = "127.0.0.1"
 	defaultMaxGenTime            = time.Second * 15
@@ -66,8 +68,15 @@ var (
 	defaultDataDir       = filepath.Join(dcrpoolHomeDir, defaultDataDirname)
 	defaultDBFile        = filepath.Join(defaultDataDir, defaultDBFilename)
 	defaultLogDir        = filepath.Join(dcrpoolHomeDir, defaultLogDirname)
-	defaultTLSCertFile   = filepath.Join(dcrpoolHomeDir, defaultTLSCertFilename)
-	defaultTLSKeyFile    = filepath.Join(dcrpoolHomeDir, defaultTLSKeyFilename)
+
+	// This keypair is solely for enabling HTTPS connections to the pool's
+	// web interface.
+	defaultTLSCertFile = filepath.Join(dcrpoolHomeDir, defaultTLSCertFilename)
+	defaultTLSKeyFile  = filepath.Join(dcrpoolHomeDir, defaultTLSKeyFilename)
+
+	// This keypair is solely for client authentication to the wallet.
+	defaultWalletTLSCertFile = filepath.Join(dcrpoolHomeDir, defaultWalletTLSCertFilename)
+	defaultWalletTLSKeyFile  = filepath.Join(dcrpoolHomeDir, defaultWalletTLSKeyFilename)
 )
 
 // runServiceCommand is only set to a real function on Windows.  It is used
@@ -106,6 +115,8 @@ type config struct {
 	UseLEHTTPS            bool          `long:"uselehttps" ini-name:"uselehttps" description:"This enables HTTPS using a Letsencrypt certificate. By default the pool uses a self-signed certificate for HTTPS."`
 	TLSCert               string        `long:"tlscert" ini-name:"tlscert" description:"Path to the TLS cert file."`
 	TLSKey                string        `long:"tlskey" ini-name:"tlskey" description:"Path to the TLS key file."`
+	WalletTLSCert         string        `long:"wallettlscert" ini-name:"wallettlscert" description:"Path to the wallet client TLS cert file."`
+	WalletTLSKey          string        `long:"wallettlskey" ini-name:"wallettlskey" description:"Path to the wallet client TLS key file."`
 	Designation           string        `long:"designation" ini-name:"designation" description:"The designated codename for this pool. Customises the logo in the top toolbar."`
 	MaxConnectionsPerHost uint32        `long:"maxconnperhost" ini-name:"maxconnperhost" description:"The maximum number of connections allowed per host."`
 	Profile               string        `long:"profile" ini-name:"profile" description:"Enable HTTP profiling on given [addr:]port -- NOTE port must be between 1024 and 65536"`
@@ -338,6 +349,8 @@ func loadConfig() (*config, []string, error) {
 		UseLEHTTPS:            defaultUseLEHTTPS,
 		TLSCert:               defaultTLSCertFile,
 		TLSKey:                defaultTLSKeyFile,
+		WalletTLSCert:         defaultWalletTLSCertFile,
+		WalletTLSKey:          defaultWalletTLSKeyFile,
 		Designation:           defaultDesignation,
 		MaxConnectionsPerHost: defaultMaxConnectionsPerHost,
 		CPUPort:               defaultCPUPort,
@@ -427,11 +440,22 @@ func loadConfig() (*config, []string, error) {
 		} else {
 			cfg.TLSCert = preCfg.TLSCert
 		}
-
 		if preCfg.TLSKey == defaultTLSKeyFile {
 			cfg.TLSKey = filepath.Join(cfg.HomeDir, defaultTLSKeyFilename)
 		} else {
 			cfg.TLSKey = preCfg.TLSKey
+		}
+		if preCfg.WalletTLSCert == defaultWalletTLSCertFile {
+			cfg.WalletTLSCert = filepath.Join(cfg.HomeDir,
+				defaultWalletTLSCertFilename)
+		} else {
+			cfg.WalletTLSCert = preCfg.WalletTLSCert
+		}
+		if preCfg.WalletTLSKey == defaultWalletTLSKeyFile {
+			cfg.WalletTLSKey = filepath.Join(cfg.HomeDir,
+				defaultWalletTLSKeyFilename)
+		} else {
+			cfg.WalletTLSKey = preCfg.WalletTLSKey
 		}
 	}
 
@@ -649,7 +673,9 @@ func loadConfig() (*config, []string, error) {
 			"via letsencrypt")
 	}
 
-	// Generate self-signed TLS cert and key if they do not already exist.
+	// Generate self-signed TLS cert and key if they do not already exist. This
+	// keypair is solely for enabling HTTPS connections to the pool's
+	// web interface.
 	if !cfg.UseLEHTTPS && (!fileExists(cfg.TLSCert) || !fileExists(cfg.TLSKey)) {
 		err := genCertPair(cfg.TLSCert, cfg.TLSKey)
 		if err != nil {
@@ -703,6 +729,18 @@ func loadConfig() (*config, []string, error) {
 			return nil, nil,
 				fmt.Errorf("wallet RPC certificate (%v) not found",
 					cfg.WalletRPCCert)
+		}
+
+		// Generate self-signed wallet TLS cert and key if they do not
+		// already exist. This keypair is solely for client authentication
+		// to the wallet.
+		if !fileExists(cfg.WalletTLSCert) || !fileExists(cfg.WalletTLSKey) {
+			err := genCertPair(cfg.WalletTLSCert, cfg.WalletTLSKey)
+			if err != nil {
+				return nil, nil,
+					fmt.Errorf("failed to generate dcrpool's wallet TLS "+
+						"cert/key: %v", err)
+			}
 		}
 	}
 
