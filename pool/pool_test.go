@@ -61,7 +61,10 @@ func setupDB() (*bolt.DB, error) {
 
 // teardownDB closes the connection to the db and deletes the db file.
 func teardownDB(db *bolt.DB, dbPath string) error {
-	db.Close()
+	err := db.Close()
+	if err != nil {
+		return err
+	}
 	return os.Remove(dbPath)
 }
 
