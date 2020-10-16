@@ -73,8 +73,8 @@ type Config struct {
 	// FetchWorkQuotas returns the reward distribution to pool accounts
 	// based on work contributed per the payment scheme used by the pool.
 	FetchWorkQuotas func() ([]*pool.Quota, error)
-	// BackupDB streams a backup of the database over an http response.
-	BackupDB func(w http.ResponseWriter) error
+	// HTTPBackupDB streams a backup of the database over an http response.
+	HTTPBackupDB func(w http.ResponseWriter) error
 	// FetchClients returns all connected pool clients.
 	FetchClients func() []*pool.Client
 	// AccountExists checks if the provided account id references a pool account.

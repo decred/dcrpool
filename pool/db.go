@@ -7,7 +7,9 @@ package pool
 import (
 	"encoding/binary"
 	"fmt"
+	"net/http"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -443,4 +445,15 @@ func loadLastPaymentCreatedOn(db *bolt.DB) (int64, error) {
 
 func closeDB(db *bolt.DB) error {
 	return db.Close()
+}
+
+func httpBackup(db *bolt.DB, w http.ResponseWriter) error {
+	err := db.View(func(tx *bolt.Tx) error {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", `attachment; filename="backup.db"`)
+		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
+		_, err := tx.WriteTo(w)
+		return err
+	})
+	return err
 }
