@@ -539,7 +539,7 @@ func (h *Hub) backup(ctx context.Context) {
 }
 
 // shutdown tears down the hub and releases resources used.
-func (h *Hub) shutdown() {
+func (h *Hub) shutdown() error {
 	if !h.cfg.SoloPool {
 		if h.walletClose != nil {
 			h.walletClose()
@@ -551,7 +551,7 @@ func (h *Hub) shutdown() {
 	if h.notifClient != nil {
 		_ = h.notifClient.CloseSend()
 	}
-	h.db.Close()
+	return closeDB(h.db)
 }
 
 // Run handles the process lifecycles of the pool hub.
@@ -567,7 +567,7 @@ func (h *Hub) Run(ctx context.Context) {
 	h.wg.Add(1)
 
 	h.wg.Wait()
-	h.shutdown()
+	_ = h.shutdown()
 }
 
 // FetchClients returns all connected pool clients.

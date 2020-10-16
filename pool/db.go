@@ -440,3 +440,7 @@ func loadLastPaymentCreatedOn(db *bolt.DB) (int64, error) {
 
 	return createdOn, nil
 }
+
+func closeDB(db *bolt.DB) error {
+	return db.Close()
+}
