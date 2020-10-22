@@ -248,16 +248,6 @@ func testDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// Recreate account X and Y.
-	_, err = persistAccount(db, xAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = persistAccount(db, yAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
 }
 
 func testLastPaymentCreatedOn(t *testing.T) {
