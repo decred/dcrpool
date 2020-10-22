@@ -21,8 +21,8 @@ const (
 // ChainStateConfig contains all of the configuration values which should be
 // provided when creating a new instance of ChainState.
 type ChainStateConfig struct {
-	// DB represents the pool database.
-	DB *bolt.DB
+	// db represents the pool database.
+	db *bolt.DB
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
 	// PayDividends pays mature mining rewards to participating accounts.
@@ -35,9 +35,6 @@ type ChainStateConfig struct {
 	// GetBlockConfirmations fetches the block confirmations with the provided
 	// block hash.
 	GetBlockConfirmations func(context.Context, *chainhash.Hash) (int64, error)
-	// PendingPaymentsForBlockHash returns the number of pending payments
-	// with the provided block hash as their source.
-	PendingPaymentsForBlockHash func(db *bolt.DB, blockHash string) (uint32, error)
 	// Cancel represents the pool's context cancellation function.
 	Cancel context.CancelFunc
 	// SignalCache sends the provided cache update event to the gui cache.
@@ -100,7 +97,7 @@ func (cs *ChainState) fetchCurrentWork() string {
 // pruneAcceptedWork removes all accepted work not confirmed as mined work
 // with heights less than the provided height.
 func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) error {
-	toDelete, err := fetchUnconfirmedWork(cs.cfg.DB, height)
+	toDelete, err := fetchUnconfirmedWork(cs.cfg.db, height)
 	if err != nil {
 		return err
 	}
@@ -122,7 +119,7 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 		// If the block has no confirmations at the current height,
 		// it is an orphan. Prune it.
 		if confs <= 0 {
-			err = work.Delete(cs.cfg.DB)
+			err = work.Delete(cs.cfg.db)
 			if err != nil {
 				return err
 			}
@@ -133,7 +130,7 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 		// If the block has confirmations mark the accepted work as
 		// confirmed.
 		work.Confirmed = true
-		err = work.Update(cs.cfg.DB)
+		err = work.Update(cs.cfg.db)
 		if err != nil {
 			return err
 		}
@@ -145,7 +142,7 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 // prunePayments removes all spendable payments sourcing from
 // orphaned blocks at the provided height.
 func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
-	toDelete, err := fetchPaymentsAtHeight(cs.cfg.DB, height)
+	toDelete, err := fetchPaymentsAtHeight(cs.cfg.db, height)
 	if err != nil {
 		return err
 	}
@@ -164,7 +161,7 @@ func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
 		// If the block has no confirmations at the current height,
 		// it is an orphan. Delete the payments associated with it.
 		if confs <= 0 {
-			err = payment.Delete(cs.cfg.DB)
+			err = payment.Delete(cs.cfg.db)
 			if err != nil {
 				return err
 			}
@@ -211,7 +208,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			// Prune invalidated jobs and accepted work.
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit
-				err := deleteJobsBeforeHeight(cs.cfg.DB, pruneLimit)
+				err := deleteJobsBeforeHeight(cs.cfg.db, pruneLimit)
 				if err != nil {
 					// Errors generated pruning invalidated jobs indicate an
 					// underlying issue accessing the database. The chainstate
@@ -283,7 +280,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			parentHeight := header.Height - 1
 			parentHash := header.PrevBlock.String()
 			parentID := AcceptedWorkID(parentHash, parentHeight)
-			work, err := FetchAcceptedWork(cs.cfg.DB, parentID)
+			work, err := FetchAcceptedWork(cs.cfg.db, parentID)
 			if err != nil {
 				// If the parent of the connected block is not an accepted
 				// work of the the pool, ignore it.
@@ -313,7 +310,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 
 			if !cs.cfg.SoloPool {
-				count, err := cs.cfg.PendingPaymentsForBlockHash(cs.cfg.DB, parentHash)
+				count, err := pendingPaymentsForBlockHash(cs.cfg.db, parentHash)
 				if err != nil {
 					// Errors generated looking up pending payments
 					// indicates an underlying issue accessing the database.
@@ -361,7 +358,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 
 				// Update accepted work as confirmed mined.
 				work.Confirmed = true
-				err = work.Update(cs.cfg.DB)
+				err = work.Update(cs.cfg.db)
 				if err != nil {
 					// Errors generated updating work state indicate an underlying
 					// issue accessing the database. The chainstate process will
@@ -397,7 +394,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			parentHeight := header.Height - 1
 			parentHash := header.PrevBlock.String()
 			parentID := AcceptedWorkID(parentHash, parentHeight)
-			confirmedWork, err := FetchAcceptedWork(cs.cfg.DB, parentID)
+			confirmedWork, err := FetchAcceptedWork(cs.cfg.db, parentID)
 			if err != nil {
 				// Errors generated, except for a value not found error,
 				// looking up accepted work indicates an underlying issue
@@ -417,7 +414,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 
 			if confirmedWork != nil {
 				confirmedWork.Confirmed = false
-				err = confirmedWork.Update(cs.cfg.DB)
+				err = confirmedWork.Update(cs.cfg.db)
 				if err != nil {
 					// Errors generated updating work state indicate an underlying
 					// issue accessing the database. The chainstate process will
@@ -437,7 +434,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			// ensure it is not confirmed mined.
 			blockHash := header.BlockHash().String()
 			id := AcceptedWorkID(blockHash, header.Height)
-			work, err := FetchAcceptedWork(cs.cfg.DB, id)
+			work, err := FetchAcceptedWork(cs.cfg.db, id)
 			if err != nil {
 				// If the disconnected block is not an accepted
 				// work of the the pool, ignore it.
@@ -458,7 +455,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 
 			work.Confirmed = false
-			err = work.Update(cs.cfg.DB)
+			err = work.Update(cs.cfg.db)
 			if err != nil {
 				// Errors generated updating work state indicate an underlying
 				// issue accessing the database. The chainstate process will

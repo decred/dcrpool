@@ -64,8 +64,8 @@ type confNotifMsg struct {
 // PaymentMgrConfig contains all of the configuration values which should be
 // provided when creating a new instance of PaymentMgr.
 type PaymentMgrConfig struct {
-	// DB represents the pool database.
-	DB *bolt.DB
+	// db represents the pool database.
+	db *bolt.DB
 	// ActiveNet represents the network being mined on.
 	ActiveNet *chaincfg.Params
 	// PoolFee represents the fee charged to participating accounts of the pool.
@@ -108,76 +108,40 @@ type PaymentMgr struct {
 
 // NewPaymentMgr creates a new payment manager.
 func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
-	funcName := "newPaymentManager"
-
 	pm := &PaymentMgr{
 		cfg: pCfg,
 	}
 	rand.Seed(time.Now().UnixNano())
 
-	err := pm.cfg.DB.Update(func(tx *bolt.Tx) error {
-		pbkt, err := fetchPoolBucket(tx)
-		if err != nil {
-			return err
-		}
-
-		// Initialize the last payment paid-on time.
-		lastPaymentPaidOnB := pbkt.Get(lastPaymentPaidOn)
-		if lastPaymentPaidOnB == nil {
-			b := make([]byte, 8)
-			binary.LittleEndian.PutUint64(b, 0)
-			err := pbkt.Put(lastPaymentPaidOn, b)
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to persist last payment "+
-					"paid-on time: %v", funcName, err)
-				return dbError(ErrPersistEntry, desc)
-			}
-		}
-
-		// Initialize the last payment height.
-		lastPaymentHeightB := pbkt.Get(lastPaymentHeight)
-		if lastPaymentHeightB == nil {
-			b := make([]byte, 4)
-			binary.LittleEndian.PutUint32(b, 0)
-			err := pbkt.Put(lastPaymentHeight, b)
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to persist last payment "+
-					"height: %v", funcName, err)
-				return dbError(ErrPersistEntry, desc)
-			}
-		}
-
-		// Initialize the last payment created-on time.
-		lastPaymentCreatedOnB := pbkt.Get(lastPaymentCreatedOn)
-		if lastPaymentCreatedOnB == nil {
-			b := make([]byte, 8)
-			binary.LittleEndian.PutUint64(b, 0)
-			err := pbkt.Put(lastPaymentCreatedOn, b)
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to persist last payment "+
-					"created-on time: %v", funcName, err)
-				return dbError(ErrPersistEntry, desc)
-			}
-		}
-
-		return nil
-	})
+	// Initialize last payment info (height and paid-on).
+	_, _, err := loadLastPaymentInfo(pm.cfg.db)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrValueNotFound) {
+			// Initialize with zeros.
+			err = persistLastPaymentInfo(pm.cfg.db, 0, 0)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
-	return pm, nil
-}
 
-// fetchPoolBucket is a helper function for getting the pool bucket.
-func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	funcName := "fetchPoolBucket"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
+	// Initialize last payment created-on.
+	_, err = loadLastPaymentCreatedOn(pm.cfg.db)
+	if err != nil {
+		if errors.Is(err, ErrValueNotFound) {
+			// Initialize with zero.
+			err = persistLastPaymentCreatedOn(pm.cfg.db, 0)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
-	return pbkt, nil
+
+	return pm, nil
 }
 
 // bigEndianBytesToNano returns nanosecond time from the provided
@@ -219,7 +183,7 @@ func (pm *PaymentMgr) sharePercentages(shares []*Share) (map[string]*big.Rat, er
 // due participating pool accounts based on work performed measured by
 // the PPS payment scheme.
 func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.Rat, error) {
-	shares, err := ppsEligibleShares(pm.cfg.DB, workCreatedOn)
+	shares, err := ppsEligibleShares(pm.cfg.db, workCreatedOn)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +202,7 @@ func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.
 func (pm *PaymentMgr) PPLNSSharePercentages() (map[string]*big.Rat, error) {
 	now := time.Now()
 	min := now.Add(-pm.cfg.LastNPeriod)
-	shares, err := pplnsEligibleShares(pm.cfg.DB, min.UnixNano())
+	shares, err := pplnsEligibleShares(pm.cfg.db, min.UnixNano())
 	if err != nil {
 		return nil, err
 	}
@@ -340,17 +304,17 @@ func (pm *PaymentMgr) payPerShare(source *PaymentSource, amt dcrutil.Amount, hei
 		return err
 	}
 	for _, payment := range payments {
-		err := payment.Persist(pm.cfg.DB)
+		err := payment.Persist(pm.cfg.db)
 		if err != nil {
 			return err
 		}
 	}
 	// Update the last payment created on time and prune invalidated shares.
-	err = persistLastPaymentCreatedOn(pm.cfg.DB, lastPmtCreatedOn)
+	err = persistLastPaymentCreatedOn(pm.cfg.db, lastPmtCreatedOn)
 	if err != nil {
 		return err
 	}
-	return pruneShares(pm.cfg.DB, workCreatedOn)
+	return pruneShares(pm.cfg.db, workCreatedOn)
 }
 
 // payPerLastNShares generates a payment bundle comprised of payments to all
@@ -367,18 +331,18 @@ func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amoun
 		return err
 	}
 	for _, payment := range payments {
-		err := payment.Persist(pm.cfg.DB)
+		err := payment.Persist(pm.cfg.db)
 		if err != nil {
 			return err
 		}
 	}
 	// Update the last payment created on time and prune invalidated shares.
-	err = persistLastPaymentCreatedOn(pm.cfg.DB, lastPmtCreatedOn)
+	err = persistLastPaymentCreatedOn(pm.cfg.db, lastPmtCreatedOn)
 	if err != nil {
 		return err
 	}
 	minNano := time.Now().Add(-pm.cfg.LastNPeriod).UnixNano()
-	return pruneShares(pm.cfg.DB, minNano)
+	return pruneShares(pm.cfg.db, minNano)
 }
 
 // generatePayments creates payments for participating accounts. This should
@@ -633,7 +597,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 				continue
 			}
 
-			acc, err := FetchAccount(pm.cfg.DB, pmt.Account)
+			acc, err := FetchAccount(pm.cfg.db, pmt.Account)
 			if err != nil {
 				return nil, nil, nil, 0, err
 			}
@@ -672,7 +636,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 // PayDividends pays mature mining rewards to participating accounts.
 func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryActive bool) error {
 	funcName := "payDividends"
-	mPmts, err := maturePendingPayments(pm.cfg.DB, height)
+	mPmts, err := maturePendingPayments(pm.cfg.db, height)
 	if err != nil {
 		return err
 	}
@@ -805,13 +769,13 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		for _, pmt := range set {
 			pmt.PaidOnHeight = height
 			pmt.TransactionID = txid.String()
-			err := pmt.Update(pm.cfg.DB)
+			err := pmt.Update(pm.cfg.db)
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to update payment: %v",
 					funcName, err)
 				return poolError(ErrPersistEntry, desc)
 			}
-			err = pmt.Archive(pm.cfg.DB)
+			err = pmt.Archive(pm.cfg.db)
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to archive payment: %v",
 					funcName, err)
@@ -821,7 +785,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	}
 
 	// Update payments metadata.
-	err = persistLastPaymentInfo(pm.cfg.DB, height, time.Now().UnixNano())
+	err = persistLastPaymentInfo(pm.cfg.db, height, time.Now().UnixNano())
 	if err != nil {
 		return err
 	}

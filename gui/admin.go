@@ -129,7 +129,7 @@ func (ui *GUI) downloadDatabaseBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := ui.cfg.BackupDB(w)
+	err := ui.cfg.HTTPBackupDB(w)
 	if err != nil {
 		log.Errorf("Error backing up database: %v", err)
 		// Don't write any http body here because Content-Length has already

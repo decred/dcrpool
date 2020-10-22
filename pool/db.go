@@ -7,7 +7,9 @@ package pool
 import (
 	"encoding/binary"
 	"fmt"
+	"net/http"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -128,10 +130,12 @@ func createBuckets(db *bolt.DB) error {
 	return err
 }
 
-// backup saves a copy of the db to file.
-func backup(db *bolt.DB, file string) error {
+// backup saves a copy of the db to file. The file will be saved in the same
+// directory as the current db file.
+func backup(db *bolt.DB, backupFileName string) error {
+	backupPath := filepath.Join(filepath.Dir(db.Path()), backupFileName)
 	return db.View(func(tx *bolt.Tx) error {
-		err := tx.CopyFile(file, 0600)
+		err := tx.CopyFile(backupPath, 0600)
 		if err != nil {
 			desc := fmt.Sprintf("unable to backup db: %v", err)
 			return poolError(ErrBackup, desc)
@@ -235,8 +239,7 @@ func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 
 	if switchMode {
 		// Backup the current database and wipe it.
-		backupPath := filepath.Join(filepath.Dir(db.Path()), backupFile)
-		err := backup(db, backupPath)
+		err := backup(db, backupFile)
 		if err != nil {
 			return nil, err
 		}
@@ -276,11 +279,9 @@ func deleteEntry(db *bolt.DB, bucket []byte, key string) error {
 // fetchBucket is a helper function for getting the requested bucket.
 func fetchBucket(tx *bolt.Tx, bucketID []byte) (*bolt.Bucket, error) {
 	const funcName = "fetchBucket"
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
+	pbkt, err := fetchPoolBucket(tx)
+	if err != nil {
+		return nil, err
 	}
 	bkt := pbkt.Bucket(bucketID)
 	if bkt == nil {
@@ -289,6 +290,18 @@ func fetchBucket(tx *bolt.Tx, bucketID []byte) (*bolt.Bucket, error) {
 		return nil, dbError(ErrBucketNotFound, desc)
 	}
 	return bkt, nil
+}
+
+// fetchPoolBucket is a helper function for getting the pool bucket.
+func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
+	funcName := "fetchPoolBucket"
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
+		return nil, dbError(ErrBucketNotFound, desc)
+	}
+	return pbkt, nil
 }
 
 func persistPoolMode(db *bolt.DB, mode uint32) error {
@@ -439,4 +452,19 @@ func loadLastPaymentCreatedOn(db *bolt.DB) (int64, error) {
 	}
 
 	return createdOn, nil
+}
+
+func closeDB(db *bolt.DB) error {
+	return db.Close()
+}
+
+func httpBackup(db *bolt.DB, w http.ResponseWriter) error {
+	err := db.View(func(tx *bolt.Tx) error {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", `attachment; filename="backup.db"`)
+		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
+		_, err := tx.WriteTo(w)
+		return err
+	})
+	return err
 }

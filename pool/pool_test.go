@@ -45,23 +45,30 @@ func setupDB() (*bolt.DB, error) {
 		return nil, err
 	}
 
-	xID = AccountID(xAddr)
-	yID = AccountID(yAddr)
+	accountX := NewAccount(xAddr)
+	err = accountX.Persist(db)
+	if err != nil {
+		return nil, err
+	}
 
-	_, err = persistAccount(db, xAddr)
+	accountY := NewAccount(yAddr)
+	err = accountY.Persist(db)
 	if err != nil {
 		return nil, err
 	}
-	_, err = persistAccount(db, yAddr)
-	if err != nil {
-		return nil, err
-	}
+
+	xID = accountX.UUID
+	yID = accountY.UUID
+
 	return db, err
 }
 
 // teardownDB closes the connection to the db and deletes the db file.
 func teardownDB(db *bolt.DB, dbPath string) error {
-	db.Close()
+	err := db.Close()
+	if err != nil {
+		return err
+	}
 	return os.Remove(dbPath)
 }
 
@@ -98,8 +105,6 @@ func TestPool(t *testing.T) {
 
 	// All sub-tests to run.
 	tests := map[string]func(*testing.T){
-		"testFetchBucketHelpers":     testFetchBucketHelpers,
-		"testInitDB":                 testInitDB,
 		"testDatabase":               testDatabase,
 		"testLastPaymentInfo":        testLastPaymentInfo,
 		"testLastPaymentCreatedOn":   testLastPaymentCreatedOn,

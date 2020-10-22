@@ -13,8 +13,6 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -229,7 +227,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	h.poolDiffs = NewDifficultySet(h.cfg.ActiveNet, powLimit, maxGenTime)
 
 	pCfg := &PaymentMgrConfig{
-		DB:                     h.db,
+		db:                     h.db,
 		ActiveNet:              h.cfg.ActiveNet,
 		PoolFee:                h.cfg.PoolFee,
 		LastNPeriod:            h.cfg.LastNPeriod,
@@ -252,16 +250,15 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	}
 
 	sCfg := &ChainStateConfig{
-		DB:                          h.db,
-		SoloPool:                    h.cfg.SoloPool,
-		PayDividends:                h.paymentMgr.payDividends,
-		PendingPaymentsForBlockHash: pendingPaymentsForBlockHash,
-		GeneratePayments:            h.paymentMgr.generatePayments,
-		GetBlock:                    h.getBlock,
-		GetBlockConfirmations:       h.getBlockConfirmations,
-		Cancel:                      h.cancel,
-		SignalCache:                 h.SignalCache,
-		HubWg:                       h.wg,
+		db:                    h.db,
+		SoloPool:              h.cfg.SoloPool,
+		PayDividends:          h.paymentMgr.payDividends,
+		GeneratePayments:      h.paymentMgr.generatePayments,
+		GetBlock:              h.getBlock,
+		GetBlockConfirmations: h.getBlockConfirmations,
+		Cancel:                h.cancel,
+		SignalCache:           h.SignalCache,
+		HubWg:                 h.wg,
 	}
 	h.chainState = NewChainState(sCfg)
 
@@ -448,7 +445,7 @@ func (h *Hub) Listen() error {
 		}
 		eCfg := &EndpointConfig{
 			ActiveNet:             h.cfg.ActiveNet,
-			DB:                    h.db,
+			db:                    h.db,
 			SoloPool:              h.cfg.SoloPool,
 			Blake256Pad:           h.blake256Pad,
 			NonceIterations:       h.cfg.NonceIterations,
@@ -527,20 +524,8 @@ func (h *Hub) HasClients() bool {
 	return atomic.LoadInt32(&h.clients) > 0
 }
 
-// backup persists a copy of the database to file  on shutdown.
-func (h *Hub) backup(ctx context.Context) {
-	<-ctx.Done()
-	log.Tracef("backing up db.")
-	backupPath := filepath.Join(filepath.Dir(h.db.Path()), backupFile)
-	err := backup(h.db, backupPath)
-	if err != nil {
-		log.Error(err)
-	}
-	h.wg.Done()
-}
-
 // shutdown tears down the hub and releases resources used.
-func (h *Hub) shutdown() {
+func (h *Hub) shutdown() error {
 	if !h.cfg.SoloPool {
 		if h.walletClose != nil {
 			h.walletClose()
@@ -552,7 +537,7 @@ func (h *Hub) shutdown() {
 	if h.notifClient != nil {
 		_ = h.notifClient.CloseSend()
 	}
-	h.db.Close()
+	return closeDB(h.db)
 }
 
 // Run handles the process lifecycles of the pool hub.
@@ -564,11 +549,21 @@ func (h *Hub) Run(ctx context.Context) {
 	go h.chainState.handleChainUpdates(ctx)
 	h.wg.Add(1)
 
-	go h.backup(ctx)
-	h.wg.Add(1)
+	// Start a goroutine which will wait for the application context to be
+	// cancelled, and then write a database backup.
+	go func() {
+		h.wg.Add(1)
+		<-ctx.Done()
+		log.Tracef("backing up db.")
+		err := backup(h.db, backupFile)
+		if err != nil {
+			log.Error(err)
+		}
+		h.wg.Done()
+	}()
 
 	h.wg.Wait()
-	h.shutdown()
+	_ = h.shutdown()
 }
 
 // FetchClients returns all connected pool clients.
@@ -673,14 +668,7 @@ func (h *Hub) CSRFSecret() ([]byte, error) {
 	return secret, nil
 }
 
-// BackupDB streams a backup of the database over an http response.
-func (h *Hub) BackupDB(w http.ResponseWriter) error {
-	err := h.db.View(func(tx *bolt.Tx) error {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", `attachment; filename="backup.db"`)
-		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
-		_, err := tx.WriteTo(w)
-		return err
-	})
-	return err
+// HTTPBackupDB streams a backup of the database over an http response.
+func (h *Hub) HTTPBackupDB(w http.ResponseWriter) error {
+	return httpBackup(h.db, w)
 }

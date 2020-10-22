@@ -11,7 +11,6 @@ import (
 	"github.com/decred/dcrd/dcrjson/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
-	bolt "go.etcd.io/bbolt"
 )
 
 func testChainState(t *testing.T) {
@@ -63,10 +62,6 @@ func testChainState(t *testing.T) {
 		return -1, nil
 	}
 
-	pendingPaymentsForBlockHash := func(*bolt.DB, string) (uint32, error) {
-		return 0, nil
-	}
-
 	signalCache := func(_ CacheUpdateEvent) {
 		// Do nothing.
 	}
@@ -74,16 +69,15 @@ func testChainState(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var confHeader wire.BlockHeader
 	cCfg := &ChainStateConfig{
-		DB:                          db,
-		SoloPool:                    false,
-		PayDividends:                payDividends,
-		GeneratePayments:            generatePayments,
-		GetBlock:                    getBlock,
-		GetBlockConfirmations:       getBlockConfirmations,
-		PendingPaymentsForBlockHash: pendingPaymentsForBlockHash,
-		SignalCache:                 signalCache,
-		Cancel:                      cancel,
-		HubWg:                       new(sync.WaitGroup),
+		db:                    db,
+		SoloPool:              false,
+		PayDividends:          payDividends,
+		GeneratePayments:      generatePayments,
+		GetBlock:              getBlock,
+		GetBlockConfirmations: getBlockConfirmations,
+		SignalCache:           signalCache,
+		Cancel:                cancel,
+		HubWg:                 new(sync.WaitGroup),
 	}
 
 	cs := NewChainState(cCfg)
@@ -212,7 +206,7 @@ func testChainState(t *testing.T) {
 		"00007979602e13db87f6c760bbf27c137f4112b9e1988724bd245fb0bb7d1283",
 		"00006fb4ee4609e90196cfa41df2f1129a64553f935f21e6940b38e7e26e7dff",
 		42, xID, CPU)
-	err = work.Persist(cs.cfg.DB)
+	err = work.Persist(cs.cfg.db)
 	if err != nil {
 		t.Fatalf("unable to persist accepted work %v", err)
 	}
@@ -226,7 +220,7 @@ func testChainState(t *testing.T) {
 		"00000000000000000000000000000000000000000000000000000000000" +
 		"00000000000008000000100000000000005a0"
 	job := NewJob(workE, 42)
-	err = job.Persist(cs.cfg.DB)
+	err = job.Persist(cs.cfg.db)
 	if err != nil {
 		log.Errorf("failed to persist job %v", err)
 		return
@@ -288,7 +282,7 @@ func testChainState(t *testing.T) {
 	<-confMsg.Done
 
 	// Ensure the accepted work is now confirmed mined.
-	confirmedWork, err := FetchAcceptedWork(cs.cfg.DB, work.UUID)
+	confirmedWork, err := FetchAcceptedWork(cs.cfg.db, work.UUID)
 	if err != nil {
 		t.Fatalf("unable to confirm accepted work: %v", err)
 	}
@@ -311,7 +305,7 @@ func testChainState(t *testing.T) {
 	<-discMinedMsg.Done
 
 	// Ensure the mined work is no longer confirmed mined.
-	discMinedWork, err := FetchAcceptedWork(cs.cfg.DB, work.UUID)
+	discMinedWork, err := FetchAcceptedWork(cs.cfg.db, work.UUID)
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}

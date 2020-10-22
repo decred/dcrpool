@@ -217,7 +217,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		FetchLastPaymentInfo:  p.hub.FetchLastPaymentInfo,
 		FetchMinedWork:        p.hub.FetchMinedWork,
 		FetchWorkQuotas:       p.hub.FetchWorkQuotas,
-		BackupDB:              p.hub.BackupDB,
+		HTTPBackupDB:          p.hub.HTTPBackupDB,
 		FetchClients:          p.hub.FetchClients,
 		AccountExists:         p.hub.AccountExists,
 		FetchArchivedPayments: p.hub.FetchArchivedPayments,

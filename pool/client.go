@@ -62,8 +62,8 @@ type readPayload struct {
 type ClientConfig struct {
 	// ActiveNet represents the active network being mined on.
 	ActiveNet *chaincfg.Params
-	// DB represents the pool database.
-	DB *bolt.DB
+	// db represents the pool database.
+	db *bolt.DB
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
 	// Blake256Pad represents the extra padding needed for work
@@ -179,7 +179,7 @@ func (c *Client) claimWeightedShare() error {
 	}
 	weight := ShareWeights[c.cfg.FetchMiner()]
 	share := NewShare(c.account, weight)
-	return share.Persist(c.cfg.DB)
+	return share.Persist(c.cfg.db)
 }
 
 // handleAuthorizeRequest processes authorize request messages received.
@@ -230,7 +230,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 
 		// Create the account if it does not already exist.
 		account := NewAccount(address)
-		err = account.Persist(c.cfg.DB)
+		err = account.Persist(c.cfg.db)
 		if err != nil {
 			// Do not error if the account already exists.
 			if !errors.Is(err, ErrValueFound) {
@@ -356,7 +356,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.ch <- resp
 		return err
 	}
-	job, err := FetchJob(c.cfg.DB, jobID)
+	job, err := FetchJob(c.cfg.db, jobID)
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
@@ -461,7 +461,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	// by the mining node.
 	work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
 		header.Height, c.account, c.cfg.FetchMiner())
-	err = work.Persist(c.cfg.DB)
+	err = work.Persist(c.cfg.db)
 	if err != nil {
 		// If the submitted accepted work already exists, ignore the
 		// submission.
@@ -606,7 +606,7 @@ func (c *Client) updateWork() {
 
 	// Create a job for the timestamp-rolled current work.
 	job := NewJob(updatedWorkE, height)
-	err = job.Persist(c.cfg.DB)
+	err = job.Persist(c.cfg.db)
 	if err != nil {
 		log.Error(err)
 		return

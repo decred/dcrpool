@@ -476,7 +476,7 @@ func testHub(t *testing.T) {
 
 	// Ensure the database can be backed up.
 	rr := httptest.NewRecorder()
-	err = hub.BackupDB(rr)
+	err = hub.HTTPBackupDB(rr)
 	if err != nil {
 		t.Fatalf("[BackupDB] unexpected error: %v", err)
 	}

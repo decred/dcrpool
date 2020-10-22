@@ -169,7 +169,7 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	pCfg := &PaymentMgrConfig{
-		DB:                    db,
+		db:                    db,
 		ActiveNet:             activeNet,
 		PoolFee:               0.1,
 		LastNPeriod:           time.Second * 120,

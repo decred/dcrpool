@@ -12,30 +12,21 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-func initBlankDB(dbFile string) (*bolt.DB, error) {
-	os.Remove(dbFile)
-	db, err := openDB(dbFile)
-	if err != nil {
-		return nil, err
-	}
-
-	return db, nil
-}
-
-func testFetchBucketHelpers(t *testing.T) {
+func TestFetchBucketHelpers(t *testing.T) {
+	// Create a new empty database.
 	dbPath := "tdb"
-	db, err := initBlankDB(dbPath)
+	os.Remove(dbPath)
+	db, err := openDB(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	td := func() {
+	defer func() {
 		err = teardownDB(db, dbPath)
 		if err != nil {
 			t.Fatalf("teardown error: %v", err)
 		}
-	}
-	defer td()
+	}()
 
 	expectedNotFoundErr := fmt.Errorf("expected main bucket not found error")
 
@@ -116,23 +107,22 @@ func testFetchBucketHelpers(t *testing.T) {
 	if !errors.Is(err, ErrBucketNotFound) {
 		t.Fatalf("expected bucket not found error, got %v", err)
 	}
-
 }
 
-func testInitDB(t *testing.T) {
+func TestInitDB(t *testing.T) {
 	dbPath := "tdb"
+	os.Remove(dbPath)
 	db, err := InitDB(dbPath, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	td := func() {
+	defer func() {
 		err = teardownDB(db, dbPath)
 		if err != nil {
 			t.Fatalf("teardown error: %v", err)
 		}
-	}
-	defer td()
+	}()
 
 	// Ensure the db buckets have been created.
 	err = db.View(func(tx *bolt.Tx) error {
@@ -210,12 +200,14 @@ func testInitDB(t *testing.T) {
 
 func testDatabase(t *testing.T) {
 	// Persist some accounts.
-	accountA, err := persistAccount(db, "Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru")
+	accountA := NewAccount("Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru")
+	err := accountA.Persist(db)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = persistAccount(db, "SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy")
+	accountB := NewAccount("SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy")
+	err = accountB.Persist(db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,16 +247,6 @@ func testDatabase(t *testing.T) {
 	}()
 
 	err = backup(db, backupFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Recreate account X and Y.
-	_, err = persistAccount(db, xAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = persistAccount(db, yAddr)
 	if err != nil {
 		t.Fatal(err)
 	}

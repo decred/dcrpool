@@ -22,8 +22,8 @@ import (
 type EndpointConfig struct {
 	// ActiveNet represents the active network being mined on.
 	ActiveNet *chaincfg.Params
-	// DB represents the pool database.
-	DB *bolt.DB
+	// db represents the pool database.
+	db *bolt.DB
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
 	// Blake256Pad represents the extra padding needed for work
@@ -160,7 +160,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 			}
 			cCfg := &ClientConfig{
 				ActiveNet:       e.cfg.ActiveNet,
-				DB:              e.cfg.DB,
+				db:              e.cfg.db,
 				Blake256Pad:     e.cfg.Blake256Pad,
 				NonceIterations: e.cfg.NonceIterations,
 				FetchMiner: func() string {
