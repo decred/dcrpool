@@ -3,35 +3,27 @@ package pool
 import (
 	"errors"
 	"testing"
-
-	bolt "go.etcd.io/bbolt"
 )
-
-func persistAccount(db *bolt.DB, address string) (*Account, error) {
-	acc := NewAccount(address)
-	err := acc.Persist(db)
-	if err != nil {
-		return nil, err
-	}
-	return acc, nil
-}
 
 func testAccount(t *testing.T) {
 	simnetAddrA := "Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru"
 	simnetAddrB := "SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy"
 
 	// Create some valid accounts.
-	accountA, err := persistAccount(db, simnetAddrA)
+	accountA := NewAccount(simnetAddrA)
+	err := accountA.Persist(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	accountB, err := persistAccount(db, simnetAddrB)
+
+	accountB := NewAccount(simnetAddrB)
+	err = accountB.Persist(db)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Creating the same account twice should fail.
-	_, err = persistAccount(db, simnetAddrA)
+	err = accountA.Persist(db)
 	if !errors.Is(err, ErrValueFound) {
 		t.Fatal("expected value found error")
 	}

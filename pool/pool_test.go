@@ -45,17 +45,21 @@ func setupDB() (*bolt.DB, error) {
 		return nil, err
 	}
 
-	xID = AccountID(xAddr)
-	yID = AccountID(yAddr)
+	accountX := NewAccount(xAddr)
+	err = accountX.Persist(db)
+	if err != nil {
+		return nil, err
+	}
 
-	_, err = persistAccount(db, xAddr)
+	accountY := NewAccount(yAddr)
+	err = accountY.Persist(db)
 	if err != nil {
 		return nil, err
 	}
-	_, err = persistAccount(db, yAddr)
-	if err != nil {
-		return nil, err
-	}
+
+	xID = accountX.UUID
+	yID = accountY.UUID
+
 	return db, err
 }
 
