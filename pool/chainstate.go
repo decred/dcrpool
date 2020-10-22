@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/decred/dcrd/blockchain/standalone"
+	"github.com/decred/dcrd/blockchain/standalone/v2"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
@@ -174,10 +174,10 @@ func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
 // isTreasuryActive checks the provided coinbase transaction if
 // the treasury agenda is active.
 func isTreasuryActive(tx *wire.MsgTx) bool {
-	if !standalone.IsCoinBaseTx(tx) {
+	if tx.Version < wire.TxVersionTreasury {
 		return false
 	}
-	if tx.Version < wire.TxVersionTreasury {
+	if !standalone.IsCoinBaseTx(tx, true) {
 		return false
 	}
 	return true
