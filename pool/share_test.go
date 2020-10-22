@@ -8,20 +8,18 @@ import (
 	"math/big"
 	"testing"
 	"time"
-
-	bolt "go.etcd.io/bbolt"
 )
 
 // persistShare creates a persisted share with the provided account and share
 // weight.
-func persistShare(db *bolt.DB, account string, weight *big.Rat, createdOnNano int64) error {
+func persistShare(db Database, account string, weight *big.Rat, createdOnNano int64) error {
 	id := shareID(account, createdOnNano)
 	share := &Share{
 		UUID:    id,
 		Account: account,
 		Weight:  weight,
 	}
-	err := share.Persist(db)
+	err := db.PersistShare(share)
 	if err != nil {
 		return err
 	}
@@ -86,7 +84,7 @@ func testPPSEligibleShares(t *testing.T) {
 	}
 
 	// Fetch eligible shares at minimum time.
-	shares, err := ppsEligibleShares(db, sixtyBefore)
+	shares, err := db.ppsEligibleShares(sixtyBefore)
 	if err != nil {
 		t.Fatalf("PPSEligibleShares: unexpected error: %v", err)
 	}
@@ -174,7 +172,7 @@ func testPPLNSEligibleShares(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	shares, err := pplnsEligibleShares(db, sixtyBefore)
+	shares, err := db.pplnsEligibleShares(sixtyBefore)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +232,7 @@ func testPruneShares(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = pruneShares(db, sixtyBefore)
+	err = db.pruneShares(sixtyBefore)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +250,7 @@ func testPruneShares(t *testing.T) {
 		t.Fatalf("unexpected error fetching share B: %v", err)
 	}
 
-	err = pruneShares(db, tenAfter)
+	err = db.pruneShares(tenAfter)
 	if err != nil {
 		t.Fatal(err)
 	}

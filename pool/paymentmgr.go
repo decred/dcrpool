@@ -17,7 +17,6 @@ import (
 	"github.com/decred/dcrd/dcrutil/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
-	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 )
 
@@ -65,7 +64,7 @@ type confNotifMsg struct {
 // provided when creating a new instance of PaymentMgr.
 type PaymentMgrConfig struct {
 	// db represents the pool database.
-	db *bolt.DB
+	db Database
 	// ActiveNet represents the network being mined on.
 	ActiveNet *chaincfg.Params
 	// PoolFee represents the fee charged to participating accounts of the pool.
@@ -114,11 +113,11 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	rand.Seed(time.Now().UnixNano())
 
 	// Initialize last payment info (height and paid-on).
-	_, _, err := loadLastPaymentInfo(pm.cfg.db)
+	_, _, err := pm.cfg.db.loadLastPaymentInfo()
 	if err != nil {
 		if errors.Is(err, ErrValueNotFound) {
 			// Initialize with zeros.
-			err = persistLastPaymentInfo(pm.cfg.db, 0, 0)
+			err = pm.cfg.db.persistLastPaymentInfo(0, 0)
 			if err != nil {
 				return nil, err
 			}
@@ -128,11 +127,11 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	}
 
 	// Initialize last payment created-on.
-	_, err = loadLastPaymentCreatedOn(pm.cfg.db)
+	_, err = pm.cfg.db.loadLastPaymentCreatedOn()
 	if err != nil {
 		if errors.Is(err, ErrValueNotFound) {
 			// Initialize with zero.
-			err = persistLastPaymentCreatedOn(pm.cfg.db, 0)
+			err = pm.cfg.db.persistLastPaymentCreatedOn(0)
 			if err != nil {
 				return nil, err
 			}
@@ -183,7 +182,7 @@ func (pm *PaymentMgr) sharePercentages(shares []*Share) (map[string]*big.Rat, er
 // due participating pool accounts based on work performed measured by
 // the PPS payment scheme.
 func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.Rat, error) {
-	shares, err := ppsEligibleShares(pm.cfg.db, workCreatedOn)
+	shares, err := pm.cfg.db.ppsEligibleShares(workCreatedOn)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +201,7 @@ func (pm *PaymentMgr) PPSSharePercentages(workCreatedOn int64) (map[string]*big.
 func (pm *PaymentMgr) PPLNSSharePercentages() (map[string]*big.Rat, error) {
 	now := time.Now()
 	min := now.Add(-pm.cfg.LastNPeriod)
-	shares, err := pplnsEligibleShares(pm.cfg.db, min.UnixNano())
+	shares, err := pm.cfg.db.pplnsEligibleShares(min.UnixNano())
 	if err != nil {
 		return nil, err
 	}
@@ -304,17 +303,17 @@ func (pm *PaymentMgr) payPerShare(source *PaymentSource, amt dcrutil.Amount, hei
 		return err
 	}
 	for _, payment := range payments {
-		err := payment.Persist(pm.cfg.db)
+		err := pm.cfg.db.PersistPayment(payment)
 		if err != nil {
 			return err
 		}
 	}
 	// Update the last payment created on time and prune invalidated shares.
-	err = persistLastPaymentCreatedOn(pm.cfg.db, lastPmtCreatedOn)
+	err = pm.cfg.db.persistLastPaymentCreatedOn(lastPmtCreatedOn)
 	if err != nil {
 		return err
 	}
-	return pruneShares(pm.cfg.db, workCreatedOn)
+	return pm.cfg.db.pruneShares(workCreatedOn)
 }
 
 // payPerLastNShares generates a payment bundle comprised of payments to all
@@ -331,18 +330,18 @@ func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amoun
 		return err
 	}
 	for _, payment := range payments {
-		err := payment.Persist(pm.cfg.db)
+		err := pm.cfg.db.PersistPayment(payment)
 		if err != nil {
 			return err
 		}
 	}
 	// Update the last payment created on time and prune invalidated shares.
-	err = persistLastPaymentCreatedOn(pm.cfg.db, lastPmtCreatedOn)
+	err = pm.cfg.db.persistLastPaymentCreatedOn(lastPmtCreatedOn)
 	if err != nil {
 		return err
 	}
 	minNano := time.Now().Add(-pm.cfg.LastNPeriod).UnixNano()
-	return pruneShares(pm.cfg.db, minNano)
+	return pm.cfg.db.pruneShares(minNano)
 }
 
 // generatePayments creates payments for participating accounts. This should
@@ -597,7 +596,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 				continue
 			}
 
-			acc, err := FetchAccount(pm.cfg.db, pmt.Account)
+			acc, err := pm.cfg.db.FetchAccount(pmt.Account)
 			if err != nil {
 				return nil, nil, nil, 0, err
 			}
@@ -636,7 +635,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 // PayDividends pays mature mining rewards to participating accounts.
 func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryActive bool) error {
 	funcName := "payDividends"
-	mPmts, err := maturePendingPayments(pm.cfg.db, height)
+	mPmts, err := pm.cfg.db.maturePendingPayments(height)
 	if err != nil {
 		return err
 	}
@@ -769,13 +768,13 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		for _, pmt := range set {
 			pmt.PaidOnHeight = height
 			pmt.TransactionID = txid.String()
-			err := pmt.Update(pm.cfg.db)
+			err := pm.cfg.db.UpdatePayment(pmt)
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to update payment: %v",
 					funcName, err)
 				return poolError(ErrPersistEntry, desc)
 			}
-			err = pmt.Archive(pm.cfg.db)
+			err = pm.cfg.db.ArchivePayment(pmt)
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to archive payment: %v",
 					funcName, err)
@@ -785,7 +784,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	}
 
 	// Update payments metadata.
-	err = persistLastPaymentInfo(pm.cfg.db, height, time.Now().UnixNano())
+	err = pm.cfg.db.persistLastPaymentInfo(height, time.Now().UnixNano())
 	if err != nil {
 		return err
 	}

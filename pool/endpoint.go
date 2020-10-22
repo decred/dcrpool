@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/v3"
-	bolt "go.etcd.io/bbolt"
 )
 
 // EndpointConfig contains all of the configuration values which should be
@@ -23,7 +22,7 @@ type EndpointConfig struct {
 	// ActiveNet represents the active network being mined on.
 	ActiveNet *chaincfg.Params
 	// db represents the pool database.
-	db *bolt.DB
+	db Database
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
 	// Blake256Pad represents the extra padding needed for work

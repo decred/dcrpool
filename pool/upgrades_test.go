@@ -15,7 +15,7 @@ import (
 )
 
 var dbUpgradeTests = [...]struct {
-	verify   func(*testing.T, *bolt.DB)
+	verify   func(*testing.T, *BoltDB)
 	filename string // in testdata directory
 }{
 	// No upgrade test for V1, it is a backwards-compatible upgrade
@@ -57,11 +57,11 @@ func TestUpgrades(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				db, err := openDB(dbPath)
+				db, err := openBoltDB(dbPath)
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer db.Close()
+				defer db.close()
 				err = upgradeDB(db)
 				if err != nil {
 					t.Fatalf("Upgrade failed: %v", err)
@@ -74,9 +74,9 @@ func TestUpgrades(t *testing.T) {
 	os.RemoveAll(d)
 }
 
-func verifyV2Upgrade(t *testing.T, db *bolt.DB) {
+func verifyV2Upgrade(t *testing.T, db *BoltDB) {
 	const funcName = "verifyV2Upgrade"
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			return fmt.Errorf("%s: bucket %s not found", funcName,
@@ -110,9 +110,9 @@ func verifyV2Upgrade(t *testing.T, db *bolt.DB) {
 	}
 }
 
-func verifyV3Upgrade(t *testing.T, db *bolt.DB) {
+func verifyV3Upgrade(t *testing.T, db *BoltDB) {
 	const funcName = "verifyV3Upgrade"
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			return fmt.Errorf("%s: bucket %s not found",
@@ -180,9 +180,9 @@ func verifyV3Upgrade(t *testing.T, db *bolt.DB) {
 	}
 }
 
-func verifyV4Upgrade(t *testing.T, db *bolt.DB) {
+func verifyV4Upgrade(t *testing.T, db *BoltDB) {
 	const funcName = "verifyV4Upgrade"
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			return fmt.Errorf("%s: bucket %s not found", funcName,

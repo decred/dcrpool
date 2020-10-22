@@ -53,10 +53,10 @@ func NewShare(account string, weight *big.Rat) *Share {
 	}
 }
 
-// Persist saves a share to the database.
-func (s *Share) Persist(db *bolt.DB) error {
-	const funcName = "Share.Persist"
-	return db.Update(func(tx *bolt.Tx) error {
+// PersistShare saves a share to the database.
+func (db *BoltDB) PersistShare(s *Share) error {
+	const funcName = "PersistShare"
+	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, shareBkt)
 		if err != nil {
 			return err
@@ -78,10 +78,10 @@ func (s *Share) Persist(db *bolt.DB) error {
 }
 
 // ppsEligibleShares fetches all shares created before or at the provided time.
-func ppsEligibleShares(db *bolt.DB, max int64) ([]*Share, error) {
+func (db *BoltDB) ppsEligibleShares(max int64) ([]*Share, error) {
 	funcName := "ppsEligibleShares"
 	eligibleShares := make([]*Share, 0)
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, shareBkt)
 		if err != nil {
 			return err
@@ -118,10 +118,10 @@ func ppsEligibleShares(db *bolt.DB, max int64) ([]*Share, error) {
 
 // pplnsEligibleShares fetches all shares keyed greater than the provided
 // minimum.
-func pplnsEligibleShares(db *bolt.DB, min int64) ([]*Share, error) {
+func (db *BoltDB) pplnsEligibleShares(min int64) ([]*Share, error) {
 	funcName := "pplnsEligibleShares"
 	eligibleShares := make([]*Share, 0)
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, shareBkt)
 		if err != nil {
 			return err
@@ -157,11 +157,11 @@ func pplnsEligibleShares(db *bolt.DB, min int64) ([]*Share, error) {
 }
 
 // pruneShares removes invalidated shares from the db.
-func pruneShares(db *bolt.DB, minNano int64) error {
+func (db *BoltDB) pruneShares(minNano int64) error {
 	funcName := "pruneShares"
 	minB := nanoToBigEndianBytes(minNano)
 
-	return db.Update(func(tx *bolt.Tx) error {
+	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, shareBkt)
 		if err != nil {
 			return err

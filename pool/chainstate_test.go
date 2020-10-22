@@ -92,7 +92,7 @@ func testChainState(t *testing.T) {
 	}
 
 	workA.Confirmed = true
-	err = workA.Update(db)
+	err = db.UpdateAcceptedWork(workA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,17 +112,17 @@ func testChainState(t *testing.T) {
 	}
 
 	// Ensure work A did not get pruned but work B did.
-	_, err = FetchAcceptedWork(db, workA.UUID)
+	_, err = db.FetchAcceptedWork(workA.UUID)
 	if err != nil {
 		t.Fatalf("expected a valid accepted work, got: %v", err)
 	}
-	_, err = FetchAcceptedWork(db, workB.UUID)
+	_, err = db.FetchAcceptedWork(workB.UUID)
 	if err == nil {
 		t.Fatal("expected a no value found error")
 	}
 
 	// Delete work A.
-	err = workA.Delete(db)
+	err = db.DeleteAcceptedWork(workA)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -158,13 +158,13 @@ func testChainState(t *testing.T) {
 	}
 
 	aID := paymentID(paymentA.Height, paymentA.CreatedOn, paymentA.Account)
-	_, err = FetchPayment(db, aID)
+	_, err = db.FetchPayment(aID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching payment A: %v", err)
 	}
 
 	bID := paymentID(paymentB.Height, paymentB.CreatedOn, paymentB.Account)
-	_, err = FetchPayment(db, bID)
+	_, err = db.FetchPayment(bID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching payment B: %v", err)
 	}
@@ -175,12 +175,12 @@ func testChainState(t *testing.T) {
 		t.Fatalf("prunePayments error: %v", err)
 	}
 
-	_, err = FetchPayment(db, aID)
+	_, err = db.FetchPayment(aID)
 	if err == nil {
 		t.Fatalf("expected payment A to be pruned at height %d", 28)
 	}
 
-	_, err = FetchPayment(db, bID)
+	_, err = db.FetchPayment(bID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching payment B: %v", err)
 	}
@@ -191,7 +191,7 @@ func testChainState(t *testing.T) {
 		t.Fatalf("prunePayments error: %v", err)
 	}
 
-	_, err = FetchPayment(db, bID)
+	_, err = db.FetchPayment(bID)
 	if err == nil {
 		t.Fatalf("expected payment B to be pruned at height %d", 29)
 	}
@@ -206,7 +206,7 @@ func testChainState(t *testing.T) {
 		"00007979602e13db87f6c760bbf27c137f4112b9e1988724bd245fb0bb7d1283",
 		"00006fb4ee4609e90196cfa41df2f1129a64553f935f21e6940b38e7e26e7dff",
 		42, xID, CPU)
-	err = work.Persist(cs.cfg.db)
+	err = cs.cfg.db.PersistAcceptedWork(work)
 	if err != nil {
 		t.Fatalf("unable to persist accepted work %v", err)
 	}
@@ -220,7 +220,7 @@ func testChainState(t *testing.T) {
 		"00000000000000000000000000000000000000000000000000000000000" +
 		"00000000000008000000100000000000005a0"
 	job := NewJob(workE, 42)
-	err = job.Persist(cs.cfg.db)
+	err = cs.cfg.db.PersistJob(job)
 	if err != nil {
 		log.Errorf("failed to persist job %v", err)
 		return
@@ -282,7 +282,7 @@ func testChainState(t *testing.T) {
 	<-confMsg.Done
 
 	// Ensure the accepted work is now confirmed mined.
-	confirmedWork, err := FetchAcceptedWork(cs.cfg.db, work.UUID)
+	confirmedWork, err := cs.cfg.db.FetchAcceptedWork(work.UUID)
 	if err != nil {
 		t.Fatalf("unable to confirm accepted work: %v", err)
 	}
@@ -305,7 +305,7 @@ func testChainState(t *testing.T) {
 	<-discMinedMsg.Done
 
 	// Ensure the mined work is no longer confirmed mined.
-	discMinedWork, err := FetchAcceptedWork(cs.cfg.db, work.UUID)
+	discMinedWork, err := cs.cfg.db.FetchAcceptedWork(work.UUID)
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}

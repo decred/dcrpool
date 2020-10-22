@@ -39,10 +39,10 @@ func NewAccount(address string) *Account {
 }
 
 // FetchAccount fetches the account referenced by the provided id.
-func FetchAccount(db *bolt.DB, id string) (*Account, error) {
+func (db *BoltDB) FetchAccount(id string) (*Account, error) {
 	const funcName = "FetchAccount"
 	var account Account
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, accountBkt)
 		if err != nil {
 			return err
@@ -67,10 +67,10 @@ func FetchAccount(db *bolt.DB, id string) (*Account, error) {
 	return &account, err
 }
 
-// Persist saves the account to the database.
-func (acc *Account) Persist(db *bolt.DB) error {
-	const funcName = "Account.Persist"
-	return db.Update(func(tx *bolt.Tx) error {
+// PersistAccount saves the account to the database.
+func (db *BoltDB) PersistAccount(acc *Account) error {
+	const funcName = "PersistAccount"
+	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, accountBkt)
 		if err != nil {
 			return err
@@ -103,7 +103,7 @@ func (acc *Account) Persist(db *bolt.DB) error {
 	})
 }
 
-// Delete purges the referenced account from the database.
-func (acc *Account) Delete(db *bolt.DB) error {
-	return deleteEntry(db, accountBkt, acc.UUID)
+// DeleteAccount purges the referenced account from the database.
+func (db *BoltDB) DeleteAccount(id string) error {
+	return deleteEntry(db, accountBkt, id)
 }

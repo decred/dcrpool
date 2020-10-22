@@ -57,17 +57,17 @@ var (
 	backupFile = "backup.kv"
 )
 
-// openDB creates a connection to the provided bolt storage, the returned
+// openBoltDB creates a connection to the provided bolt storage, the returned
 // connection storage should always be closed after use.
-func openDB(storage string) (*bolt.DB, error) {
-	const funcName = "openDB"
+func openBoltDB(storage string) (*BoltDB, error) {
+	const funcName = "openBoltDB"
 	db, err := bolt.Open(storage, 0600,
 		&bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to open db file: %v", funcName, err)
 		return nil, dbError(ErrDBOpen, desc)
 	}
-	return db, nil
+	return &BoltDB{db}, nil
 }
 
 // createNestedBucket creates a nested child bucket of the provided parent.
@@ -83,9 +83,9 @@ func createNestedBucket(parent *bolt.Bucket, child []byte) error {
 }
 
 // createBuckets creates all storage buckets of the mining pool.
-func createBuckets(db *bolt.DB) error {
+func createBuckets(db *BoltDB) error {
 	const funcName = "createBuckets"
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.DB.Update(func(tx *bolt.Tx) error {
 		var err error
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
@@ -132,9 +132,9 @@ func createBuckets(db *bolt.DB) error {
 
 // backup saves a copy of the db to file. The file will be saved in the same
 // directory as the current db file.
-func backup(db *bolt.DB, backupFileName string) error {
-	backupPath := filepath.Join(filepath.Dir(db.Path()), backupFileName)
-	return db.View(func(tx *bolt.Tx) error {
+func (db *BoltDB) backup(backupFileName string) error {
+	backupPath := filepath.Join(filepath.Dir(db.DB.Path()), backupFileName)
+	return db.DB.View(func(tx *bolt.Tx) error {
 		err := tx.CopyFile(backupPath, 0600)
 		if err != nil {
 			desc := fmt.Sprintf("unable to backup db: %v", err)
@@ -145,9 +145,9 @@ func backup(db *bolt.DB, backupFileName string) error {
 }
 
 // purge removes all existing data and recreates the db.
-func purge(db *bolt.DB) error {
+func purge(db *BoltDB) error {
 	const funcName = "purge"
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("%s: bucket %s not found",
@@ -202,12 +202,13 @@ func purge(db *bolt.DB) error {
 	return createBuckets(db)
 }
 
-// InitDB handles the creation, upgrading and backup of the pool database.
-func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
-	db, err := openDB(dbFile)
+// InitBoltDB handles the creation, upgrading and backup of the pool database.
+func InitBoltDB(dbFile string, isSoloPool bool) (*BoltDB, error) {
+	db, err := openBoltDB(dbFile)
 	if err != nil {
 		return nil, err
 	}
+
 	err = createBuckets(db)
 	if err != nil {
 		return nil, err
@@ -218,7 +219,7 @@ func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 	}
 
 	var switchMode bool
-	err = db.View(func(tx *bolt.Tx) error {
+	err = db.DB.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			return err
@@ -239,7 +240,7 @@ func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 
 	if switchMode {
 		// Backup the current database and wipe it.
-		err := backup(db, backupFile)
+		err := db.backup(backupFile)
 		if err != nil {
 			return nil, err
 		}
@@ -255,9 +256,9 @@ func InitDB(dbFile string, isSoloPool bool) (*bolt.DB, error) {
 
 // deleteEntry removes the specified key and its associated value from
 // the provided bucket.
-func deleteEntry(db *bolt.DB, bucket []byte, key string) error {
+func deleteEntry(db *BoltDB, bucket []byte, key string) error {
 	const funcName = "deleteEntry"
-	return db.Update(func(tx *bolt.Tx) error {
+	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("%s: bucket %s not found", funcName,
@@ -304,8 +305,8 @@ func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	return pbkt, nil
 }
 
-func persistPoolMode(db *bolt.DB, mode uint32) error {
-	return db.Update(func(tx *bolt.Tx) error {
+func (db *BoltDB) persistPoolMode(mode uint32) error {
+	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		b := make([]byte, 4)
 		binary.LittleEndian.PutUint32(b, mode)
@@ -313,10 +314,10 @@ func persistPoolMode(db *bolt.DB, mode uint32) error {
 	})
 }
 
-func fetchCSRFSecret(db *bolt.DB) ([]byte, error) {
+func (db *BoltDB) fetchCSRFSecret() ([]byte, error) {
 	var secret []byte
 
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
@@ -341,8 +342,8 @@ func fetchCSRFSecret(db *bolt.DB) ([]byte, error) {
 	return secret, nil
 }
 
-func persistCSRFSecret(db *bolt.DB, secret []byte) error {
-	return db.Update(func(tx *bolt.Tx) error {
+func (db *BoltDB) persistCSRFSecret(secret []byte) error {
+	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
@@ -353,9 +354,9 @@ func persistCSRFSecret(db *bolt.DB, secret []byte) error {
 	})
 }
 
-func persistLastPaymentInfo(db *bolt.DB, height uint32, paidOn int64) error {
+func (db *BoltDB) persistLastPaymentInfo(height uint32, paidOn int64) error {
 	funcName := "persistLastPaymentInfo"
-	return db.Update(func(tx *bolt.Tx) error {
+	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt, err := fetchPoolBucket(tx)
 		if err != nil {
 			return err
@@ -381,11 +382,11 @@ func persistLastPaymentInfo(db *bolt.DB, height uint32, paidOn int64) error {
 	})
 }
 
-func loadLastPaymentInfo(db *bolt.DB) (uint32, int64, error) {
+func (db *BoltDB) loadLastPaymentInfo() (uint32, int64, error) {
 	funcName := "loadLastPaymentInfo"
 	var height uint32
 	var paidOn int64
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		pbkt, err := fetchPoolBucket(tx)
 		if err != nil {
 			return err
@@ -412,9 +413,9 @@ func loadLastPaymentInfo(db *bolt.DB) (uint32, int64, error) {
 	return height, paidOn, nil
 }
 
-func persistLastPaymentCreatedOn(db *bolt.DB, createdOn int64) error {
+func (db *BoltDB) persistLastPaymentCreatedOn(createdOn int64) error {
 	funcName := "persistLastPaymentCreatedOn"
-	return db.Update(func(tx *bolt.Tx) error {
+	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt, err := fetchPoolBucket(tx)
 		if err != nil {
 			return err
@@ -429,10 +430,10 @@ func persistLastPaymentCreatedOn(db *bolt.DB, createdOn int64) error {
 	})
 }
 
-func loadLastPaymentCreatedOn(db *bolt.DB) (int64, error) {
+func (db *BoltDB) loadLastPaymentCreatedOn() (int64, error) {
 	funcName := "loadLastPaymentCreatedOn"
 	var createdOn int64
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		pbkt, err := fetchPoolBucket(tx)
 		if err != nil {
 			return err
@@ -454,12 +455,12 @@ func loadLastPaymentCreatedOn(db *bolt.DB) (int64, error) {
 	return createdOn, nil
 }
 
-func closeDB(db *bolt.DB) error {
-	return db.Close()
+func (db *BoltDB) close() error {
+	return db.DB.Close()
 }
 
-func httpBackup(db *bolt.DB, w http.ResponseWriter) error {
-	err := db.View(func(tx *bolt.Tx) error {
+func (db *BoltDB) httpBackup(w http.ResponseWriter) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", `attachment; filename="backup.db"`)
 		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))

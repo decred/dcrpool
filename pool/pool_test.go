@@ -26,46 +26,48 @@ var (
 		"SsnbEmxCVXskgTHXvf3rEa17NA39qQuGHwQ",
 		chaincfg.SimNetParams())
 
-	db *bolt.DB
+	db *BoltDB
 )
 
 // setupDB initializes the pool database.
-func setupDB() (*bolt.DB, error) {
+func setupDB() error {
 	os.Remove(testDB)
-	db, err := openDB(testDB)
+	var err error
+	db, err = openBoltDB(testDB)
 	if err != nil {
-		return nil, err
+		return err
 	}
+
 	err = createBuckets(db)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	err = upgradeDB(db)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	accountX := NewAccount(xAddr)
-	err = accountX.Persist(db)
+	err = db.PersistAccount(accountX)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	accountY := NewAccount(yAddr)
-	err = accountY.Persist(db)
+	err = db.PersistAccount(accountY)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	xID = accountX.UUID
 	yID = accountY.UUID
 
-	return db, err
+	return err
 }
 
-// teardownDB closes the connection to the db and deletes the db file.
-func teardownDB(db *bolt.DB, dbPath string) error {
-	err := db.Close()
+// teardownBoltDB closes the connection to the db and deletes the db file.
+func teardownBoltDB(db *BoltDB, dbPath string) error {
+	err := db.close()
 	if err != nil {
 		return err
 	}
@@ -73,9 +75,9 @@ func teardownDB(db *bolt.DB, dbPath string) error {
 }
 
 // emptyBucket deletes all k/v pairs in the provided bucket.
-func emptyBucket(db *bolt.DB, bucket []byte) error {
+func emptyBucket(db *BoltDB, bucket []byte) error {
 	const funcName = "emptyBucket"
-	return db.Update(func(tx *bolt.Tx) error {
+	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("%s: bucket %s not found", funcName,
@@ -128,7 +130,7 @@ func TestPool(t *testing.T) {
 	for testName, test := range tests {
 		// Create a new blank database for each sub-test.
 		var err error
-		db, err = setupDB()
+		err = setupDB()
 		if err != nil {
 			t.Fatalf("setup error: %v", err)
 		}
@@ -137,7 +139,7 @@ func TestPool(t *testing.T) {
 		t.Run(testName, test)
 
 		// Remove database.
-		err = teardownDB(db, testDB)
+		err = teardownBoltDB(db, testDB)
 		if err != nil {
 			t.Fatalf("teardown error: %v", err)
 		}
