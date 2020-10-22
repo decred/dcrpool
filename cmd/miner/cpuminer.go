@@ -16,7 +16,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/decred/dcrd/blockchain/standalone"
+	"github.com/decred/dcrd/blockchain/standalone/v2"
 	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrpool/pool"
 )
