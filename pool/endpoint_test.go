@@ -42,7 +42,7 @@ func testEndpoint(t *testing.T) {
 	var connectionsMtx sync.RWMutex
 	eCfg := &EndpointConfig{
 		ActiveNet:             chaincfg.SimNetParams(),
-		DB:                    db,
+		db:                    db,
 		SoloPool:              true,
 		Blake256Pad:           blake256Pad,
 		NonceIterations:       iterations,

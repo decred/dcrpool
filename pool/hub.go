@@ -227,7 +227,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	h.poolDiffs = NewDifficultySet(h.cfg.ActiveNet, powLimit, maxGenTime)
 
 	pCfg := &PaymentMgrConfig{
-		DB:                     h.db,
+		db:                     h.db,
 		ActiveNet:              h.cfg.ActiveNet,
 		PoolFee:                h.cfg.PoolFee,
 		LastNPeriod:            h.cfg.LastNPeriod,
@@ -250,7 +250,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	}
 
 	sCfg := &ChainStateConfig{
-		DB:                    h.db,
+		db:                    h.db,
 		SoloPool:              h.cfg.SoloPool,
 		PayDividends:          h.paymentMgr.payDividends,
 		GeneratePayments:      h.paymentMgr.generatePayments,
@@ -445,7 +445,7 @@ func (h *Hub) Listen() error {
 		}
 		eCfg := &EndpointConfig{
 			ActiveNet:             h.cfg.ActiveNet,
-			DB:                    h.db,
+			db:                    h.db,
 			SoloPool:              h.cfg.SoloPool,
 			Blake256Pad:           h.blake256Pad,
 			NonceIterations:       h.cfg.NonceIterations,
