@@ -408,9 +408,9 @@ func removeTxFeeReserveUpgrade(tx *bolt.Tx) error {
 
 // upgradeDB checks whether any upgrades are necessary before the database is
 // ready for application usage.  If any are, they are performed.
-func upgradeDB(db *bolt.DB) error {
+func upgradeDB(db *BoltDB) error {
 	var version uint32
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		var err error
 		version, err = fetchDBVersion(tx)
 		if err != nil {
@@ -430,7 +430,7 @@ func upgradeDB(db *bolt.DB) error {
 
 	log.Infof("Upgrading database from version %d to %d", version, DBVersion)
 
-	return db.Update(func(tx *bolt.Tx) error {
+	return db.DB.Update(func(tx *bolt.Tx) error {
 		// Execute all necessary upgrades in order.
 		for _, upgrade := range upgrades[version:] {
 			err := upgrade(tx)

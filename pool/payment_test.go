@@ -10,13 +10,12 @@ import (
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v3"
-	bolt "go.etcd.io/bbolt"
 )
 
-func persistPayment(db *bolt.DB, account string, source *PaymentSource,
+func persistPayment(db Database, account string, source *PaymentSource,
 	amount dcrutil.Amount, height uint32, estMaturity uint32) (*Payment, error) {
 	pmt := NewPayment(account, source, amount, height, estMaturity)
-	err := pmt.Persist(db)
+	err := db.persistPayment(pmt)
 	if err != nil {
 		return nil, fmt.Errorf("unable to persist payment: %v", err)
 	}
@@ -49,9 +48,9 @@ func testPayment(t *testing.T) {
 
 	// Fetch a payment using its id.
 	id := paymentID(pmtA.Height, pmtA.CreatedOn, pmtA.Account)
-	fetchedPayment, err := FetchPayment(db, id)
+	fetchedPayment, err := db.fetchPayment(id)
 	if err != nil {
-		t.Fatalf("FetchPayment err: %v", err)
+		t.Fatalf("fetchPayment err: %v", err)
 	}
 	if fetchedPayment == nil {
 		t.Fatal("expected a non-nil payment")
@@ -60,15 +59,15 @@ func testPayment(t *testing.T) {
 	// Ensure payments can be updated.
 	txid := chainhash.Hash{0}.String()
 	pmtB.TransactionID = txid
-	err = pmtB.Update(db)
+	err = db.updatePayment(pmtB)
 	if err != nil {
 		t.Fatalf("payment update err: %v", err)
 	}
 
 	id = paymentID(pmtB.Height, pmtB.CreatedOn, pmtB.Account)
-	fetchedPayment, err = FetchPayment(db, id)
+	fetchedPayment, err = db.fetchPayment(id)
 	if err != nil {
-		t.Fatalf("FetchPayment err: %v", err)
+		t.Fatalf("fetchPayment err: %v", err)
 	}
 
 	if fetchedPayment.TransactionID != txid {
@@ -78,27 +77,27 @@ func testPayment(t *testing.T) {
 
 	// Persist payment B as an archived payment.
 	pmtB.PaidOnHeight = estMaturity + 1
-	err = pmtB.Archive(db)
+	err = db.archivePayment(pmtB)
 	if err != nil {
 		t.Fatalf("payment delete error: %v", err)
 	}
 
 	// Ensure the payment B was archived.
 	id = paymentID(pmtB.Height, pmtB.CreatedOn, pmtB.Account)
-	_, err = FetchPayment(db, id)
+	_, err = db.fetchPayment(id)
 	if err == nil {
 		t.Fatalf("expected a value not found error: %v", err)
 	}
 
 	// Delete payment C.
-	err = pmtC.Delete(db)
+	err = db.deletePayment(pmtC)
 	if err != nil {
 		t.Fatalf("payment delete error: %v", err)
 	}
 
 	// Ensure the payment C was deleted.
 	id = paymentID(pmtC.Height, pmtC.CreatedOn, pmtC.Account)
-	fetchedPayment, err = FetchPayment(db, id)
+	fetchedPayment, err = db.fetchPayment(id)
 	if err == nil {
 		t.Fatalf("expected a value not found error: %v", err)
 	}
@@ -135,11 +134,11 @@ func testPaymentAccessors(t *testing.T) {
 	}
 	pmtC.PaidOnHeight = estMaturity + 1
 	pmtC.TransactionID = zeroHash.String()
-	err = pmtC.Update(db)
+	err = db.updatePayment(pmtC)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = pmtC.Archive(db)
+	err = db.archivePayment(pmtC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,17 +149,17 @@ func testPaymentAccessors(t *testing.T) {
 	}
 	pmtD.PaidOnHeight = estMaturity + 1
 	pmtD.TransactionID = chainhash.Hash{0}.String()
-	err = pmtD.Update(db)
+	err = db.updatePayment(pmtD)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = pmtD.Archive(db)
+	err = db.archivePayment(pmtD)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Ensure there are two pending payments.
-	pmts, err := fetchPendingPayments(db)
+	pmts, err := db.fetchPendingPayments()
 	if err != nil {
 		t.Fatalf("pendingPayments error: %v", err)
 	}
@@ -170,7 +169,7 @@ func testPaymentAccessors(t *testing.T) {
 	}
 
 	// Ensure there are two archived payments (payment C and D).
-	pmts, err = archivedPayments(db)
+	pmts, err = db.archivedPayments()
 	if err != nil {
 		t.Fatalf("archivedPayments error: %v", err)
 	}
@@ -180,7 +179,7 @@ func testPaymentAccessors(t *testing.T) {
 	}
 
 	// Ensure there are two mature payments at height 28 (payment A and B).
-	pmtSet, err := maturePendingPayments(db, 28)
+	pmtSet, err := db.maturePendingPayments(28)
 	if err != nil {
 		t.Fatalf("maturePendingPayments error: %v", err)
 	}
@@ -201,7 +200,7 @@ func testPaymentAccessors(t *testing.T) {
 	}
 
 	// Ensure there are no mature payments at height 27 (payment A and B).
-	pmtSet, err = maturePendingPayments(db, 27)
+	pmtSet, err = db.maturePendingPayments(27)
 	if err != nil {
 		t.Fatalf("maturePendingPayments error: %v", err)
 	}
@@ -211,7 +210,7 @@ func testPaymentAccessors(t *testing.T) {
 	}
 
 	// Ensure there are two pending payments for the zero hash.
-	count, err := pendingPaymentsForBlockHash(db, zeroSource.BlockHash)
+	count, err := db.pendingPaymentsForBlockHash(zeroSource.BlockHash)
 	if err != nil {
 		t.Fatalf("pendingPaymentsForBlockHash error: %v", err)
 	}

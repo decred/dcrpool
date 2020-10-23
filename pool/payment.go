@@ -58,11 +58,11 @@ func paymentID(height uint32, createdOnNano int64, account string) string {
 	return buf.String()
 }
 
-// FetchPayment fetches the payment referenced by the provided id.
-func FetchPayment(db *bolt.DB, id string) (*Payment, error) {
-	const funcName = "FetchPayment"
+// fetchPayment fetches the payment referenced by the provided id.
+func (db *BoltDB) fetchPayment(id string) (*Payment, error) {
+	const funcName = "fetchPayment"
 	var payment Payment
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
@@ -86,10 +86,10 @@ func FetchPayment(db *bolt.DB, id string) (*Payment, error) {
 	return &payment, err
 }
 
-// Persist saves a payment to the database.
-func (pmt *Payment) Persist(db *bolt.DB) error {
-	const funcName = "Payment.Persist"
-	return db.Update(func(tx *bolt.Tx) error {
+// persistPayment saves a payment to the database.
+func (db *BoltDB) persistPayment(pmt *Payment) error {
+	const funcName = "persistPayment"
+	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
@@ -111,22 +111,22 @@ func (pmt *Payment) Persist(db *bolt.DB) error {
 	})
 }
 
-// Update persists the updated payment to the database.
-func (pmt *Payment) Update(db *bolt.DB) error {
-	return pmt.Persist(db)
+// updatePayment persists the updated payment to the database.
+func (db *BoltDB) updatePayment(pmt *Payment) error {
+	return db.persistPayment(pmt)
 }
 
-// Delete purges the referenced payment from the database. Note that
+// deletePayment purges the referenced payment from the database. Note that
 // archived payments cannot be deleted.
-func (pmt *Payment) Delete(db *bolt.DB) error {
+func (db *BoltDB) deletePayment(pmt *Payment) error {
 	id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
 	return deleteEntry(db, paymentBkt, id)
 }
 
-// Archive removes the associated payment from active payments and archives it.
-func (pmt *Payment) Archive(db *bolt.DB) error {
-	const funcName = "Payment.Archive"
-	return db.Update(func(tx *bolt.Tx) error {
+// archivePayment removes the associated payment from active payments and archives it.
+func (db *BoltDB) archivePayment(pmt *Payment) error {
+	const funcName = "archivePayment"
+	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
@@ -165,9 +165,9 @@ func (pmt *Payment) Archive(db *bolt.DB) error {
 
 // fetchPaymentsAtHeight returns all payments sourcing from orphaned blocks at
 // the provided height.
-func fetchPaymentsAtHeight(db *bolt.DB, height uint32) ([]*Payment, error) {
+func (db *BoltDB) fetchPaymentsAtHeight(height uint32) ([]*Payment, error) {
 	toReturn := make([]*Payment, 0)
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
@@ -201,10 +201,10 @@ func fetchPaymentsAtHeight(db *bolt.DB, height uint32) ([]*Payment, error) {
 }
 
 // fetchPendingPayments fetches all unpaid payments.
-func fetchPendingPayments(db *bolt.DB) ([]*Payment, error) {
+func (db *BoltDB) fetchPendingPayments() ([]*Payment, error) {
 	funcName := "fetchPendingPayments"
 	payments := make([]*Payment, 0)
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
@@ -232,10 +232,10 @@ func fetchPendingPayments(db *bolt.DB) ([]*Payment, error) {
 
 // pendingPaymentsForBlockHash returns the number of pending payments with the
 // provided block hash as their source.
-func pendingPaymentsForBlockHash(db *bolt.DB, blockHash string) (uint32, error) {
+func (db *BoltDB) pendingPaymentsForBlockHash(blockHash string) (uint32, error) {
 	funcName := "pendingPaymentsForBlockHash"
 	var count uint32
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
@@ -266,10 +266,10 @@ func pendingPaymentsForBlockHash(db *bolt.DB, blockHash string) (uint32, error) 
 
 // archivedPayments fetches all archived payments. List is ordered, most
 // recent comes first.
-func archivedPayments(db *bolt.DB) ([]*Payment, error) {
+func (db *BoltDB) archivedPayments() ([]*Payment, error) {
 	funcName := "archivedPayments"
 	pmts := make([]*Payment, 0)
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		abkt, err := fetchBucket(tx, paymentArchiveBkt)
 		if err != nil {
 			return err
@@ -296,10 +296,10 @@ func archivedPayments(db *bolt.DB) ([]*Payment, error) {
 
 // maturePendingPayments fetches all mature pending payments at the
 // provided height.
-func maturePendingPayments(db *bolt.DB, height uint32) (map[string][]*Payment, error) {
+func (db *BoltDB) maturePendingPayments(height uint32) (map[string][]*Payment, error) {
 	funcName := "maturePendingPayments"
 	payments := make([]*Payment, 0)
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err

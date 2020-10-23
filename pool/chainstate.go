@@ -10,7 +10,6 @@ import (
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
-	bolt "go.etcd.io/bbolt"
 )
 
 const (
@@ -22,7 +21,7 @@ const (
 // provided when creating a new instance of ChainState.
 type ChainStateConfig struct {
 	// db represents the pool database.
-	db *bolt.DB
+	db Database
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
 	// PayDividends pays mature mining rewards to participating accounts.
@@ -97,7 +96,7 @@ func (cs *ChainState) fetchCurrentWork() string {
 // pruneAcceptedWork removes all accepted work not confirmed as mined work
 // with heights less than the provided height.
 func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) error {
-	toDelete, err := fetchUnconfirmedWork(cs.cfg.db, height)
+	toDelete, err := cs.cfg.db.fetchUnconfirmedWork(height)
 	if err != nil {
 		return err
 	}
@@ -119,7 +118,7 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 		// If the block has no confirmations at the current height,
 		// it is an orphan. Prune it.
 		if confs <= 0 {
-			err = work.Delete(cs.cfg.db)
+			err = cs.cfg.db.deleteAcceptedWork(work)
 			if err != nil {
 				return err
 			}
@@ -130,7 +129,7 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 		// If the block has confirmations mark the accepted work as
 		// confirmed.
 		work.Confirmed = true
-		err = work.Update(cs.cfg.db)
+		err = cs.cfg.db.updateAcceptedWork(work)
 		if err != nil {
 			return err
 		}
@@ -142,7 +141,7 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 // prunePayments removes all spendable payments sourcing from
 // orphaned blocks at the provided height.
 func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
-	toDelete, err := fetchPaymentsAtHeight(cs.cfg.db, height)
+	toDelete, err := cs.cfg.db.fetchPaymentsAtHeight(height)
 	if err != nil {
 		return err
 	}
@@ -161,7 +160,7 @@ func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
 		// If the block has no confirmations at the current height,
 		// it is an orphan. Delete the payments associated with it.
 		if confs <= 0 {
-			err = payment.Delete(cs.cfg.db)
+			err = cs.cfg.db.deletePayment(payment)
 			if err != nil {
 				return err
 			}
@@ -208,7 +207,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			// Prune invalidated jobs and accepted work.
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit
-				err := deleteJobsBeforeHeight(cs.cfg.db, pruneLimit)
+				err := cs.cfg.db.deleteJobsBeforeHeight(pruneLimit)
 				if err != nil {
 					// Errors generated pruning invalidated jobs indicate an
 					// underlying issue accessing the database. The chainstate
@@ -280,7 +279,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			parentHeight := header.Height - 1
 			parentHash := header.PrevBlock.String()
 			parentID := AcceptedWorkID(parentHash, parentHeight)
-			work, err := FetchAcceptedWork(cs.cfg.db, parentID)
+			work, err := cs.cfg.db.fetchAcceptedWork(parentID)
 			if err != nil {
 				// If the parent of the connected block is not an accepted
 				// work of the the pool, ignore it.
@@ -310,7 +309,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 
 			if !cs.cfg.SoloPool {
-				count, err := pendingPaymentsForBlockHash(cs.cfg.db, parentHash)
+				count, err := cs.cfg.db.pendingPaymentsForBlockHash(parentHash)
 				if err != nil {
 					// Errors generated looking up pending payments
 					// indicates an underlying issue accessing the database.
@@ -358,7 +357,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 
 				// Update accepted work as confirmed mined.
 				work.Confirmed = true
-				err = work.Update(cs.cfg.db)
+				err = cs.cfg.db.updateAcceptedWork(work)
 				if err != nil {
 					// Errors generated updating work state indicate an underlying
 					// issue accessing the database. The chainstate process will
@@ -394,7 +393,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			parentHeight := header.Height - 1
 			parentHash := header.PrevBlock.String()
 			parentID := AcceptedWorkID(parentHash, parentHeight)
-			confirmedWork, err := FetchAcceptedWork(cs.cfg.db, parentID)
+			confirmedWork, err := cs.cfg.db.fetchAcceptedWork(parentID)
 			if err != nil {
 				// Errors generated, except for a value not found error,
 				// looking up accepted work indicates an underlying issue
@@ -414,7 +413,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 
 			if confirmedWork != nil {
 				confirmedWork.Confirmed = false
-				err = confirmedWork.Update(cs.cfg.db)
+				err = cs.cfg.db.updateAcceptedWork(confirmedWork)
 				if err != nil {
 					// Errors generated updating work state indicate an underlying
 					// issue accessing the database. The chainstate process will
@@ -434,7 +433,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			// ensure it is not confirmed mined.
 			blockHash := header.BlockHash().String()
 			id := AcceptedWorkID(blockHash, header.Height)
-			work, err := FetchAcceptedWork(cs.cfg.db, id)
+			work, err := cs.cfg.db.fetchAcceptedWork(id)
 			if err != nil {
 				// If the disconnected block is not an accepted
 				// work of the the pool, ignore it.
@@ -455,7 +454,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 
 			work.Confirmed = false
-			err = work.Update(cs.cfg.db)
+			err = cs.cfg.db.updateAcceptedWork(work)
 			if err != nil {
 				// Errors generated updating work state indicate an underlying
 				// issue accessing the database. The chainstate process will

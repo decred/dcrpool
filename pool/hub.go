@@ -25,7 +25,6 @@ import (
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/rpcclient/v6"
 	"github.com/decred/dcrd/wire"
-	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 )
 
@@ -120,7 +119,7 @@ type NodeConnection interface {
 // HubConfig represents configuration details for the hub.
 type HubConfig struct {
 	ActiveNet             *chaincfg.Params
-	DB                    *bolt.DB
+	DB                    Database
 	PoolFee               float64
 	MaxGenTime            time.Duration
 	PaymentMethod         string
@@ -142,7 +141,6 @@ type HubConfig struct {
 type Hub struct {
 	clients int32 // update atomically.
 
-	db             *bolt.DB
 	cfg            *HubConfig
 	limiter        *RateLimiter
 	nodeConn       NodeConnection
@@ -207,7 +205,6 @@ func generateBlake256Pad() []byte {
 func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	h := &Hub{
 		cfg:         hcfg,
-		db:          hcfg.DB,
 		limiter:     NewRateLimiter(),
 		wg:          new(sync.WaitGroup),
 		connections: make(map[string]uint32),
@@ -227,7 +224,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	h.poolDiffs = NewDifficultySet(h.cfg.ActiveNet, powLimit, maxGenTime)
 
 	pCfg := &PaymentMgrConfig{
-		db:                     h.db,
+		db:                     h.cfg.DB,
 		ActiveNet:              h.cfg.ActiveNet,
 		PoolFee:                h.cfg.PoolFee,
 		LastNPeriod:            h.cfg.LastNPeriod,
@@ -250,7 +247,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	}
 
 	sCfg := &ChainStateConfig{
-		db:                    h.db,
+		db:                    h.cfg.DB,
 		SoloPool:              h.cfg.SoloPool,
 		PayDividends:          h.paymentMgr.payDividends,
 		GeneratePayments:      h.paymentMgr.generatePayments,
@@ -270,7 +267,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		log.Infof("Solo pool mode active.")
 	}
 
-	err = persistPoolMode(h.db, mode)
+	err = h.cfg.DB.persistPoolMode(mode)
 	if err != nil {
 		return nil, err
 	}
@@ -345,11 +342,11 @@ func (h *Hub) FetchLastWorkHeight() uint32 {
 // FetchLastPaymentInfo returns the height, paid on time, and created on time,
 // for the last payment made by the pool.
 func (h *Hub) FetchLastPaymentInfo() (uint32, int64, int64, error) {
-	height, paidOn, err := loadLastPaymentInfo(h.cfg.DB)
+	height, paidOn, err := h.cfg.DB.loadLastPaymentInfo()
 	if err != nil {
 		return 0, 0, 0, nil
 	}
-	createdOn, err := loadLastPaymentCreatedOn(h.cfg.DB)
+	createdOn, err := h.cfg.DB.loadLastPaymentCreatedOn()
 	if err != nil {
 		return 0, 0, 0, nil
 	}
@@ -417,7 +414,7 @@ func (h *Hub) processWork(headerE string) {
 	nTime := headerE[272:280]
 	genTx2 := headerE[352:360]
 	job := NewJob(headerE, height)
-	err = job.Persist(h.db)
+	err = h.cfg.DB.persistJob(job)
 	if err != nil {
 		log.Error(err)
 		return
@@ -445,7 +442,7 @@ func (h *Hub) Listen() error {
 		}
 		eCfg := &EndpointConfig{
 			ActiveNet:             h.cfg.ActiveNet,
-			db:                    h.db,
+			db:                    h.cfg.DB,
 			SoloPool:              h.cfg.SoloPool,
 			Blake256Pad:           h.blake256Pad,
 			NonceIterations:       h.cfg.NonceIterations,
@@ -537,7 +534,7 @@ func (h *Hub) shutdown() error {
 	if h.notifClient != nil {
 		_ = h.notifClient.CloseSend()
 	}
-	return closeDB(h.db)
+	return h.cfg.DB.close()
 }
 
 // Run handles the process lifecycles of the pool hub.
@@ -555,7 +552,7 @@ func (h *Hub) Run(ctx context.Context) {
 		h.wg.Add(1)
 		<-ctx.Done()
 		log.Tracef("backing up db.")
-		err := backup(h.db, backupFile)
+		err := h.cfg.DB.backup(backupFile)
 		if err != nil {
 			log.Error(err)
 		}
@@ -581,12 +578,12 @@ func (h *Hub) FetchClients() []*Client {
 
 // FetchPendingPayments fetches all unpaid payments.
 func (h *Hub) FetchPendingPayments() ([]*Payment, error) {
-	return fetchPendingPayments(h.cfg.DB)
+	return h.cfg.DB.fetchPendingPayments()
 }
 
 // FetchArchivedPayments fetches all paid payments.
 func (h *Hub) FetchArchivedPayments() ([]*Payment, error) {
-	return archivedPayments(h.cfg.DB)
+	return h.cfg.DB.archivedPayments()
 }
 
 // FetchMinedWork returns work data associated with all blocks mined by the pool
@@ -594,7 +591,7 @@ func (h *Hub) FetchArchivedPayments() ([]*Payment, error) {
 //
 // List is ordered, most recent comes first.
 func (h *Hub) FetchMinedWork() ([]*AcceptedWork, error) {
-	return ListMinedWork(h.db)
+	return h.cfg.DB.listMinedWork()
 }
 
 // Quota details the portion of mining rewrds due an account for work
@@ -634,7 +631,7 @@ func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 
 // AccountExists checks if the provided account id references a pool account.
 func (h *Hub) AccountExists(accountID string) bool {
-	_, err := FetchAccount(h.db, accountID)
+	_, err := h.cfg.DB.fetchAccount(accountID)
 	if err != nil {
 		log.Tracef("Unable to fetch account for id: %s", accountID)
 		return false
@@ -644,7 +641,7 @@ func (h *Hub) AccountExists(accountID string) bool {
 
 // CSRFSecret fetches a persisted secret or generates a new one.
 func (h *Hub) CSRFSecret() ([]byte, error) {
-	secret, err := fetchCSRFSecret(h.db)
+	secret, err := h.cfg.DB.fetchCSRFSecret()
 
 	if err != nil {
 		if errors.Is(err, ErrValueNotFound) {
@@ -656,7 +653,7 @@ func (h *Hub) CSRFSecret() ([]byte, error) {
 				return nil, err
 			}
 
-			err = persistCSRFSecret(h.db, secret)
+			err = h.cfg.DB.persistCSRFSecret(secret)
 			if err != nil {
 				return nil, err
 			}
@@ -670,5 +667,5 @@ func (h *Hub) CSRFSecret() ([]byte, error) {
 
 // HTTPBackupDB streams a backup of the database over an http response.
 func (h *Hub) HTTPBackupDB(w http.ResponseWriter) error {
-	return httpBackup(h.db, w)
+	return h.cfg.DB.httpBackup(w)
 }

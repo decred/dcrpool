@@ -3,13 +3,11 @@ package pool
 import (
 	"fmt"
 	"testing"
-
-	bolt "go.etcd.io/bbolt"
 )
 
-func persistJob(db *bolt.DB, header string, height uint32) (*Job, error) {
+func persistJob(bdb Database, header string, height uint32) (*Job, error) {
 	job := NewJob(header, height)
-	err := job.Persist(db)
+	err := bdb.persistJob(job)
 	if err != nil {
 		return nil, fmt.Errorf("unable to persist job: %v", err)
 	}
@@ -48,9 +46,9 @@ func testJob(t *testing.T) {
 	}
 
 	// Fetch a job using its id.
-	fetchedJob, err := FetchJob(db, jobA.UUID)
+	fetchedJob, err := db.fetchJob(jobA.UUID)
 	if err != nil {
-		t.Fatalf("FetchJob err: %v", err)
+		t.Fatalf("fetchJob err: %v", err)
 	}
 
 	if fetchedJob == nil {
@@ -58,22 +56,22 @@ func testJob(t *testing.T) {
 	}
 
 	// Delete jobs B and C.
-	err = jobB.Delete(db)
+	err = db.deleteJob(jobB)
 	if err != nil {
 		t.Fatalf("job delete error: %v", err)
 	}
 
-	err = jobC.Delete(db)
+	err = db.deleteJob(jobC)
 	if err != nil {
 		t.Fatalf("job delete error: %v", err)
 	}
 
 	// Ensure the jobs were deleted.
-	_, err = FetchJob(db, jobB.UUID)
+	_, err = db.fetchJob(jobB.UUID)
 	if err == nil {
 		t.Fatalf("expected a value not found error: %v", err)
 	}
-	_, err = FetchJob(db, jobC.UUID)
+	_, err = db.fetchJob(jobC.UUID)
 	if err == nil {
 		t.Fatalf("expected a value not found error: %v", err)
 	}
@@ -101,17 +99,17 @@ func testDeleteJobsBeforeHeight(t *testing.T) {
 	}
 
 	// Delete jobs below height 57.
-	err = deleteJobsBeforeHeight(db, 57)
+	err = db.deleteJobsBeforeHeight(57)
 	if err != nil {
 		t.Fatalf("deleteJobsBeforeHeight error: %v", err)
 	}
 
 	// Ensure job A has been pruned with job B remaining.
-	_, err = FetchJob(db, jobA.UUID)
+	_, err = db.fetchJob(jobA.UUID)
 	if err == nil {
 		t.Fatal("expected a value not found error")
 	}
-	_, err = FetchJob(db, jobB.UUID)
+	_, err = db.fetchJob(jobB.UUID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching job B: %v", err)
 	}

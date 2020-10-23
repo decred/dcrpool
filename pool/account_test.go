@@ -11,27 +11,27 @@ func testAccount(t *testing.T) {
 
 	// Create some valid accounts.
 	accountA := NewAccount(simnetAddrA)
-	err := accountA.Persist(db)
+	err := db.persistAccount(accountA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	accountB := NewAccount(simnetAddrB)
-	err = accountB.Persist(db)
+	err = db.persistAccount(accountB)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Creating the same account twice should fail.
-	err = accountA.Persist(db)
+	err = db.persistAccount(accountA)
 	if !errors.Is(err, ErrValueFound) {
 		t.Fatal("expected value found error")
 	}
 
 	// Fetch an account with its id.
-	fetchedAccount, err := FetchAccount(db, accountA.UUID)
+	fetchedAccount, err := db.fetchAccount(accountA.UUID)
 	if err != nil {
-		t.Fatalf("FetchAccount error: %v", err)
+		t.Fatalf("fetchAccount error: %v", err)
 	}
 
 	if fetchedAccount.Address != accountA.Address {
@@ -45,23 +45,23 @@ func testAccount(t *testing.T) {
 	}
 
 	// Delete all accounts.
-	err = accountA.Delete(db)
+	err = db.deleteAccount(accountA.UUID)
 	if err != nil {
 		t.Fatalf("delete accountA error: %v ", err)
 	}
 
-	err = accountB.Delete(db)
+	err = db.deleteAccount(accountB.UUID)
 	if err != nil {
 		t.Fatalf("delete accountB error: %v ", err)
 	}
 
 	// Ensure the accounts have both been deleted.
-	_, err = FetchAccount(db, accountA.UUID)
+	_, err = db.fetchAccount(accountA.UUID)
 	if !errors.Is(err, ErrValueNotFound) {
 		t.Fatal("expected value not found error")
 	}
 
-	_, err = FetchAccount(db, accountB.UUID)
+	_, err = db.fetchAccount(accountB.UUID)
 	if !errors.Is(err, ErrValueNotFound) {
 		t.Fatal("expected value not found error")
 	}

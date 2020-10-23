@@ -16,13 +16,13 @@ func TestFetchBucketHelpers(t *testing.T) {
 	// Create a new empty database.
 	dbPath := "tdb"
 	os.Remove(dbPath)
-	db, err := openDB(dbPath)
+	db, err := openBoltDB(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer func() {
-		err = teardownDB(db, dbPath)
+		err = teardownBoltDB(db, dbPath)
 		if err != nil {
 			t.Fatalf("teardown error: %v", err)
 		}
@@ -32,26 +32,26 @@ func TestFetchBucketHelpers(t *testing.T) {
 
 	// Ensure payment manager helpers return an error when the
 	// pool bucket cannot be found.
-	_, err = loadLastPaymentCreatedOn(db)
+	_, err = db.loadLastPaymentCreatedOn()
 	if err == nil {
 		t.Fatal(expectedNotFoundErr)
 	}
-	_, _, err = loadLastPaymentInfo(db)
+	_, _, err = db.loadLastPaymentInfo()
 	if err == nil {
 		t.Fatal(expectedNotFoundErr)
 	}
-	err = persistLastPaymentCreatedOn(db, 0)
+	err = db.persistLastPaymentCreatedOn(0)
 	if err == nil {
 		t.Fatal(expectedNotFoundErr)
 	}
-	err = persistLastPaymentInfo(db, 0, 0)
+	err = db.persistLastPaymentInfo(0, 0)
 	if err == nil {
 		t.Fatal(expectedNotFoundErr)
 	}
 
 	// Ensure fetch bucket helper returns an error when the
 	// pool bucket cannot be found.
-	err = db.View(func(tx *bolt.Tx) error {
+	err = db.DB.View(func(tx *bolt.Tx) error {
 		_, err := fetchBucket(tx, workBkt)
 		return err
 	})
@@ -75,7 +75,7 @@ func TestFetchBucketHelpers(t *testing.T) {
 	}
 
 	// Create the pool database bucket.
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.DB.Update(func(tx *bolt.Tx) error {
 		var err error
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
@@ -100,7 +100,7 @@ func TestFetchBucketHelpers(t *testing.T) {
 
 	// Ensure fetch bucket helper returns an error if the
 	// required nested bucket cannot be found.
-	err = db.View(func(tx *bolt.Tx) error {
+	err = db.DB.View(func(tx *bolt.Tx) error {
 		_, err := fetchBucket(tx, workBkt)
 		return err
 	})
@@ -112,20 +112,20 @@ func TestFetchBucketHelpers(t *testing.T) {
 func TestInitDB(t *testing.T) {
 	dbPath := "tdb"
 	os.Remove(dbPath)
-	db, err := InitDB(dbPath, false)
+	db, err := InitBoltDB(dbPath, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer func() {
-		err = teardownDB(db, dbPath)
+		err = teardownBoltDB(db, dbPath)
 		if err != nil {
 			t.Fatalf("teardown error: %v", err)
 		}
 	}()
 
 	// Ensure the db buckets have been created.
-	err = db.View(func(tx *bolt.Tx) error {
+	err = db.DB.View(func(tx *bolt.Tx) error {
 		var err error
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
@@ -162,7 +162,7 @@ func TestInitDB(t *testing.T) {
 	}
 
 	// Persist the pool mode.
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			return fmt.Errorf("poolBkt does not exist")
@@ -176,19 +176,19 @@ func TestInitDB(t *testing.T) {
 		t.Fatalf("db update error: %v", err)
 	}
 
-	err = db.Close()
+	err = db.close()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Trigger a pool mode switch.
-	db, err = InitDB(dbPath, true)
+	db, err = InitBoltDB(dbPath, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Delete the database backup.
-	backup := filepath.Join(filepath.Dir(db.Path()), backupFile)
+	backup := filepath.Join(filepath.Dir(db.DB.Path()), backupFile)
 	if _, err := os.Stat(backup); os.IsNotExist(err) {
 		t.Fatalf("backup (%s) does not exist", backup)
 	}
@@ -201,13 +201,13 @@ func TestInitDB(t *testing.T) {
 func testDatabase(t *testing.T) {
 	// Persist some accounts.
 	accountA := NewAccount("Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru")
-	err := accountA.Persist(db)
+	err := db.persistAccount(accountA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	accountB := NewAccount("SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy")
-	err = accountB.Persist(db)
+	err = db.persistAccount(accountB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func testDatabase(t *testing.T) {
 	}
 
 	// Ensure the accountA has been removed.
-	_, err = FetchAccount(db, accountA.UUID)
+	_, err = db.fetchAccount(accountA.UUID)
 	if !errors.Is(err, ErrValueNotFound) {
 		t.Fatalf("expected no value found error: %v", err)
 	}
@@ -231,11 +231,11 @@ func testDatabase(t *testing.T) {
 	}
 
 	// Ensure the account X and Y have been removed.
-	_, err = FetchAccount(db, xID)
+	_, err = db.fetchAccount(xID)
 	if err == nil {
 		t.Fatalf("expected no value found error for %s", xID)
 	}
-	_, err = FetchAccount(db, yID)
+	_, err = db.fetchAccount(yID)
 	if err == nil {
 		t.Fatalf("expected no value found error for %s", yID)
 	}
@@ -246,7 +246,7 @@ func testDatabase(t *testing.T) {
 		os.Remove(backupFile)
 	}()
 
-	err = backup(db, backupFile)
+	err = db.backup(backupFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,20 +254,20 @@ func testDatabase(t *testing.T) {
 
 func testLastPaymentCreatedOn(t *testing.T) {
 	// Expect an error if no value set.
-	_, err := loadLastPaymentCreatedOn(db)
+	_, err := db.loadLastPaymentCreatedOn()
 	if !errors.Is(err, ErrValueNotFound) {
 		t.Fatalf("[loadLastPaymentCreatedOn] expected value not found error, got: %v", err)
 	}
 
 	// Set some values.
 	lastPaymentCreatedOn := time.Now().UnixNano()
-	err = persistLastPaymentCreatedOn(db, lastPaymentCreatedOn)
+	err = db.persistLastPaymentCreatedOn(lastPaymentCreatedOn)
 	if err != nil {
 		t.Fatalf("[persistLastPaymentCreatedOn] unable to persist last payment created on: %v", err)
 	}
 
 	// Ensure values can be retrieved.
-	paymentCreatedOn, err := loadLastPaymentCreatedOn(db)
+	paymentCreatedOn, err := db.loadLastPaymentCreatedOn()
 	if err != nil {
 		t.Fatalf("[loadLastPaymentCreatedOn] unable to load last payment created on: %v", err)
 	}
@@ -279,7 +279,7 @@ func testLastPaymentCreatedOn(t *testing.T) {
 
 func testLastPaymentInfo(t *testing.T) {
 	// Expect an error if no value set.
-	_, _, err := loadLastPaymentInfo(db)
+	_, _, err := db.loadLastPaymentInfo()
 	if !errors.Is(err, ErrValueNotFound) {
 		t.Fatalf("[loadLastPaymentInfo] expected value not found error, got: %v", err)
 	}
@@ -287,13 +287,13 @@ func testLastPaymentInfo(t *testing.T) {
 	// Set some values.
 	lastPaymentHeight := uint32(1)
 	lastPaymentPaidOn := time.Now().UnixNano()
-	err = persistLastPaymentInfo(db, lastPaymentHeight, lastPaymentPaidOn)
+	err = db.persistLastPaymentInfo(lastPaymentHeight, lastPaymentPaidOn)
 	if err != nil {
 		t.Fatalf("[persistLastPaymentInfo] unable to persist last payment info: %v", err)
 	}
 
 	// Ensure values can be retrieved.
-	paymentHeight, paymentPaidOn, err := loadLastPaymentInfo(db)
+	paymentHeight, paymentPaidOn, err := db.loadLastPaymentInfo()
 	if err != nil {
 		t.Fatalf("[loadLastPaymentInfo] unable to load last payment info: %v", err)
 	}

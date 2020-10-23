@@ -2,14 +2,12 @@ package pool
 
 import (
 	"testing"
-
-	bolt "go.etcd.io/bbolt"
 )
 
-func persistAcceptedWork(db *bolt.DB, blockHash string, prevHash string,
+func persistAcceptedWork(db Database, blockHash string, prevHash string,
 	height uint32, minedBy string, miner string) (*AcceptedWork, error) {
 	acceptedWork := NewAcceptedWork(blockHash, prevHash, height, minedBy, miner)
-	err := acceptedWork.Persist(db)
+	err := db.persistAcceptedWork(acceptedWork)
 	if err != nil {
 		return nil, err
 	}
@@ -55,29 +53,29 @@ func testAcceptedWork(t *testing.T) {
 		431611, xID, "dcr1")
 
 	// Ensure updating a non persisted accepted work returns an error.
-	err = workE.Update(db)
+	err = db.updateAcceptedWork(workE)
 	if err == nil {
 		t.Fatal("Update: expected a no accepted work found error")
 	}
 
 	// Ensure creating an already existing accepted work returns an error.
-	err = workD.Persist(db)
+	err = db.persistAcceptedWork(workD)
 	if err == nil {
 		t.Fatal("Persist: expected a duplicate accepted work error")
 	}
 
 	// Ensure fetching a non existent accepted work returns an error.
 	id := AcceptedWorkID(workC.BlockHash, workD.Height)
-	_, err = FetchAcceptedWork(db, id)
+	_, err = db.fetchAcceptedWork(id)
 	if err == nil {
-		t.Fatalf("FetchAcceptedWork: expected a non-existent accepted work error")
+		t.Fatalf("fetchAcceptedWork: expected a non-existent accepted work error")
 	}
 
 	// Fetch an accepted work with its id.
 	id = AcceptedWorkID(workC.BlockHash, workC.Height)
-	fetchedWork, err := FetchAcceptedWork(db, id)
+	fetchedWork, err := db.fetchAcceptedWork(id)
 	if err != nil {
-		t.Fatalf("FetchAcceptedWork error: %v", err)
+		t.Fatalf("fetchAcceptedWork error: %v", err)
 	}
 
 	if fetchedWork.BlockHash != workC.BlockHash {
@@ -91,9 +89,9 @@ func testAcceptedWork(t *testing.T) {
 	}
 
 	// Ensure unconfirmed work is returned
-	minedWork, err := ListMinedWork(db)
+	minedWork, err := db.listMinedWork()
 	if err != nil {
-		t.Fatalf("ListMinedWork error: %v", err)
+		t.Fatalf("listMinedWork error: %v", err)
 	}
 
 	if len(minedWork) != 4 {
@@ -102,33 +100,33 @@ func testAcceptedWork(t *testing.T) {
 
 	// Confirm all accepted work a mined work.
 	workA.Confirmed = true
-	err = workA.Update(db)
+	err = db.updateAcceptedWork(workA)
 	if err != nil {
 		t.Fatalf("confirm workA error: %v ", err)
 	}
 
 	workB.Confirmed = true
-	err = workB.Update(db)
+	err = db.updateAcceptedWork(workB)
 	if err != nil {
 		t.Fatalf("confirm workB error: %v ", err)
 	}
 
 	workC.Confirmed = true
-	err = workC.Update(db)
+	err = db.updateAcceptedWork(workC)
 	if err != nil {
 		t.Fatalf("confirm workC error: %v ", err)
 	}
 
 	workD.Confirmed = true
-	err = workD.Update(db)
+	err = db.updateAcceptedWork(workD)
 	if err != nil {
 		t.Fatalf("confirm workD error: %v ", err)
 	}
 
 	// Ensure accepted work are listed as mined since they are confirmed.
-	minedWork, err = ListMinedWork(db)
+	minedWork, err = db.listMinedWork()
 	if err != nil {
-		t.Fatalf("ListMinedWork error: %v", err)
+		t.Fatalf("listMinedWork error: %v", err)
 	}
 
 	if len(minedWork) != 4 {
@@ -136,9 +134,9 @@ func testAcceptedWork(t *testing.T) {
 	}
 
 	// Ensure account Y has only one associated mined work.
-	allWork, err := ListMinedWork(db)
+	allWork, err := db.listMinedWork()
 	if err != nil {
-		t.Fatalf("ListMinedWork error: %v", err)
+		t.Fatalf("listMinedWork error: %v", err)
 	}
 
 	minedWorkByAccount := make([]*AcceptedWork, 0)
@@ -154,29 +152,29 @@ func testAcceptedWork(t *testing.T) {
 	}
 
 	// Delete all work.
-	err = workA.Delete(db)
+	err = db.deleteAcceptedWork(workA)
 	if err != nil {
 		t.Fatalf("delete workA error: %v ", err)
 	}
 
-	err = workB.Delete(db)
+	err = db.deleteAcceptedWork(workB)
 	if err != nil {
 		t.Fatalf("delete workB error: %v ", err)
 	}
-	err = workC.Delete(db)
+	err = db.deleteAcceptedWork(workC)
 	if err != nil {
 		t.Fatalf("delete workC error: %v ", err)
 	}
 
-	err = workD.Delete(db)
+	err = db.deleteAcceptedWork(workD)
 	if err != nil {
 		t.Fatalf("delete workD error: %v ", err)
 	}
 
 	// Ensure there are no mined work.
-	minedWork, err = ListMinedWork(db)
+	minedWork, err = db.listMinedWork()
 	if err != nil {
-		t.Fatalf("ListMinedWork error: %v", err)
+		t.Fatalf("listMinedWork error: %v", err)
 	}
 
 	if len(minedWork) != 0 {

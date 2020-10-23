@@ -339,7 +339,7 @@ func testHub(t *testing.T) {
 		"193c4b8fd02aaed33ab9c5418ace9bec4047f61f923767bceb5a51c6e368bfa6",
 		CPU)
 
-	err = work.Persist(db)
+	err = db.persistAcceptedWork(work)
 	if err != nil {
 		t.Fatalf("[Persist] unexpected error: %v", err)
 	}
@@ -488,7 +488,7 @@ func testHub(t *testing.T) {
 		t.Fatal("expected a response body with data")
 	}
 
-	backup := filepath.Join(filepath.Dir(db.Path()), backupFile)
+	backup := filepath.Join(filepath.Dir(db.DB.Path()), backupFile)
 
 	cancel()
 	hub.wg.Wait()
