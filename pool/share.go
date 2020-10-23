@@ -53,9 +53,9 @@ func NewShare(account string, weight *big.Rat) *Share {
 	}
 }
 
-// PersistShare saves a share to the database.
-func (db *BoltDB) PersistShare(s *Share) error {
-	const funcName = "PersistShare"
+// persistShare saves a share to the database.
+func (db *BoltDB) persistShare(s *Share) error {
+	const funcName = "persistShare"
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, shareBkt)
 		if err != nil {

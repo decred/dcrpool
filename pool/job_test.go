@@ -7,7 +7,7 @@ import (
 
 func persistJob(bdb Database, header string, height uint32) (*Job, error) {
 	job := NewJob(header, height)
-	err := bdb.PersistJob(job)
+	err := bdb.persistJob(job)
 	if err != nil {
 		return nil, fmt.Errorf("unable to persist job: %v", err)
 	}
@@ -46,9 +46,9 @@ func testJob(t *testing.T) {
 	}
 
 	// Fetch a job using its id.
-	fetchedJob, err := db.FetchJob(jobA.UUID)
+	fetchedJob, err := db.fetchJob(jobA.UUID)
 	if err != nil {
-		t.Fatalf("FetchJob err: %v", err)
+		t.Fatalf("fetchJob err: %v", err)
 	}
 
 	if fetchedJob == nil {
@@ -56,22 +56,22 @@ func testJob(t *testing.T) {
 	}
 
 	// Delete jobs B and C.
-	err = db.DeleteJob(jobB)
+	err = db.deleteJob(jobB)
 	if err != nil {
 		t.Fatalf("job delete error: %v", err)
 	}
 
-	err = db.DeleteJob(jobC)
+	err = db.deleteJob(jobC)
 	if err != nil {
 		t.Fatalf("job delete error: %v", err)
 	}
 
 	// Ensure the jobs were deleted.
-	_, err = db.FetchJob(jobB.UUID)
+	_, err = db.fetchJob(jobB.UUID)
 	if err == nil {
 		t.Fatalf("expected a value not found error: %v", err)
 	}
-	_, err = db.FetchJob(jobC.UUID)
+	_, err = db.fetchJob(jobC.UUID)
 	if err == nil {
 		t.Fatalf("expected a value not found error: %v", err)
 	}
@@ -99,17 +99,17 @@ func testDeleteJobsBeforeHeight(t *testing.T) {
 	}
 
 	// Delete jobs below height 57.
-	err = db.DeleteJobsBeforeHeight(57)
+	err = db.deleteJobsBeforeHeight(57)
 	if err != nil {
 		t.Fatalf("deleteJobsBeforeHeight error: %v", err)
 	}
 
 	// Ensure job A has been pruned with job B remaining.
-	_, err = db.FetchJob(jobA.UUID)
+	_, err = db.fetchJob(jobA.UUID)
 	if err == nil {
 		t.Fatal("expected a value not found error")
 	}
-	_, err = db.FetchJob(jobB.UUID)
+	_, err = db.fetchJob(jobB.UUID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching job B: %v", err)
 	}

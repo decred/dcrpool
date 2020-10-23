@@ -19,7 +19,7 @@ func persistShare(db Database, account string, weight *big.Rat, createdOnNano in
 		Account: account,
 		Weight:  weight,
 	}
-	err := db.PersistShare(share)
+	err := db.persistShare(share)
 	if err != nil {
 		return err
 	}

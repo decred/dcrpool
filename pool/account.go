@@ -38,9 +38,9 @@ func NewAccount(address string) *Account {
 	}
 }
 
-// FetchAccount fetches the account referenced by the provided id.
-func (db *BoltDB) FetchAccount(id string) (*Account, error) {
-	const funcName = "FetchAccount"
+// fetchAccount fetches the account referenced by the provided id.
+func (db *BoltDB) fetchAccount(id string) (*Account, error) {
+	const funcName = "fetchAccount"
 	var account Account
 	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, accountBkt)
@@ -67,9 +67,9 @@ func (db *BoltDB) FetchAccount(id string) (*Account, error) {
 	return &account, err
 }
 
-// PersistAccount saves the account to the database.
-func (db *BoltDB) PersistAccount(acc *Account) error {
-	const funcName = "PersistAccount"
+// persistAccount saves the account to the database.
+func (db *BoltDB) persistAccount(acc *Account) error {
+	const funcName = "persistAccount"
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, accountBkt)
 		if err != nil {
@@ -103,7 +103,7 @@ func (db *BoltDB) PersistAccount(acc *Account) error {
 	})
 }
 
-// DeleteAccount purges the referenced account from the database.
-func (db *BoltDB) DeleteAccount(id string) error {
+// deleteAccount purges the referenced account from the database.
+func (db *BoltDB) deleteAccount(id string) error {
 	return deleteEntry(db, accountBkt, id)
 }

@@ -58,9 +58,9 @@ func paymentID(height uint32, createdOnNano int64, account string) string {
 	return buf.String()
 }
 
-// FetchPayment fetches the payment referenced by the provided id.
-func (db *BoltDB) FetchPayment(id string) (*Payment, error) {
-	const funcName = "FetchPayment"
+// fetchPayment fetches the payment referenced by the provided id.
+func (db *BoltDB) fetchPayment(id string) (*Payment, error) {
+	const funcName = "fetchPayment"
 	var payment Payment
 	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, paymentBkt)
@@ -86,9 +86,9 @@ func (db *BoltDB) FetchPayment(id string) (*Payment, error) {
 	return &payment, err
 }
 
-// PersistPayment saves a payment to the database.
-func (db *BoltDB) PersistPayment(pmt *Payment) error {
-	const funcName = "PersistPayment"
+// persistPayment saves a payment to the database.
+func (db *BoltDB) persistPayment(pmt *Payment) error {
+	const funcName = "persistPayment"
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
@@ -111,21 +111,21 @@ func (db *BoltDB) PersistPayment(pmt *Payment) error {
 	})
 }
 
-// UpdatePayment persists the updated payment to the database.
-func (db *BoltDB) UpdatePayment(pmt *Payment) error {
-	return db.PersistPayment(pmt)
+// updatePayment persists the updated payment to the database.
+func (db *BoltDB) updatePayment(pmt *Payment) error {
+	return db.persistPayment(pmt)
 }
 
-// DeletePayment purges the referenced payment from the database. Note that
+// deletePayment purges the referenced payment from the database. Note that
 // archived payments cannot be deleted.
-func (db *BoltDB) DeletePayment(pmt *Payment) error {
+func (db *BoltDB) deletePayment(pmt *Payment) error {
 	id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
 	return deleteEntry(db, paymentBkt, id)
 }
 
-// ArchivePayment removes the associated payment from active payments and archives it.
-func (db *BoltDB) ArchivePayment(pmt *Payment) error {
-	const funcName = "ArchivePayment"
+// archivePayment removes the associated payment from active payments and archives it.
+func (db *BoltDB) archivePayment(pmt *Payment) error {
+	const funcName = "archivePayment"
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {

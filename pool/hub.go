@@ -416,7 +416,7 @@ func (h *Hub) processWork(headerE string) {
 	nTime := headerE[272:280]
 	genTx2 := headerE[352:360]
 	job := NewJob(headerE, height)
-	err = h.db.PersistJob(job)
+	err = h.db.persistJob(job)
 	if err != nil {
 		log.Error(err)
 		return
@@ -593,7 +593,7 @@ func (h *Hub) FetchArchivedPayments() ([]*Payment, error) {
 //
 // List is ordered, most recent comes first.
 func (h *Hub) FetchMinedWork() ([]*AcceptedWork, error) {
-	return h.db.ListMinedWork()
+	return h.db.listMinedWork()
 }
 
 // Quota details the portion of mining rewrds due an account for work
@@ -633,7 +633,7 @@ func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 
 // AccountExists checks if the provided account id references a pool account.
 func (h *Hub) AccountExists(accountID string) bool {
-	_, err := h.db.FetchAccount(accountID)
+	_, err := h.db.fetchAccount(accountID)
 	if err != nil {
 		log.Tracef("Unable to fetch account for id: %s", accountID)
 		return false

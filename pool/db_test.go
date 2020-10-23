@@ -201,13 +201,13 @@ func TestInitDB(t *testing.T) {
 func testDatabase(t *testing.T) {
 	// Persist some accounts.
 	accountA := NewAccount("Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru")
-	err := db.PersistAccount(accountA)
+	err := db.persistAccount(accountA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	accountB := NewAccount("SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy")
-	err = db.PersistAccount(accountB)
+	err = db.persistAccount(accountB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func testDatabase(t *testing.T) {
 	}
 
 	// Ensure the accountA has been removed.
-	_, err = db.FetchAccount(accountA.UUID)
+	_, err = db.fetchAccount(accountA.UUID)
 	if !errors.Is(err, ErrValueNotFound) {
 		t.Fatalf("expected no value found error: %v", err)
 	}
@@ -231,11 +231,11 @@ func testDatabase(t *testing.T) {
 	}
 
 	// Ensure the account X and Y have been removed.
-	_, err = db.FetchAccount(xID)
+	_, err = db.fetchAccount(xID)
 	if err == nil {
 		t.Fatalf("expected no value found error for %s", xID)
 	}
-	_, err = db.FetchAccount(yID)
+	_, err = db.fetchAccount(yID)
 	if err == nil {
 		t.Fatalf("expected no value found error for %s", yID)
 	}

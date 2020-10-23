@@ -48,13 +48,13 @@ func setupDB() error {
 	}
 
 	accountX := NewAccount(xAddr)
-	err = db.PersistAccount(accountX)
+	err = db.persistAccount(accountX)
 	if err != nil {
 		return err
 	}
 
 	accountY := NewAccount(yAddr)
-	err = db.PersistAccount(accountY)
+	err = db.persistAccount(accountY)
 	if err != nil {
 		return err
 	}

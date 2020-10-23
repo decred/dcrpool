@@ -178,7 +178,7 @@ func (c *Client) claimWeightedShare() error {
 	}
 	weight := ShareWeights[c.cfg.FetchMiner()]
 	share := NewShare(c.account, weight)
-	return c.cfg.db.PersistShare(share)
+	return c.cfg.db.persistShare(share)
 }
 
 // handleAuthorizeRequest processes authorize request messages received.
@@ -229,7 +229,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 
 		// Create the account if it does not already exist.
 		account := NewAccount(address)
-		err = c.cfg.db.PersistAccount(account)
+		err = c.cfg.db.persistAccount(account)
 		if err != nil {
 			// Do not error if the account already exists.
 			if !errors.Is(err, ErrValueFound) {
@@ -355,7 +355,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.ch <- resp
 		return err
 	}
-	job, err := c.cfg.db.FetchJob(jobID)
+	job, err := c.cfg.db.fetchJob(jobID)
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
@@ -460,7 +460,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	// by the mining node.
 	work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
 		header.Height, c.account, c.cfg.FetchMiner())
-	err = c.cfg.db.PersistAcceptedWork(work)
+	err = c.cfg.db.persistAcceptedWork(work)
 	if err != nil {
 		// If the submitted accepted work already exists, ignore the
 		// submission.
@@ -605,7 +605,7 @@ func (c *Client) updateWork() {
 
 	// Create a job for the timestamp-rolled current work.
 	job := NewJob(updatedWorkE, height)
-	err = c.cfg.db.PersistJob(job)
+	err = c.cfg.db.persistJob(job)
 	if err != nil {
 		log.Error(err)
 		return

@@ -47,9 +47,9 @@ func NewJob(header string, height uint32) *Job {
 	}
 }
 
-// FetchJob fetches the job referenced by the provided id.
-func (db *BoltDB) FetchJob(id string) (*Job, error) {
-	const funcName = "FetchJob"
+// fetchJob fetches the job referenced by the provided id.
+func (db *BoltDB) fetchJob(id string) (*Job, error) {
+	const funcName = "fetchJob"
 	var job Job
 	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, jobBkt)
@@ -76,9 +76,9 @@ func (db *BoltDB) FetchJob(id string) (*Job, error) {
 	return &job, err
 }
 
-// PersistJob saves the job to the database.
-func (db *BoltDB) PersistJob(job *Job) error {
-	const funcName = "PersistJob"
+// persistJob saves the job to the database.
+func (db *BoltDB) persistJob(job *Job) error {
+	const funcName = "persistJob"
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, jobBkt)
 		if err != nil {
@@ -101,13 +101,13 @@ func (db *BoltDB) PersistJob(job *Job) error {
 	})
 }
 
-// DeleteJob removes the associated job from the database.
-func (db *BoltDB) DeleteJob(job *Job) error {
+// deleteJob removes the associated job from the database.
+func (db *BoltDB) deleteJob(job *Job) error {
 	return deleteEntry(db, jobBkt, job.UUID)
 }
 
-// DeleteJobsBeforeHeight removes all jobs with heights less than the provided height.
-func (db *BoltDB) DeleteJobsBeforeHeight(height uint32) error {
+// deleteJobsBeforeHeight removes all jobs with heights less than the provided height.
+func (db *BoltDB) deleteJobsBeforeHeight(height uint32) error {
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, jobBkt)
 		if err != nil {

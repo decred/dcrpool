@@ -15,7 +15,7 @@ import (
 func persistPayment(db Database, account string, source *PaymentSource,
 	amount dcrutil.Amount, height uint32, estMaturity uint32) (*Payment, error) {
 	pmt := NewPayment(account, source, amount, height, estMaturity)
-	err := db.PersistPayment(pmt)
+	err := db.persistPayment(pmt)
 	if err != nil {
 		return nil, fmt.Errorf("unable to persist payment: %v", err)
 	}
@@ -48,9 +48,9 @@ func testPayment(t *testing.T) {
 
 	// Fetch a payment using its id.
 	id := paymentID(pmtA.Height, pmtA.CreatedOn, pmtA.Account)
-	fetchedPayment, err := db.FetchPayment(id)
+	fetchedPayment, err := db.fetchPayment(id)
 	if err != nil {
-		t.Fatalf("FetchPayment err: %v", err)
+		t.Fatalf("fetchPayment err: %v", err)
 	}
 	if fetchedPayment == nil {
 		t.Fatal("expected a non-nil payment")
@@ -59,15 +59,15 @@ func testPayment(t *testing.T) {
 	// Ensure payments can be updated.
 	txid := chainhash.Hash{0}.String()
 	pmtB.TransactionID = txid
-	err = db.UpdatePayment(pmtB)
+	err = db.updatePayment(pmtB)
 	if err != nil {
 		t.Fatalf("payment update err: %v", err)
 	}
 
 	id = paymentID(pmtB.Height, pmtB.CreatedOn, pmtB.Account)
-	fetchedPayment, err = db.FetchPayment(id)
+	fetchedPayment, err = db.fetchPayment(id)
 	if err != nil {
-		t.Fatalf("FetchPayment err: %v", err)
+		t.Fatalf("fetchPayment err: %v", err)
 	}
 
 	if fetchedPayment.TransactionID != txid {
@@ -77,27 +77,27 @@ func testPayment(t *testing.T) {
 
 	// Persist payment B as an archived payment.
 	pmtB.PaidOnHeight = estMaturity + 1
-	err = db.ArchivePayment(pmtB)
+	err = db.archivePayment(pmtB)
 	if err != nil {
 		t.Fatalf("payment delete error: %v", err)
 	}
 
 	// Ensure the payment B was archived.
 	id = paymentID(pmtB.Height, pmtB.CreatedOn, pmtB.Account)
-	_, err = db.FetchPayment(id)
+	_, err = db.fetchPayment(id)
 	if err == nil {
 		t.Fatalf("expected a value not found error: %v", err)
 	}
 
 	// Delete payment C.
-	err = db.DeletePayment(pmtC)
+	err = db.deletePayment(pmtC)
 	if err != nil {
 		t.Fatalf("payment delete error: %v", err)
 	}
 
 	// Ensure the payment C was deleted.
 	id = paymentID(pmtC.Height, pmtC.CreatedOn, pmtC.Account)
-	fetchedPayment, err = db.FetchPayment(id)
+	fetchedPayment, err = db.fetchPayment(id)
 	if err == nil {
 		t.Fatalf("expected a value not found error: %v", err)
 	}
@@ -134,11 +134,11 @@ func testPaymentAccessors(t *testing.T) {
 	}
 	pmtC.PaidOnHeight = estMaturity + 1
 	pmtC.TransactionID = zeroHash.String()
-	err = db.UpdatePayment(pmtC)
+	err = db.updatePayment(pmtC)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = db.ArchivePayment(pmtC)
+	err = db.archivePayment(pmtC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,11 +149,11 @@ func testPaymentAccessors(t *testing.T) {
 	}
 	pmtD.PaidOnHeight = estMaturity + 1
 	pmtD.TransactionID = chainhash.Hash{0}.String()
-	err = db.UpdatePayment(pmtD)
+	err = db.updatePayment(pmtD)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = db.ArchivePayment(pmtD)
+	err = db.archivePayment(pmtD)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -60,9 +60,9 @@ func NewAcceptedWork(blockHash string, prevHash string, height uint32,
 	}
 }
 
-// FetchAcceptedWork fetches the accepted work referenced by the provided id.
-func (db *BoltDB) FetchAcceptedWork(id string) (*AcceptedWork, error) {
-	const funcName = "FetchAcceptedWork"
+// fetchAcceptedWork fetches the accepted work referenced by the provided id.
+func (db *BoltDB) fetchAcceptedWork(id string) (*AcceptedWork, error) {
+	const funcName = "fetchAcceptedWork"
 	var work AcceptedWork
 	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, workBkt)
@@ -88,9 +88,9 @@ func (db *BoltDB) FetchAcceptedWork(id string) (*AcceptedWork, error) {
 	return &work, err
 }
 
-// PersistAcceptedWork saves the accepted work to the database.
-func (db *BoltDB) PersistAcceptedWork(work *AcceptedWork) error {
-	const funcName = "PersistAcceptedWork"
+// persistAcceptedWork saves the accepted work to the database.
+func (db *BoltDB) persistAcceptedWork(work *AcceptedWork) error {
+	const funcName = "persistAcceptedWork"
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, workBkt)
 		if err != nil {
@@ -122,9 +122,9 @@ func (db *BoltDB) PersistAcceptedWork(work *AcceptedWork) error {
 	})
 }
 
-// UpdateAcceptedWork persists modifications to an existing work.
-func (db *BoltDB) UpdateAcceptedWork(work *AcceptedWork) error {
-	const funcName = "UpdateAcceptedWork"
+// updateAcceptedWork persists modifications to an existing work.
+func (db *BoltDB) updateAcceptedWork(work *AcceptedWork) error {
+	const funcName = "updateAcceptedWork"
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, workBkt)
 		if err != nil {
@@ -154,17 +154,17 @@ func (db *BoltDB) UpdateAcceptedWork(work *AcceptedWork) error {
 	})
 }
 
-// DeleteAcceptedWork removes the associated accepted work from the database.
-func (db *BoltDB) DeleteAcceptedWork(work *AcceptedWork) error {
+// deleteAcceptedWork removes the associated accepted work from the database.
+func (db *BoltDB) deleteAcceptedWork(work *AcceptedWork) error {
 	return deleteEntry(db, workBkt, work.UUID)
 }
 
-// ListMinedWork returns work data associated with all blocks mined by the pool
+// listMinedWork returns work data associated with all blocks mined by the pool
 // regardless of whether they are confirmed or not.
 //
 // List is ordered, most recent comes first.
-func (db *BoltDB) ListMinedWork() ([]*AcceptedWork, error) {
-	const funcName = "ListMinedWork"
+func (db *BoltDB) listMinedWork() ([]*AcceptedWork, error) {
+	const funcName = "listMinedWork"
 	minedWork := make([]*AcceptedWork, 0)
 	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, workBkt)

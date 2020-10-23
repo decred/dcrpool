@@ -24,16 +24,16 @@ type Database interface {
 	loadLastPaymentCreatedOn() (int64, error)
 
 	// Account
-	FetchAccount(id string) (*Account, error)
-	PersistAccount(acc *Account) error
-	DeleteAccount(id string) error
+	fetchAccount(id string) (*Account, error)
+	persistAccount(acc *Account) error
+	deleteAccount(id string) error
 
 	// Payment
-	FetchPayment(id string) (*Payment, error)
-	PersistPayment(payment *Payment) error
-	UpdatePayment(payment *Payment) error
-	DeletePayment(payment *Payment) error
-	ArchivePayment(payment *Payment) error
+	fetchPayment(id string) (*Payment, error)
+	persistPayment(payment *Payment) error
+	updatePayment(payment *Payment) error
+	deletePayment(payment *Payment) error
+	archivePayment(payment *Payment) error
 	fetchPaymentsAtHeight(height uint32) ([]*Payment, error)
 	fetchPendingPayments() ([]*Payment, error)
 	pendingPaymentsForBlockHash(blockHash string) (uint32, error)
@@ -41,24 +41,24 @@ type Database interface {
 	maturePendingPayments(height uint32) (map[string][]*Payment, error)
 
 	// Share
-	PersistShare(share *Share) error
+	persistShare(share *Share) error
 	ppsEligibleShares(max int64) ([]*Share, error)
 	pplnsEligibleShares(min int64) ([]*Share, error)
 	pruneShares(minNano int64) error
 
 	// AcceptedWork
-	FetchAcceptedWork(id string) (*AcceptedWork, error)
-	PersistAcceptedWork(work *AcceptedWork) error
-	UpdateAcceptedWork(work *AcceptedWork) error
-	DeleteAcceptedWork(work *AcceptedWork) error
-	ListMinedWork() ([]*AcceptedWork, error)
+	fetchAcceptedWork(id string) (*AcceptedWork, error)
+	persistAcceptedWork(work *AcceptedWork) error
+	updateAcceptedWork(work *AcceptedWork) error
+	deleteAcceptedWork(work *AcceptedWork) error
+	listMinedWork() ([]*AcceptedWork, error)
 	fetchUnconfirmedWork(height uint32) ([]*AcceptedWork, error)
 
 	// Job
-	FetchJob(id string) (*Job, error)
-	PersistJob(job *Job) error
-	DeleteJob(job *Job) error
-	DeleteJobsBeforeHeight(height uint32) error
+	fetchJob(id string) (*Job, error)
+	persistJob(job *Job) error
+	deleteJob(job *Job) error
+	deleteJobsBeforeHeight(height uint32) error
 }
 
 // BoltDB is a wrapper around bolt.DB which implements the Database interface.

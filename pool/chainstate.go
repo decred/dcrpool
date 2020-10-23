@@ -118,7 +118,7 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 		// If the block has no confirmations at the current height,
 		// it is an orphan. Prune it.
 		if confs <= 0 {
-			err = cs.cfg.db.DeleteAcceptedWork(work)
+			err = cs.cfg.db.deleteAcceptedWork(work)
 			if err != nil {
 				return err
 			}
@@ -129,7 +129,7 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 		// If the block has confirmations mark the accepted work as
 		// confirmed.
 		work.Confirmed = true
-		err = cs.cfg.db.UpdateAcceptedWork(work)
+		err = cs.cfg.db.updateAcceptedWork(work)
 		if err != nil {
 			return err
 		}
@@ -160,7 +160,7 @@ func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
 		// If the block has no confirmations at the current height,
 		// it is an orphan. Delete the payments associated with it.
 		if confs <= 0 {
-			err = cs.cfg.db.DeletePayment(payment)
+			err = cs.cfg.db.deletePayment(payment)
 			if err != nil {
 				return err
 			}
@@ -207,7 +207,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			// Prune invalidated jobs and accepted work.
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit
-				err := cs.cfg.db.DeleteJobsBeforeHeight(pruneLimit)
+				err := cs.cfg.db.deleteJobsBeforeHeight(pruneLimit)
 				if err != nil {
 					// Errors generated pruning invalidated jobs indicate an
 					// underlying issue accessing the database. The chainstate
@@ -279,7 +279,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			parentHeight := header.Height - 1
 			parentHash := header.PrevBlock.String()
 			parentID := AcceptedWorkID(parentHash, parentHeight)
-			work, err := cs.cfg.db.FetchAcceptedWork(parentID)
+			work, err := cs.cfg.db.fetchAcceptedWork(parentID)
 			if err != nil {
 				// If the parent of the connected block is not an accepted
 				// work of the the pool, ignore it.
@@ -357,7 +357,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 
 				// Update accepted work as confirmed mined.
 				work.Confirmed = true
-				err = cs.cfg.db.UpdateAcceptedWork(work)
+				err = cs.cfg.db.updateAcceptedWork(work)
 				if err != nil {
 					// Errors generated updating work state indicate an underlying
 					// issue accessing the database. The chainstate process will
@@ -393,7 +393,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			parentHeight := header.Height - 1
 			parentHash := header.PrevBlock.String()
 			parentID := AcceptedWorkID(parentHash, parentHeight)
-			confirmedWork, err := cs.cfg.db.FetchAcceptedWork(parentID)
+			confirmedWork, err := cs.cfg.db.fetchAcceptedWork(parentID)
 			if err != nil {
 				// Errors generated, except for a value not found error,
 				// looking up accepted work indicates an underlying issue
@@ -413,7 +413,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 
 			if confirmedWork != nil {
 				confirmedWork.Confirmed = false
-				err = cs.cfg.db.UpdateAcceptedWork(confirmedWork)
+				err = cs.cfg.db.updateAcceptedWork(confirmedWork)
 				if err != nil {
 					// Errors generated updating work state indicate an underlying
 					// issue accessing the database. The chainstate process will
@@ -433,7 +433,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			// ensure it is not confirmed mined.
 			blockHash := header.BlockHash().String()
 			id := AcceptedWorkID(blockHash, header.Height)
-			work, err := cs.cfg.db.FetchAcceptedWork(id)
+			work, err := cs.cfg.db.fetchAcceptedWork(id)
 			if err != nil {
 				// If the disconnected block is not an accepted
 				// work of the the pool, ignore it.
@@ -454,7 +454,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			}
 
 			work.Confirmed = false
-			err = cs.cfg.db.UpdateAcceptedWork(work)
+			err = cs.cfg.db.updateAcceptedWork(work)
 			if err != nil {
 				// Errors generated updating work state indicate an underlying
 				// issue accessing the database. The chainstate process will

@@ -303,7 +303,7 @@ func (pm *PaymentMgr) payPerShare(source *PaymentSource, amt dcrutil.Amount, hei
 		return err
 	}
 	for _, payment := range payments {
-		err := pm.cfg.db.PersistPayment(payment)
+		err := pm.cfg.db.persistPayment(payment)
 		if err != nil {
 			return err
 		}
@@ -330,7 +330,7 @@ func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amoun
 		return err
 	}
 	for _, payment := range payments {
-		err := pm.cfg.db.PersistPayment(payment)
+		err := pm.cfg.db.persistPayment(payment)
 		if err != nil {
 			return err
 		}
@@ -596,7 +596,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 				continue
 			}
 
-			acc, err := pm.cfg.db.FetchAccount(pmt.Account)
+			acc, err := pm.cfg.db.fetchAccount(pmt.Account)
 			if err != nil {
 				return nil, nil, nil, 0, err
 			}
@@ -768,13 +768,13 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		for _, pmt := range set {
 			pmt.PaidOnHeight = height
 			pmt.TransactionID = txid.String()
-			err := pm.cfg.db.UpdatePayment(pmt)
+			err := pm.cfg.db.updatePayment(pmt)
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to update payment: %v",
 					funcName, err)
 				return poolError(ErrPersistEntry, desc)
 			}
-			err = pm.cfg.db.ArchivePayment(pmt)
+			err = pm.cfg.db.archivePayment(pmt)
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to archive payment: %v",
 					funcName, err)
