@@ -141,7 +141,6 @@ type HubConfig struct {
 type Hub struct {
 	clients int32 // update atomically.
 
-	db             Database
 	cfg            *HubConfig
 	limiter        *RateLimiter
 	nodeConn       NodeConnection
@@ -206,7 +205,6 @@ func generateBlake256Pad() []byte {
 func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	h := &Hub{
 		cfg:         hcfg,
-		db:          hcfg.DB,
 		limiter:     NewRateLimiter(),
 		wg:          new(sync.WaitGroup),
 		connections: make(map[string]uint32),
@@ -226,7 +224,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	h.poolDiffs = NewDifficultySet(h.cfg.ActiveNet, powLimit, maxGenTime)
 
 	pCfg := &PaymentMgrConfig{
-		db:                     h.db,
+		db:                     h.cfg.DB,
 		ActiveNet:              h.cfg.ActiveNet,
 		PoolFee:                h.cfg.PoolFee,
 		LastNPeriod:            h.cfg.LastNPeriod,
@@ -249,7 +247,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	}
 
 	sCfg := &ChainStateConfig{
-		db:                    h.db,
+		db:                    h.cfg.DB,
 		SoloPool:              h.cfg.SoloPool,
 		PayDividends:          h.paymentMgr.payDividends,
 		GeneratePayments:      h.paymentMgr.generatePayments,
@@ -269,7 +267,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		log.Infof("Solo pool mode active.")
 	}
 
-	err = h.db.persistPoolMode(mode)
+	err = h.cfg.DB.persistPoolMode(mode)
 	if err != nil {
 		return nil, err
 	}
@@ -416,7 +414,7 @@ func (h *Hub) processWork(headerE string) {
 	nTime := headerE[272:280]
 	genTx2 := headerE[352:360]
 	job := NewJob(headerE, height)
-	err = h.db.persistJob(job)
+	err = h.cfg.DB.persistJob(job)
 	if err != nil {
 		log.Error(err)
 		return
@@ -444,7 +442,7 @@ func (h *Hub) Listen() error {
 		}
 		eCfg := &EndpointConfig{
 			ActiveNet:             h.cfg.ActiveNet,
-			db:                    h.db,
+			db:                    h.cfg.DB,
 			SoloPool:              h.cfg.SoloPool,
 			Blake256Pad:           h.blake256Pad,
 			NonceIterations:       h.cfg.NonceIterations,
@@ -536,7 +534,7 @@ func (h *Hub) shutdown() error {
 	if h.notifClient != nil {
 		_ = h.notifClient.CloseSend()
 	}
-	return h.db.close()
+	return h.cfg.DB.close()
 }
 
 // Run handles the process lifecycles of the pool hub.
@@ -554,7 +552,7 @@ func (h *Hub) Run(ctx context.Context) {
 		h.wg.Add(1)
 		<-ctx.Done()
 		log.Tracef("backing up db.")
-		err := h.db.backup(backupFile)
+		err := h.cfg.DB.backup(backupFile)
 		if err != nil {
 			log.Error(err)
 		}
@@ -593,7 +591,7 @@ func (h *Hub) FetchArchivedPayments() ([]*Payment, error) {
 //
 // List is ordered, most recent comes first.
 func (h *Hub) FetchMinedWork() ([]*AcceptedWork, error) {
-	return h.db.listMinedWork()
+	return h.cfg.DB.listMinedWork()
 }
 
 // Quota details the portion of mining rewrds due an account for work
@@ -633,7 +631,7 @@ func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 
 // AccountExists checks if the provided account id references a pool account.
 func (h *Hub) AccountExists(accountID string) bool {
-	_, err := h.db.fetchAccount(accountID)
+	_, err := h.cfg.DB.fetchAccount(accountID)
 	if err != nil {
 		log.Tracef("Unable to fetch account for id: %s", accountID)
 		return false
@@ -643,7 +641,7 @@ func (h *Hub) AccountExists(accountID string) bool {
 
 // CSRFSecret fetches a persisted secret or generates a new one.
 func (h *Hub) CSRFSecret() ([]byte, error) {
-	secret, err := h.db.fetchCSRFSecret()
+	secret, err := h.cfg.DB.fetchCSRFSecret()
 
 	if err != nil {
 		if errors.Is(err, ErrValueNotFound) {
@@ -655,7 +653,7 @@ func (h *Hub) CSRFSecret() ([]byte, error) {
 				return nil, err
 			}
 
-			err = h.db.persistCSRFSecret(secret)
+			err = h.cfg.DB.persistCSRFSecret(secret)
 			if err != nil {
 				return nil, err
 			}
@@ -669,5 +667,5 @@ func (h *Hub) CSRFSecret() ([]byte, error) {
 
 // HTTPBackupDB streams a backup of the database over an http response.
 func (h *Hub) HTTPBackupDB(w http.ResponseWriter) error {
-	return h.db.httpBackup(w)
+	return h.cfg.DB.httpBackup(w)
 }
