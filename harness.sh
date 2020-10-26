@@ -148,6 +148,7 @@ cat > "${HARNESS_ROOT}/mwallet/mwallet.conf" <<EOF
 username=${RPC_USER}
 password=${RPC_PASS}
 cafile=${HARNESS_ROOT}/master/rpc.cert
+clientcafile=${HARNESS_ROOT}/pool/wallet.cert
 logdir=${HARNESS_ROOT}/mwallet/log
 appdata=${HARNESS_ROOT}/mwallet
 simnet=1
@@ -229,6 +230,12 @@ EOF
 chmod +x "${HARNESS_ROOT}/mwallet/ctl"
 
 tmux new-window -t $TMUX_SESSION -n 'mwallet'
+
+# generate the needed dcrpool key pairs before starting the wallet.
+tmux send-keys "cd ${HARNESS_ROOT}/pool" C-m
+tmux send-keys "dcrpool --configfile=pool.conf --gencertsonly \
+--homedir=${HARNESS_ROOT}/pool" C-m
+
 tmux send-keys "cd ${HARNESS_ROOT}/mwallet" C-m
 echo "Creating simnet master wallet"
 tmux send-keys "dcrwallet -C mwallet.conf --create <<EOF
@@ -238,7 +245,7 @@ y
 ${MASTER_WALLET_SEED}
 EOF" C-m
 sleep 1
-tmux send-keys "dcrwallet -C mwallet.conf " C-m
+tmux send-keys "dcrwallet -C mwallet.conf --debuglevel=info" C-m
 
 # ################################################################################
 # # Setup the pool wallet's dcrctl (wctl).
