@@ -105,8 +105,10 @@ func testClient(t *testing.T) {
 		},
 		SoloPool:       false,
 		DifficultyInfo: diffInfo,
-		EndpointWg:     new(sync.WaitGroup),
-		RemoveClient:   func(c *Client) {},
+		Disconnect: func() {
+			// Do Nothing.
+		},
+		RemoveClient: func(c *Client) {},
 		SubmitWork: func(_ context.Context, submission *string) (bool, error) {
 			return false, nil
 		},
@@ -1398,6 +1400,4 @@ func testClient(t *testing.T) {
 
 	// Trigger a client timeout by waiting.
 	time.Sleep(time.Millisecond * 5300)
-
-	client.cfg.EndpointWg.Wait()
 }

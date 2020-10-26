@@ -65,6 +65,7 @@ type Endpoint struct {
 	port       uint32
 	diffInfo   *DifficultyInfo
 	connCh     chan *connection
+	discCh     chan struct{}
 	listener   net.Listener
 	cfg        *EndpointConfig
 	clients    map[string]*Client
@@ -81,6 +82,7 @@ func NewEndpoint(eCfg *EndpointConfig, diffInfo *DifficultyInfo, port uint32, mi
 		cfg:      eCfg,
 		clients:  make(map[string]*Client),
 		connCh:   make(chan *connection, bufferSize),
+		discCh:   make(chan struct{}, bufferSize),
 	}
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "0.0.0.0", endpoint.port))
 	if err != nil {
@@ -132,13 +134,6 @@ func (e *Endpoint) connect(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			e.listener.Close()
-			e.wg.Done()
-			e.clientsMtx.Lock()
-			for _, client := range e.clients {
-				client.cancel()
-			}
-			e.clientsMtx.Unlock()
-			e.cfg.HubWg.Done()
 			return
 
 		case msg := <-e.connCh:
@@ -165,8 +160,10 @@ func (e *Endpoint) connect(ctx context.Context) {
 				FetchMiner: func() string {
 					return e.miner
 				},
-				DifficultyInfo:    e.diffInfo,
-				EndpointWg:        &e.wg,
+				DifficultyInfo: e.diffInfo,
+				Disconnect: func() {
+					e.wg.Done()
+				},
 				RemoveClient:      e.removeClient,
 				SubmitWork:        e.cfg.SubmitWork,
 				FetchCurrentWork:  e.cfg.FetchCurrentWork,
@@ -187,6 +184,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 			e.clients[client.id] = client
 			e.clientsMtx.Unlock()
 			e.cfg.AddConnection(host)
+			e.wg.Add(1)
 			go client.run()
 
 			// Signal the gui cache of the connected client.
@@ -199,11 +197,34 @@ func (e *Endpoint) connect(ctx context.Context) {
 	}
 }
 
+// disconnect relays client disconnections to the endpoint for processing.
+// It must be run as a goroutine.
+func (e *Endpoint) disconnect(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			e.clientsMtx.Lock()
+			for _, client := range e.clients {
+				client.cancel()
+			}
+			e.clientsMtx.Unlock()
+
+			e.wg.Done()
+			e.cfg.HubWg.Done()
+			return
+
+		case <-e.discCh:
+			e.wg.Done()
+		}
+	}
+}
+
 // run handles the lifecycle of all endpoint related processes.
 // This should be run as a goroutine.
 func (e *Endpoint) run(ctx context.Context) {
 	e.wg.Add(1)
 	go e.listen()
 	go e.connect(ctx)
+	go e.disconnect(ctx)
 	e.wg.Wait()
 }

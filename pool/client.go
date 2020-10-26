@@ -74,8 +74,8 @@ type ClientConfig struct {
 	FetchMiner func() string
 	// DifficultyInfo represents the difficulty info for the client.
 	DifficultyInfo *DifficultyInfo
-	// EndpointWg is the waitgroup of the client's endpoint.
-	EndpointWg *sync.WaitGroup
+	// Disconnect relays a disconnection signal to the client endpoint.
+	Disconnect func()
 	// RemoveClient removes the client from the pool.
 	RemoveClient func(*Client)
 	// SubmitWork sends solved block data to the consensus daemon.
@@ -1011,8 +1011,6 @@ func (c *Client) send() {
 
 // run handles the process lifecycles of the pool client.
 func (c *Client) run() {
-	endpointWg := c.cfg.EndpointWg
-	endpointWg.Add(1)
 	go c.read()
 
 	c.wg.Add(4)
@@ -1023,5 +1021,5 @@ func (c *Client) run() {
 	c.wg.Wait()
 
 	c.shutdown()
-	endpointWg.Done()
+	c.cfg.Disconnect()
 }
