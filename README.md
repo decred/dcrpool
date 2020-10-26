@@ -149,16 +149,16 @@ set as the pool fee addresses (`--poolfeeaddrs`) of the mining pool.
 
 ## Wallet Client Authentication
 
-dcrwallet v1.6 requires client authentication certificates to be  provided 
+dcrwallet v1.6 requires client authentication certificates to be provided 
 on startup via the client CA file config option (`--clientcafile`). 
 Since dcrpool is expected to maintain a grpc connection to the wallet it needs 
 to generate the needed certificate before the wallet is started. A config 
 option (`--gencertsonly`) which allows the generation of all key pairs without 
 starting the pool has been added for this purpose. Pool operators running a 
-publicly avilable mining pool will be required to first run their pools 
+publicly available mining pool will be required to first run their pools 
 with `--gencertsonly` to generate required key pairs before configuring their 
 pool wallets and starting them. The test harness, [harness.sh](./harness.sh), 
-provides a detailed example for referrence. 
+provides a detailed example for reference. 
 
 ## Pool Fees
 
