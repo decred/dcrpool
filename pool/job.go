@@ -6,7 +6,6 @@ package pool
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -20,14 +19,6 @@ type Job struct {
 	UUID   string `json:"uuid"`
 	Height uint32 `json:"height"`
 	Header string `json:"header"`
-}
-
-// nanoToBigEndianBytes returns an 8-byte big endian representation of
-// the provided nanosecond time.
-func nanoToBigEndianBytes(nano int64) []byte {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(nano))
-	return b
 }
 
 // jobID generates a unique job id of the provided block height.

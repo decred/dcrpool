@@ -2,7 +2,6 @@ package pool
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -141,12 +140,6 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	}
 
 	return pm, nil
-}
-
-// bigEndianBytesToNano returns nanosecond time from the provided
-// big endian bytes.
-func bigEndianBytesToNano(b []byte) uint64 {
-	return binary.BigEndian.Uint64(b)
 }
 
 // sharePercentages calculates the percentages due each participating account
