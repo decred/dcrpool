@@ -56,14 +56,53 @@ func NewShare(account string, weight *big.Rat) *Share {
 	}
 }
 
-// PersistShare saves a share to the database.
+// fetchShare fetches the share referenced by the provided id. Returns an error
+// if the share is not found.
+func (db *BoltDB) fetchShare(id string) (*Share, error) {
+	const funcName = "fetchShare"
+	var share Share
+	err := db.DB.View(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, shareBkt)
+		if err != nil {
+			return err
+		}
+
+		v := bkt.Get([]byte(id))
+		if v == nil {
+			desc := fmt.Sprintf("%s: no share found for id %s", funcName, id)
+			return dbError(ErrValueNotFound, desc)
+		}
+		err = json.Unmarshal(v, &share)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to unmarshal share bytes: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &share, err
+}
+
+// PersistShare saves a share to the database. Returns an error if a share
+// already exists with the same ID.
 func (db *BoltDB) PersistShare(s *Share) error {
-	const funcName = "persistShare"
+	const funcName = "PersistShare"
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, shareBkt)
 		if err != nil {
 			return err
 		}
+
+		// Do not persist already existing share.
+		if bkt.Get([]byte(s.UUID)) != nil {
+			desc := fmt.Sprintf("%s: share %s already exists", funcName,
+				s.UUID)
+			return dbError(ErrValueFound, desc)
+		}
+
 		sBytes, err := json.Marshal(s)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
