@@ -127,6 +127,7 @@ type config struct {
 	D1Port                uint32        `long:"d1port" ini-name:"d1port" description:"Whatsminer D1 connection port."`
 	DCR1Port              uint32        `long:"dcr1port" ini-name:"dcr1port" description:"Obelisk DCR1 connection port."`
 	CoinbaseConfTimeout   time.Duration `long:"conftimeout" ini-name:"conftimeout" description:"The duration to wait for coinbase confirmations."`
+	GenCertsOnly          bool          `long:"gencertsonly" ini-name:"gencertsonly" description:"Only generate needed TLS key pairs and terminate."`
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
 	net                   *params
@@ -725,7 +726,7 @@ func loadConfig() (*config, []string, error) {
 
 	if !cfg.SoloPool {
 		// Load the wallet RPC certificate.
-		if !fileExists(cfg.WalletRPCCert) {
+		if !cfg.GenCertsOnly && !fileExists(cfg.WalletRPCCert) {
 			return nil, nil,
 				fmt.Errorf("wallet RPC certificate (%v) not found",
 					cfg.WalletRPCCert)
@@ -755,6 +756,12 @@ func loadConfig() (*config, []string, error) {
 		str := "%s: MinPayment has been deprecated, " +
 			"please remove from your config file."
 		mpLog.Warnf(str, funcName)
+	}
+
+	// Only generate needed key pairs and terminate if GenCertsOnly is active.
+	if cfg.GenCertsOnly {
+		return nil, nil, errors.New("generated needed certificates, " +
+			"terminating.")
 	}
 
 	return &cfg, remainingArgs, nil

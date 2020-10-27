@@ -9,6 +9,7 @@ require (
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.2
 	github.com/decred/dcrd/chaincfg/v3 v3.0.0
 	github.com/decred/dcrd/crypto/blake256 v1.0.0
+	github.com/decred/dcrd/dcrjson/v3 v3.1.0
 	github.com/decred/dcrd/dcrutil/v3 v3.0.0
 	github.com/decred/dcrd/rpc/jsonrpc/types/v2 v2.1.0
 	github.com/decred/dcrd/rpcclient/v6 v6.0.0
