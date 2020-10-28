@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# Copyright (c) 2020 The Decred developers
+# Use of this source code is governed by an ISC
+# license that can be found in the LICENSE file.
+#
 # The script does automatic checking on a Go package and its sub-packages, including:
 # 1. gofmt         (http://golang.org/cmd/gofmt/)
 # 2. golint        (https://github.com/golang/lint)
@@ -9,6 +14,17 @@
 # 7. test coverage (http://blog.golang.org/cover)
 
 set -ex
+
+# run `go mod download` and `go mod tidy` and fail if the git status of
+# go.mod and/or go.sum changes
+MOD_STATUS=$(git status --porcelain go.mod go.sum)
+go mod download
+go mod tidy
+UPDATED_MOD_STATUS=$(git status --porcelain go.mod go.sum)
+if [ "$UPDATED_MOD_STATUS" != "$MOD_STATUS" ]; then
+    echo "Running `go mod tidy` modified go.mod and/or go.sum"
+    exit 1
+fi
 
 # run tests
 env GORACE="halt_on_error=1" go test -race ./...
