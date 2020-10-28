@@ -32,10 +32,14 @@ const (
 	// It restores the created on time field for shares.
 	shareCreatedOnVersion = 5
 
+	// paymentUUIDVersion is the sixthversion of the database.
+	// It adds the UUID field to payments.
+	paymentUUIDVersion = 6
+
 	// DBVersion is the latest version of the database that is understood by the
 	// program. Databases with recorded versions higher than this will fail to
 	// open (meaning any upgrades prevent reverting to older software).
-	DBVersion = shareCreatedOnVersion
+	DBVersion = paymentUUIDVersion
 )
 
 // upgrades maps between old database versions and the upgrade function to
@@ -46,6 +50,7 @@ var upgrades = [...]func(tx *bolt.Tx) error{
 	paymentSourceVersion - 1:      paymentSourceUpgrade,
 	removeTxFeeReserveVersion - 1: removeTxFeeReserveUpgrade,
 	shareCreatedOnVersion - 1:     shareCreatedOnUpgrade,
+	paymentUUIDVersion - 1:        paymentUUIDUpgrade,
 }
 
 func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
@@ -471,6 +476,101 @@ func shareCreatedOnUpgrade(tx *bolt.Tx) error {
 		}
 
 		err = sbkt.Put([]byte(share.UUID), sBytes)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist share: %v",
+				funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+	}
+
+	return setDBVersion(tx, newVersion)
+}
+
+func paymentUUIDUpgrade(tx *bolt.Tx) error {
+	const oldVersion = 5
+	const newVersion = 6
+
+	const funcName = "paymentUUIDUpgrade"
+
+	dbVersion, err := fetchDBVersion(tx)
+	if err != nil {
+		return err
+	}
+
+	if dbVersion != oldVersion {
+		desc := fmt.Sprintf("%s: inappropriately called", err)
+		return dbError(ErrDBUpgrade, desc)
+	}
+
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
+		return dbError(ErrBucketNotFound, desc)
+	}
+
+	pmtbkt := pbkt.Bucket(paymentBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(paymentBkt))
+		return dbError(ErrBucketNotFound, desc)
+	}
+
+	c := pmtbkt.Cursor()
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		var pmt Payment
+		err := json.Unmarshal(v, &pmt)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
+		}
+
+		UUID := string(k)
+		pmt.UUID = UUID
+
+		pBytes, err := json.Marshal(pmt)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
+		}
+
+		err = pmtbkt.Put(k, pBytes)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist share: %v",
+				funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
+	}
+
+	abkt := pbkt.Bucket(paymentArchiveBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(paymentArchiveBkt))
+		return dbError(ErrBucketNotFound, desc)
+	}
+
+	c = abkt.Cursor()
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		var pmt Payment
+		err := json.Unmarshal(v, &pmt)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
+		}
+
+		pmt.UUID = string(k)
+
+		pBytes, err := json.Marshal(pmt)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
+		}
+
+		err = abkt.Put(k, pBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist share: %v",
 				funcName, err)
