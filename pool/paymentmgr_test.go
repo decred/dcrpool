@@ -397,7 +397,7 @@ func testPaymentMgr(t *testing.T) {
 	// Ensure payment maturity works as expected.
 	for i := 0; i < shareCount; i++ {
 		// Create readily available shares for account X.
-		err = persistShare(db, xID, weight, thirtyBefore)
+		err = persistShare(db, xID, weight, thirtyBefore+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -405,7 +405,7 @@ func testPaymentMgr(t *testing.T) {
 	sixtyAfter := time.Now().Add((time.Second * 60)).UnixNano()
 	for i := 0; i < shareCount; i++ {
 		// Create future shares for account Y.
-		err = persistShare(db, yID, weight, sixtyAfter)
+		err = persistShare(db, yID, weight, sixtyAfter+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
