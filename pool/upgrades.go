@@ -2,6 +2,7 @@ package pool
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -27,10 +28,14 @@ const (
 	// It removes the tx fee reserve from the database.
 	removeTxFeeReserveVersion = 4
 
+	// shareCreatedOnVersion is the fifth version of the database.
+	// It restores the created on time field for shares.
+	shareCreatedOnVersion = 5
+
 	// DBVersion is the latest version of the database that is understood by the
 	// program. Databases with recorded versions higher than this will fail to
 	// open (meaning any upgrades prevent reverting to older software).
-	DBVersion = removeTxFeeReserveVersion
+	DBVersion = shareCreatedOnVersion
 )
 
 // upgrades maps between old database versions and the upgrade function to
@@ -40,6 +45,7 @@ var upgrades = [...]func(tx *bolt.Tx) error{
 	shareIDVersion - 1:            shareIDUpgrade,
 	paymentSourceVersion - 1:      paymentSourceUpgrade,
 	removeTxFeeReserveVersion - 1: removeTxFeeReserveUpgrade,
+	shareCreatedOnVersion - 1:     shareCreatedOnUpgrade,
 }
 
 func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
@@ -401,6 +407,75 @@ func removeTxFeeReserveUpgrade(tx *bolt.Tx) error {
 		desc := fmt.Sprintf("%s: unable to remove tx fee reserve entry",
 			funcName)
 		return dbError(ErrDeleteEntry, desc)
+	}
+
+	return setDBVersion(tx, newVersion)
+}
+
+func shareCreatedOnUpgrade(tx *bolt.Tx) error {
+	const oldVersion = 4
+	const newVersion = 5
+
+	const funcName = "shareCreatedOnUpgrade"
+
+	dbVersion, err := fetchDBVersion(tx)
+	if err != nil {
+		return err
+	}
+
+	if dbVersion != oldVersion {
+		desc := fmt.Sprintf("%s: inappropriately called", err)
+		return dbError(ErrDBUpgrade, desc)
+	}
+
+	pbkt := tx.Bucket(poolBkt)
+	if pbkt == nil {
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(poolBkt))
+		return dbError(ErrBucketNotFound, desc)
+	}
+
+	sbkt := pbkt.Bucket(shareBkt)
+	if sbkt == nil {
+		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
+			string(shareBkt))
+		return dbError(ErrBucketNotFound, desc)
+	}
+
+	c := sbkt.Cursor()
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		var share Share
+		err := json.Unmarshal(v, &share)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to unmarshal share: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
+		}
+
+		createdOnB := make([]byte, 8)
+		_, err = hex.Decode(createdOnB, k[:16])
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to decode share "+
+				"created-on bytes: %v", funcName, err)
+			return dbError(ErrDecode, desc)
+		}
+
+		createdOn := bigEndianBytesToNano(createdOnB)
+		share.CreatedOn = int64(createdOn)
+
+		sBytes, err := json.Marshal(share)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
+				funcName, err)
+			return dbError(ErrParse, desc)
+		}
+
+		err = sbkt.Put([]byte(share.UUID), sBytes)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist share: %v",
+				funcName, err)
+			return dbError(ErrPersistEntry, desc)
+		}
 	}
 
 	return setDBVersion(tx, newVersion)

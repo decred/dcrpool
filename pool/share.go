@@ -39,17 +39,20 @@ func shareID(account string, createdOn int64) string {
 
 // Share represents verifiable work performed by a pool client.
 type Share struct {
-	UUID    string   `json:"uuid"`
-	Account string   `json:"account"`
-	Weight  *big.Rat `json:"weight"`
+	UUID      string   `json:"uuid"`
+	Account   string   `json:"account"`
+	Weight    *big.Rat `json:"weight"`
+	CreatedOn int64    `json:"createdon"`
 }
 
 // NewShare creates a share with the provided account and weight.
 func NewShare(account string, weight *big.Rat) *Share {
+	now := time.Now().UnixNano()
 	return &Share{
-		UUID:    shareID(account, time.Now().UnixNano()),
-		Account: account,
-		Weight:  weight,
+		UUID:      shareID(account, now),
+		Account:   account,
+		Weight:    weight,
+		CreatedOn: now,
 	}
 }
 
