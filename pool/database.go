@@ -41,7 +41,7 @@ type Database interface {
 	maturePendingPayments(height uint32) (map[string][]*Payment, error)
 
 	// Share
-	persistShare(share *Share) error
+	PersistShare(share *Share) error
 	ppsEligibleShares(max int64) ([]*Share, error)
 	pplnsEligibleShares(min int64) ([]*Share, error)
 	pruneShares(minNano int64) error
