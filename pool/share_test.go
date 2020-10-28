@@ -15,9 +15,10 @@ import (
 // weight.
 func persistShare(db Database, account string, weight *big.Rat, createdOnNano int64) error {
 	share := &Share{
-		UUID:    shareID(account, createdOnNano),
-		Account: account,
-		Weight:  weight,
+		UUID:      shareID(account, createdOnNano),
+		Account:   account,
+		Weight:    weight,
+		CreatedOn: createdOnNano,
 	}
 	err := db.PersistShare(share)
 	if err != nil {
@@ -32,13 +33,13 @@ func testShares(t *testing.T) {
 
 	// Create a valid share.
 	share := NewShare(account, weight)
-	err := db.persistShare(share)
+	err := db.PersistShare(share)
 	if err != nil {
 		t.Fatalf("could not persist share: %v", err)
 	}
 
 	// Creating the same share twice should fail.
-	err = db.persistShare(share)
+	err = db.PersistShare(share)
 	if !errors.Is(err, ErrValueFound) {
 		t.Fatalf("expected value found error, got %v", err)
 	}
@@ -58,6 +59,11 @@ func testShares(t *testing.T) {
 	if fetchedShare.Account != share.Account {
 		t.Fatalf("expected %v as fetched share account, got %v",
 			share.Account, fetchedShare.Account)
+	}
+
+	if fetchedShare.CreatedOn != share.CreatedOn {
+		t.Fatalf("expected %v as fetched share created on, got %v",
+			share.CreatedOn, fetchedShare.CreatedOn)
 	}
 
 	if fetchedShare.Weight.Cmp(share.Weight) != 0 {
