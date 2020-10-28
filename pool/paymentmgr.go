@@ -296,7 +296,7 @@ func (pm *PaymentMgr) payPerShare(source *PaymentSource, amt dcrutil.Amount, hei
 		return err
 	}
 	for _, payment := range payments {
-		err := pm.cfg.db.persistPayment(payment)
+		err := pm.cfg.db.PersistPayment(payment)
 		if err != nil {
 			return err
 		}
@@ -323,7 +323,7 @@ func (pm *PaymentMgr) payPerLastNShares(source *PaymentSource, amt dcrutil.Amoun
 		return err
 	}
 	for _, payment := range payments {
-		err := pm.cfg.db.persistPayment(payment)
+		err := pm.cfg.db.PersistPayment(payment)
 		if err != nil {
 			return err
 		}
@@ -767,7 +767,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 					funcName, err)
 				return poolError(ErrPersistEntry, desc)
 			}
-			err = pm.cfg.db.archivePayment(pmt)
+			err = pm.cfg.db.ArchivePayment(pmt)
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to archive payment: %v",
 					funcName, err)

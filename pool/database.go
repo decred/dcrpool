@@ -30,10 +30,10 @@ type Database interface {
 
 	// Payment
 	fetchPayment(id string) (*Payment, error)
-	persistPayment(payment *Payment) error
+	PersistPayment(payment *Payment) error
 	updatePayment(payment *Payment) error
 	deletePayment(payment *Payment) error
-	archivePayment(payment *Payment) error
+	ArchivePayment(payment *Payment) error
 	fetchPaymentsAtHeight(height uint32) ([]*Payment, error)
 	fetchPendingPayments() ([]*Payment, error)
 	pendingPaymentsForBlockHash(blockHash string) (uint32, error)

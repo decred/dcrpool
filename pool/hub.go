@@ -548,8 +548,8 @@ func (h *Hub) Run(ctx context.Context) {
 
 	// Start a goroutine which will wait for the application context to be
 	// cancelled, and then write a database backup.
+	h.wg.Add(1)
 	go func() {
-		h.wg.Add(1)
 		<-ctx.Done()
 		log.Tracef("backing up db.")
 		err := h.cfg.DB.backup(backupFile)
