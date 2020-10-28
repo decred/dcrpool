@@ -86,9 +86,9 @@ func (db *BoltDB) fetchPayment(id string) (*Payment, error) {
 	return &payment, err
 }
 
-// persistPayment saves a payment to the database.
-func (db *BoltDB) persistPayment(pmt *Payment) error {
-	const funcName = "persistPayment"
+// PersistPayment saves a payment to the database.
+func (db *BoltDB) PersistPayment(pmt *Payment) error {
+	const funcName = "PersistPayment"
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
@@ -113,7 +113,7 @@ func (db *BoltDB) persistPayment(pmt *Payment) error {
 
 // updatePayment persists the updated payment to the database.
 func (db *BoltDB) updatePayment(pmt *Payment) error {
-	return db.persistPayment(pmt)
+	return db.PersistPayment(pmt)
 }
 
 // deletePayment purges the referenced payment from the database. Note that
@@ -124,7 +124,7 @@ func (db *BoltDB) deletePayment(pmt *Payment) error {
 }
 
 // archivePayment removes the associated payment from active payments and archives it.
-func (db *BoltDB) archivePayment(pmt *Payment) error {
+func (db *BoltDB) ArchivePayment(pmt *Payment) error {
 	const funcName = "archivePayment"
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt, err := fetchBucket(tx, paymentBkt)

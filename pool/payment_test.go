@@ -16,7 +16,7 @@ import (
 func persistPayment(db Database, account string, source *PaymentSource,
 	amount dcrutil.Amount, height uint32, estMaturity uint32) (*Payment, error) {
 	pmt := NewPayment(account, source, amount, height, estMaturity)
-	err := db.persistPayment(pmt)
+	err := db.PersistPayment(pmt)
 	if err != nil {
 		return nil, fmt.Errorf("unable to persist payment: %v", err)
 	}
@@ -78,7 +78,7 @@ func testPayment(t *testing.T) {
 
 	// Persist payment B as an archived payment.
 	pmtB.PaidOnHeight = estMaturity + 1
-	err = db.archivePayment(pmtB)
+	err = db.ArchivePayment(pmtB)
 	if err != nil {
 		t.Fatalf("payment delete error: %v", err)
 	}
@@ -139,7 +139,7 @@ func testPaymentAccessors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = db.archivePayment(pmtC)
+	err = db.ArchivePayment(pmtC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func testPaymentAccessors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = db.archivePayment(pmtD)
+	err = db.ArchivePayment(pmtD)
 	if err != nil {
 		t.Fatal(err)
 	}
