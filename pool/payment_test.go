@@ -5,6 +5,7 @@
 package pool
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -85,8 +86,8 @@ func testPayment(t *testing.T) {
 	// Ensure the payment B was archived.
 	id = paymentID(pmtB.Height, pmtB.CreatedOn, pmtB.Account)
 	_, err = db.fetchPayment(id)
-	if err == nil {
-		t.Fatalf("expected a value not found error: %v", err)
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value not found error, got %v", err)
 	}
 
 	// Delete payment C.
@@ -98,8 +99,8 @@ func testPayment(t *testing.T) {
 	// Ensure the payment C was deleted.
 	id = paymentID(pmtC.Height, pmtC.CreatedOn, pmtC.Account)
 	fetchedPayment, err = db.fetchPayment(id)
-	if err == nil {
-		t.Fatalf("expected a value not found error: %v", err)
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value not found error, got %v", err)
 	}
 
 	if fetchedPayment != nil {

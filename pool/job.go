@@ -6,7 +6,6 @@ package pool
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -20,14 +19,6 @@ type Job struct {
 	UUID   string `json:"uuid"`
 	Height uint32 `json:"height"`
 	Header string `json:"header"`
-}
-
-// nanoToBigEndianBytes returns an 8-byte big endian representation of
-// the provided nanosecond time.
-func nanoToBigEndianBytes(nano int64) []byte {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(nano))
-	return b
 }
 
 // jobID generates a unique job id of the provided block height.
@@ -47,7 +38,8 @@ func NewJob(header string, height uint32) *Job {
 	}
 }
 
-// fetchJob fetches the job referenced by the provided id.
+// fetchJob fetches the job referenced by the provided id. Returns an error if
+// the job is not found.
 func (db *BoltDB) fetchJob(id string) (*Job, error) {
 	const funcName = "fetchJob"
 	var job Job
@@ -76,13 +68,21 @@ func (db *BoltDB) fetchJob(id string) (*Job, error) {
 	return &job, err
 }
 
-// persistJob saves the job to the database.
+// persistJob saves the job to the database. Returns an error if an account
+// already exists with the same ID.
 func (db *BoltDB) persistJob(job *Job) error {
 	const funcName = "persistJob"
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, jobBkt)
 		if err != nil {
 			return err
+		}
+
+		// Do not persist already existing job.
+		if bkt.Get([]byte(job.UUID)) != nil {
+			desc := fmt.Sprintf("%s: job %s already exists", funcName,
+				job.UUID)
+			return dbError(ErrValueFound, desc)
 		}
 
 		jobBytes, err := json.Marshal(job)
@@ -102,11 +102,12 @@ func (db *BoltDB) persistJob(job *Job) error {
 }
 
 // deleteJob removes the associated job from the database.
-func (db *BoltDB) deleteJob(job *Job) error {
-	return deleteEntry(db, jobBkt, job.UUID)
+func (db *BoltDB) deleteJob(id string) error {
+	return deleteEntry(db, jobBkt, id)
 }
 
-// deleteJobsBeforeHeight removes all jobs with heights less than the provided height.
+// deleteJobsBeforeHeight removes all jobs with heights less than the provided
+// height.
 func (db *BoltDB) deleteJobsBeforeHeight(height uint32) error {
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, jobBkt)

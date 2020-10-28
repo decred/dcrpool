@@ -38,7 +38,8 @@ func NewAccount(address string) *Account {
 	}
 }
 
-// fetchAccount fetches the account referenced by the provided id.
+// fetchAccount fetches the account referenced by the provided id. Returns
+// an error if the account is not found.
 func (db *BoltDB) fetchAccount(id string) (*Account, error) {
 	const funcName = "fetchAccount"
 	var account Account
@@ -67,7 +68,9 @@ func (db *BoltDB) fetchAccount(id string) (*Account, error) {
 	return &account, err
 }
 
-// persistAccount saves the account to the database.
+// persistAccount saves the account to the database. Before persisting the
+// account, it sets the createdOn timestamp. Returns an error if an account
+// already exists with the same ID.
 func (db *BoltDB) persistAccount(acc *Account) error {
 	const funcName = "persistAccount"
 	return db.DB.Update(func(tx *bolt.Tx) error {
@@ -77,9 +80,7 @@ func (db *BoltDB) persistAccount(acc *Account) error {
 		}
 
 		// Do not persist already existing account.
-		id := []byte(acc.UUID)
-		v := bkt.Get(id)
-		if v != nil {
+		if bkt.Get([]byte(acc.UUID)) != nil {
 			desc := fmt.Sprintf("%s: account %s already exists", funcName,
 				acc.UUID)
 			return dbError(ErrValueFound, desc)

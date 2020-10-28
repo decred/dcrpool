@@ -5,6 +5,7 @@
 package pool
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -13,11 +14,11 @@ import (
 // persistShare creates a persisted share with the provided account and share
 // weight.
 func persistShare(db Database, account string, weight *big.Rat, createdOnNano int64) error {
-	id := shareID(account, createdOnNano)
 	share := &Share{
-		UUID:    id,
-		Account: account,
-		Weight:  weight,
+		UUID:      shareID(account, createdOnNano),
+		Account:   account,
+		Weight:    weight,
+		CreatedOn: createdOnNano,
 	}
 	err := db.PersistShare(share)
 	if err != nil {
@@ -27,29 +28,53 @@ func persistShare(db Database, account string, weight *big.Rat, createdOnNano in
 }
 
 func testShares(t *testing.T) {
-	shareACreatedOn := time.Now().Add(-(time.Second * 10)).UnixNano()
-	shareBCreatedOn := time.Now().Add(-(time.Second * 20)).UnixNano()
+	account := "9e5b83c58170e46b2dee1315aa3b00efd96b5839498fda135b8eddb34f6b34ee"
 	weight := new(big.Rat).SetFloat64(1.0)
-	err := persistShare(db, xID, weight, shareACreatedOn) // Share A
+
+	// Create a valid share.
+	share := NewShare(account, weight)
+	err := db.PersistShare(share)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("could not persist share: %v", err)
 	}
 
-	err = persistShare(db, yID, weight, shareBCreatedOn) // Share B
-	if err != nil {
-		t.Fatal(err)
+	// Creating the same share twice should fail.
+	err = db.PersistShare(share)
+	if !errors.Is(err, ErrValueFound) {
+		t.Fatalf("expected value found error, got %v", err)
 	}
 
-	// Fetch share A and B.
-	aID := shareID(xID, shareACreatedOn)
-	_, err = fetchShare(db, aID)
+	// Fetch share using its id.
+	fetchedShare, err := db.fetchShare(share.UUID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching share A: %v", err)
 	}
-	bID := shareID(yID, shareBCreatedOn)
-	_, err = fetchShare(db, bID)
-	if err != nil {
-		t.Fatalf("unexpected error fetching share B: %v", err)
+
+	// Ensure fetched values match persisted values.
+	if fetchedShare.UUID != share.UUID {
+		t.Fatalf("expected %v as fetched share id, got %v",
+			share.UUID, fetchedShare.UUID)
+	}
+
+	if fetchedShare.Account != share.Account {
+		t.Fatalf("expected %v as fetched share account, got %v",
+			share.Account, fetchedShare.Account)
+	}
+
+	if fetchedShare.CreatedOn != share.CreatedOn {
+		t.Fatalf("expected %v as fetched share created on, got %v",
+			share.CreatedOn, fetchedShare.CreatedOn)
+	}
+
+	if fetchedShare.Weight.Cmp(share.Weight) != 0 {
+		t.Fatalf("expected %v as fetched share weight, got %v",
+			share.Weight, fetchedShare.Weight)
+	}
+
+	// Expect error when fetching share which doesnt exist.
+	_, err = db.fetchShare("not a real ID")
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value not found error, got %v", err)
 	}
 }
 
@@ -239,13 +264,13 @@ func testPruneShares(t *testing.T) {
 
 	// Ensure share A got pruned with share B remaining.
 	shareAID := shareID(xID, eightyBefore)
-	_, err = fetchShare(db, shareAID)
-	if err == nil {
-		t.Fatal("expected value not found error")
+	_, err = db.fetchShare(shareAID)
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value not found error, got %v", err)
 	}
 
 	shareBID := shareID(yID, thirtyBefore)
-	_, err = fetchShare(db, shareBID)
+	_, err = db.fetchShare(shareBID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching share B: %v", err)
 	}
@@ -256,8 +281,8 @@ func testPruneShares(t *testing.T) {
 	}
 
 	// Ensure share B got pruned.
-	_, err = fetchShare(db, shareBID)
-	if err == nil {
-		t.Fatalf("expected value not found error")
+	_, err = db.fetchShare(shareBID)
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value not found error, got %v", err)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -19,7 +18,6 @@ import (
 	"github.com/decred/dcrd/dcrutil/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
-	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 )
 
@@ -58,27 +56,6 @@ func (txB *txBroadcasterImpl) SignTransaction(ctx context.Context, req *walletrp
 // PublishTransaction broadcasts the transaction unto the network.
 func (txB *txBroadcasterImpl) PublishTransaction(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
 	return txB.publishTransaction(ctx, req, options...)
-}
-
-// fetchShare fetches the share referenced by the provided id.
-func fetchShare(db *BoltDB, id string) (*Share, error) {
-	var share Share
-	err := db.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchBucket(tx, shareBkt)
-		if err != nil {
-			return err
-		}
-		v := bkt.Get([]byte(id))
-		if v == nil {
-			return fmt.Errorf("no share found for id %s", id)
-		}
-		err = json.Unmarshal(v, &share)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &share, err
 }
 
 func TestSharePercentages(t *testing.T) {
@@ -420,7 +397,7 @@ func testPaymentMgr(t *testing.T) {
 	// Ensure payment maturity works as expected.
 	for i := 0; i < shareCount; i++ {
 		// Create readily available shares for account X.
-		err = persistShare(db, xID, weight, thirtyBefore)
+		err = persistShare(db, xID, weight, thirtyBefore+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -428,7 +405,7 @@ func testPaymentMgr(t *testing.T) {
 	sixtyAfter := time.Now().Add((time.Second * 60)).UnixNano()
 	for i := 0; i < shareCount; i++ {
 		// Create future shares for account Y.
-		err = persistShare(db, yID, weight, sixtyAfter)
+		err = persistShare(db, yID, weight, sixtyAfter+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}

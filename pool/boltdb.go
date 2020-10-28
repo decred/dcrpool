@@ -305,6 +305,20 @@ func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	return pbkt, nil
 }
 
+// bigEndianBytesToNano returns nanosecond time from the provided
+// big endian bytes.
+func bigEndianBytesToNano(b []byte) uint64 {
+	return binary.BigEndian.Uint64(b)
+}
+
+// nanoToBigEndianBytes returns an 8-byte big endian representation of
+// the provided nanosecond time.
+func nanoToBigEndianBytes(nano int64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(nano))
+	return b
+}
+
 func (db *BoltDB) persistPoolMode(mode uint32) error {
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)

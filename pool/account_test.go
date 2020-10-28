@@ -25,7 +25,7 @@ func testAccount(t *testing.T) {
 	// Creating the same account twice should fail.
 	err = db.persistAccount(accountA)
 	if !errors.Is(err, ErrValueFound) {
-		t.Fatal("expected value found error")
+		t.Fatalf("expected value found error, got %v", err)
 	}
 
 	// Fetch an account with its id.
@@ -34,6 +34,7 @@ func testAccount(t *testing.T) {
 		t.Fatalf("fetchAccount error: %v", err)
 	}
 
+	// Ensure fetched values match persisted values.
 	if fetchedAccount.Address != accountA.Address {
 		t.Fatalf("expected %v as fetched account address, got %v",
 			accountA.Address, fetchedAccount.Address)
@@ -42,6 +43,11 @@ func testAccount(t *testing.T) {
 	if fetchedAccount.UUID != accountA.UUID {
 		t.Fatalf("expected %v as fetched account id, got %v",
 			accountA.UUID, fetchedAccount.UUID)
+	}
+
+	// Ensure CreatedOn has been given a value.
+	if fetchedAccount.CreatedOn == 0 {
+		t.Fatal("expected account createdon to have non-zero value")
 	}
 
 	// Delete all accounts.
@@ -58,11 +64,17 @@ func testAccount(t *testing.T) {
 	// Ensure the accounts have both been deleted.
 	_, err = db.fetchAccount(accountA.UUID)
 	if !errors.Is(err, ErrValueNotFound) {
-		t.Fatal("expected value not found error")
+		t.Fatalf("expected value not found error, got %v", err)
 	}
 
 	_, err = db.fetchAccount(accountB.UUID)
 	if !errors.Is(err, ErrValueNotFound) {
-		t.Fatal("expected value not found error")
+		t.Fatalf("expected value not found error, got %v", err)
+	}
+
+	// Deleting an account which does not exist should not return an error.
+	err = db.deleteAccount(accountA.UUID)
+	if err != nil {
+		t.Fatalf("delete accountA error: %v ", err)
 	}
 }

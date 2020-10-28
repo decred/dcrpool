@@ -42,6 +42,7 @@ type Database interface {
 
 	// Share
 	PersistShare(share *Share) error
+	fetchShare(id string) (*Share, error)
 	ppsEligibleShares(max int64) ([]*Share, error)
 	pplnsEligibleShares(min int64) ([]*Share, error)
 	pruneShares(minNano int64) error
@@ -57,7 +58,7 @@ type Database interface {
 	// Job
 	fetchJob(id string) (*Job, error)
 	persistJob(job *Job) error
-	deleteJob(job *Job) error
+	deleteJob(id string) error
 	deleteJobsBeforeHeight(height uint32) error
 }
 
