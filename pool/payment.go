@@ -23,6 +23,7 @@ type PaymentSource struct {
 
 // Payment represents value paid to a pool account or collected fees.
 type Payment struct {
+	UUID              string         `json:"uuid"`
 	Account           string         `json:"account"`
 	EstimatedMaturity uint32         `json:"estimatedmaturity"`
 	Height            uint32         `json:"height"`
@@ -36,19 +37,6 @@ type Payment struct {
 	Source *PaymentSource `json:"source"`
 }
 
-// NewPayment creates a payment instance.
-func NewPayment(account string, source *PaymentSource, amount dcrutil.Amount,
-	height uint32, estMaturity uint32) *Payment {
-	return &Payment{
-		Account:           account,
-		Amount:            amount,
-		Height:            height,
-		Source:            source,
-		EstimatedMaturity: estMaturity,
-		CreatedOn:         time.Now().UnixNano(),
-	}
-}
-
 // paymentID generates a unique id using the provided payment details.
 func paymentID(height uint32, createdOnNano int64, account string) string {
 	var buf bytes.Buffer
@@ -56,6 +44,21 @@ func paymentID(height uint32, createdOnNano int64, account string) string {
 	_, _ = buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOnNano)))
 	_, _ = buf.WriteString(account)
 	return buf.String()
+}
+
+// NewPayment creates a payment instance.
+func NewPayment(account string, source *PaymentSource, amount dcrutil.Amount,
+	height uint32, estMaturity uint32) *Payment {
+	now := time.Now().UnixNano()
+	return &Payment{
+		UUID:              paymentID(height, now, account),
+		Account:           account,
+		Amount:            amount,
+		Height:            height,
+		Source:            source,
+		EstimatedMaturity: estMaturity,
+		CreatedOn:         now,
+	}
 }
 
 // fetchPayment fetches the payment referenced by the provided id.
@@ -100,8 +103,7 @@ func (db *BoltDB) PersistPayment(pmt *Payment) error {
 				funcName, err)
 			return dbError(ErrParse, desc)
 		}
-		id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
-		err = bkt.Put([]byte(id), b)
+		err = bkt.Put([]byte(pmt.UUID), b)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment bytes: %v",
 				funcName, err)

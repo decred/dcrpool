@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	bolt "go.etcd.io/bbolt"
@@ -24,6 +25,7 @@ var dbUpgradeTests = [...]struct {
 	{verifyV3Upgrade, "v2.db.gz"},
 	{verifyV4Upgrade, "v2.db.gz"},
 	{verifyV5Upgrade, "v4.db.gz"},
+	{verifyV6Upgrade, "v5.db.gz"},
 }
 
 func TestUpgrades(t *testing.T) {
@@ -241,6 +243,74 @@ func verifyV5Upgrade(t *testing.T, db *BoltDB) {
 					createdOnHex, k[:16])
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func verifyV6Upgrade(t *testing.T, db *BoltDB) {
+	const funcName = "verifyV6Upgrade"
+	err := db.DB.View(func(tx *bolt.Tx) error {
+		pbkt := tx.Bucket(poolBkt)
+		if pbkt == nil {
+			return fmt.Errorf("%s: bucket %s not found", funcName,
+				string(poolBkt))
+		}
+
+		pmtbkt := pbkt.Bucket(paymentBkt)
+		if pmtbkt == nil {
+			return fmt.Errorf("%s: bucket %s not found", funcName,
+				string(paymentBkt))
+		}
+
+		c := pmtbkt.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var pmt Payment
+			err := json.Unmarshal(v, &pmt)
+			if err != nil {
+				return fmt.Errorf("%s: unable to unmarshal payment: %v",
+					funcName, err)
+			}
+
+			if pmt.UUID == "" {
+				return fmt.Errorf("%s: the payment UUID "+
+					"value for %s is not set", funcName, pmt.UUID)
+			}
+
+			if strings.Compare(string(k), pmt.UUID) != 0 {
+				return fmt.Errorf("%s: payment UUID (%s) does not match "+
+					"the  payment key (%s)", funcName, pmt.UUID, string(k))
+			}
+		}
+
+		abkt := pbkt.Bucket(paymentArchiveBkt)
+		if abkt == nil {
+			return fmt.Errorf("%s: bucket %s not found", funcName,
+				string(paymentArchiveBkt))
+		}
+
+		c = abkt.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var pmt Payment
+			err := json.Unmarshal(v, &pmt)
+			if err != nil {
+				return fmt.Errorf("%s: unable to unmarshal archived payment: %v",
+					funcName, err)
+			}
+
+			if pmt.UUID == "" {
+				return fmt.Errorf("%s: the payment UUID "+
+					"value for %s is not set", funcName, pmt.UUID)
+			}
+
+			if strings.Compare(string(k), pmt.UUID) != 0 {
+				return fmt.Errorf("%s: payment UUID (%s) does not match "+
+					"the  payment key (%s)", funcName, pmt.UUID, string(k))
+			}
+		}
+
 		return nil
 	})
 	if err != nil {
