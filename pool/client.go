@@ -178,7 +178,7 @@ func (c *Client) claimWeightedShare() error {
 	}
 	weight := ShareWeights[c.cfg.FetchMiner()]
 	share := NewShare(c.account, weight)
-	return c.cfg.db.persistShare(share)
+	return c.cfg.db.PersistShare(share)
 }
 
 // handleAuthorizeRequest processes authorize request messages received.
