@@ -259,18 +259,38 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	}
 	h.chainState = NewChainState(sCfg)
 
-	mode := uint32(0)
+	// Ensure database is in the correct mode.
+	cfgMode := uint32(0)
+	if h.cfg.SoloPool {
+		cfgMode = 1
+	}
+
+	dbMode, err := hcfg.DB.fetchPoolMode()
+	if err != nil {
+		// If pool mode is not set, assume the database is new and persist the
+		// pool mode.
+		if errors.Is(err, ErrValueNotFound) {
+			err = hcfg.DB.persistPoolMode(cfgMode)
+			if err != nil {
+				return nil, fmt.Errorf("failed to persist pool mode: %v", err)
+			}
+			dbMode = cfgMode
+		} else {
+			return nil, err
+		}
+	}
+
+	if cfgMode != dbMode {
+		return nil, fmt.Errorf("database and config have differing values for "+
+			"pool mode, config=%d, database=%d", cfgMode, dbMode)
+	}
+
 	if !h.cfg.SoloPool {
 		log.Infof("Payment method is %s.", strings.ToUpper(hcfg.PaymentMethod))
 	} else {
-		mode = 1
 		log.Infof("Solo pool mode active.")
 	}
 
-	err = h.cfg.DB.persistPoolMode(mode)
-	if err != nil {
-		return nil, err
-	}
 	return h, nil
 }
 

@@ -91,7 +91,7 @@ func newPool(cfg *config) (*miningPool, error) {
 		return nil, err
 	}
 
-	db, err := pool.InitBoltDB(cfg.DBFile, cfg.SoloPool)
+	db, err := pool.InitBoltDB(cfg.DBFile)
 	if err != nil {
 		return nil, err
 	}

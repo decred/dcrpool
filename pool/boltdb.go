@@ -144,66 +144,8 @@ func (db *BoltDB) backup(backupFileName string) error {
 	})
 }
 
-// purge removes all existing data and recreates the db.
-func purge(db *BoltDB) error {
-	const funcName = "purge"
-	err := db.DB.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		if pbkt == nil {
-			desc := fmt.Sprintf("%s: bucket %s not found",
-				funcName, string(poolBkt))
-			return dbError(ErrBucketNotFound, desc)
-		}
-		err := pbkt.DeleteBucket(accountBkt)
-		if err != nil {
-			return err
-		}
-		err = pbkt.DeleteBucket(shareBkt)
-		if err != nil {
-			return err
-		}
-		err = pbkt.DeleteBucket(workBkt)
-		if err != nil {
-			return err
-		}
-		err = pbkt.DeleteBucket(jobBkt)
-		if err != nil {
-			return err
-		}
-		err = pbkt.DeleteBucket(paymentBkt)
-		if err != nil {
-			return err
-		}
-		err = pbkt.DeleteBucket(paymentArchiveBkt)
-		if err != nil {
-			return err
-		}
-		err = pbkt.Delete(lastPaymentHeight)
-		if err != nil {
-			return err
-		}
-		err = pbkt.Delete(lastPaymentPaidOn)
-		if err != nil {
-			return err
-		}
-		err = pbkt.Delete(lastPaymentCreatedOn)
-		if err != nil {
-			return err
-		}
-		err = pbkt.Delete(soloPool)
-		if err != nil {
-			return err
-		}
-		return pbkt.Delete(csrfSecret)
-	})
-	if err != nil {
-		return err
-	}
-	return createBuckets(db)
-}
-
-// InitBoltDB handles the creation, upgrading and backup of the pool database.
-func InitBoltDB(dbFile string, isSoloPool bool) (*BoltDB, error) {
+// InitBoltDB handles the creation and upgrading of a bolt database.
+func InitBoltDB(dbFile string) (*BoltDB, error) {
 	db, err := openBoltDB(dbFile)
 	if err != nil {
 		return nil, err
@@ -218,39 +160,6 @@ func InitBoltDB(dbFile string, isSoloPool bool) (*BoltDB, error) {
 		return nil, err
 	}
 
-	var switchMode bool
-	err = db.DB.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		if pbkt == nil {
-			return err
-		}
-		v := pbkt.Get(soloPool)
-		if v == nil {
-			return nil
-		}
-		spMode := binary.LittleEndian.Uint32(v) == 1
-		if isSoloPool != spMode {
-			switchMode = true
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if switchMode {
-		// Backup the current database and wipe it.
-		err := db.backup(backupFile)
-		if err != nil {
-			return nil, err
-		}
-		log.Infof("Pool mode changed, database backup created.")
-		err = purge(db)
-		if err != nil {
-			return nil, err
-		}
-		log.Infof("Database wiped.")
-	}
 	return db, nil
 }
 
@@ -319,7 +228,35 @@ func nanoToBigEndianBytes(nano int64) []byte {
 	return b
 }
 
+func (db *BoltDB) fetchPoolMode() (uint32, error) {
+	// PoolMode is stored as a uint32 for historical reasons.
+	// 0 indicates Public
+	// 1 indicates Solo
+
+	var mode uint32
+	err := db.DB.View(func(tx *bolt.Tx) error {
+		pbkt, err := fetchPoolBucket(tx)
+		if err != nil {
+			return err
+		}
+		b := pbkt.Get(soloPool)
+		if b == nil {
+			return dbError(ErrValueNotFound, "no pool mode found")
+		}
+		mode = binary.LittleEndian.Uint32(b)
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return mode, nil
+}
+
 func (db *BoltDB) persistPoolMode(mode uint32) error {
+	// PoolMode is stored as a uint32 for historical reasons.
+	// 0 indicates Public
+	// 1 indicates Solo
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		b := make([]byte, 4)
