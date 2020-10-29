@@ -125,9 +125,9 @@ func (db *BoltDB) deletePayment(pmt *Payment) error {
 	return deleteEntry(db, paymentBkt, id)
 }
 
-// archivePayment removes the associated payment from active payments and archives it.
+// ArchivePayment removes the associated payment from active payments and archives it.
 func (db *BoltDB) ArchivePayment(pmt *Payment) error {
-	const funcName = "archivePayment"
+	const funcName = "ArchivePayment"
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
@@ -139,23 +139,22 @@ func (db *BoltDB) ArchivePayment(pmt *Payment) error {
 		}
 
 		// Remove the active payment record.
-		id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
-		err = pbkt.Delete([]byte(id))
+		err = pbkt.Delete([]byte(pmt.UUID))
 		if err != nil {
 			return err
 		}
 
-		// Archive the payment.
-		pmt.CreatedOn = time.Now().UnixNano()
-		pmtB, err := json.Marshal(pmt)
+		// Create a new payment to add to the archive.
+		aPmt := NewPayment(pmt.Account, pmt.Source, pmt.Amount, pmt.Height,
+			pmt.EstimatedMaturity)
+		aPmtB, err := json.Marshal(aPmt)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
 				funcName, err)
 			return dbError(ErrParse, desc)
 		}
 
-		id = paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
-		err = abkt.Put([]byte(id), pmtB)
+		err = abkt.Put([]byte(aPmt.UUID), aPmtB)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to archive payment entry: %v",
 				funcName, err)
