@@ -120,8 +120,7 @@ func (db *BoltDB) updatePayment(pmt *Payment) error {
 
 // deletePayment purges the referenced payment from the database. Note that
 // archived payments cannot be deleted.
-func (db *BoltDB) deletePayment(pmt *Payment) error {
-	id := paymentID(pmt.Height, pmt.CreatedOn, pmt.Account)
+func (db *BoltDB) deletePayment(id string) error {
 	return deleteEntry(db, paymentBkt, id)
 }
 

@@ -157,14 +157,12 @@ func testChainState(t *testing.T) {
 		t.Fatalf("prunePayments error: %v", err)
 	}
 
-	aID := paymentID(paymentA.Height, paymentA.CreatedOn, paymentA.Account)
-	_, err = db.fetchPayment(aID)
+	_, err = db.fetchPayment(paymentA.UUID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching payment A: %v", err)
 	}
 
-	bID := paymentID(paymentB.Height, paymentB.CreatedOn, paymentB.Account)
-	_, err = db.fetchPayment(bID)
+	_, err = db.fetchPayment(paymentB.UUID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching payment B: %v", err)
 	}
@@ -175,12 +173,12 @@ func testChainState(t *testing.T) {
 		t.Fatalf("prunePayments error: %v", err)
 	}
 
-	_, err = db.fetchPayment(aID)
+	_, err = db.fetchPayment(paymentA.UUID)
 	if err == nil {
 		t.Fatalf("expected payment A to be pruned at height %d", 28)
 	}
 
-	_, err = db.fetchPayment(bID)
+	_, err = db.fetchPayment(paymentB.UUID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching payment B: %v", err)
 	}
@@ -191,7 +189,7 @@ func testChainState(t *testing.T) {
 		t.Fatalf("prunePayments error: %v", err)
 	}
 
-	_, err = db.fetchPayment(bID)
+	_, err = db.fetchPayment(paymentB.UUID)
 	if err == nil {
 		t.Fatalf("expected payment B to be pruned at height %d", 29)
 	}

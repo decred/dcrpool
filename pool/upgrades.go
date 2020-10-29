@@ -32,7 +32,7 @@ const (
 	// It restores the created on time field for shares.
 	shareCreatedOnVersion = 5
 
-	// paymentUUIDVersion is the sixthversion of the database.
+	// paymentUUIDVersion is the sixth version of the database.
 	// It adds the UUID field to payments.
 	paymentUUIDVersion = 6
 
@@ -531,14 +531,14 @@ func paymentUUIDUpgrade(tx *bolt.Tx) error {
 
 		pBytes, err := json.Marshal(pmt)
 		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
+			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
 				funcName, err)
 			return dbError(ErrParse, desc)
 		}
 
 		err = pmtbkt.Put(k, pBytes)
 		if err != nil {
-			desc := fmt.Sprintf("%s: unable to persist share: %v",
+			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)
 			return dbError(ErrPersistEntry, desc)
 		}
@@ -565,14 +565,14 @@ func paymentUUIDUpgrade(tx *bolt.Tx) error {
 
 		pBytes, err := json.Marshal(pmt)
 		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
+			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
 				funcName, err)
 			return dbError(ErrParse, desc)
 		}
 
 		err = abkt.Put(k, pBytes)
 		if err != nil {
-			desc := fmt.Sprintf("%s: unable to persist share: %v",
+			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)
 			return dbError(ErrPersistEntry, desc)
 		}

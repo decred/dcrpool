@@ -160,7 +160,7 @@ func (cs *ChainState) prunePayments(ctx context.Context, height uint32) error {
 		// If the block has no confirmations at the current height,
 		// it is an orphan. Delete the payments associated with it.
 		if confs <= 0 {
-			err = cs.cfg.db.deletePayment(payment)
+			err = cs.cfg.db.deletePayment(payment.UUID)
 			if err != nil {
 				return err
 			}

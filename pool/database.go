@@ -32,7 +32,7 @@ type Database interface {
 	fetchPayment(id string) (*Payment, error)
 	PersistPayment(payment *Payment) error
 	updatePayment(payment *Payment) error
-	deletePayment(payment *Payment) error
+	deletePayment(id string) error
 	ArchivePayment(payment *Payment) error
 	fetchPaymentsAtHeight(height uint32) ([]*Payment, error)
 	fetchPendingPayments() ([]*Payment, error)
