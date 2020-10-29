@@ -107,9 +107,9 @@ func TestPool(t *testing.T) {
 
 	// All sub-tests to run.
 	tests := map[string]func(*testing.T){
-		"testDatabase":               testDatabase,
 		"testLastPaymentInfo":        testLastPaymentInfo,
 		"testLastPaymentCreatedOn":   testLastPaymentCreatedOn,
+		"testPoolMode":               testPoolMode,
 		"testAcceptedWork":           testAcceptedWork,
 		"testAccount":                testAccount,
 		"testJob":                    testJob,

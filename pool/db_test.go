@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -69,11 +68,6 @@ func TestFetchBucketHelpers(t *testing.T) {
 		t.Fatal(expectedNotFoundErr)
 	}
 
-	err = purge(db)
-	if err == nil {
-		t.Fatal(expectedNotFoundErr)
-	}
-
 	// Create the pool database bucket.
 	err = db.DB.Update(func(tx *bolt.Tx) error {
 		var err error
@@ -112,7 +106,7 @@ func TestFetchBucketHelpers(t *testing.T) {
 func TestInitDB(t *testing.T) {
 	dbPath := "tdb"
 	os.Remove(dbPath)
-	db, err := InitBoltDB(dbPath, false)
+	db, err := InitBoltDB(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,96 +154,6 @@ func TestInitDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("db create error: %v", err)
 	}
-
-	// Persist the pool mode.
-	err = db.DB.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		if pbkt == nil {
-			return fmt.Errorf("poolBkt does not exist")
-		}
-
-		b := make([]byte, 4)
-		binary.LittleEndian.PutUint32(b, 0)
-		return pbkt.Put(soloPool, b)
-	})
-	if err != nil {
-		t.Fatalf("db update error: %v", err)
-	}
-
-	err = db.close()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Trigger a pool mode switch.
-	db, err = InitBoltDB(dbPath, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Delete the database backup.
-	backup := filepath.Join(filepath.Dir(db.DB.Path()), backupFile)
-	if _, err := os.Stat(backup); os.IsNotExist(err) {
-		t.Fatalf("backup (%s) does not exist", backup)
-	}
-	err = os.Remove(backup)
-	if err != nil {
-		t.Fatalf("backup deletion error: %v", err)
-	}
-}
-
-func testDatabase(t *testing.T) {
-	// Persist some accounts.
-	accountA := NewAccount("Ssj6Sd54j11JM8qpenCwfwnKD73dsjm68ru")
-	err := db.persistAccount(accountA)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	accountB := NewAccount("SssPc1UNr8czcP3W9hfAgpmLRa3zJPDhfSy")
-	err = db.persistAccount(accountB)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// delete the created account.
-	err = deleteEntry(db, accountBkt, accountA.UUID)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Ensure the accountA has been removed.
-	_, err = db.fetchAccount(accountA.UUID)
-	if !errors.Is(err, ErrValueNotFound) {
-		t.Fatalf("expected no value found error: %v", err)
-	}
-
-	// purge the db.
-	err = purge(db)
-	if err != nil {
-		t.Fatalf("backup error: %v", err)
-	}
-
-	// Ensure the account X and Y have been removed.
-	_, err = db.fetchAccount(xID)
-	if err == nil {
-		t.Fatalf("expected no value found error for %s", xID)
-	}
-	_, err = db.fetchAccount(yID)
-	if err == nil {
-		t.Fatalf("expected no value found error for %s", yID)
-	}
-
-	// Create a database backup.
-	backupFile := "backup.db"
-	defer func() {
-		os.Remove(backupFile)
-	}()
-
-	err = db.backup(backupFile)
-	if err != nil {
-		t.Fatal(err)
-	}
 }
 
 func testLastPaymentCreatedOn(t *testing.T) {
@@ -274,6 +178,44 @@ func testLastPaymentCreatedOn(t *testing.T) {
 	if lastPaymentCreatedOn != paymentCreatedOn {
 		t.Fatalf("[loadLastPaymentCreatedOn] expected last payment created on to be %d, got %d",
 			lastPaymentCreatedOn, paymentCreatedOn)
+	}
+}
+
+func testPoolMode(t *testing.T) {
+	// Expect an error if no value set.
+	_, err := db.fetchPoolMode()
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value not found error, got: %v", err)
+	}
+
+	// Set pool mode to 1.
+	err = db.persistPoolMode(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure retrived value matches persisted value.
+	mode, err := db.fetchPoolMode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode != 1 {
+		t.Fatalf("Expected pool mode to be solo")
+	}
+
+	// Set pool mode to 0.
+	err = db.persistPoolMode(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure retrived value matches persisted value.
+	mode, err = db.fetchPoolMode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode != 0 {
+		t.Fatalf("Expected pool mode to be 0")
 	}
 }
 

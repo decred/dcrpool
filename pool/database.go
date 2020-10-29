@@ -15,6 +15,7 @@ type Database interface {
 	close() error
 
 	// Pool metadata
+	fetchPoolMode() (uint32, error)
 	persistPoolMode(mode uint32) error
 	fetchCSRFSecret() ([]byte, error)
 	persistCSRFSecret(secret []byte) error
