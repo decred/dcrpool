@@ -16,11 +16,11 @@ var (
 	// Account X address.
 	xAddr = "SsWKp7wtdTZYabYFYSc9cnxhwFEjA5g4pFc"
 	// Account X id.
-	xID = ""
+	xID = NewAccount(xAddr).UUID
 	// Account Y address.
 	yAddr = "Ssp7J7TUmi5iPhoQnWYNGQbeGhu6V3otJcS"
 	// Account Y id.
-	yID = ""
+	yID = NewAccount(yAddr).UUID
 	// Pool fee address.
 	poolFeeAddrs, _ = dcrutil.DecodeAddress(
 		"SsnbEmxCVXskgTHXvf3rEa17NA39qQuGHwQ",
@@ -46,21 +46,6 @@ func setupDB() error {
 	if err != nil {
 		return err
 	}
-
-	accountX := NewAccount(xAddr)
-	err = db.persistAccount(accountX)
-	if err != nil {
-		return err
-	}
-
-	accountY := NewAccount(yAddr)
-	err = db.persistAccount(accountY)
-	if err != nil {
-		return err
-	}
-
-	xID = accountX.UUID
-	yID = accountY.UUID
 
 	return err
 }

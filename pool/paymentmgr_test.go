@@ -447,6 +447,19 @@ func testPaymentMgrMaturity(t *testing.T) {
 }
 
 func testPaymentMgrPayment(t *testing.T) {
+	// Insert some test accounts.
+	accountX := NewAccount(xAddr)
+	err := db.persistAccount(accountX)
+	if err != nil {
+		t.Fatalf("failed to insert account: %v", err)
+	}
+
+	accountY := NewAccount(yAddr)
+	err = db.persistAccount(accountY)
+	if err != nil {
+		t.Fatalf("failed to insert account: %v", err)
+	}
+
 	mgr, err := createPaymentMgr(PPS)
 	if err != nil {
 		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
