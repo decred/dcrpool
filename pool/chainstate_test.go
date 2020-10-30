@@ -118,8 +118,8 @@ func testChainState(t *testing.T) {
 		t.Fatalf("expected a valid accepted work, got: %v", err)
 	}
 	_, err = db.fetchAcceptedWork(workB.UUID)
-	if err == nil {
-		t.Fatal("expected a no value found error")
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value found error, got %v", err)
 	}
 
 	// Delete work A.
@@ -175,8 +175,8 @@ func testChainState(t *testing.T) {
 	}
 
 	_, err = db.fetchPayment(paymentA.UUID)
-	if err == nil {
-		t.Fatalf("expected payment A to be pruned at height %d", 28)
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value found error, got %v", err)
 	}
 
 	_, err = db.fetchPayment(paymentB.UUID)
@@ -191,8 +191,8 @@ func testChainState(t *testing.T) {
 	}
 
 	_, err = db.fetchPayment(paymentB.UUID)
-	if err == nil {
-		t.Fatalf("expected payment B to be pruned at height %d", 29)
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value found error, got %v", err)
 	}
 
 	cs.cfg.GetBlock = getBlock
