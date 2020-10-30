@@ -155,8 +155,8 @@ func (db *BoltDB) updateAcceptedWork(work *AcceptedWork) error {
 }
 
 // deleteAcceptedWork removes the associated accepted work from the database.
-func (db *BoltDB) deleteAcceptedWork(work *AcceptedWork) error {
-	return deleteEntry(db, workBkt, work.UUID)
+func (db *BoltDB) deleteAcceptedWork(id string) error {
+	return deleteEntry(db, workBkt, id)
 }
 
 // listMinedWork returns work data associated with all blocks mined by the pool

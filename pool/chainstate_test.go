@@ -3,6 +3,7 @@ package pool
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -83,24 +84,21 @@ func testChainState(t *testing.T) {
 	cs := NewChainState(cCfg)
 
 	// Test pruneAcceptedWork.
-	workA, err := persistAcceptedWork(db,
+	workA := NewAcceptedWork(
 		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
 		"000000000000000007301a21efa98033e06f7eba836990394fff9f765f1556b1",
 		396692, yID, "dr3")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	workA.Confirmed = true
-	err = db.updateAcceptedWork(workA)
+	err = db.persistAcceptedWork(workA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	workB, err := persistAcceptedWork(db,
+	workB := NewAcceptedWork(
 		"000000000000000025aa4a7ba8c3ece4608376bf84a82ec7e025991460097198",
 		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
 		396693, xID, "dr5")
+	err = db.persistAcceptedWork(workB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,12 +115,12 @@ func testChainState(t *testing.T) {
 		t.Fatalf("expected a valid accepted work, got: %v", err)
 	}
 	_, err = db.fetchAcceptedWork(workB.UUID)
-	if err == nil {
-		t.Fatal("expected a no value found error")
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value found error, got %v", err)
 	}
 
 	// Delete work A.
-	err = db.deleteAcceptedWork(workA)
+	err = db.deleteAcceptedWork(workA.UUID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -141,12 +139,14 @@ func testChainState(t *testing.T) {
 		BlockHash: chainhash.Hash{0}.String(),
 		Coinbase:  chainhash.Hash{0}.String(),
 	}
-	paymentA, err := persistPayment(db, xID, zeroSource, amt, height, estMaturity)
+	paymentA := NewPayment(xID, zeroSource, amt, height, estMaturity)
+	err = db.PersistPayment(paymentA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	paymentB, err := persistPayment(db, yID, zeroSource, amt, height+1, estMaturity+1)
+	paymentB := NewPayment(yID, zeroSource, amt, height+1, estMaturity+1)
+	err = db.PersistPayment(paymentB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,8 +174,8 @@ func testChainState(t *testing.T) {
 	}
 
 	_, err = db.fetchPayment(paymentA.UUID)
-	if err == nil {
-		t.Fatalf("expected payment A to be pruned at height %d", 28)
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value found error, got %v", err)
 	}
 
 	_, err = db.fetchPayment(paymentB.UUID)
@@ -190,8 +190,8 @@ func testChainState(t *testing.T) {
 	}
 
 	_, err = db.fetchPayment(paymentB.UUID)
-	if err == nil {
-		t.Fatalf("expected payment B to be pruned at height %d", 29)
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value found error, got %v", err)
 	}
 
 	cs.cfg.GetBlock = getBlock

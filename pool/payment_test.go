@@ -6,22 +6,11 @@ package pool
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v3"
 )
-
-func persistPayment(db Database, account string, source *PaymentSource,
-	amount dcrutil.Amount, height uint32, estMaturity uint32) (*Payment, error) {
-	pmt := NewPayment(account, source, amount, height, estMaturity)
-	err := db.PersistPayment(pmt)
-	if err != nil {
-		return nil, fmt.Errorf("unable to persist payment: %v", err)
-	}
-	return pmt, nil
-}
 
 func testPayment(t *testing.T) {
 	height := uint32(10)
@@ -31,18 +20,22 @@ func testPayment(t *testing.T) {
 		Coinbase:  chainhash.Hash{0}.String(),
 	}
 
+	// Create some valid payments.
 	amt, _ := dcrutil.NewAmount(5)
-	pmtA, err := persistPayment(db, xID, zeroSource, amt, height, estMaturity)
+	pmtA := NewPayment(xID, zeroSource, amt, height, estMaturity)
+	err := db.PersistPayment(pmtA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	pmtB, err := persistPayment(db, xID, zeroSource, amt, height, estMaturity)
+	pmtB := NewPayment(xID, zeroSource, amt, height, estMaturity)
+	err = db.PersistPayment(pmtB)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	pmtC, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
+	pmtC := NewPayment(yID, zeroSource, amt, height, estMaturity)
+	err = db.PersistPayment(pmtC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,8 +45,51 @@ func testPayment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fetchPayment err: %v", err)
 	}
-	if fetchedPayment == nil {
-		t.Fatal("expected a non-nil payment")
+
+	// Ensure fetched values match persisted values.
+	if fetchedPayment.Account != pmtA.Account {
+		t.Fatalf("expected %v as fetched payment account, got %v",
+			pmtA.Account, fetchedPayment.Account)
+	}
+
+	if fetchedPayment.EstimatedMaturity != pmtA.EstimatedMaturity {
+		t.Fatalf("expected %v as fetched payment est maturity, got %v",
+			pmtA.EstimatedMaturity, fetchedPayment.EstimatedMaturity)
+	}
+
+	if fetchedPayment.Height != pmtA.Height {
+		t.Fatalf("expected %v as fetched payment height, got %v",
+			pmtA.Height, fetchedPayment.Height)
+	}
+
+	if fetchedPayment.Amount != pmtA.Amount {
+		t.Fatalf("expected %v as fetched payment amount, got %v",
+			pmtA.Amount, fetchedPayment.Amount)
+	}
+
+	if fetchedPayment.CreatedOn != pmtA.CreatedOn {
+		t.Fatalf("expected %v as fetched payment createdon, got %v",
+			pmtA.CreatedOn, fetchedPayment.CreatedOn)
+	}
+
+	if fetchedPayment.PaidOnHeight != pmtA.PaidOnHeight {
+		t.Fatalf("expected %v as fetched payment paidonheight, got %v",
+			pmtA.PaidOnHeight, fetchedPayment.PaidOnHeight)
+	}
+
+	if fetchedPayment.TransactionID != pmtA.TransactionID {
+		t.Fatalf("expected %v as fetched payment transactionid, got %v",
+			pmtA.TransactionID, fetchedPayment.TransactionID)
+	}
+
+	if fetchedPayment.Source.Coinbase != pmtA.Source.Coinbase {
+		t.Fatalf("expected %v as fetched payment source coinbase, got %v",
+			pmtA.Source.Coinbase, fetchedPayment.Source.Coinbase)
+	}
+
+	if fetchedPayment.Source.BlockHash != pmtA.Source.BlockHash {
+		t.Fatalf("expected %v as fetched payment source blockhash, got %v",
+			pmtA.Source.BlockHash, fetchedPayment.Source.BlockHash)
 	}
 
 	// Ensure payments can be updated.
@@ -102,6 +138,18 @@ func testPayment(t *testing.T) {
 	if fetchedPayment != nil {
 		t.Fatal("expected a nil payment")
 	}
+
+	// Deleting a payment which does not exist should not return an error.
+	err = db.deletePayment(pmtC.UUID)
+	if err != nil {
+		t.Fatalf("payment delete error: %v", err)
+	}
+
+	// Updating a payment which does not exist should not return an error.
+	err = db.updatePayment(pmtC)
+	if err != nil {
+		t.Fatalf("payment update error: %v", err)
+	}
 }
 
 // testPaymentAccessors tests fetchPendingPayments, maturePendingPayments,
@@ -115,41 +163,39 @@ func testPaymentAccessors(t *testing.T) {
 		Coinbase:  zeroHash.String(),
 	}
 	amt, _ := dcrutil.NewAmount(5)
-	_, err := persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
+	pmtA := NewPayment(xID, zeroSource, amt, height+1, estMaturity+1)
+	err := db.PersistPayment(pmtA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
+	pmtB := NewPayment(xID, zeroSource, amt, height+1, estMaturity+1)
+	err = db.PersistPayment(pmtB)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	pmtC, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pmtC := NewPayment(yID, zeroSource, amt, height, estMaturity)
 	pmtC.PaidOnHeight = estMaturity + 1
 	pmtC.TransactionID = zeroHash.String()
-	err = db.updatePayment(pmtC)
+	err = db.PersistPayment(pmtC)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	err = db.ArchivePayment(pmtC)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	pmtD, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pmtD := NewPayment(yID, zeroSource, amt, height, estMaturity)
 	pmtD.PaidOnHeight = estMaturity + 1
 	pmtD.TransactionID = chainhash.Hash{0}.String()
-	err = db.updatePayment(pmtD)
+	err = db.PersistPayment(pmtD)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	err = db.ArchivePayment(pmtD)
 	if err != nil {
 		t.Fatal(err)

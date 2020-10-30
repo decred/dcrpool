@@ -61,7 +61,8 @@ func NewPayment(account string, source *PaymentSource, amount dcrutil.Amount,
 	}
 }
 
-// fetchPayment fetches the payment referenced by the provided id.
+// fetchPayment fetches the payment referenced by the provided id. Returns an
+// error if the payment is not found.
 func (db *BoltDB) fetchPayment(id string) (*Payment, error) {
 	const funcName = "fetchPayment"
 	var payment Payment
