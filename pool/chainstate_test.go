@@ -84,24 +84,21 @@ func testChainState(t *testing.T) {
 	cs := NewChainState(cCfg)
 
 	// Test pruneAcceptedWork.
-	workA, err := persistAcceptedWork(db,
+	workA := NewAcceptedWork(
 		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
 		"000000000000000007301a21efa98033e06f7eba836990394fff9f765f1556b1",
 		396692, yID, "dr3")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	workA.Confirmed = true
-	err = db.updateAcceptedWork(workA)
+	err = db.persistAcceptedWork(workA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	workB, err := persistAcceptedWork(db,
+	workB := NewAcceptedWork(
 		"000000000000000025aa4a7ba8c3ece4608376bf84a82ec7e025991460097198",
 		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
 		396693, xID, "dr5")
+	err = db.persistAcceptedWork(workB)
 	if err != nil {
 		t.Fatal(err)
 	}

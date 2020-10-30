@@ -5,16 +5,6 @@ import (
 	"testing"
 )
 
-func persistAcceptedWork(db Database, blockHash string, prevHash string,
-	height uint32, minedBy string, miner string) (*AcceptedWork, error) {
-	acceptedWork := NewAcceptedWork(blockHash, prevHash, height, minedBy, miner)
-	err := db.persistAcceptedWork(acceptedWork)
-	if err != nil {
-		return nil, err
-	}
-	return acceptedWork, nil
-}
-
 func testAcceptedWork(t *testing.T) {
 	// Created some valid accepted work.
 	workA := NewAcceptedWork(
