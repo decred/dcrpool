@@ -118,7 +118,7 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 		// If the block has no confirmations at the current height,
 		// it is an orphan. Prune it.
 		if confs <= 0 {
-			err = cs.cfg.db.deleteAcceptedWork(work)
+			err = cs.cfg.db.deleteAcceptedWork(work.UUID)
 			if err != nil {
 				return err
 			}

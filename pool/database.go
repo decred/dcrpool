@@ -52,7 +52,7 @@ type Database interface {
 	fetchAcceptedWork(id string) (*AcceptedWork, error)
 	persistAcceptedWork(work *AcceptedWork) error
 	updateAcceptedWork(work *AcceptedWork) error
-	deleteAcceptedWork(work *AcceptedWork) error
+	deleteAcceptedWork(id string) error
 	listMinedWork() ([]*AcceptedWork, error)
 	fetchUnconfirmedWork(height uint32) ([]*AcceptedWork, error)
 

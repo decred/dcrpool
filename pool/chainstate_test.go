@@ -3,6 +3,7 @@ package pool
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -122,7 +123,7 @@ func testChainState(t *testing.T) {
 	}
 
 	// Delete work A.
-	err = db.deleteAcceptedWork(workA)
+	err = db.deleteAcceptedWork(workA.UUID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

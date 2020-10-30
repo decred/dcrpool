@@ -152,21 +152,21 @@ func testAcceptedWork(t *testing.T) {
 	}
 
 	// Delete all work.
-	err = db.deleteAcceptedWork(workA)
+	err = db.deleteAcceptedWork(workA.UUID)
 	if err != nil {
 		t.Fatalf("delete workA error: %v ", err)
 	}
 
-	err = db.deleteAcceptedWork(workB)
+	err = db.deleteAcceptedWork(workB.UUID)
 	if err != nil {
 		t.Fatalf("delete workB error: %v ", err)
 	}
-	err = db.deleteAcceptedWork(workC)
+	err = db.deleteAcceptedWork(workC.UUID)
 	if err != nil {
 		t.Fatalf("delete workC error: %v ", err)
 	}
 
-	err = db.deleteAcceptedWork(workD)
+	err = db.deleteAcceptedWork(workD.UUID)
 	if err != nil {
 		t.Fatalf("delete workD error: %v ", err)
 	}
