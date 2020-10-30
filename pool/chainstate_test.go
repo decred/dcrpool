@@ -139,12 +139,14 @@ func testChainState(t *testing.T) {
 		BlockHash: chainhash.Hash{0}.String(),
 		Coinbase:  chainhash.Hash{0}.String(),
 	}
-	paymentA, err := persistPayment(db, xID, zeroSource, amt, height, estMaturity)
+	paymentA := NewPayment(xID, zeroSource, amt, height, estMaturity)
+	err = db.PersistPayment(paymentA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	paymentB, err := persistPayment(db, yID, zeroSource, amt, height+1, estMaturity+1)
+	paymentB := NewPayment(yID, zeroSource, amt, height+1, estMaturity+1)
+	err = db.PersistPayment(paymentB)
 	if err != nil {
 		t.Fatal(err)
 	}

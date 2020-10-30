@@ -6,22 +6,11 @@ package pool
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v3"
 )
-
-func persistPayment(db Database, account string, source *PaymentSource,
-	amount dcrutil.Amount, height uint32, estMaturity uint32) (*Payment, error) {
-	pmt := NewPayment(account, source, amount, height, estMaturity)
-	err := db.PersistPayment(pmt)
-	if err != nil {
-		return nil, fmt.Errorf("unable to persist payment: %v", err)
-	}
-	return pmt, nil
-}
 
 func testPayment(t *testing.T) {
 	height := uint32(10)
@@ -174,41 +163,39 @@ func testPaymentAccessors(t *testing.T) {
 		Coinbase:  zeroHash.String(),
 	}
 	amt, _ := dcrutil.NewAmount(5)
-	_, err := persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
+	pmtA := NewPayment(xID, zeroSource, amt, height+1, estMaturity+1)
+	err := db.PersistPayment(pmtA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = persistPayment(db, xID, zeroSource, amt, height+1, estMaturity+1)
+	pmtB := NewPayment(xID, zeroSource, amt, height+1, estMaturity+1)
+	err = db.PersistPayment(pmtB)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	pmtC, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pmtC := NewPayment(yID, zeroSource, amt, height, estMaturity)
 	pmtC.PaidOnHeight = estMaturity + 1
 	pmtC.TransactionID = zeroHash.String()
-	err = db.updatePayment(pmtC)
+	err = db.PersistPayment(pmtC)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	err = db.ArchivePayment(pmtC)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	pmtD, err := persistPayment(db, yID, zeroSource, amt, height, estMaturity)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pmtD := NewPayment(yID, zeroSource, amt, height, estMaturity)
 	pmtD.PaidOnHeight = estMaturity + 1
 	pmtD.TransactionID = chainhash.Hash{0}.String()
-	err = db.updatePayment(pmtD)
+	err = db.PersistPayment(pmtD)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	err = db.ArchivePayment(pmtD)
 	if err != nil {
 		t.Fatal(err)

@@ -878,12 +878,16 @@ func testPaymentMgr(t *testing.T) {
 	height = uint32(10)
 	estMaturity = uint32(26)
 	amt, _ = dcrutil.NewAmount(5)
-	_, err = persistPayment(db, xID, zeroSource, amt, height, estMaturity)
+
+	pmtX := NewPayment(xID, zeroSource, amt, height, estMaturity)
+	err = db.PersistPayment(pmtX)
 	if err != nil {
 		cancel()
 		t.Fatal(err)
 	}
-	_, err = persistPayment(db, yID, randSource, amt, height, estMaturity)
+
+	pmtY := NewPayment(yID, randSource, amt, height, estMaturity)
+	err = db.PersistPayment(pmtY)
 	if err != nil {
 		cancel()
 		t.Fatal(err)
