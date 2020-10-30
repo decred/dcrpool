@@ -460,9 +460,16 @@ func testHub(t *testing.T) {
 		t.Fatalf("unexpected submit work error: %v", err)
 	}
 
-	// Ensure account X exists.
-	if !hub.AccountExists(xID) {
-		t.Fatalf("expected account with id %s to exist", xID)
+	// Create an account.
+	account := NewAccount(xAddr)
+	err = db.persistAccount(account)
+	if err != nil {
+		t.Fatalf("failed to insert account: %v", err)
+	}
+
+	// Ensure hub can check for account existence.
+	if !hub.AccountExists(account.UUID) {
+		t.Fatalf("expected account with id %s to exist", account.UUID)
 	}
 
 	// Ensure the gui CSRF secret can be generated.
