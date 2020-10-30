@@ -422,11 +422,11 @@ func testPaymentMgr(t *testing.T) {
 		t.Fatalf("[maturePendingPayments] unexpected error: %v", err)
 	}
 
-	if len(pmtSets) == 0 {
+	if len(pmtSets) != 1 {
 		t.Fatal("[maturePendingPayments] expected mature payments")
 	}
 
-	_, ok := pmtSets[zeroSource.BlockHash]
+	pmts, ok := pmtSets[zeroSource.BlockHash]
 	if !ok {
 		t.Fatalf("[maturePendingPayments] expected mature payments "+
 			"at height %d", height)
