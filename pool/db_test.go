@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -153,6 +154,48 @@ func TestInitDB(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("db create error: %v", err)
+	}
+}
+
+func testCSRFSecret(t *testing.T) {
+	// Expect an error if no value set.
+	_, err := db.fetchCSRFSecret()
+	if !errors.Is(err, ErrValueNotFound) {
+		t.Fatalf("expected value not found error, got: %v", err)
+	}
+
+	// Set and retrieve a value.
+	csrfSecret := []byte("some really super secret string")
+	err = db.persistCSRFSecret(csrfSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fetched, err := db.fetchCSRFSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure retrieved value matches persisted value.
+	if !bytes.Equal(fetched, csrfSecret) {
+		t.Fatalf("expected csrf secret %q but got %q", csrfSecret, fetched)
+	}
+
+	// Ensure value can be updated.
+	csrfSecret = []byte("another completely secret string")
+	err = db.persistCSRFSecret(csrfSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fetched, err = db.fetchCSRFSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure retrieved value matches persisted value.
+	if !bytes.Equal(fetched, csrfSecret) {
+		t.Fatalf("expected csrf secret %q but got %q", csrfSecret, fetched)
 	}
 }
 
