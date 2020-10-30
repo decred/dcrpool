@@ -122,7 +122,11 @@ func TestPool(t *testing.T) {
 		"testPaymentAccessors":       testPaymentAccessors,
 		"testEndpoint":               testEndpoint,
 		"testClient":                 testClient,
-		"testPaymentMgr":             testPaymentMgr,
+		"testPaymentMgrPPS":          testPaymentMgrPPS,
+		"testPaymentMgrPPLNS":        testPaymentMgrPPLNS,
+		"testPaymentMgrMaturity":     testPaymentMgrMaturity,
+		"testPaymentMgrPayment":      testPaymentMgrPayment,
+		"testPaymentMgrDust":         testPaymentMgrDust,
 		"testChainState":             testChainState,
 		"testHub":                    testHub,
 	}

@@ -21,6 +21,14 @@ import (
 	"google.golang.org/grpc"
 )
 
+var (
+	zeroHash   = chainhash.Hash{0}
+	zeroSource = &PaymentSource{
+		BlockHash: zeroHash.String(),
+		Coinbase:  zeroHash.String(),
+	}
+)
+
 type txCreatorImpl struct {
 	getBlock             func(ctx context.Context, blockHash *chainhash.Hash) (*wire.MsgBlock, error)
 	getTxOut             func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error)
@@ -130,7 +138,7 @@ func TestSharePercentages(t *testing.T) {
 	}
 }
 
-func testPaymentMgr(t *testing.T) {
+func createPaymentMgr(paymentMethod string) (*PaymentMgr, error) {
 	activeNet := chaincfg.SimNetParams()
 
 	getBlockConfirmations := func(context.Context, *chainhash.Hash) (int64, error) {
@@ -151,15 +159,19 @@ func testPaymentMgr(t *testing.T) {
 		PoolFee:               0.1,
 		LastNPeriod:           time.Second * 120,
 		SoloPool:              false,
-		PaymentMethod:         PPS,
+		PaymentMethod:         paymentMethod,
 		GetBlockConfirmations: getBlockConfirmations,
 		FetchTxCreator:        fetchTxCreator,
 		FetchTxBroadcaster:    fetchTxBroadcaster,
 		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
 	}
-	mgr, err := NewPaymentMgr(pCfg)
+	return NewPaymentMgr(pCfg)
+}
+
+func testPaymentMgrPPS(t *testing.T) {
+	mgr, err := createPaymentMgr(PPS)
 	if err != nil {
-		t.Fatalf("[NewPaymentMgr] unexpected error: %v", err)
+		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
 
 	// Ensure Pay-Per-Share (PPS) works as expected.
@@ -188,31 +200,25 @@ func testPaymentMgr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	zeroHash := chainhash.Hash{0}
-	zeroSource := &PaymentSource{
-		BlockHash: zeroHash.String(),
-		Coinbase:  zeroHash.String(),
-	}
-
 	// Ensure the last payment created on time was updated.
 	previousPaymentCreatedOn, err := db.loadLastPaymentCreatedOn()
 	if err != nil {
-		t.Fatalf("[PPS] unable to get previous payment created-on: %v", err)
+		t.Fatalf("unable to get previous payment created-on: %v", err)
 	}
 	err = mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
 	if err != nil {
-		t.Fatalf("[PPS] unable to generate payments: %v", err)
+		t.Fatalf("unable to generate payments: %v", err)
 	}
 	currentPaymentCreatedOn, err := db.loadLastPaymentCreatedOn()
 	if err != nil {
-		t.Fatalf("[PPS] unable to get current payment created-on: %v", err)
+		t.Fatalf("unable to get current payment created-on: %v", err)
 	}
 	if currentPaymentCreatedOn < now.UnixNano() {
-		t.Fatalf("[PPS] expected last payment created on time to "+
+		t.Fatalf("expected last payment created on time to "+
 			"be greater than %v,got %v", now, currentPaymentCreatedOn)
 	}
 	if currentPaymentCreatedOn < previousPaymentCreatedOn {
-		t.Fatalf("[PPS] expected last payment created on time to "+
+		t.Fatalf("expected last payment created on time to "+
 			"be greater than %v,got %v", previousPaymentCreatedOn,
 			currentPaymentCreatedOn)
 	}
@@ -240,13 +246,13 @@ func testPaymentMgr(t *testing.T) {
 	// Ensure the two account payments have the same payments since
 	// they have the same share weights.
 	if xt != yt {
-		t.Fatalf("[PPS] expected equal account amounts, %v != %v", xt, yt)
+		t.Fatalf("expected equal account amounts, %v != %v", xt, yt)
 	}
 
 	// Ensure the fee payment is the exact fee percentage of the total amount.
 	expectedFeeAmt := coinbase.MulF64(mgr.cfg.PoolFee)
 	if ft != expectedFeeAmt {
-		t.Fatalf("[PPS] expected %v fee payment amount, got %v",
+		t.Fatalf("expected %v fee payment amount, got %v",
 			ft, expectedFeeAmt)
 	}
 
@@ -254,37 +260,25 @@ func testPaymentMgr(t *testing.T) {
 	// coinbase amount.
 	sum := xt + yt + ft
 	if sum != coinbase {
-		t.Fatalf("[PPS] expected the sum of all payments to be %v, got %v",
+		t.Fatalf("expected the sum of all payments to be %v, got %v",
 			coinbase, sum)
 	}
+}
 
-	// Empty the share bucket.
-	err = emptyBucket(db, shareBkt)
+func testPaymentMgrPPLNS(t *testing.T) {
+	mgr, err := createPaymentMgr(PPLNS)
 	if err != nil {
-		t.Fatalf("[PPS] emptyBucket error: %v", err)
-	}
-
-	// Empty the payment bucket.
-	err = emptyBucket(db, paymentBkt)
-	if err != nil {
-		t.Fatalf("[PPS] emptyBucket error: %v", err)
-	}
-
-	// Reset backed up values to their defaults.
-	err = db.persistLastPaymentInfo(0, 0)
-	if err != nil {
-		t.Fatalf("unable to persist default last payment info: %v", err)
-	}
-	err = db.persistLastPaymentCreatedOn(0)
-	if err != nil {
-		t.Fatalf("unable to persist default last payment created on: %v", err)
+		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
 
 	// Ensure Pay-Per-Last-N-Shares (PPLNS) works as expected.
-	now = time.Now()
-	pCfg.PaymentMethod = PPLNS
-	shareCount = 5
-	coinbaseValue = 60
+	now := time.Now()
+	shareCount := 5
+	coinbaseValue := 60
+	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
+	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
+	height := uint32(20)
+	weight := new(big.Rat).SetFloat64(1.0)
 
 	// Create shares for account x and y.
 	for i := 0; i < shareCount; i++ {
@@ -298,44 +292,42 @@ func testPaymentMgr(t *testing.T) {
 		}
 	}
 
-	coinbase, err = dcrutil.NewAmount(float64(coinbaseValue))
+	coinbase, err := dcrutil.NewAmount(float64(coinbaseValue))
 	if err != nil {
 		t.Fatalf("[NewAmount] unexpected error: %v", err)
 	}
 
 	// Ensure the last payment created on time was updated.
-	previousPaymentCreatedOn, err = db.loadLastPaymentCreatedOn()
+	previousPaymentCreatedOn, err := db.loadLastPaymentCreatedOn()
 	if err != nil {
-		t.Fatalf("[PPLNS] unable to get previous payment created-on: %v", err)
+		t.Fatalf("unable to get previous payment created-on: %v", err)
 	}
 	err = mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
 	if err != nil {
-		t.Fatalf("[PPLNS] unable to generate payments: %v", err)
+		t.Fatalf("unable to generate payments: %v", err)
 	}
-	currentPaymentCreatedOn, err = db.loadLastPaymentCreatedOn()
+	currentPaymentCreatedOn, err := db.loadLastPaymentCreatedOn()
 	if err != nil {
-		t.Fatalf("[PPLNS] unable to get current payment created-on: %v", err)
+		t.Fatalf("unable to get current payment created-on: %v", err)
 	}
 	if currentPaymentCreatedOn < now.UnixNano() {
-		t.Fatalf("[PPLNS] expected last payment created on time "+
+		t.Fatalf("expected last payment created on time "+
 			"to be greater than %v,got %v", now, currentPaymentCreatedOn)
 	}
 	if currentPaymentCreatedOn < previousPaymentCreatedOn {
-		t.Fatalf("[PPLNS] expected last payment created on time "+
+		t.Fatalf("expected last payment created on time "+
 			"to be greater than %v,got %v", previousPaymentCreatedOn,
 			currentPaymentCreatedOn)
 	}
 
 	// Ensure the payments created are for accounts x, y and a fee
 	// payment entry.
-	pmts, err = db.fetchPendingPayments()
+	pmts, err := db.fetchPendingPayments()
 	if err != nil {
-		t.Fatalf("[PPLNS] pendingPayments error: %v", err)
+		t.Fatalf("pendingPayments error: %v", err)
 	}
 
-	xt = dcrutil.Amount(0)
-	yt = dcrutil.Amount(0)
-	ft = dcrutil.Amount(0)
+	var xt, yt, ft dcrutil.Amount
 	for _, pmt := range pmts {
 		if pmt.Account == xID {
 			xt += pmt.Amount
@@ -351,48 +343,39 @@ func testPaymentMgr(t *testing.T) {
 	// Ensure the two account payments have the same payments since
 	// they have the same share weights.
 	if xt != yt {
-		t.Fatalf("[PPLNS] expected equal account amounts, %v != %v", xt, yt)
+		t.Fatalf("expected equal account amounts, %v != %v", xt, yt)
 	}
 
 	// Ensure the fee payment is the exact fee percentage of the total amount.
-	expectedFeeAmt = coinbase.MulF64(mgr.cfg.PoolFee)
+	expectedFeeAmt := coinbase.MulF64(mgr.cfg.PoolFee)
 	if ft != expectedFeeAmt {
-		t.Fatalf("[PPLNS] expected %v fee payment amount, got %v",
+		t.Fatalf("expected %v fee payment amount, got %v",
 			ft, expectedFeeAmt)
 	}
 
 	// Ensure the sum of all payment amounts is equal to the initial
 	// amount.
-	sum = xt + yt + ft
+	sum := xt + yt + ft
 	if sum != coinbase {
-		t.Fatalf("[PPLNS] expected the sum of all payments to be %v, got %v",
+		t.Fatalf("expected the sum of all payments to be %v, got %v",
 			coinbase, sum)
 	}
 
-	// Empty the share bucket.
-	err = emptyBucket(db, shareBkt)
+}
+
+func testPaymentMgrMaturity(t *testing.T) {
+	mgr, err := createPaymentMgr(PPLNS)
 	if err != nil {
-		t.Fatalf("[PPLNS] emptyBucket error: %v", err)
+		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
 
-	// Empty the payment bucket.
-	err = emptyBucket(db, paymentBkt)
-	if err != nil {
-		t.Fatalf("[PPLNS] emptyBucket error: %v", err)
-	}
-
-	// Reset backed up values to their defaults.
-	err = db.persistLastPaymentInfo(0, 0)
-	if err != nil {
-		t.Fatalf("unable to persist default last payment info: %v", err)
-	}
-	err = db.persistLastPaymentCreatedOn(0)
-	if err != nil {
-		t.Fatalf("unable to persist default last payment created on: %v", err)
-	}
-
-	now = time.Now()
-	paymentMaturity := height + uint32(activeNet.CoinbaseMaturity+1)
+	now := time.Now()
+	shareCount := 3
+	coinbaseValue := 60
+	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
+	height := uint32(20)
+	weight := new(big.Rat).SetFloat64(1.0)
+	paymentMaturity := height + uint32(chaincfg.SimNetParams().CoinbaseMaturity+1)
 
 	// Ensure payment maturity works as expected.
 	for i := 0; i < shareCount; i++ {
@@ -409,6 +392,11 @@ func testPaymentMgr(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+	}
+
+	coinbase, err := dcrutil.NewAmount(float64(coinbaseValue))
+	if err != nil {
+		t.Fatalf("[NewAmount] unexpected error: %v", err)
 	}
 
 	err = mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
@@ -432,9 +420,7 @@ func testPaymentMgr(t *testing.T) {
 			"at height %d", height)
 	}
 
-	xt = dcrutil.Amount(0)
-	yt = dcrutil.Amount(0)
-	ft = dcrutil.Amount(0)
+	var xt, yt, ft dcrutil.Amount
 	for _, pmt := range pmts {
 		if pmt.Account == xID {
 			xt += pmt.Amount
@@ -450,36 +436,23 @@ func testPaymentMgr(t *testing.T) {
 	// Ensure the two account payments have the same payments since
 	// they have the same share weights.
 	if xt != yt {
-		t.Fatalf("[PPLNS] expected equal account amounts, %v != %v", xt, yt)
+		t.Fatalf("expected equal account amounts, %v != %v", xt, yt)
 	}
 
-	expectedFeeAmt = coinbase.MulF64(mgr.cfg.PoolFee)
+	expectedFeeAmt := coinbase.MulF64(mgr.cfg.PoolFee)
 	if ft != expectedFeeAmt {
 		t.Fatalf("expected pool fee payment total to have %v, got %v",
 			expectedFeeAmt, ft)
 	}
+}
 
-	// Empty the share bucket.
-	err = emptyBucket(db, shareBkt)
+func testPaymentMgrPayment(t *testing.T) {
+	mgr, err := createPaymentMgr(PPS)
 	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Empty the payment bucket.
-	err = emptyBucket(db, paymentBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
+		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
 
-	// Reset backed up values to their defaults.
-	err = db.persistLastPaymentInfo(0, 0)
-	if err != nil {
-		t.Fatalf("unable to persist default last payment info: %v", err)
-	}
-	err = db.persistLastPaymentCreatedOn(0)
-	if err != nil {
-		t.Fatalf("unable to persist default last payment created on: %v", err)
-	}
+	height := uint32(20)
 
 	// pruneOrphanedPayments tests.
 	var randBytes [chainhash.HashSize + 1]byte
@@ -1167,13 +1140,22 @@ func testPaymentMgr(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
+}
+
+func testPaymentMgrDust(t *testing.T) {
+	mgr, err := createPaymentMgr(PPLNS)
+	if err != nil {
+		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
+	}
+
+	height := uint32(20)
 
 	// Ensure dust payments are forfeited by their originating accounts and
 	// added to the pool fee payout.
-	now = time.Now()
-	pCfg.PaymentMethod = PPLNS
-	coinbaseValue = 1
+	now := time.Now()
+	coinbaseValue := 1
 	mul := 100000
+	weight := new(big.Rat).SetFloat64(1.0)
 	yWeight := new(big.Rat).Mul(weight, new(big.Rat).SetInt64(int64(mul)))
 
 	// Create shares for account x and y.
@@ -1186,7 +1168,7 @@ func testPaymentMgr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	coinbase, err = dcrutil.NewAmount(float64(coinbaseValue))
+	coinbase, err := dcrutil.NewAmount(float64(coinbaseValue))
 	if err != nil {
 		t.Fatalf("[NewAmount] unexpected error: %v", err)
 	}
@@ -1205,7 +1187,7 @@ func testPaymentMgr(t *testing.T) {
 
 	// Ensure the payments created are for account y and a fee
 	// payment entry.
-	pmts, err = db.fetchPendingPayments()
+	pmts, err := db.fetchPendingPayments()
 	if err != nil {
 		t.Fatalf("pendingPayments error: %v", err)
 	}
@@ -1215,9 +1197,7 @@ func testPaymentMgr(t *testing.T) {
 		t.Fatalf("expected 2 pending payments, got %d", len(pmts))
 	}
 
-	xt = dcrutil.Amount(0)
-	yt = dcrutil.Amount(0)
-	ft = dcrutil.Amount(0)
+	var xt, yt, ft dcrutil.Amount
 	for _, pmt := range pmts {
 		if pmt.Account == xID {
 			xt += pmt.Amount
@@ -1236,31 +1216,9 @@ func testPaymentMgr(t *testing.T) {
 	}
 
 	// Ensure the updated pool fee includes the dust amount from account x.
-	expectedFeeAmt = coinbase.MulF64(mgr.cfg.PoolFee)
+	expectedFeeAmt := coinbase.MulF64(mgr.cfg.PoolFee)
 	if ft-maxRoundingDiff < expectedFeeAmt {
 		t.Fatalf("expected the updated pool fee (%v) to be greater "+
 			"than the initial (%v)", ft, expectedFeeAmt)
-	}
-
-	// Empty the share bucket.
-	err = emptyBucket(db, shareBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Empty the payment bucket.
-	err = emptyBucket(db, paymentBkt)
-	if err != nil {
-		t.Fatalf("emptyBucket error: %v", err)
-	}
-
-	// Reset backed up values to their defaults.
-	err = db.persistLastPaymentInfo(0, 0)
-	if err != nil {
-		t.Fatalf("unable to persist default last payment info: %v", err)
-	}
-	err = db.persistLastPaymentCreatedOn(0)
-	if err != nil {
-		t.Fatalf("unable to persist default last payment created on: %v", err)
 	}
 }

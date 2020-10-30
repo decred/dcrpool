@@ -198,7 +198,8 @@ func (db *BoltDB) pplnsEligibleShares(min int64) ([]*Share, error) {
 	return eligibleShares, err
 }
 
-// pruneShares removes invalidated shares from the db.
+// pruneShares removes shares with a createdOn time earlier than the provided
+// time.
 func (db *BoltDB) pruneShares(minNano int64) error {
 	funcName := "pruneShares"
 	minB := nanoToBigEndianBytes(minNano)
