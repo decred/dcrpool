@@ -66,11 +66,6 @@ func Test_BoltDB_FetchBucketHelpers(t *testing.T) {
 		t.Fatal(expectedNotFoundErr)
 	}
 
-	err = emptyBucket(db, paymentBkt)
-	if err == nil {
-		t.Fatal(expectedNotFoundErr)
-	}
-
 	// Create the pool database bucket.
 	err = db.DB.Update(func(tx *bolt.Tx) error {
 		var err error
