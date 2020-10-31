@@ -11,8 +11,8 @@ import (
 type Database interface {
 	// Utils
 	httpBackup(w http.ResponseWriter) error
-	backup(fileName string) error
-	close() error
+	Backup(fileName string) error
+	Close() error
 
 	// Pool metadata
 	fetchPoolMode() (uint32, error)

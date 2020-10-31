@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -12,7 +14,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-func TestFetchBucketHelpers(t *testing.T) {
+func Test_BoltDB_FetchBucketHelpers(t *testing.T) {
 	// Create a new empty database.
 	dbPath := "tdb"
 	os.Remove(dbPath)
@@ -104,7 +106,36 @@ func TestFetchBucketHelpers(t *testing.T) {
 	}
 }
 
-func TestInitDB(t *testing.T) {
+func Test_BoltDB_HttpBackup(t *testing.T) {
+	dbPath := "tdb"
+	os.Remove(dbPath)
+	db, err := InitBoltDB(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		err = teardownBoltDB(db, dbPath)
+		if err != nil {
+			t.Fatalf("teardown error: %v", err)
+		}
+	}()
+
+	rr := httptest.NewRecorder()
+	err = db.httpBackup(rr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := ioutil.ReadAll(rr.Result().Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) == 0 {
+		t.Fatal("expected a response body with data")
+	}
+}
+
+func Test_BoltDB_InitDB(t *testing.T) {
 	dbPath := "tdb"
 	os.Remove(dbPath)
 	db, err := InitBoltDB(dbPath)

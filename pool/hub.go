@@ -542,10 +542,10 @@ func (h *Hub) HasClients() bool {
 }
 
 // shutdown tears down the hub and releases resources used.
-func (h *Hub) shutdown() error {
+func (h *Hub) shutdown() {
 	if !h.cfg.SoloPool {
 		if h.walletClose != nil {
-			h.walletClose()
+			_ = h.walletClose()
 		}
 	}
 	if h.nodeConn != nil {
@@ -554,7 +554,6 @@ func (h *Hub) shutdown() error {
 	if h.notifClient != nil {
 		_ = h.notifClient.CloseSend()
 	}
-	return h.cfg.DB.close()
 }
 
 // Run handles the process lifecycles of the pool hub.
@@ -566,21 +565,9 @@ func (h *Hub) Run(ctx context.Context) {
 	go h.chainState.handleChainUpdates(ctx)
 	h.wg.Add(1)
 
-	// Start a goroutine which will wait for the application context to be
-	// cancelled, and then write a database backup.
-	h.wg.Add(1)
-	go func() {
-		<-ctx.Done()
-		log.Tracef("backing up db.")
-		err := h.cfg.DB.backup(backupFile)
-		if err != nil {
-			log.Error(err)
-		}
-		h.wg.Done()
-	}()
-
+	// Wait until all hub processes have terminated, and then shutdown.
 	h.wg.Wait()
-	_ = h.shutdown()
+	h.shutdown()
 }
 
 // FetchClients returns all connected pool clients.

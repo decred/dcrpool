@@ -52,7 +52,7 @@ func setupDB() error {
 
 // teardownBoltDB closes the connection to the db and deletes the db file.
 func teardownBoltDB(db *BoltDB, dbPath string) error {
-	err := db.close()
+	err := db.Close()
 	if err != nil {
 		return err
 	}

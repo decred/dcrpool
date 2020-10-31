@@ -26,6 +26,11 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+const (
+	// dbBackupFile is the database backup file name.
+	dbBackupFile = "backup.kv"
+)
+
 // miningPool represents a decred Proof-of-Work mining pool.
 type miningPool struct {
 	cfg    *config
@@ -36,7 +41,7 @@ type miningPool struct {
 }
 
 // newPool initializes the mining pool.
-func newPool(cfg *config) (*miningPool, error) {
+func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 	p := new(miningPool)
 	p.cfg = cfg
 	dcrdRPCCfg := &rpcclient.ConnConfig{
@@ -91,11 +96,6 @@ func newPool(cfg *config) (*miningPool, error) {
 		return nil, err
 	}
 
-	db, err := pool.InitBoltDB(cfg.DBFile)
-	if err != nil {
-		return nil, err
-	}
-
 	hcfg := &pool.HubConfig{
 		DB:                    db,
 		ActiveNet:             cfg.net.Params,
@@ -114,7 +114,7 @@ func newPool(cfg *config) (*miningPool, error) {
 	}
 	p.hub, err = pool.NewHub(p.cancel, hcfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize hub: %v", err)
 	}
 
 	// Establish a connection to the mining node.
@@ -250,9 +250,15 @@ func main() {
 		}
 	}()
 
-	p, err := newPool(cfg)
+	db, err := pool.InitBoltDB(cfg.DBFile)
 	if err != nil {
-		mpLog.Error(err)
+		mpLog.Errorf("Failed to initialize database: %v", err)
+		os.Exit(1)
+	}
+
+	p, err := newPool(db, cfg)
+	if err != nil {
+		mpLog.Errorf("Failed to initialize pool: %v", err)
 		os.Exit(1)
 	}
 
@@ -289,4 +295,13 @@ func main() {
 	}()
 	p.gui.Run(p.ctx)
 	p.hub.Run(p.ctx)
+
+	// hub.Run() blocks until the pool is fully shut down. When it returns,
+	// close the DB and write a backup file.
+	db.Close()
+	mpLog.Tracef("Backing up database.")
+	err = db.Backup(dbBackupFile)
+	if err != nil {
+		mpLog.Errorf("Failed to write database backup file: %v", err)
+	}
 }

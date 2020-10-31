@@ -65,7 +65,7 @@ func TestUpgrades(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer db.close()
+				defer db.Close()
 				err = upgradeDB(db)
 				if err != nil {
 					t.Fatalf("Upgrade failed: %v", err)
