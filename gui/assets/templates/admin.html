@@ -9,11 +9,12 @@
             <h1 class="mr-auto text-nowrap">Admin Panel</h1>
             
             <div class="row mr-1">
+                {{ if .BackupAvailable }}
                 <form class="p-2" action="/backup" method="post">
                     {{.HeaderData.CSRF}}
                     <button type="submit" class="btn btn-primary btn-small">Backup</button>
                 </form>
-                
+                {{ end }}
                 <form class="p-2" action="/logout" method="post">
                     {{.HeaderData.CSRF}}
                     <button type="submit" class="btn btn-primary btn-small">Logout</button>

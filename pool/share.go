@@ -158,8 +158,7 @@ func (db *BoltDB) ppsEligibleShares(max int64) ([]*Share, error) {
 	return eligibleShares, err
 }
 
-// pplnsEligibleShares fetches all shares keyed greater than the provided
-// minimum.
+// pplnsEligibleShares fetches all shares created after the provided time.
 func (db *BoltDB) pplnsEligibleShares(min int64) ([]*Share, error) {
 	funcName := "pplnsEligibleShares"
 	eligibleShares := make([]*Share, 0)

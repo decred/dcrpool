@@ -41,17 +41,13 @@ of the address mining rewards are paid to and its name, formatted as:
 the address provided in the username to create an account, all other connected 
 miners with the same address set will contribute work to that account.  
 
-As a contingency, the pool maintains a backup of the database (`backup.kv`), 
-created on shutdown in the same directory as the database itself.
-
 The user interface of the pool provides public access to statistics and pool 
 account data. Users of the pool can access all payments, mined blocks by the 
 account and also work contributed by clients of the account via the interface. 
 The interface is only accessible via HTTPS and by default uses a self-signed 
 certificate, served on port `:8080`. In production, particularly for pool 
 mining, a certificate from an authority (`CA`) like 
-[letsencrypt](https://letsencrypt.org/) is recommended. The user interface also 
-provides pool administrators database backup functionality when needed.
+[letsencrypt](https://letsencrypt.org/) is recommended.
 
 ## Installing and Updating
 
@@ -74,6 +70,17 @@ run `go install . ./cmd/...` in the root directory.  Some notes:
 
 - The `dcrpool` executable will be installed to `$GOPATH/bin`.  `GOPATH`
   defaults to `$HOME/go` (or `%USERPROFILE%\go` on Windows) if unset.
+
+## Database
+
+dcrpool can run with either a [Bolt database](https://github.com/etcd-io/bbolt)
+or a [Postgres database](https://www.postgresql.org/). Bolt is used by default.
+[postgres.md](./docs/postgres.md) has more details about running with Postgres.
+
+When running in Bolt mode, the pool maintains a backup of the database
+(`backup.kv`), created on shutdown in the same directory as the database itself.
+The user interface also provides functionality for pool administrators to backup
+Bolt database when necessary.
 
 ### Example of obtaining and building from source on Ubuntu
 

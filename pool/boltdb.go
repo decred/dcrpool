@@ -406,6 +406,7 @@ func (db *BoltDB) loadLastPaymentCreatedOn() (int64, error) {
 	return createdOn, nil
 }
 
+// Close closes the Bolt database.
 func (db *BoltDB) Close() error {
 	return db.DB.Close()
 }

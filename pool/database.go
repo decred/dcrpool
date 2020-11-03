@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"database/sql"
 	"net/http"
 
 	bolt "go.etcd.io/bbolt"
@@ -66,4 +67,9 @@ type Database interface {
 // BoltDB is a wrapper around bolt.DB which implements the Database interface.
 type BoltDB struct {
 	DB *bolt.DB
+}
+
+// PostgresDB is a wrapper around sql.DB which implements the Database interface.
+type PostgresDB struct {
+	DB *sql.DB
 }

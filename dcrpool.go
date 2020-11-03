@@ -212,13 +212,17 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 		FetchLastPaymentInfo:  p.hub.FetchLastPaymentInfo,
 		FetchMinedWork:        p.hub.FetchMinedWork,
 		FetchWorkQuotas:       p.hub.FetchWorkQuotas,
-		HTTPBackupDB:          p.hub.HTTPBackupDB,
 		FetchClients:          p.hub.FetchClients,
 		AccountExists:         p.hub.AccountExists,
 		FetchArchivedPayments: p.hub.FetchArchivedPayments,
 		FetchPendingPayments:  p.hub.FetchPendingPayments,
 		FetchCacheChannel:     p.hub.FetchCacheChannel,
 	}
+
+	if !cfg.UsePostgres {
+		gcfg.HTTPBackupDB = p.hub.HTTPBackupDB
+	}
+
 	p.gui, err = gui.NewGUI(gcfg)
 	if err != nil {
 		p.hub.CloseListeners()
@@ -245,7 +249,14 @@ func main() {
 		}
 	}()
 
-	db, err := pool.InitBoltDB(cfg.DBFile)
+	var db pool.Database
+	if cfg.UsePostgres {
+		db, err = pool.InitPostgresDB(cfg.PGHost, cfg.PGPort, cfg.PGUser,
+			cfg.PGPass, cfg.PGDBName)
+	} else {
+		db, err = pool.InitBoltDB(cfg.DBFile)
+	}
+
 	if err != nil {
 		mpLog.Errorf("failed to initialize database: %v", err)
 		os.Exit(1)
@@ -292,11 +303,13 @@ func main() {
 	p.hub.Run(p.ctx)
 
 	// hub.Run() blocks until the pool is fully shut down. When it returns,
-	// write a backup of the DB, and then close the DB.
-	mpLog.Tracef("Backing up database.")
-	err = db.Backup(pool.BoltBackupFile)
-	if err != nil {
-		mpLog.Errorf("failed to write database backup file: %v", err)
+	// write a backup of the DB (if not using postgres), and then close the DB.
+	if !cfg.UsePostgres {
+		mpLog.Tracef("Backing up database.")
+		err = db.Backup(pool.BoltBackupFile)
+		if err != nil {
+			mpLog.Errorf("failed to write database backup file: %v", err)
+		}
 	}
 
 	db.Close()

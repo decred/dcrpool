@@ -22,6 +22,7 @@ type adminPageData struct {
 	ArchivedPayments      []*archivedPayment
 	PendingPaymentsTotal  string
 	PendingPayments       []*pendingPayment
+	BackupAvailable       bool
 }
 
 // adminPage is the handler for "GET /admin". If the current session is
@@ -73,6 +74,7 @@ func (ui *GUI) adminPage(w http.ResponseWriter, r *http.Request) {
 		PendingPayments:       pendingPmts,
 		ArchivedPaymentsTotal: totalArchived,
 		ArchivedPayments:      archivedPmts,
+		BackupAvailable:       ui.cfg.HTTPBackupDB != nil,
 	}
 
 	ui.renderTemplate(w, "admin", pageData)

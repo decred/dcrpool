@@ -58,6 +58,12 @@ const (
 	defaultMaxConnectionsPerHost = 100 // 100 connected clients per host
 	defaultWalletAccount         = 0
 	defaultCoinbaseConfTimeout   = time.Minute * 5 // one block time
+	defaultUsePostgres           = false
+	defaultPGHost                = "127.0.0.1"
+	defaultPGPort                = 5432
+	defaultPGUser                = "dcrpooluser"
+	defaultPGPass                = "12345"
+	defaultPGDBName              = "dcrpooldb"
 )
 
 var (
@@ -128,6 +134,12 @@ type config struct {
 	DCR1Port              uint32        `long:"dcr1port" ini-name:"dcr1port" description:"Obelisk DCR1 connection port."`
 	CoinbaseConfTimeout   time.Duration `long:"conftimeout" ini-name:"conftimeout" description:"The duration to wait for coinbase confirmations."`
 	GenCertsOnly          bool          `long:"gencertsonly" ini-name:"gencertsonly" description:"Only generate needed TLS key pairs and terminate."`
+	UsePostgres           bool          `long:"postgres" ini-name:"postgres" description:"Use postgres database instead of bolt."`
+	PGHost                string        `long:"postgreshost" ini-name:"postgreshost" description:"Host to establish a postgres connection."`
+	PGPort                uint32        `long:"postgresport" ini-name:"postgresport" description:"Port to establish a postgres connection."`
+	PGUser                string        `long:"postgresuser" ini-name:"postgresuser" description:"Username for postgres authentication."`
+	PGPass                string        `long:"postgrespass" ini-name:"postgrespass" description:"Password for postgres authentication."`
+	PGDBName              string        `long:"postgresdbname" ini-name:"postgresdbname" description:"Postgres database name."`
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
 	net                   *params
@@ -362,6 +374,12 @@ func loadConfig() (*config, []string, error) {
 		DCR1Port:              defaultDCR1Port,
 		WalletAccount:         defaultWalletAccount,
 		CoinbaseConfTimeout:   defaultCoinbaseConfTimeout,
+		UsePostgres:           defaultUsePostgres,
+		PGHost:                defaultPGHost,
+		PGPort:                defaultPGPort,
+		PGUser:                defaultPGUser,
+		PGPass:                defaultPGPass,
+		PGDBName:              defaultPGDBName,
 	}
 
 	// Service options which are only added on Windows.

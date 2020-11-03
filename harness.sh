@@ -29,6 +29,15 @@ MINER_MAX_PROCS=1
 PAYMENT_METHOD="pplns"
 LAST_N_PERIOD=5m
 GUI_DIR="${HARNESS_ROOT}/gui"
+
+# Using postgres requires the DB specified below to exist and contain no data.
+USE_POSTGRES=true
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
+POSTGRES_USER=dcrpooluser
+POSTGRES_PASS=12345
+POSTGRES_DBNAME=dcrpooldb
+
 # CPU_MINING_ADDR is the mining address printed during creation of vwallet.
 # Initial block rewards from `generate` are sent here so vwallet can buy tickets.
 CPU_MINING_ADDR="SsaJxXSymEGroxAiUY9u1mRq1DDWLxn5WhB"
@@ -128,6 +137,12 @@ adminpass=${ADMIN_PASS}
 guidir=${GUI_DIR}
 designation=${TMUX_SESSION}
 profile=6060
+postgres=${USE_POSTGRES}
+postgreshost=${POSTGRES_HOST}
+postgresport=${POSTGRES_PORT}
+postgresuser=${POSTGRES_USER}
+postgrespass=${POSTGRES_PASS}
+postgresdbname=${POSTGRES_DBNAME}
 EOF
 
 cat > "${HARNESS_ROOT}/mwallet/dcrmwctl.conf" <<EOF
