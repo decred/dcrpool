@@ -131,7 +131,7 @@ func (ui *GUI) downloadDatabaseBackup(w http.ResponseWriter, r *http.Request) {
 
 	err := ui.cfg.HTTPBackupDB(w)
 	if err != nil {
-		log.Errorf("Error backing up database: %v", err)
+		log.Errorf("error backing up database: %v", err)
 		// Don't write any http body here because Content-Length has already
 		// been set in BackupDB. Status is enough to indicate an error.
 		w.WriteHeader(http.StatusInternalServerError)

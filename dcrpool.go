@@ -26,11 +26,6 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-const (
-	// dbBackupFile is the database backup file name.
-	dbBackupFile = "backup.kv"
-)
-
 // miningPool represents a decred Proof-of-Work mining pool.
 type miningPool struct {
 	cfg    *config
@@ -252,13 +247,13 @@ func main() {
 
 	db, err := pool.InitBoltDB(cfg.DBFile)
 	if err != nil {
-		mpLog.Errorf("Failed to initialize database: %v", err)
+		mpLog.Errorf("failed to initialize database: %v", err)
 		os.Exit(1)
 	}
 
 	p, err := newPool(db, cfg)
 	if err != nil {
-		mpLog.Errorf("Failed to initialize pool: %v", err)
+		mpLog.Errorf("failed to initialize pool: %v", err)
 		os.Exit(1)
 	}
 
@@ -300,8 +295,8 @@ func main() {
 	// close the DB and write a backup file.
 	db.Close()
 	mpLog.Tracef("Backing up database.")
-	err = db.Backup(dbBackupFile)
+	err = db.Backup(pool.BoltBackupFile)
 	if err != nil {
-		mpLog.Errorf("Failed to write database backup file: %v", err)
+		mpLog.Errorf("failed to write database backup file: %v", err)
 	}
 }

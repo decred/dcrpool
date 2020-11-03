@@ -53,6 +53,8 @@ var (
 	csrfSecret = []byte("csrfsecret")
 	// PoolFeesK is the key used to track pool fee payouts.
 	PoolFeesK = "fees"
+	// BoltBackupFile is the database backup file name.
+	BoltBackupFile = "backup.kv"
 )
 
 // openBoltDB creates a connection to the provided bolt storage, the returned
