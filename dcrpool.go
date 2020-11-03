@@ -292,11 +292,12 @@ func main() {
 	p.hub.Run(p.ctx)
 
 	// hub.Run() blocks until the pool is fully shut down. When it returns,
-	// close the DB and write a backup file.
-	db.Close()
+	// write a backup of the DB, and then close the DB.
 	mpLog.Tracef("Backing up database.")
 	err = db.Backup(pool.BoltBackupFile)
 	if err != nil {
 		mpLog.Errorf("failed to write database backup file: %v", err)
 	}
+
+	db.Close()
 }
