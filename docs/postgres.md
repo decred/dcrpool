@@ -5,6 +5,8 @@ Tested with PostgreSQL 13.0.
 **Note:** When running in Postgres mode, backups will not be created
 automatically by dcrpool.
 
+## Setup
+
 1. Connect to your instance of PostgreSQL using `psql` to create a new database
     and a new user for dcrpool.
     Be sure to substitute the example password `12345` with something more secure.
@@ -38,3 +40,10 @@ automatically by dcrpool.
     postgrespass=12345
     postgresdbname=dcrpooldb
     ```
+
+## Tuning
+
+A helpful online tool to determine good settings for your system is called
+[PGTune](https://pgtune.leopard.in.ua/#/). After providing basic information
+about your hardware, PGTune will output a snippet of optimization settings to
+add to your PostgreSQL config.
