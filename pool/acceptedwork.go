@@ -61,6 +61,7 @@ func NewAcceptedWork(blockHash string, prevHash string, height uint32,
 }
 
 // fetchAcceptedWork fetches the accepted work referenced by the provided id.
+// Returns an error if the work is not found.
 func (db *BoltDB) fetchAcceptedWork(id string) (*AcceptedWork, error) {
 	const funcName = "fetchAcceptedWork"
 	var work AcceptedWork
@@ -122,7 +123,8 @@ func (db *BoltDB) persistAcceptedWork(work *AcceptedWork) error {
 	})
 }
 
-// updateAcceptedWork persists modifications to an existing work.
+// updateAcceptedWork persists modifications to an existing work. Returns an
+// error if the work is not found.
 func (db *BoltDB) updateAcceptedWork(work *AcceptedWork) error {
 	const funcName = "updateAcceptedWork"
 	return db.DB.Update(func(tx *bolt.Tx) error {

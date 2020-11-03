@@ -24,28 +24,54 @@ var (
 		"SsnbEmxCVXskgTHXvf3rEa17NA39qQuGHwQ",
 		chaincfg.SimNetParams())
 
-	db *BoltDB
+	db Database
 )
 
-// setupDB initializes the pool database.
-func setupDB() error {
-	os.Remove(testDB)
-	var err error
-	db, err = openBoltDB(testDB)
+func setupPostgresDB() (*PostgresDB, error) {
+	pgHost := "127.0.0.1"
+	pgPort := uint32(5432)
+	pgUser := "dcrpooluser"
+	pgPass := "12345"
+	pgDBName := "dcrpooltestdb"
+	return InitPostgresDB(pgHost, pgPort, pgUser, pgPass, pgDBName)
+}
+
+func teardownPostgresDB(db *PostgresDB) error {
+	const stmt = `
+		DROP TABLE IF EXISTS accounts;
+		DROP TABLE IF EXISTS jobs;
+		DROP TABLE IF EXISTS shares;
+		DROP TABLE IF EXISTS payments;
+		DROP TABLE IF EXISTS archivedpayments;
+		DROP TABLE IF EXISTS acceptedwork;
+		DROP TABLE IF EXISTS metadata;
+	`
+	_, err := db.DB.Exec(stmt)
 	if err != nil {
 		return err
+	}
+	return db.Close()
+}
+
+// setupBoltDB initializes a bolt database.
+func setupBoltDB() (*BoltDB, error) {
+	os.Remove(testDB)
+	var err error
+	db, err := openBoltDB(testDB)
+	if err != nil {
+		return nil, err
 	}
 
 	err = createBuckets(db)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = upgradeDB(db)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return err
+	return db, err
 }
 
 // teardownBoltDB closes the connection to the db and deletes the db file.
@@ -58,11 +84,10 @@ func teardownBoltDB(db *BoltDB, dbPath string) error {
 }
 
 // TestPool runs all pool related tests which require a real database.
-// An clean instance of bbolt is created and initialized with buckets before
-// each test.
 func TestPool(t *testing.T) {
 
-	// All sub-tests to run.
+	// All sub-tests to run. All of these tests will be run with a postgres
+	// database and a bolt database.
 	tests := map[string]func(*testing.T){
 		"testCSRFSecret":             testCSRFSecret,
 		"testLastPaymentInfo":        testLastPaymentInfo,
@@ -89,21 +114,37 @@ func TestPool(t *testing.T) {
 		"testHub":                    testHub,
 	}
 
+	// Run all tests with bolt DB.
 	for testName, test := range tests {
-		// Create a new blank database for each sub-test.
-		var err error
-		err = setupDB()
+		boltDB, err := setupBoltDB()
 		if err != nil {
-			t.Fatalf("setup error: %v", err)
+			t.Fatalf("setupBoltDB error: %v", err)
 		}
 
-		// Run the sub-test.
-		t.Run(testName, test)
+		db = boltDB
 
-		// Remove database.
-		err = teardownBoltDB(db, testDB)
+		t.Run(testName+"_Bolt", test)
+
+		err = teardownBoltDB(boltDB, testDB)
 		if err != nil {
-			t.Fatalf("teardown error: %v", err)
+			t.Fatalf("bolt teardown error: %v", err)
+		}
+	}
+
+	// Run all tests with postgres DB.
+	for testName, test := range tests {
+		postgresDB, err := setupPostgresDB()
+		if err != nil {
+			t.Fatalf("setupPostgresDB error: %v", err)
+		}
+
+		db = postgresDB
+
+		t.Run(testName+"_Postgres", test)
+
+		err = teardownPostgresDB(postgresDB)
+		if err != nil {
+			t.Fatalf("postgres teardown error: %v", err)
 		}
 	}
 

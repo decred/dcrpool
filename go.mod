@@ -22,6 +22,7 @@ require (
 	github.com/jessevdk/go-flags v1.4.1-0.20200711081900-c17162fe8fd7
 	github.com/jrick/logrotate v1.0.0
 	github.com/kr/pretty v0.1.0 // indirect
+	github.com/lib/pq v1.8.0
 	go.etcd.io/bbolt v1.3.5
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/time v0.0.0-20200416051211-89c76fbcd5d1
