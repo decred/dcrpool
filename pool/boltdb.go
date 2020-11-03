@@ -53,8 +53,8 @@ var (
 	csrfSecret = []byte("csrfsecret")
 	// PoolFeesK is the key used to track pool fee payouts.
 	PoolFeesK = "fees"
-	// backup is the database backup file name.
-	backupFile = "backup.kv"
+	// BoltBackupFile is the database backup file name.
+	BoltBackupFile = "backup.kv"
 )
 
 // openBoltDB creates a connection to the provided bolt storage, the returned
@@ -130,9 +130,9 @@ func createBuckets(db *BoltDB) error {
 	return err
 }
 
-// backup saves a copy of the db to file. The file will be saved in the same
+// Backup saves a copy of the db to file. The file will be saved in the same
 // directory as the current db file.
-func (db *BoltDB) backup(backupFileName string) error {
+func (db *BoltDB) Backup(backupFileName string) error {
 	backupPath := filepath.Join(filepath.Dir(db.DB.Path()), backupFileName)
 	return db.DB.View(func(tx *bolt.Tx) error {
 		err := tx.CopyFile(backupPath, 0600)
@@ -406,7 +406,7 @@ func (db *BoltDB) loadLastPaymentCreatedOn() (int64, error) {
 	return createdOn, nil
 }
 
-func (db *BoltDB) close() error {
+func (db *BoltDB) Close() error {
 	return db.DB.Close()
 }
 

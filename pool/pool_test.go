@@ -1,13 +1,11 @@
 package pool
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
-	bolt "go.etcd.io/bbolt"
 )
 
 var (
@@ -52,37 +50,11 @@ func setupDB() error {
 
 // teardownBoltDB closes the connection to the db and deletes the db file.
 func teardownBoltDB(db *BoltDB, dbPath string) error {
-	err := db.close()
+	err := db.Close()
 	if err != nil {
 		return err
 	}
 	return os.Remove(dbPath)
-}
-
-// emptyBucket deletes all k/v pairs in the provided bucket.
-func emptyBucket(db *BoltDB, bucket []byte) error {
-	const funcName = "emptyBucket"
-	return db.DB.Update(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		if pbkt == nil {
-			desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-				string(poolBkt))
-			return dbError(ErrBucketNotFound, desc)
-		}
-		b := pbkt.Bucket(bucket)
-		toDelete := [][]byte{}
-		c := b.Cursor()
-		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			toDelete = append(toDelete, k)
-		}
-		for _, k := range toDelete {
-			err := b.Delete(k)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
 }
 
 // TestPool runs all pool related tests which require a real database.

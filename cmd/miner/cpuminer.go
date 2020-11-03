@@ -139,7 +139,7 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 				var header wire.BlockHeader
 				err := header.FromBytes(headerB)
 				if err != nil {
-					log.Errorf("Failed to create solved block header "+
+					log.Errorf("failed to create solved block header "+
 						" from bytes: %v", err)
 					return false
 				}

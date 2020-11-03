@@ -5,13 +5,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/big"
 	"net"
-	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -481,32 +477,6 @@ func testHub(t *testing.T) {
 		t.Fatal("expected a non-nil csrf secref")
 	}
 
-	// Ensure the database can be backed up.
-	rr := httptest.NewRecorder()
-	err = hub.HTTPBackupDB(rr)
-	if err != nil {
-		t.Fatalf("[BackupDB] unexpected error: %v", err)
-	}
-	body, err := ioutil.ReadAll(rr.Result().Body)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(body) == 0 {
-		t.Fatal("expected a response body with data")
-	}
-
-	backup := filepath.Join(filepath.Dir(db.DB.Path()), backupFile)
-
 	cancel()
 	hub.wg.Wait()
-
-	// Delete the database backup.
-	if _, err := os.Stat(backup); os.IsNotExist(err) {
-		t.Fatalf("backup (%s) does not exist", backup)
-	}
-	err = os.Remove(backup)
-	if err != nil {
-		t.Fatalf("backup deletion error: %v", err)
-	}
-
 }
