@@ -1,8 +1,9 @@
 package pool
 
 import (
-	"errors"
 	"testing"
+
+	"github.com/decred/dcrpool/errors"
 )
 
 func testJob(t *testing.T) {
@@ -42,7 +43,7 @@ func testJob(t *testing.T) {
 
 	// Creating the same job twice should fail.
 	err = db.persistJob(jobA)
-	if !errors.Is(err, ErrValueFound) {
+	if !errors.Is(err, errors.ValueFound) {
 		t.Fatalf("expected value found error, got %v", err)
 	}
 
@@ -81,11 +82,11 @@ func testJob(t *testing.T) {
 
 	// Ensure the jobs were deleted.
 	_, err = db.fetchJob(jobB.UUID)
-	if !errors.Is(err, ErrValueNotFound) {
+	if !errors.Is(err, errors.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 	_, err = db.fetchJob(jobC.UUID)
-	if !errors.Is(err, ErrValueNotFound) {
+	if !errors.Is(err, errors.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 
@@ -128,7 +129,7 @@ func testDeleteJobsBeforeHeight(t *testing.T) {
 
 	// Ensure job A has been pruned with job B remaining.
 	_, err = db.fetchJob(jobA.UUID)
-	if !errors.Is(err, ErrValueNotFound) {
+	if !errors.Is(err, errors.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrpool/errors"
 )
 
 // Message types.
@@ -173,27 +174,27 @@ func ParseAuthorizeRequest(req *Request) (string, error) {
 	const funcName = "ParseAuthorizeRequest"
 	if req.Method != Authorize {
 		desc := fmt.Sprintf("%s: request method is not authorize", funcName)
-		return "", msgError(ErrParse, desc)
+		return "", errors.MsgError(errors.Parse, desc)
 	}
 
 	auth, ok := req.Params.([]interface{})
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse authorize parameters",
 			funcName)
-		return "", msgError(ErrParse, desc)
+		return "", errors.MsgError(errors.Parse, desc)
 	}
 
 	if len(auth) < 2 {
 		desc := fmt.Sprintf("%s: expected 2 params for authorize request, "+
 			"got %d", funcName, len(auth))
-		return "", msgError(ErrParse, desc)
+		return "", errors.MsgError(errors.Parse, desc)
 	}
 
 	username, ok := auth[0].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse username parameter "+
 			"for authorize request", funcName)
-		return "", msgError(ErrParse, desc)
+		return "", errors.MsgError(errors.Parse, desc)
 	}
 
 	return username, nil
@@ -215,7 +216,7 @@ func ParseAuthorizeResponse(resp *Response) (bool, *StratumError, error) {
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse authorize response "+
 			"result parameter", funcName)
-		return false, nil, msgError(ErrParse, desc)
+		return false, nil, errors.MsgError(errors.Parse, desc)
 	}
 
 	return status, resp.Error, nil
@@ -241,27 +242,27 @@ func ParseSubscribeRequest(req *Request) (string, string, error) {
 	const funcName = "ParseSubscribeRequest"
 	if req.Method != Subscribe {
 		desc := fmt.Sprintf("%s: request method is not subscribe", funcName)
-		return "", "", msgError(ErrParse, desc)
+		return "", "", errors.MsgError(errors.Parse, desc)
 	}
 
 	params, ok := req.Params.([]interface{})
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse subscribe parameters",
 			funcName)
-		return "", "", msgError(ErrParse, desc)
+		return "", "", errors.MsgError(errors.Parse, desc)
 	}
 
 	if len(params) == 0 {
 		desc := fmt.Sprintf("%s: no user agent provided for subscribe "+
 			"request", funcName)
-		return "", "", msgError(ErrParse, desc)
+		return "", "", errors.MsgError(errors.Parse, desc)
 	}
 
 	miner, ok := params[0].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse miner parameter for "+
 			"subscribe request", funcName)
-		return "", "", msgError(ErrParse, desc)
+		return "", "", errors.MsgError(errors.Parse, desc)
 	}
 
 	id := ""
@@ -270,7 +271,7 @@ func ParseSubscribeRequest(req *Request) (string, string, error) {
 		if !ok {
 			desc := fmt.Sprintf("%s: unable to parse id parameter for "+
 				"subscribe request", funcName)
-			return "", "", msgError(ErrParse, desc)
+			return "", "", errors.MsgError(errors.Parse, desc)
 		}
 	}
 
@@ -302,63 +303,63 @@ func ParseSubscribeResponse(resp *Response) (string, string, string, uint64, err
 	if resp.Error != nil {
 		desc := fmt.Sprintf("%s: %d, %s, %s", funcName, resp.Error.Code,
 			resp.Error.Message, resp.Error.Traceback)
-		return "", "", "", 0, msgError(ErrParse, desc)
+		return "", "", "", 0, errors.MsgError(errors.Parse, desc)
 	}
 
 	res, ok := resp.Result.([]interface{})
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse subscribe response "+
 			"result parameter", funcName)
-		return "", "", "", 0, msgError(ErrParse, desc)
+		return "", "", "", 0, errors.MsgError(errors.Parse, desc)
 	}
 
 	subs, ok := res[0].([]interface{})
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse subscription details",
 			funcName)
-		return "", "", "", 0, msgError(ErrParse, desc)
+		return "", "", "", 0, errors.MsgError(errors.Parse, desc)
 	}
 
 	diff, ok := subs[0].([]interface{})
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse subscription difficulty "+
 			"id details", funcName)
-		return "", "", "", 0, msgError(ErrParse, desc)
+		return "", "", "", 0, errors.MsgError(errors.Parse, desc)
 	}
 
 	diffID, ok := diff[1].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse subscription difficulty id",
 			funcName)
-		return "", "", "", 0, msgError(ErrParse, desc)
+		return "", "", "", 0, errors.MsgError(errors.Parse, desc)
 	}
 
 	notify, ok := subs[1].([]interface{})
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse subscription notify "+
 			"id details", funcName)
-		return "", "", "", 0, msgError(ErrParse, desc)
+		return "", "", "", 0, errors.MsgError(errors.Parse, desc)
 	}
 
 	notifyID, ok := notify[1].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse subscription notify id",
 			funcName)
-		return "", "", "", 0, msgError(ErrParse, desc)
+		return "", "", "", 0, errors.MsgError(errors.Parse, desc)
 	}
 
 	extraNonce1, ok := res[1].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse subscription ExtraNonce1 "+
 			"parameter", funcName)
-		return "", "", "", 0, msgError(ErrParse, desc)
+		return "", "", "", 0, errors.MsgError(errors.Parse, desc)
 	}
 
 	nonce2Size, ok := res[2].(float64)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse subscription "+
 			"ExtraNonce2Size parameter", funcName)
-		return "", "", "", 0, msgError(ErrParse, desc)
+		return "", "", "", 0, errors.MsgError(errors.Parse, desc)
 	}
 
 	extraNonce2Size := uint64(nonce2Size)
@@ -382,14 +383,14 @@ func ParseSetDifficultyNotification(req *Request) (uint64, error) {
 	if req.Method != SetDifficulty {
 		desc := fmt.Sprintf("%s: notification method is not set "+
 			"difficulty", funcName)
-		return 0, msgError(ErrParse, desc)
+		return 0, errors.MsgError(errors.Parse, desc)
 	}
 
 	params, ok := req.Params.([]interface{})
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse set difficulty "+
 			"parameters", funcName)
-		return 0, msgError(ErrParse, desc)
+		return 0, errors.MsgError(errors.Parse, desc)
 	}
 
 	return uint64(params[0].(float64)), nil
@@ -409,42 +410,42 @@ func ParseWorkNotification(req *Request) (string, string, string, string, string
 	const funcName = "ParseWorkNotification"
 	if req.Method != Notify {
 		desc := fmt.Sprintf("%s: notification method is not notify", funcName)
-		return "", "", "", "", "", "", "", false, msgError(ErrParse, desc)
+		return "", "", "", "", "", "", "", false, errors.MsgError(errors.Parse, desc)
 	}
 
 	params, ok := req.Params.([]interface{})
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification "+
 			"parameters", funcName)
-		return "", "", "", "", "", "", "", false, msgError(ErrParse, desc)
+		return "", "", "", "", "", "", "", false, errors.MsgError(errors.Parse, desc)
 	}
 
 	jobID, ok := params[0].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification "+
 			"jobID parameter", funcName)
-		return "", "", "", "", "", "", "", false, msgError(ErrParse, desc)
+		return "", "", "", "", "", "", "", false, errors.MsgError(errors.Parse, desc)
 	}
 
 	prevBlock, ok := params[1].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification prevBlock "+
 			"parameter", funcName)
-		return "", "", "", "", "", "", "", false, msgError(ErrParse, desc)
+		return "", "", "", "", "", "", "", false, errors.MsgError(errors.Parse, desc)
 	}
 
 	genTx1, ok := params[2].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification genTx1 "+
 			"parameter", funcName)
-		return "", "", "", "", "", "", "", false, msgError(ErrParse, desc)
+		return "", "", "", "", "", "", "", false, errors.MsgError(errors.Parse, desc)
 	}
 
 	genTx2, ok := params[3].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification genTx2 "+
 			"parameter", funcName)
-		return "", "", "", "", "", "", "", false, msgError(ErrParse, desc)
+		return "", "", "", "", "", "", "", false, errors.MsgError(errors.Parse, desc)
 	}
 
 	// Note that param[4] which is the list of merkle branches is not
@@ -455,28 +456,28 @@ func ParseWorkNotification(req *Request) (string, string, string, string, string
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification "+
 			"blockVersion parameter", funcName)
-		return "", "", "", "", "", "", "", false, msgError(ErrParse, desc)
+		return "", "", "", "", "", "", "", false, errors.MsgError(errors.Parse, desc)
 	}
 
 	nBits, ok := params[6].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification "+
 			"nBits parameter", funcName)
-		return "", "", "", "", "", "", "", false, msgError(ErrParse, desc)
+		return "", "", "", "", "", "", "", false, errors.MsgError(errors.Parse, desc)
 	}
 
 	nTime, ok := params[7].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification "+
 			"nTime parameter", funcName)
-		return "", "", "", "", "", "", "", false, msgError(ErrParse, desc)
+		return "", "", "", "", "", "", "", false, errors.MsgError(errors.Parse, desc)
 	}
 
 	cleanJob, ok := params[8].(bool)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification "+
 			"cleanJob parameter", funcName)
-		return "", "", "", "", "", "", "", false, msgError(ErrParse, desc)
+		return "", "", "", "", "", "", "", false, errors.MsgError(errors.Parse, desc)
 	}
 
 	return jobID, prevBlock, genTx1, genTx2, blockVersion,
@@ -501,7 +502,7 @@ func GenerateBlockHeader(blockVersionE string, prevBlockE string,
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to decode block header %s: %v",
 			funcName, headerE, err)
-		return nil, msgError(ErrDecode, desc)
+		return nil, errors.MsgError(errors.Decode, desc)
 	}
 
 	var header wire.BlockHeader
@@ -509,7 +510,7 @@ func GenerateBlockHeader(blockVersionE string, prevBlockE string,
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to create header from bytes %s: %v",
 			funcName, headerE, err)
-		return nil, msgError(ErrHeaderInvalid, desc)
+		return nil, errors.MsgError(errors.HeaderInvalid, desc)
 	}
 	return &header, nil
 }
@@ -609,14 +610,14 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string,
 
 	default:
 		desc := fmt.Sprintf("miner %s is unknown", miner)
-		return nil, msgError(ErrMinerUnknown, desc)
+		return nil, errors.MsgError(errors.MinerUnknown, desc)
 	}
 
 	solvedHeaderD, err := hex.DecodeString(string(headerEB))
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to decode solved header: %v",
 			miner, err)
-		return nil, msgError(ErrDecode, desc)
+		return nil, errors.MsgError(errors.Decode, desc)
 	}
 
 	var solvedHeader wire.BlockHeader
@@ -624,7 +625,7 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string,
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to create header from bytes: %v",
 			miner, err)
-		return nil, msgError(ErrParse, desc)
+		return nil, errors.MsgError(errors.Parse, desc)
 	}
 
 	return &solvedHeader, nil
@@ -644,52 +645,52 @@ func ParseSubmitWorkRequest(req *Request, miner string) (string, string, string,
 	const funcName = "ParseSubmitWorkRequest"
 	if req.Method != Submit {
 		desc := fmt.Sprintf("%s: request method is not submit", funcName)
-		return "", "", "", "", "", msgError(ErrParse, desc)
+		return "", "", "", "", "", errors.MsgError(errors.Parse, desc)
 	}
 
 	params, ok := req.Params.([]interface{})
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse submit work parameters",
 			funcName)
-		return "", "", "", "", "", msgError(ErrParse, desc)
+		return "", "", "", "", "", errors.MsgError(errors.Parse, desc)
 	}
 
 	if len(params) < 5 {
 		desc := fmt.Sprintf("%s: expected 5 submit work "+
 			"parameters, got %d", funcName, len(params))
-		return "", "", "", "", "", msgError(ErrParse, desc)
+		return "", "", "", "", "", errors.MsgError(errors.Parse, desc)
 	}
 
 	workerName, ok := params[0].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse workerName parameter",
 			funcName)
-		return "", "", "", "", "", msgError(ErrParse, desc)
+		return "", "", "", "", "", errors.MsgError(errors.Parse, desc)
 	}
 
 	jobID, ok := params[1].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse jobID parameter", funcName)
-		return "", "", "", "", "", msgError(ErrParse, desc)
+		return "", "", "", "", "", errors.MsgError(errors.Parse, desc)
 	}
 
 	extraNonce2, ok := params[2].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse extraNonce2 parameter",
 			funcName)
-		return "", "", "", "", "", msgError(ErrParse, desc)
+		return "", "", "", "", "", errors.MsgError(errors.Parse, desc)
 	}
 
 	nTime, ok := params[3].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse nTime parameter", funcName)
-		return "", "", "", "", "", msgError(ErrParse, desc)
+		return "", "", "", "", "", errors.MsgError(errors.Parse, desc)
 	}
 
 	nonce, ok := params[4].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse nonce parameter", funcName)
-		return "", "", "", "", "", msgError(ErrParse, desc)
+		return "", "", "", "", "", errors.MsgError(errors.Parse, desc)
 	}
 
 	return workerName, jobID, extraNonce2, nTime, nonce, nil
@@ -710,7 +711,7 @@ func ParseSubmitWorkResponse(resp *Response) (bool, *StratumError, error) {
 	status, ok := resp.Result.(bool)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse result parameter", funcName)
-		return false, nil, msgError(ErrParse, desc)
+		return false, nil, errors.MsgError(errors.Parse, desc)
 	}
 
 	return status, resp.Error, nil

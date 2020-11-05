@@ -5,11 +5,12 @@
 package pool
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrutil/v3"
+
+	"github.com/decred/dcrpool/errors"
 )
 
 func testPayment(t *testing.T) {
@@ -119,7 +120,7 @@ func testPayment(t *testing.T) {
 
 	// Ensure the payment B was archived.
 	_, err = db.fetchPayment(pmtB.UUID)
-	if !errors.Is(err, ErrValueNotFound) {
+	if !errors.Is(err, errors.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 
@@ -131,7 +132,7 @@ func testPayment(t *testing.T) {
 
 	// Ensure the payment C was deleted.
 	fetchedPayment, err = db.fetchPayment(pmtC.UUID)
-	if !errors.Is(err, ErrValueNotFound) {
+	if !errors.Is(err, errors.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 

@@ -9,7 +9,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -26,6 +25,8 @@ import (
 	"github.com/decred/dcrd/rpcclient/v6"
 	"github.com/decred/dcrd/wire"
 	"google.golang.org/grpc"
+
+	"github.com/decred/dcrpool/errors"
 )
 
 const (
@@ -269,7 +270,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	if err != nil {
 		// If pool mode is not set, assume the database is new and persist the
 		// pool mode.
-		if errors.Is(err, ErrValueNotFound) {
+		if errors.Is(err, errors.ValueNotFound) {
 			err = hcfg.DB.persistPoolMode(cfgMode)
 			if err != nil {
 				return nil, fmt.Errorf("failed to persist pool mode: %v", err)
@@ -297,7 +298,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 // submitWork sends solved block data to the consensus daemon for evaluation.
 func (h *Hub) submitWork(ctx context.Context, data *string) (bool, error) {
 	if h.nodeConn == nil {
-		return false, poolError(ErrDisconnected, "node disconnected")
+		return false, errors.PoolError(errors.Disconnected, "node disconnected")
 	}
 
 	return h.nodeConn.GetWorkSubmit(ctx, *data)
@@ -306,12 +307,12 @@ func (h *Hub) submitWork(ctx context.Context, data *string) (bool, error) {
 // getWork fetches available work from the consensus daemon.
 func (h *Hub) getWork(ctx context.Context) (string, string, error) {
 	if h.nodeConn == nil {
-		return "", "", poolError(ErrDisconnected, "node disonnected")
+		return "", "", errors.PoolError(errors.Disconnected, "node disonnected")
 	}
 	work, err := h.nodeConn.GetWork(ctx)
 	if err != nil {
 		desc := fmt.Sprintf("unable to fetch current work: %v", err)
-		return "", "", poolError(ErrGetWork, desc)
+		return "", "", errors.PoolError(errors.GetWork, desc)
 	}
 	return work.Data, work.Target, err
 }
@@ -332,7 +333,7 @@ func (h *Hub) getTxConfNotifications(txHashes []*chainhash.Hash, stopAfter int32
 	err := h.notifClient.Send(req)
 	if err != nil {
 		desc := fmt.Sprintf("unable to fetch tx confirmations: %v", err)
-		return nil, poolError(ErrTxConf, desc)
+		return nil, errors.PoolError(errors.TxConf, desc)
 	}
 
 	return h.notifClient.Recv, nil
@@ -344,7 +345,7 @@ func (h *Hub) getBlockConfirmations(ctx context.Context, hash *chainhash.Hash) (
 	info, err := h.nodeConn.GetBlockVerbose(ctx, hash, false)
 	if err != nil {
 		desc := fmt.Sprintf("unable to fetch block confirmations: %v", err)
-		return 0, poolError(ErrBlockConf, desc)
+		return 0, errors.PoolError(errors.BlockConf, desc)
 	}
 	return info.Confirmations, nil
 }
@@ -376,13 +377,13 @@ func (h *Hub) FetchLastPaymentInfo() (uint32, int64, int64, error) {
 // getBlock fetches the blocks associated with the provided block hash.
 func (h *Hub) getBlock(ctx context.Context, blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
 	if h.nodeConn == nil {
-		return nil, poolError(ErrDisconnected, "node disconnected")
+		return nil, errors.PoolError(errors.Disconnected, "node disconnected")
 	}
 	block, err := h.nodeConn.GetBlock(ctx, blockHash)
 	if err != nil {
 		desc := fmt.Sprintf("unable to fetch block %s: %v",
 			blockHash.String(), err)
-		return nil, poolError(ErrGetBlock, desc)
+		return nil, errors.PoolError(errors.GetBlock, desc)
 	}
 	return block, nil
 }
@@ -481,7 +482,7 @@ func (h *Hub) Listen() error {
 		if err != nil {
 			desc := fmt.Sprintf("unable to create %s endpoint on port %d",
 				miner, port)
-			return poolError(ErrListener, desc)
+			return errors.PoolError(errors.Listener, desc)
 		}
 		h.endpoints = append(h.endpoints, endpoint)
 	}
@@ -651,7 +652,7 @@ func (h *Hub) CSRFSecret() ([]byte, error) {
 	secret, err := h.cfg.DB.fetchCSRFSecret()
 
 	if err != nil {
-		if errors.Is(err, ErrValueNotFound) {
+		if errors.Is(err, errors.ValueNotFound) {
 			// If the database doesnt contain a CSRF secret, generate one and
 			// persist it.
 			secret = make([]byte, 32)

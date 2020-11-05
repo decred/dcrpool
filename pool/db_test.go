@@ -3,7 +3,6 @@ package pool
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
@@ -12,6 +11,8 @@ import (
 	"time"
 
 	bolt "go.etcd.io/bbolt"
+
+	"github.com/decred/dcrpool/errors"
 )
 
 func Test_BoltDB_FetchBucketHelpers(t *testing.T) {
@@ -57,7 +58,7 @@ func Test_BoltDB_FetchBucketHelpers(t *testing.T) {
 		_, err := fetchBucket(tx, workBkt)
 		return err
 	})
-	if !errors.Is(err, ErrBucketNotFound) {
+	if !errors.Is(err, errors.BucketNotFound) {
 		t.Fatalf("expected bucket not found error, got %v", err)
 	}
 
@@ -96,7 +97,7 @@ func Test_BoltDB_FetchBucketHelpers(t *testing.T) {
 		_, err := fetchBucket(tx, workBkt)
 		return err
 	})
-	if !errors.Is(err, ErrBucketNotFound) {
+	if !errors.Is(err, errors.BucketNotFound) {
 		t.Fatalf("expected bucket not found error, got %v", err)
 	}
 }
@@ -186,7 +187,7 @@ func Test_BoltDB_InitDB(t *testing.T) {
 func testCSRFSecret(t *testing.T) {
 	// Expect an error if no value set.
 	_, err := db.fetchCSRFSecret()
-	if !errors.Is(err, ErrValueNotFound) {
+	if !errors.Is(err, errors.ValueNotFound) {
 		t.Fatalf("expected value not found error, got: %v", err)
 	}
 
@@ -230,7 +231,7 @@ func testCSRFSecret(t *testing.T) {
 func testLastPaymentCreatedOn(t *testing.T) {
 	// Expect an error if no value set.
 	_, err := db.loadLastPaymentCreatedOn()
-	if !errors.Is(err, ErrValueNotFound) {
+	if !errors.Is(err, errors.ValueNotFound) {
 		t.Fatalf("expected value not found error, got: %v", err)
 	}
 
@@ -255,7 +256,7 @@ func testLastPaymentCreatedOn(t *testing.T) {
 func testPoolMode(t *testing.T) {
 	// Expect an error if no value set.
 	_, err := db.fetchPoolMode()
-	if !errors.Is(err, ErrValueNotFound) {
+	if !errors.Is(err, errors.ValueNotFound) {
 		t.Fatalf("expected value not found error, got: %v", err)
 	}
 
@@ -293,7 +294,7 @@ func testPoolMode(t *testing.T) {
 func testLastPaymentInfo(t *testing.T) {
 	// Expect an error if no value set.
 	_, _, err := db.loadLastPaymentInfo()
-	if !errors.Is(err, ErrValueNotFound) {
+	if !errors.Is(err, errors.ValueNotFound) {
 		t.Fatalf("expected value not found error, got: %v", err)
 	}
 
