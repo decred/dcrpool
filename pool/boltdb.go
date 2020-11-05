@@ -99,7 +99,7 @@ func createBuckets(db *BoltDB) error {
 				return dbError(ErrBucketCreate, desc)
 			}
 			vbytes := make([]byte, 4)
-			binary.LittleEndian.PutUint32(vbytes, uint32(DBVersion))
+			binary.LittleEndian.PutUint32(vbytes, LatestBoltDBVersion)
 			err = pbkt.Put(versionK, vbytes)
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to persist version: %v",
