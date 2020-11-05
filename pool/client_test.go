@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -18,7 +19,7 @@ import (
 
 	"github.com/decred/dcrd/chaincfg/v3"
 
-	"github.com/decred/dcrpool/errors"
+	errs "github.com/decred/dcrpool/errors"
 )
 
 func testClient(t *testing.T) {
@@ -584,13 +585,13 @@ func testClient(t *testing.T) {
 	// it triggers a weighted share error.
 	client.cfg.SoloPool = true
 	err = client.claimWeightedShare()
-	if !errors.Is(err, errors.ClaimShare) {
+	if !errors.Is(err, errs.ClaimShare) {
 		t.Fatalf("[claimWeightedShare (CPU)] expected a solo pool mode error")
 	}
 	client.cfg.SoloPool = false
 	client.cfg.ActiveNet = chaincfg.MainNetParams()
 	err = client.claimWeightedShare()
-	if !errors.Is(err, errors.ClaimShare) {
+	if !errors.Is(err, errs.ClaimShare) {
 		t.Fatalf("[claimWeightedShare (CPU)] expected an active " +
 			"network cpu share error")
 	}

@@ -1,9 +1,10 @@
 package pool
 
 import (
+	"errors"
 	"testing"
 
-	"github.com/decred/dcrpool/errors"
+	errs "github.com/decred/dcrpool/errors"
 )
 
 func testAcceptedWork(t *testing.T) {
@@ -51,20 +52,20 @@ func testAcceptedWork(t *testing.T) {
 
 	// Ensure updating a non persisted accepted work returns an error.
 	err = db.updateAcceptedWork(workE)
-	if !errors.Is(err, errors.ValueNotFound) {
+	if !errors.Is(err, errs.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 
 	// Ensure creating an already existing accepted work returns an error.
 	err = db.persistAcceptedWork(workD)
-	if !errors.Is(err, errors.ValueFound) {
+	if !errors.Is(err, errs.ValueFound) {
 		t.Fatalf("expected value found error, got %v", err)
 	}
 
 	// Ensure fetching a non existent accepted work returns an error.
 	id := AcceptedWorkID(workC.BlockHash, workD.Height)
 	_, err = db.fetchAcceptedWork(id)
-	if !errors.Is(err, errors.ValueNotFound) {
+	if !errors.Is(err, errs.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 

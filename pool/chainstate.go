@@ -2,6 +2,7 @@ package pool
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
 
-	"github.com/decred/dcrpool/errors"
+	errs "github.com/decred/dcrpool/errors"
 )
 
 const (
@@ -284,7 +285,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			if err != nil {
 				// If the parent of the connected block is not an accepted
 				// work of the the pool, ignore it.
-				if errors.Is(err, errors.ValueNotFound) {
+				if errors.Is(err, errs.ValueNotFound) {
 					log.Tracef("Block #%d (%s) is not an accepted "+
 						"work of the pool", parentHeight, parentHash)
 					close(msg.Done)
@@ -400,7 +401,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				// looking up accepted work indicates an underlying issue
 				// accessing the database. The chainstate process will be
 				// terminated as a result.
-				if !errors.Is(err, errors.ValueNotFound) {
+				if !errors.Is(err, errs.ValueNotFound) {
 					log.Errorf("unable to fetch accepted work for block "+
 						"#%d's parent %s: %v", header.Height, parentHash, err)
 					close(msg.Done)
@@ -438,7 +439,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			if err != nil {
 				// If the disconnected block is not an accepted
 				// work of the the pool, ignore it.
-				if errors.Is(err, errors.ValueNotFound) {
+				if errors.Is(err, errs.ValueNotFound) {
 					close(msg.Done)
 					continue
 				}

@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/decred/dcrpool/errors"
 	bolt "go.etcd.io/bbolt"
+
+	errs "github.com/decred/dcrpool/errors"
 )
 
 const (
@@ -37,11 +38,11 @@ const (
 	// It adds the UUID field to payments.
 	paymentUUIDVersion = 6
 
-	// LatestBoltDBVersion is the latest version of the bolt database that is
+	// BoltDBVersion is the latest version of the bolt database that is
 	// understood by the program. Databases with recorded versions higher than
 	// this will fail to open (meaning any upgrades prevent reverting to older
 	// software).
-	LatestBoltDBVersion = paymentUUIDVersion
+	BoltDBVersion = paymentUUIDVersion
 )
 
 // upgrades maps between old database versions and the upgrade function to
@@ -61,12 +62,12 @@ func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
 	if poolBkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return 0, errors.DBError(errors.BucketNotFound, desc)
+		return 0, errs.DBError(errs.BucketNotFound, desc)
 	}
 	v := pbkt.Get(versionK)
 	if v == nil {
 		desc := fmt.Sprintf("%s: db version not set", funcName)
-		return 0, errors.DBError(errors.ValueNotFound, desc)
+		return 0, errs.DBError(errs.ValueNotFound, desc)
 	}
 
 	return binary.LittleEndian.Uint32(v), nil
@@ -78,7 +79,7 @@ func setDBVersion(tx *bolt.Tx, newVersion uint32) error {
 	if poolBkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	vBytes := make([]byte, 4)
@@ -86,7 +87,7 @@ func setDBVersion(tx *bolt.Tx, newVersion uint32) error {
 	err := pbkt.Put(versionK, vBytes)
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to persist version: %v", funcName, err)
-		return errors.DBError(errors.PersistEntry, desc)
+		return errs.DBError(errs.PersistEntry, desc)
 	}
 
 	return nil
@@ -105,14 +106,14 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 
 	if dbVersion != oldVersion {
 		desc := fmt.Sprintf("%s: inappropriately called", funcName)
-		return errors.DBError(errors.DBUpgrade, desc)
+		return errs.DBError(errs.DBUpgrade, desc)
 	}
 
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	// Update all entries in the payment and payment archive buckets.
@@ -124,7 +125,7 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 	if pmtbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(paymentBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	pmtCursor := pmtbkt.Cursor()
@@ -134,21 +135,21 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		pBytes, err := json.Marshal(payment)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		err = pmtbkt.Put(k, pBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)
-			return errors.DBError(errors.PersistEntry, desc)
+			return errs.DBError(errs.PersistEntry, desc)
 		}
 	}
 
@@ -156,7 +157,7 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 	if abkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(paymentArchiveBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	aCursor := abkt.Cursor()
@@ -166,21 +167,21 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		pBytes, err := json.Marshal(payment)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal payment: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		err = abkt.Put(k, pBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)
-			return errors.DBError(errors.PersistEntry, desc)
+			return errs.DBError(errs.PersistEntry, desc)
 		}
 	}
 
@@ -200,21 +201,21 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 
 	if dbVersion != oldVersion {
 		desc := fmt.Sprintf("%s: inappropriately called", funcName)
-		return errors.DBError(errors.DBUpgrade, desc)
+		return errs.DBError(errs.DBUpgrade, desc)
 	}
 
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	sbkt := pbkt.Bucket(shareBkt)
 	if sbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(shareBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	toDelete := [][]byte{}
@@ -225,7 +226,7 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to unmarshal share: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		createdOn := bigEndianBytesToNano(k)
@@ -235,14 +236,14 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		err = sbkt.Put([]byte(share.UUID), sBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist share: %v",
 				funcName, err)
-			return errors.DBError(errors.PersistEntry, desc)
+			return errs.DBError(errs.PersistEntry, desc)
 		}
 
 		toDelete = append(toDelete, k)
@@ -253,7 +254,7 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to delete share: %v",
 				funcName, err)
-			return errors.DBError(errors.DeleteEntry, desc)
+			return errs.DBError(errs.DeleteEntry, desc)
 		}
 	}
 
@@ -273,14 +274,14 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 
 	if dbVersion != oldVersion {
 		desc := fmt.Sprintf("%s: inappropriately called", funcName)
-		return errors.DBError(errors.DBUpgrade, desc)
+		return errs.DBError(errs.DBUpgrade, desc)
 	}
 
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	// Update all entries in the payment and payment archive buckets.
@@ -292,7 +293,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 	if pmtbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(paymentBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	zeroSource := &PaymentSource{}
@@ -305,7 +306,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		payment.Source = zeroSource
@@ -314,7 +315,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		key := paymentID(payment.Height, payment.CreatedOn, payment.Account)
@@ -322,7 +323,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)
-			return errors.DBError(errors.PersistEntry, desc)
+			return errs.DBError(errs.PersistEntry, desc)
 		}
 
 		toDelete = append(toDelete, k)
@@ -333,7 +334,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to delete payment: %v",
 				funcName, err)
-			return errors.DBError(errors.DeleteEntry, desc)
+			return errs.DBError(errs.DeleteEntry, desc)
 		}
 	}
 
@@ -341,7 +342,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 	if abkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(paymentArchiveBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	toDelete = [][]byte{}
@@ -360,7 +361,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		key := paymentID(payment.Height, payment.CreatedOn, payment.Account)
@@ -368,7 +369,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)
-			return errors.DBError(errors.PersistEntry, desc)
+			return errs.DBError(errs.PersistEntry, desc)
 		}
 
 		toDelete = append(toDelete, k)
@@ -379,7 +380,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to delete payment: %v",
 				funcName, err)
-			return errors.DBError(errors.DeleteEntry, desc)
+			return errs.DBError(errs.DeleteEntry, desc)
 		}
 	}
 
@@ -399,21 +400,21 @@ func removeTxFeeReserveUpgrade(tx *bolt.Tx) error {
 
 	if dbVersion != oldVersion {
 		desc := fmt.Sprintf("%s: inappropriately called", err)
-		return errors.DBError(errors.DBUpgrade, desc)
+		return errs.DBError(errs.DBUpgrade, desc)
 	}
 
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	err = pbkt.Delete([]byte("txfeereserve"))
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to remove tx fee reserve entry",
 			funcName)
-		return errors.DBError(errors.DeleteEntry, desc)
+		return errs.DBError(errs.DeleteEntry, desc)
 	}
 
 	return setDBVersion(tx, newVersion)
@@ -432,21 +433,21 @@ func shareCreatedOnUpgrade(tx *bolt.Tx) error {
 
 	if dbVersion != oldVersion {
 		desc := fmt.Sprintf("%s: inappropriately called", err)
-		return errors.DBError(errors.DBUpgrade, desc)
+		return errs.DBError(errs.DBUpgrade, desc)
 	}
 
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	sbkt := pbkt.Bucket(shareBkt)
 	if sbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(shareBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	c := sbkt.Cursor()
@@ -456,7 +457,7 @@ func shareCreatedOnUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to unmarshal share: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		createdOnB := make([]byte, 8)
@@ -464,7 +465,7 @@ func shareCreatedOnUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to decode share "+
 				"created-on bytes: %v", funcName, err)
-			return errors.DBError(errors.Decode, desc)
+			return errs.DBError(errs.Decode, desc)
 		}
 
 		createdOn := bigEndianBytesToNano(createdOnB)
@@ -474,14 +475,14 @@ func shareCreatedOnUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		err = sbkt.Put([]byte(share.UUID), sBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist share: %v",
 				funcName, err)
-			return errors.DBError(errors.PersistEntry, desc)
+			return errs.DBError(errs.PersistEntry, desc)
 		}
 	}
 
@@ -501,21 +502,21 @@ func paymentUUIDUpgrade(tx *bolt.Tx) error {
 
 	if dbVersion != oldVersion {
 		desc := fmt.Sprintf("%s: inappropriately called", err)
-		return errors.DBError(errors.DBUpgrade, desc)
+		return errs.DBError(errs.DBUpgrade, desc)
 	}
 
 	pbkt := tx.Bucket(poolBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	pmtbkt := pbkt.Bucket(paymentBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(paymentBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	c := pmtbkt.Cursor()
@@ -525,7 +526,7 @@ func paymentUUIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		UUID := string(k)
@@ -535,14 +536,14 @@ func paymentUUIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		err = pmtbkt.Put(k, pBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)
-			return errors.DBError(errors.PersistEntry, desc)
+			return errs.DBError(errs.PersistEntry, desc)
 		}
 	}
 
@@ -550,7 +551,7 @@ func paymentUUIDUpgrade(tx *bolt.Tx) error {
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(paymentArchiveBkt))
-		return errors.DBError(errors.BucketNotFound, desc)
+		return errs.DBError(errs.BucketNotFound, desc)
 	}
 
 	c = abkt.Cursor()
@@ -560,7 +561,7 @@ func paymentUUIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		pmt.UUID = string(k)
@@ -569,14 +570,14 @@ func paymentUUIDUpgrade(tx *bolt.Tx) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
 				funcName, err)
-			return errors.DBError(errors.Parse, desc)
+			return errs.DBError(errs.Parse, desc)
 		}
 
 		err = abkt.Put(k, pBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)
-			return errors.DBError(errors.PersistEntry, desc)
+			return errs.DBError(errs.PersistEntry, desc)
 		}
 	}
 
@@ -600,12 +601,12 @@ func upgradeDB(db *BoltDB) error {
 		return err
 	}
 
-	if version >= LatestBoltDBVersion {
+	if version >= BoltDBVersion {
 		// No upgrades necessary.
 		return nil
 	}
 
-	log.Infof("Upgrading database from version %d to %d", version, LatestBoltDBVersion)
+	log.Infof("Upgrading database from version %d to %d", version, BoltDBVersion)
 
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		// Execute all necessary upgrades in order.

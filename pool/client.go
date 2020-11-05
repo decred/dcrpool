@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -26,7 +27,7 @@ import (
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
 
-	"github.com/decred/dcrpool/errors"
+	errs "github.com/decred/dcrpool/errors"
 )
 
 const (
@@ -169,13 +170,13 @@ func (c *Client) shutdown() {
 func (c *Client) claimWeightedShare() error {
 	if c.cfg.SoloPool {
 		desc := "cannot claim shares in solo pool mode"
-		return errors.PoolError(errors.ClaimShare, desc)
+		return errs.PoolError(errs.ClaimShare, desc)
 	}
 	if c.cfg.ActiveNet.Name == chaincfg.MainNetParams().Name &&
 		c.cfg.FetchMiner() == CPU {
 		desc := "cannot claim shares for cpu miners on mainnet, " +
 			"reserved for testing purposes only (simnet, testnet)"
-		return errors.PoolError(errors.ClaimShare, desc)
+		return errs.PoolError(errs.ClaimShare, desc)
 	}
 	weight := ShareWeights[c.cfg.FetchMiner()]
 	share := NewShare(c.account, weight)
@@ -190,7 +191,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 		sErr := NewStratumError(Unknown, err)
 		resp := AuthorizeResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return errors.PoolError(errors.LimitExceeded, err.Error())
+		return errs.PoolError(errs.LimitExceeded, err.Error())
 	}
 
 	// The client's username is expected to be of the format address.clientid
@@ -213,7 +214,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 			sErr := NewStratumError(Unknown, err)
 			resp := AuthorizeResponse(*req.ID, false, sErr)
 			c.ch <- resp
-			return errors.MsgError(errors.Parse, err.Error())
+			return errs.MsgError(errs.Parse, err.Error())
 		}
 
 		name := strings.TrimSpace(parts[1])
@@ -233,7 +234,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 		err = c.cfg.db.persistAccount(account)
 		if err != nil {
 			// Do not error if the account already exists.
-			if !errors.Is(err, errors.ValueFound) {
+			if !errors.Is(err, errs.ValueFound) {
 				sErr := NewStratumError(Unknown, err)
 				resp := AuthorizeResponse(*req.ID, false, sErr)
 				c.ch <- resp
@@ -265,7 +266,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
 		c.ch <- resp
-		return errors.PoolError(errors.LimitExceeded, err.Error())
+		return errs.PoolError(errs.LimitExceeded, err.Error())
 	}
 
 	_, nid, err := ParseSubscribeRequest(req)
@@ -345,7 +346,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return errors.PoolError(errors.LimitExceeded, err.Error())
+		return errs.PoolError(errs.LimitExceeded, err.Error())
 	}
 
 	_, jobID, extraNonce2E, nTimeE, nonceE, err :=
@@ -381,7 +382,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return errors.PoolError(errors.Difficulty, err.Error())
+		return errs.PoolError(errs.Difficulty, err.Error())
 	}
 	hash := header.BlockHash()
 	hashTarget := new(big.Rat).SetInt(standalone.HashToBig(&hash))
@@ -399,7 +400,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		sErr := NewStratumError(LowDifficultyShare, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return errors.PoolError(errors.Difficulty, err.Error())
+		return errs.PoolError(errs.Difficulty, err.Error())
 	}
 	atomic.AddInt64(&c.submissions, 1)
 
@@ -412,7 +413,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 			sErr := NewStratumError(Unknown, err)
 			resp := SubmitWorkResponse(*req.ID, false, sErr)
 			c.ch <- resp
-			return errors.PoolError(errors.ClaimShare, err.Error())
+			return errs.PoolError(errs.ClaimShare, err.Error())
 		}
 
 		// Signal the gui cache of the claimed weighted share.
@@ -426,7 +427,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.ch <- resp
 		desc := fmt.Sprintf("submitted work from %s is not "+
 			"less than the network target difficulty", c.id)
-		return errors.PoolError(errors.Difficulty, desc)
+		return errs.PoolError(errs.Difficulty, desc)
 	}
 
 	// Generate and send the work submission.
@@ -454,7 +455,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.ch <- SubmitWorkResponse(*req.ID, false, nil)
 		desc := fmt.Sprintf("%s: work %s rejected by the network",
 			c.id, hash.String())
-		return errors.PoolError(errors.WorkRejected, desc)
+		return errs.PoolError(errs.WorkRejected, desc)
 	}
 
 	// Create accepted work if the work submission is accepted
@@ -465,7 +466,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	if err != nil {
 		// If the submitted accepted work already exists, ignore the
 		// submission.
-		if errors.Is(err, errors.ValueFound) {
+		if errors.Is(err, errs.ValueFound) {
 			sErr := NewStratumError(DuplicateShare, err)
 			resp := SubmitWorkResponse(*req.ID, false, sErr)
 			c.ch <- resp
@@ -719,7 +720,7 @@ func hexReversed(in string) (string, error) {
 	if len(in)%2 != 0 {
 		desc := fmt.Sprintf("%s: expected even hex input length, got %d",
 			funcName, len(in))
-		return "", errors.PoolError(errors.HexLength, desc)
+		return "", errs.PoolError(errs.HexLength, desc)
 	}
 	var buf bytes.Buffer
 	for i := len(in) - 1; i > -1; i -= 2 {
