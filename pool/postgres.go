@@ -42,6 +42,7 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string) (*Postg
 		return nil, dbError(ErrDBOpen, desc)
 	}
 
+	// Create all of the tables required by dcrpool.
 	_, err = db.Exec(createTableMetadata)
 	if err != nil {
 		return nil, err
@@ -85,6 +86,8 @@ func (db *PostgresDB) Close() error {
 	return db.DB.Close()
 }
 
+// decodePaymentRows deserializes the provided SQL rows into a slice of Payment
+// structs.
 func decodePaymentRows(rows *sql.Rows) ([]*Payment, error) {
 	var toReturn []*Payment
 	for rows.Next() {
@@ -112,6 +115,8 @@ func decodePaymentRows(rows *sql.Rows) ([]*Payment, error) {
 	return toReturn, nil
 }
 
+// decodeWorkRows deserializes the provided SQL rows into a slice of
+// AcceptedWork structs.
 func decodeWorkRows(rows *sql.Rows) ([]*AcceptedWork, error) {
 	var toReturn []*AcceptedWork
 	for rows.Next() {
@@ -138,6 +143,8 @@ func decodeWorkRows(rows *sql.Rows) ([]*AcceptedWork, error) {
 	return toReturn, nil
 }
 
+// decodeShareRows deserializes the provided SQL rows into a slice of Share
+// structs.
 func decodeShareRows(rows *sql.Rows) ([]*Share, error) {
 	var toReturn []*Share
 	for rows.Next() {
@@ -175,6 +182,8 @@ func (db *PostgresDB) Backup(fileName string) error {
 	return errors.New("Backup is not implemented for postgres database")
 }
 
+// fetchPoolMode retrives the pool mode from the database. PoolMode is stored as
+// a uint32 for historical reasons. 0 indicates Public, 1 indicates Solo.
 func (db *PostgresDB) fetchPoolMode() (uint32, error) {
 	const funcName = "fetchPoolMode"
 	var poolmode uint32
@@ -190,11 +199,14 @@ func (db *PostgresDB) fetchPoolMode() (uint32, error) {
 	return poolmode, nil
 }
 
+// persistPoolMode stores the pool mode in the database. PoolMode is stored as a
+// uint32 for historical reasons. 0 indicates Public, 1 indicates Solo.
 func (db *PostgresDB) persistPoolMode(mode uint32) error {
 	_, err := db.DB.Exec(insertPoolMode, mode)
 	return err
 }
 
+// fetchCSRFSecret retrieves the bytes used for the CSRF secret from the database.
 func (db *PostgresDB) fetchCSRFSecret() ([]byte, error) {
 	const funcName = "fetchCSRFSecret"
 	var secret string
@@ -218,11 +230,14 @@ func (db *PostgresDB) fetchCSRFSecret() ([]byte, error) {
 	return decoded, nil
 }
 
+// persistCSRFSecret stores the bytes used for the CSRF secret in the database.
 func (db *PostgresDB) persistCSRFSecret(secret []byte) error {
 	_, err := db.DB.Exec(insertCSRFSecret, hex.EncodeToString(secret))
 	return err
 }
 
+// persistLastPaymentInfo stores the last payment height and paidOn timestamp
+// in the database.
 func (db *PostgresDB) persistLastPaymentInfo(height uint32, paidOn int64) error {
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -244,6 +259,8 @@ func (db *PostgresDB) persistLastPaymentInfo(height uint32, paidOn int64) error 
 	return tx.Commit()
 }
 
+// loadLastPaymentInfo retrieves the last payment height and paidOn timestamp
+// from the database.
 func (db *PostgresDB) loadLastPaymentInfo() (uint32, int64, error) {
 	const funcName = "loadLastPaymentInfo"
 
@@ -274,11 +291,15 @@ func (db *PostgresDB) loadLastPaymentInfo() (uint32, int64, error) {
 	return height, paidOn, nil
 }
 
+// persistLastPaymentCreatedOn stores the last payment createdOn timestamp in
+// the database.
 func (db *PostgresDB) persistLastPaymentCreatedOn(createdOn int64) error {
 	_, err := db.DB.Exec(insertLastPaymentCreatedOn, createdOn)
 	return err
 }
 
+// loadLastPaymentCreatedOn retrieves the last payment createdOn timestamp from
+// the database.
 func (db *PostgresDB) loadLastPaymentCreatedOn() (int64, error) {
 	const funcName = "loadLastPaymentCreatedOn"
 	var createdOn int64

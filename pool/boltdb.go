@@ -228,11 +228,9 @@ func nanoToBigEndianBytes(nano int64) []byte {
 	return b
 }
 
+// fetchPoolMode retrives the pool mode from the database. PoolMode is stored as
+// a uint32 for historical reasons. 0 indicates Public, 1 indicates Solo.
 func (db *BoltDB) fetchPoolMode() (uint32, error) {
-	// PoolMode is stored as a uint32 for historical reasons.
-	// 0 indicates Public
-	// 1 indicates Solo
-
 	var mode uint32
 	err := db.DB.View(func(tx *bolt.Tx) error {
 		pbkt, err := fetchPoolBucket(tx)
@@ -253,10 +251,10 @@ func (db *BoltDB) fetchPoolMode() (uint32, error) {
 	return mode, nil
 }
 
+// persistPoolMode stores the pool mode in the database. PoolMode is stored as a
+// uint32 for historical reasons. 0 indicates Public, 1 indicates Solo.
 func (db *BoltDB) persistPoolMode(mode uint32) error {
-	// PoolMode is stored as a uint32 for historical reasons.
-	// 0 indicates Public
-	// 1 indicates Solo
+
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		b := make([]byte, 4)
@@ -265,6 +263,7 @@ func (db *BoltDB) persistPoolMode(mode uint32) error {
 	})
 }
 
+// fetchCSRFSecret retrieves the bytes used for the CSRF secret from the database.
 func (db *BoltDB) fetchCSRFSecret() ([]byte, error) {
 	var secret []byte
 
@@ -293,6 +292,7 @@ func (db *BoltDB) fetchCSRFSecret() ([]byte, error) {
 	return secret, nil
 }
 
+// persistCSRFSecret stores the bytes used for the CSRF secret in the database.
 func (db *BoltDB) persistCSRFSecret(secret []byte) error {
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
@@ -305,6 +305,8 @@ func (db *BoltDB) persistCSRFSecret(secret []byte) error {
 	})
 }
 
+// persistLastPaymentInfo stores the last payment height and paidOn timestamp
+// in the database.
 func (db *BoltDB) persistLastPaymentInfo(height uint32, paidOn int64) error {
 	funcName := "persistLastPaymentInfo"
 	return db.DB.Update(func(tx *bolt.Tx) error {
@@ -333,6 +335,8 @@ func (db *BoltDB) persistLastPaymentInfo(height uint32, paidOn int64) error {
 	})
 }
 
+// loadLastPaymentInfo retrieves the last payment height and paidOn timestamp
+// from the database.
 func (db *BoltDB) loadLastPaymentInfo() (uint32, int64, error) {
 	funcName := "loadLastPaymentInfo"
 	var height uint32
@@ -364,6 +368,8 @@ func (db *BoltDB) loadLastPaymentInfo() (uint32, int64, error) {
 	return height, paidOn, nil
 }
 
+// persistLastPaymentCreatedOn stores the last payment createdOn timestamp in
+// the database.
 func (db *BoltDB) persistLastPaymentCreatedOn(createdOn int64) error {
 	funcName := "persistLastPaymentCreatedOn"
 	return db.DB.Update(func(tx *bolt.Tx) error {
@@ -381,6 +387,8 @@ func (db *BoltDB) persistLastPaymentCreatedOn(createdOn int64) error {
 	})
 }
 
+// loadLastPaymentCreatedOn retrieves the last payment createdOn timestamp from
+// the database.
 func (db *BoltDB) loadLastPaymentCreatedOn() (int64, error) {
 	funcName := "loadLastPaymentCreatedOn"
 	var createdOn int64
@@ -411,6 +419,8 @@ func (db *BoltDB) Close() error {
 	return db.DB.Close()
 }
 
+// httpBackup streams a backup of the entire database over the provided HTTP
+// response writer.
 func (db *BoltDB) httpBackup(w http.ResponseWriter) error {
 	err := db.DB.View(func(tx *bolt.Tx) error {
 		w.Header().Set("Content-Type", "application/octet-stream")
