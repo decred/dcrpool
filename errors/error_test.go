@@ -4,6 +4,7 @@
 package errors
 
 import (
+	"errors"
 	"io"
 	"testing"
 )
@@ -147,7 +148,7 @@ func TestErrorKindIsAs(t *testing.T) {
 
 	for _, test := range tests {
 		// Ensure the error matches or not depending on the expected result.
-		result := Is(test.err, test.target)
+		result := errors.Is(test.err, test.target)
 		if result != test.wantMatch {
 			t.Errorf("%s: incorrect error identification -- got %v, want %v",
 				test.name, result, test.wantMatch)
@@ -157,7 +158,7 @@ func TestErrorKindIsAs(t *testing.T) {
 		// Ensure the underlying error kind can be unwrapped and is the
 		// expected kind.
 		var kind ErrorKind
-		if !As(test.err, &kind) {
+		if !errors.As(test.err, &kind) {
 			t.Errorf("%s: unable to unwrap to error kind", test.name)
 			continue
 		}

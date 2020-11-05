@@ -7,6 +7,7 @@ package pool
 import (
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -16,7 +17,7 @@ import (
 
 	"github.com/lib/pq"
 
-	"github.com/decred/dcrpool/errors"
+	errs "github.com/decred/dcrpool/errors"
 )
 
 // InitPostgresDB connects to the specified database and creates all tables
@@ -31,7 +32,7 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string) (*Postg
 	db, err := sql.Open("postgres", psqlInfo)
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to open postgres: %v", funcName, err)
-		return nil, errors.DBError(errors.DBOpen, desc)
+		return nil, errs.DBError(errs.DBOpen, desc)
 	}
 
 	// Send a Ping() to validate the db connection. This is because the Open()
@@ -40,7 +41,7 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string) (*Postg
 	err = db.Ping()
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to connect to postgres: %v", funcName, err)
-		return nil, errors.DBError(errors.DBOpen, desc)
+		return nil, errs.DBError(errs.DBOpen, desc)
 	}
 
 	// Create all of the tables required by dcrpool.
@@ -159,7 +160,7 @@ func decodeShareRows(rows *sql.Rows) ([]*Share, error) {
 		weightRat, ok := new(big.Rat).SetString(weight)
 		if !ok {
 			desc := fmt.Sprintf("unable to decode rat string: %v", err)
-			return nil, errors.DBError(errors.Parse, desc)
+			return nil, errs.DBError(errs.Parse, desc)
 		}
 		share := &Share{uuid, account, weightRat, createdon}
 		toReturn = append(toReturn, share)
@@ -192,7 +193,7 @@ func (db *PostgresDB) fetchPoolMode() (uint32, error) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			desc := fmt.Sprintf("%s: no value found for poolmode", funcName)
-			return 0, errors.DBError(errors.ValueNotFound, desc)
+			return 0, errs.DBError(errs.ValueNotFound, desc)
 		}
 
 		return 0, err
@@ -215,7 +216,7 @@ func (db *PostgresDB) fetchCSRFSecret() ([]byte, error) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			desc := fmt.Sprintf("%s: no value found for csrfsecret", funcName)
-			return nil, errors.DBError(errors.ValueNotFound, desc)
+			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
 		return nil, err
@@ -225,7 +226,7 @@ func (db *PostgresDB) fetchCSRFSecret() ([]byte, error) {
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to decode csrf secret: %v",
 			funcName, err)
-		return nil, errors.DBError(errors.Parse, desc)
+		return nil, errs.DBError(errs.Parse, desc)
 	}
 
 	return decoded, nil
@@ -271,7 +272,7 @@ func (db *PostgresDB) loadLastPaymentInfo() (uint32, int64, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			desc := fmt.Sprintf("%s: no value found for lastpaymentheight",
 				funcName)
-			return 0, 0, errors.DBError(errors.ValueNotFound, desc)
+			return 0, 0, errs.DBError(errs.ValueNotFound, desc)
 		}
 
 		return 0, 0, err
@@ -283,7 +284,7 @@ func (db *PostgresDB) loadLastPaymentInfo() (uint32, int64, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			desc := fmt.Sprintf("%s: no value found for lastpaymentpaidon",
 				funcName)
-			return 0, 0, errors.DBError(errors.ValueNotFound, desc)
+			return 0, 0, errs.DBError(errs.ValueNotFound, desc)
 		}
 
 		return 0, 0, err
@@ -309,7 +310,7 @@ func (db *PostgresDB) loadLastPaymentCreatedOn() (int64, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			desc := fmt.Sprintf("%s: no value found for lastpaymentcreatedon",
 				funcName)
-			return 0, errors.DBError(errors.ValueNotFound, desc)
+			return 0, errs.DBError(errs.ValueNotFound, desc)
 		}
 
 		return 0, err
@@ -330,7 +331,7 @@ func (db *PostgresDB) persistAccount(acc *Account) error {
 			if pqError.Code.Name() == "unique_violation" {
 				desc := fmt.Sprintf("%s: account %s already exists", funcName,
 					acc.UUID)
-				return errors.DBError(errors.ValueFound, desc)
+				return errs.DBError(errs.ValueFound, desc)
 			}
 		}
 
@@ -349,7 +350,7 @@ func (db *PostgresDB) fetchAccount(id string) (*Account, error) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			desc := fmt.Sprintf("%s: no account found for id %s", funcName, id)
-			return nil, errors.DBError(errors.ValueNotFound, desc)
+			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
 		return nil, err
@@ -377,7 +378,7 @@ func (db *PostgresDB) fetchPayment(id string) (*Payment, error) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			desc := fmt.Sprintf("%s: no payment found for id %s", funcName, id)
-			return nil, errors.DBError(errors.ValueNotFound, desc)
+			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
 		return nil, err
@@ -401,7 +402,7 @@ func (db *PostgresDB) PersistPayment(p *Payment) error {
 			if pqError.Code.Name() == "unique_violation" {
 				desc := fmt.Sprintf("%s: payment %s already exists", funcName,
 					p.UUID)
-				return errors.DBError(errors.ValueFound, desc)
+				return errs.DBError(errs.ValueFound, desc)
 			}
 		}
 
@@ -535,7 +536,7 @@ func (db *PostgresDB) fetchShare(id string) (*Share, error) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			desc := fmt.Sprintf("%s: no share found for id %s", funcName, id)
-			return nil, errors.DBError(errors.ValueNotFound, desc)
+			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
 		return nil, err
@@ -545,7 +546,7 @@ func (db *PostgresDB) fetchShare(id string) (*Share, error) {
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to decode rat string: %v",
 			funcName, err)
-		return nil, errors.DBError(errors.Parse, desc)
+		return nil, errs.DBError(errs.Parse, desc)
 	}
 
 	return &Share{uuid, account, weightRat, createdOn}, nil
@@ -564,7 +565,7 @@ func (db *PostgresDB) PersistShare(share *Share) error {
 			if pqError.Code.Name() == "unique_violation" {
 				desc := fmt.Sprintf("%s: share %s already exists", funcName,
 					share.UUID)
-				return errors.DBError(errors.ValueFound, desc)
+				return errs.DBError(errs.ValueFound, desc)
 			}
 		}
 
@@ -614,7 +615,7 @@ func (db *PostgresDB) fetchAcceptedWork(id string) (*AcceptedWork, error) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			desc := fmt.Sprintf("%s: no work found for id %s", funcName, id)
-			return nil, errors.DBError(errors.ValueNotFound, desc)
+			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
 		return nil, err
@@ -637,7 +638,7 @@ func (db *PostgresDB) persistAcceptedWork(work *AcceptedWork) error {
 			if pqError.Code.Name() == "unique_violation" {
 				desc := fmt.Sprintf("%s: work %s already exists", funcName,
 					work.UUID)
-				return errors.DBError(errors.ValueFound, desc)
+				return errs.DBError(errs.ValueFound, desc)
 			}
 		}
 
@@ -665,7 +666,7 @@ func (db *PostgresDB) updateAcceptedWork(work *AcceptedWork) error {
 
 	if rowsAffected == 0 {
 		desc := fmt.Sprintf("%s: work %s not found", funcName, work.UUID)
-		return errors.DBError(errors.ValueNotFound, desc)
+		return errs.DBError(errs.ValueNotFound, desc)
 	}
 
 	return nil
@@ -711,7 +712,7 @@ func (db *PostgresDB) fetchJob(id string) (*Job, error) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			desc := fmt.Sprintf("%s: no job found for id %s", funcName, id)
-			return nil, errors.DBError(errors.ValueNotFound, desc)
+			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
 		return nil, err
@@ -732,7 +733,7 @@ func (db *PostgresDB) persistJob(job *Job) error {
 			if pqError.Code.Name() == "unique_violation" {
 				desc := fmt.Sprintf("%s: job %s already exists", funcName,
 					job.UUID)
-				return errors.DBError(errors.ValueFound, desc)
+				return errs.DBError(errs.ValueFound, desc)
 			}
 		}
 

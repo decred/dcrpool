@@ -5,11 +5,12 @@
 package pool
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 	"time"
 
-	"github.com/decred/dcrpool/errors"
+	errs "github.com/decred/dcrpool/errors"
 )
 
 // persistShare creates a persisted share with the provided account and share
@@ -41,7 +42,7 @@ func testShares(t *testing.T) {
 
 	// Creating the same share twice should fail.
 	err = db.PersistShare(share)
-	if !errors.Is(err, errors.ValueFound) {
+	if !errors.Is(err, errs.ValueFound) {
 		t.Fatalf("expected value found error, got %v", err)
 	}
 
@@ -74,7 +75,7 @@ func testShares(t *testing.T) {
 
 	// Expect error when fetching share which doesnt exist.
 	_, err = db.fetchShare("not a real ID")
-	if !errors.Is(err, errors.ValueNotFound) {
+	if !errors.Is(err, errs.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 }
@@ -266,7 +267,7 @@ func testPruneShares(t *testing.T) {
 	// Ensure share A got pruned with share B remaining.
 	shareAID := shareID(xID, eightyBefore)
 	_, err = db.fetchShare(shareAID)
-	if !errors.Is(err, errors.ValueNotFound) {
+	if !errors.Is(err, errs.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 
@@ -283,7 +284,7 @@ func testPruneShares(t *testing.T) {
 
 	// Ensure share B got pruned.
 	_, err = db.fetchShare(shareBID)
-	if !errors.Is(err, errors.ValueNotFound) {
+	if !errors.Is(err, errs.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 }

@@ -4,8 +4,6 @@
 
 package errors
 
-import "errors"
-
 // ErrorKind identifies a kind of error.  It has full support for errors.Is and
 // errors.As, so the caller can directly check against an error kind when
 // determining the reason for an error.
@@ -146,12 +144,6 @@ type Error struct {
 	Err         error
 }
 
-// New creates a simple error from a string.  New is identical to "errors".New
-// from the standard library.
-func New(text string) error {
-	return errors.New(text)
-}
-
 // Error satisfies the error interface and prints human-readable errors.
 func (e Error) Error() string {
 	return e.Description
@@ -160,18 +152,6 @@ func (e Error) Error() string {
 // Unwrap returns the underlying wrapped error.
 func (e Error) Unwrap() error {
 	return e.Err
-}
-
-// Is returns whether err equals or wraps target.
-func Is(err, target error) bool {
-	return errors.Is(err, target)
-}
-
-// As attempts to assign the error pointed to by target with the first error in
-// err's error chain with a compatible type.  Returns true if target is
-// assigned.
-func As(err error, target interface{}) bool {
-	return errors.As(err, target)
 }
 
 // PoolError creates an Error given a set of arguments. This should only be

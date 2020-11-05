@@ -3,6 +3,7 @@ package pool
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -12,7 +13,7 @@ import (
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
 
-	"github.com/decred/dcrpool/errors"
+	errs "github.com/decred/dcrpool/errors"
 )
 
 func testChainState(t *testing.T) {
@@ -116,7 +117,7 @@ func testChainState(t *testing.T) {
 		t.Fatalf("expected a valid accepted work, got: %v", err)
 	}
 	_, err = db.fetchAcceptedWork(workB.UUID)
-	if !errors.Is(err, errors.ValueNotFound) {
+	if !errors.Is(err, errs.ValueNotFound) {
 		t.Fatalf("expected value found error, got %v", err)
 	}
 
@@ -175,7 +176,7 @@ func testChainState(t *testing.T) {
 	}
 
 	_, err = db.fetchPayment(paymentA.UUID)
-	if !errors.Is(err, errors.ValueNotFound) {
+	if !errors.Is(err, errs.ValueNotFound) {
 		t.Fatalf("expected value found error, got %v", err)
 	}
 
@@ -191,7 +192,7 @@ func testChainState(t *testing.T) {
 	}
 
 	_, err = db.fetchPayment(paymentB.UUID)
-	if !errors.Is(err, errors.ValueNotFound) {
+	if !errors.Is(err, errs.ValueNotFound) {
 		t.Fatalf("expected value found error, got %v", err)
 	}
 
