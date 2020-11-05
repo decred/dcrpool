@@ -36,10 +36,11 @@ const (
 	// It adds the UUID field to payments.
 	paymentUUIDVersion = 6
 
-	// DBVersion is the latest version of the database that is understood by the
-	// program. Databases with recorded versions higher than this will fail to
-	// open (meaning any upgrades prevent reverting to older software).
-	DBVersion = paymentUUIDVersion
+	// LatestBoltDBVersion is the latest version of the bolt database that is
+	// understood by the program. Databases with recorded versions higher than
+	// this will fail to open (meaning any upgrades prevent reverting to older
+	// software).
+	LatestBoltDBVersion = paymentUUIDVersion
 )
 
 // upgrades maps between old database versions and the upgrade function to
@@ -598,12 +599,12 @@ func upgradeDB(db *BoltDB) error {
 		return err
 	}
 
-	if version >= DBVersion {
+	if version >= LatestBoltDBVersion {
 		// No upgrades necessary.
 		return nil
 	}
 
-	log.Infof("Upgrading database from version %d to %d", version, DBVersion)
+	log.Infof("Upgrading database from version %d to %d", version, LatestBoltDBVersion)
 
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		// Execute all necessary upgrades in order.

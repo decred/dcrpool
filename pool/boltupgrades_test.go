@@ -16,7 +16,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-var dbUpgradeTests = [...]struct {
+var boltDBUpgradeTests = [...]struct {
 	verify   func(*testing.T, *BoltDB)
 	filename string // in testdata directory
 }{
@@ -28,7 +28,7 @@ var dbUpgradeTests = [...]struct {
 	{verifyV6Upgrade, "v5.db.gz"},
 }
 
-func TestUpgrades(t *testing.T) {
+func TestBoltDBUpgrades(t *testing.T) {
 	t.Parallel()
 
 	d, err := ioutil.TempDir("", "dcrpool_test_upgrades")
@@ -37,7 +37,7 @@ func TestUpgrades(t *testing.T) {
 	}
 
 	t.Run("group", func(t *testing.T) {
-		for i, test := range dbUpgradeTests {
+		for i, test := range boltDBUpgradeTests {
 			test := test
 			name := fmt.Sprintf("test%d", i)
 			t.Run(name, func(t *testing.T) {

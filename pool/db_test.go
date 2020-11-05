@@ -78,7 +78,7 @@ func Test_BoltDB_FetchBucketHelpers(t *testing.T) {
 
 			}
 			vbytes := make([]byte, 4)
-			binary.LittleEndian.PutUint32(vbytes, uint32(DBVersion))
+			binary.LittleEndian.PutUint32(vbytes, LatestBoltDBVersion)
 			err = pbkt.Put(versionK, vbytes)
 			if err != nil {
 				return fmt.Errorf("unable to persist version: %v", err)
