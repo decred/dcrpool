@@ -583,13 +583,13 @@ func testClient(t *testing.T) {
 	// it triggers a weighted share error.
 	client.cfg.SoloPool = true
 	err = client.claimWeightedShare()
-	if err == nil {
+	if !errors.Is(err, ErrClaimShare) {
 		t.Fatalf("[claimWeightedShare (CPU)] expected a solo pool mode error")
 	}
 	client.cfg.SoloPool = false
 	client.cfg.ActiveNet = chaincfg.MainNetParams()
 	err = client.claimWeightedShare()
-	if err == nil {
+	if !errors.Is(err, ErrClaimShare) {
 		t.Fatalf("[claimWeightedShare (CPU)] expected an active " +
 			"network cpu share error")
 	}
