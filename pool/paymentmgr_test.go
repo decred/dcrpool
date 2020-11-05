@@ -779,7 +779,7 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	// Ensure generating payout tx details returns an error if the outputs of
 	// the transaction do not exhaust all remaining input value after rounding
-	// e.
+	// errors.
 	txC = &txCreatorImpl{
 		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
 			return &chainjson.GetTxOutResult{
