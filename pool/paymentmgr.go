@@ -30,7 +30,7 @@ const (
 
 	// maxRoundingDiff is the maximum amount of atoms the total
 	// output value of a transaction is allowed to be short of the
-	// provided input due to rounding e.
+	// provided input due to rounding errors.
 	maxRoundingDiff = dcrutil.Amount(500)
 )
 
@@ -608,7 +608,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 
 	// Ensure the transaction outputs do not source more value than possible
 	// from the provided inputs and also are consuming all of the input
-	// value after rounding e.
+	// value after rounding errors.
 	if tOut > tIn {
 		desc := fmt.Sprintf("%s: total output values for the "+
 			"transaction (%s) is greater than the provided inputs (%s)",
