@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
@@ -64,20 +65,20 @@ func TestDifficulty(t *testing.T) {
 
 	// Test fetchMinerDifficulty.
 	diffSet := []struct {
-		miner   string
-		wantErr bool
+		miner       string
+		expectedErr error
 	}{
 		{
-			miner:   CPU,
-			wantErr: false,
+			miner:       CPU,
+			expectedErr: nil,
 		},
 		{
-			miner:   "",
-			wantErr: true,
+			miner:       "",
+			expectedErr: ErrValueNotFound,
 		},
 		{
-			miner:   "antminerdr7",
-			wantErr: true,
+			miner:       "antminerdr7",
+			expectedErr: ErrValueNotFound,
 		},
 	}
 
@@ -86,12 +87,12 @@ func TestDifficulty(t *testing.T) {
 		powLimit := new(big.Rat).SetInt(net.PowLimit)
 		set := NewDifficultySet(net, powLimit, soloMaxGenTime)
 		diffInfo, err := set.fetchMinerDifficulty(tc.miner)
-		if (err != nil) != tc.wantErr {
-			t.Fatalf("[fetchMinerDifficulty] #%d: error: %v, wantErr: %v",
-				idx+1, err, tc.wantErr)
+		if !errors.Is(err, tc.expectedErr) {
+			t.Fatalf("[fetchMinerDifficulty] #%d: error: %v, expectedErr: %v",
+				idx+1, err, tc.expectedErr)
 		}
 
-		if !tc.wantErr {
+		if tc.expectedErr == nil {
 			if diffInfo == nil {
 				t.Fatalf("[fetchMinerDifficulty] #%d: expected valid "+
 					"difficulty info for %s", idx+1, tc.miner)
