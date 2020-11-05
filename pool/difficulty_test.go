@@ -1,11 +1,12 @@
 package pool
 
 import (
-	"errors"
 	"math/big"
 	"testing"
 
 	"github.com/decred/dcrd/chaincfg/v3"
+
+	"github.com/decred/dcrpool/errors"
 )
 
 func TestDifficulty(t *testing.T) {
@@ -74,11 +75,11 @@ func TestDifficulty(t *testing.T) {
 		},
 		{
 			miner:       "",
-			expectedErr: ErrValueNotFound,
+			expectedErr: errors.ValueNotFound,
 		},
 		{
 			miner:       "antminerdr7",
-			expectedErr: ErrValueNotFound,
+			expectedErr: errors.ValueNotFound,
 		},
 	}
 

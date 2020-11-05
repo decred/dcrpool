@@ -1,8 +1,9 @@
 package pool
 
 import (
-	"errors"
 	"testing"
+
+	"github.com/decred/dcrpool/errors"
 )
 
 func testAccount(t *testing.T) {
@@ -24,7 +25,7 @@ func testAccount(t *testing.T) {
 
 	// Creating the same account twice should fail.
 	err = db.persistAccount(accountA)
-	if !errors.Is(err, ErrValueFound) {
+	if !errors.Is(err, errors.ValueFound) {
 		t.Fatalf("expected value found error, got %v", err)
 	}
 
@@ -63,12 +64,12 @@ func testAccount(t *testing.T) {
 
 	// Ensure the accounts have both been deleted.
 	_, err = db.fetchAccount(accountA.UUID)
-	if !errors.Is(err, ErrValueNotFound) {
+	if !errors.Is(err, errors.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 
 	_, err = db.fetchAccount(accountB.UUID)
-	if !errors.Is(err, ErrValueNotFound) {
+	if !errors.Is(err, errors.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 

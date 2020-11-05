@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrpool/errors"
 )
 
 // Supported mining clients.
@@ -125,7 +126,7 @@ func (d *DifficultySet) fetchMinerDifficulty(miner string) (*DifficultyInfo, err
 	if !ok {
 		desc := fmt.Sprintf("%s: no difficulty data found for miner %s",
 			funcName, miner)
-		return nil, poolError(ErrValueNotFound, desc)
+		return nil, errors.PoolError(errors.ValueNotFound, desc)
 	}
 	return diffData, nil
 }

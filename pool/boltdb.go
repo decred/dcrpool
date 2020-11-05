@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/decred/dcrpool/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -68,7 +69,7 @@ func openBoltDB(storage string) (*BoltDB, error) {
 		&bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to open db file: %v", funcName, err)
-		return nil, dbError(ErrDBOpen, desc)
+		return nil, errors.DBError(errors.DBOpen, desc)
 	}
 	return &BoltDB{db}, nil
 }
@@ -80,7 +81,7 @@ func createNestedBucket(parent *bolt.Bucket, child []byte) error {
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to create %s bucket: %v",
 			funcName, string(child), err)
-		return dbError(ErrBucketCreate, desc)
+		return errors.DBError(errors.BucketCreate, desc)
 	}
 	return nil
 }
@@ -96,7 +97,7 @@ func createBuckets(db *BoltDB) error {
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to create %s bucket: %v",
 					funcName, string(poolBkt), err)
-				return dbError(ErrBucketCreate, desc)
+				return errors.DBError(errors.BucketCreate, desc)
 			}
 			vbytes := make([]byte, 4)
 			binary.LittleEndian.PutUint32(vbytes, LatestBoltDBVersion)
@@ -104,7 +105,7 @@ func createBuckets(db *BoltDB) error {
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to persist version: %v",
 					funcName, err)
-				return dbError(ErrPersistEntry, desc)
+				return errors.DBError(errors.PersistEntry, desc)
 			}
 		}
 
@@ -141,7 +142,7 @@ func (db *BoltDB) Backup(backupFileName string) error {
 		err := tx.CopyFile(backupPath, 0600)
 		if err != nil {
 			desc := fmt.Sprintf("unable to backup db: %v", err)
-			return poolError(ErrBackup, desc)
+			return errors.PoolError(errors.Backup, desc)
 		}
 		return nil
 	})
@@ -175,7 +176,7 @@ func deleteEntry(db *BoltDB, bucket []byte, key string) error {
 		if pbkt == nil {
 			desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 				string(poolBkt))
-			return dbError(ErrBucketNotFound, desc)
+			return errors.DBError(errors.BucketNotFound, desc)
 		}
 		b := pbkt.Bucket(bucket)
 
@@ -183,7 +184,7 @@ func deleteEntry(db *BoltDB, bucket []byte, key string) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to delete entry with "+
 				"key %s from bucket %s", funcName, key, string(poolBkt))
-			return dbError(ErrDeleteEntry, desc)
+			return errors.DBError(errors.DeleteEntry, desc)
 		}
 		return nil
 	})
@@ -200,7 +201,7 @@ func fetchBucket(tx *bolt.Tx, bucketID []byte) (*bolt.Bucket, error) {
 	if bkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(bucketID))
-		return nil, dbError(ErrBucketNotFound, desc)
+		return nil, errors.DBError(errors.BucketNotFound, desc)
 	}
 	return bkt, nil
 }
@@ -212,7 +213,7 @@ func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return nil, dbError(ErrBucketNotFound, desc)
+		return nil, errors.DBError(errors.BucketNotFound, desc)
 	}
 	return pbkt, nil
 }
@@ -242,7 +243,7 @@ func (db *BoltDB) fetchPoolMode() (uint32, error) {
 		}
 		b := pbkt.Get(soloPool)
 		if b == nil {
-			return dbError(ErrValueNotFound, "no pool mode found")
+			return errors.DBError(errors.ValueNotFound, "no pool mode found")
 		}
 		mode = binary.LittleEndian.Uint32(b)
 		return nil
@@ -274,11 +275,11 @@ func (db *BoltDB) fetchCSRFSecret() ([]byte, error) {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return dbError(ErrBucketNotFound, desc)
+			return errors.DBError(errors.BucketNotFound, desc)
 		}
 		v := pbkt.Get(csrfSecret)
 		if v == nil {
-			return dbError(ErrValueNotFound, "No csrf secret found")
+			return errors.DBError(errors.ValueNotFound, "No csrf secret found")
 		}
 
 		// Byte slices returned from Bolt are only valid during a transaction.
@@ -301,7 +302,7 @@ func (db *BoltDB) persistCSRFSecret(secret []byte) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return dbError(ErrBucketNotFound, desc)
+			return errors.DBError(errors.BucketNotFound, desc)
 		}
 
 		return pbkt.Put(csrfSecret, secret)
@@ -324,14 +325,14 @@ func (db *BoltDB) persistLastPaymentInfo(height uint32, paidOn int64) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist last payment height: %v",
 				funcName, err)
-			return dbError(ErrPersistEntry, desc)
+			return errors.DBError(errors.PersistEntry, desc)
 		}
 
 		err = pbkt.Put(lastPaymentPaidOn, nanoToBigEndianBytes(paidOn))
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist last payment "+
 				"paid on time: %v", funcName, err)
-			return dbError(ErrPersistEntry, desc)
+			return errors.DBError(errors.PersistEntry, desc)
 		}
 
 		return nil
@@ -355,7 +356,7 @@ func (db *BoltDB) loadLastPaymentInfo() (uint32, int64, error) {
 
 		if lastPaymentHeightB == nil || lastPaymentPaidOnB == nil {
 			desc := fmt.Sprintf("%s: last payment info not initialized", funcName)
-			return dbError(ErrValueNotFound, desc)
+			return errors.DBError(errors.ValueNotFound, desc)
 		}
 
 		height = binary.LittleEndian.Uint32(lastPaymentHeightB)
@@ -384,7 +385,7 @@ func (db *BoltDB) persistLastPaymentCreatedOn(createdOn int64) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist last payment "+
 				"created-on time: %v", funcName, err)
-			return dbError(ErrPersistEntry, desc)
+			return errors.DBError(errors.PersistEntry, desc)
 		}
 		return nil
 	})
@@ -404,7 +405,7 @@ func (db *BoltDB) loadLastPaymentCreatedOn() (int64, error) {
 		if lastPaymentCreatedOnB == nil {
 			desc := fmt.Sprintf("%s: last payment created-on not initialized",
 				funcName)
-			return dbError(ErrValueNotFound, desc)
+			return errors.DBError(errors.ValueNotFound, desc)
 		}
 		createdOn = int64(bigEndianBytesToNano(lastPaymentCreatedOnB))
 		return nil
@@ -448,13 +449,13 @@ func (db *BoltDB) fetchAcceptedWork(id string) (*AcceptedWork, error) {
 		v := bkt.Get([]byte(id))
 		if v == nil {
 			desc := fmt.Sprintf("%s: no value for key %s", funcName, id)
-			return dbError(ErrValueNotFound, desc)
+			return errors.DBError(errors.ValueNotFound, desc)
 		}
 		err = json.Unmarshal(v, &work)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to unmarshal accepted work: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return errors.DBError(errors.Parse, desc)
 		}
 		return nil
 	})
@@ -479,20 +480,20 @@ func (db *BoltDB) persistAcceptedWork(work *AcceptedWork) error {
 		if v != nil {
 			desc := fmt.Sprintf("%s: work %s already exists", funcName,
 				work.UUID)
-			return dbError(ErrValueFound, desc)
+			return errors.DBError(errors.ValueFound, desc)
 		}
 		workBytes, err := json.Marshal(work)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal accepted "+
 				"work bytes: %v", funcName, err)
-			return dbError(ErrParse, desc)
+			return errors.DBError(errors.Parse, desc)
 		}
 
 		err = bkt.Put(id, workBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist accepted work: %v",
 				funcName, err)
-			return dbError(ErrPersistEntry, desc)
+			return errors.DBError(errors.PersistEntry, desc)
 		}
 		return nil
 	})
@@ -513,19 +514,19 @@ func (db *BoltDB) updateAcceptedWork(work *AcceptedWork) error {
 		v := bkt.Get(id)
 		if v == nil {
 			desc := fmt.Sprintf("%s: work %s not found", funcName, work.UUID)
-			return dbError(ErrValueNotFound, desc)
+			return errors.DBError(errors.ValueNotFound, desc)
 		}
 		workBytes, err := json.Marshal(work)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal accepted "+
 				"work bytes: %v", funcName, err)
-			return dbError(ErrPersistEntry, desc)
+			return errors.DBError(errors.PersistEntry, desc)
 		}
 		err = bkt.Put(id, workBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist accepted work: %v",
 				funcName, err)
-			return dbError(ErrPersistEntry, desc)
+			return errors.DBError(errors.PersistEntry, desc)
 		}
 		return nil
 	})
@@ -556,7 +557,7 @@ func (db *BoltDB) listMinedWork() ([]*AcceptedWork, error) {
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to unmarshal accepted "+
 					"work: %v", funcName, err)
-				return poolError(ErrParse, desc)
+				return errors.PoolError(errors.Parse, desc)
 			}
 			minedWork = append(minedWork, &work)
 		}
@@ -621,13 +622,13 @@ func (db *BoltDB) fetchAccount(id string) (*Account, error) {
 		v := bkt.Get([]byte(id))
 		if v == nil {
 			desc := fmt.Sprintf("%s: no account found for id %s", funcName, id)
-			return dbError(ErrValueNotFound, desc)
+			return errors.DBError(errors.ValueNotFound, desc)
 		}
 		err = json.Unmarshal(v, &account)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to unmarshal account: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return errors.DBError(errors.Parse, desc)
 		}
 		return nil
 	})
@@ -652,7 +653,7 @@ func (db *BoltDB) persistAccount(acc *Account) error {
 		if bkt.Get([]byte(acc.UUID)) != nil {
 			desc := fmt.Sprintf("%s: account %s already exists", funcName,
 				acc.UUID)
-			return dbError(ErrValueFound, desc)
+			return errors.DBError(errors.ValueFound, desc)
 		}
 
 		acc.CreatedOn = uint64(time.Now().Unix())
@@ -661,13 +662,13 @@ func (db *BoltDB) persistAccount(acc *Account) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal account bytes: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return errors.DBError(errors.Parse, desc)
 		}
 		err = bkt.Put([]byte(acc.UUID), accBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist account entry: %v",
 				funcName, err)
-			return dbError(ErrPersistEntry, desc)
+			return errors.DBError(errors.PersistEntry, desc)
 		}
 		return nil
 	})
@@ -692,13 +693,13 @@ func (db *BoltDB) fetchJob(id string) (*Job, error) {
 		v := bkt.Get([]byte(id))
 		if v == nil {
 			desc := fmt.Sprintf("%s: no job found for id %s", funcName, id)
-			return dbError(ErrValueNotFound, desc)
+			return errors.DBError(errors.ValueNotFound, desc)
 		}
 		err = json.Unmarshal(v, &job)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to unmarshal job bytes: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return errors.DBError(errors.Parse, desc)
 		}
 		return nil
 	})
@@ -722,20 +723,20 @@ func (db *BoltDB) persistJob(job *Job) error {
 		if bkt.Get([]byte(job.UUID)) != nil {
 			desc := fmt.Sprintf("%s: job %s already exists", funcName,
 				job.UUID)
-			return dbError(ErrValueFound, desc)
+			return errors.DBError(errors.ValueFound, desc)
 		}
 
 		jobBytes, err := json.Marshal(job)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal job bytes: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return errors.DBError(errors.Parse, desc)
 		}
 		err = bkt.Put([]byte(job.UUID), jobBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist job entry: %v",
 				funcName, err)
-			return dbError(ErrPersistEntry, desc)
+			return errors.DBError(errors.PersistEntry, desc)
 		}
 		return nil
 	})
@@ -793,13 +794,13 @@ func (db *BoltDB) fetchPayment(id string) (*Payment, error) {
 		v := bkt.Get([]byte(id))
 		if v == nil {
 			desc := fmt.Sprintf("%s: no payment found for id %s", funcName, id)
-			return dbError(ErrValueNotFound, desc)
+			return errors.DBError(errors.ValueNotFound, desc)
 		}
 		err = json.Unmarshal(v, &payment)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return errors.DBError(errors.Parse, desc)
 		}
 		return nil
 	})
@@ -821,13 +822,13 @@ func (db *BoltDB) PersistPayment(pmt *Payment) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return errors.DBError(errors.Parse, desc)
 		}
 		err = bkt.Put([]byte(pmt.UUID), b)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment bytes: %v",
 				funcName, err)
-			return dbError(ErrPersistEntry, desc)
+			return errors.DBError(errors.PersistEntry, desc)
 		}
 		return nil
 	})
@@ -870,14 +871,14 @@ func (db *BoltDB) ArchivePayment(pmt *Payment) error {
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return errors.DBError(errors.Parse, desc)
 		}
 
 		err = abkt.Put([]byte(aPmt.UUID), aPmtB)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to archive payment entry: %v",
 				funcName, err)
-			return dbError(ErrPersistEntry, desc)
+			return errors.DBError(errors.PersistEntry, desc)
 		}
 		return nil
 	})
@@ -936,7 +937,7 @@ func (db *BoltDB) fetchPendingPayments() ([]*Payment, error) {
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to unmarshal "+
 					"payment: %v", funcName, err)
-				return dbError(ErrParse, desc)
+				return errors.DBError(errors.Parse, desc)
 			}
 			if payment.PaidOnHeight == 0 {
 				payments = append(payments, &payment)
@@ -968,7 +969,7 @@ func (db *BoltDB) pendingPaymentsForBlockHash(blockHash string) (uint32, error) 
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
 					funcName, err)
-				return dbError(ErrParse, desc)
+				return errors.DBError(errors.Parse, desc)
 			}
 			if payment.PaidOnHeight == 0 {
 				if payment.Source.BlockHash == blockHash {
@@ -1002,7 +1003,7 @@ func (db *BoltDB) archivedPayments() ([]*Payment, error) {
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
 					funcName, err)
-				return dbError(ErrParse, desc)
+				return errors.DBError(errors.Parse, desc)
 			}
 			pmts = append(pmts, &payment)
 		}
@@ -1032,7 +1033,7 @@ func (db *BoltDB) maturePendingPayments(height uint32) (map[string][]*Payment, e
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
 					funcName, err)
-				return dbError(ErrParse, desc)
+				return errors.DBError(errors.Parse, desc)
 			}
 			spendableHeight := payment.EstimatedMaturity + 1
 			if payment.PaidOnHeight == 0 && spendableHeight <= height {
@@ -1071,13 +1072,13 @@ func (db *BoltDB) fetchShare(id string) (*Share, error) {
 		v := bkt.Get([]byte(id))
 		if v == nil {
 			desc := fmt.Sprintf("%s: no share found for id %s", funcName, id)
-			return dbError(ErrValueNotFound, desc)
+			return errors.DBError(errors.ValueNotFound, desc)
 		}
 		err = json.Unmarshal(v, &share)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to unmarshal share bytes: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return errors.DBError(errors.Parse, desc)
 		}
 		return nil
 	})
@@ -1101,20 +1102,20 @@ func (db *BoltDB) PersistShare(s *Share) error {
 		if bkt.Get([]byte(s.UUID)) != nil {
 			desc := fmt.Sprintf("%s: share %s already exists", funcName,
 				s.UUID)
-			return dbError(ErrValueFound, desc)
+			return errors.DBError(errors.ValueFound, desc)
 		}
 
 		sBytes, err := json.Marshal(s)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
 				funcName, err)
-			return dbError(ErrParse, desc)
+			return errors.DBError(errors.Parse, desc)
 		}
 		err = bkt.Put([]byte(s.UUID), sBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist share entry: %v",
 				funcName, err)
-			return dbError(ErrPersistEntry, desc)
+			return errors.DBError(errors.PersistEntry, desc)
 		}
 		return nil
 	})
@@ -1137,7 +1138,7 @@ func (db *BoltDB) ppsEligibleShares(max int64) ([]*Share, error) {
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to decode share "+
 					"created-on bytes: %v", funcName, err)
-				return dbError(ErrDecode, desc)
+				return errors.DBError(errors.Decode, desc)
 			}
 
 			if bytes.Compare(createdOnB, maxB) <= 0 {
@@ -1146,7 +1147,7 @@ func (db *BoltDB) ppsEligibleShares(max int64) ([]*Share, error) {
 				if err != nil {
 					desc := fmt.Sprintf("%s: unable to unmarshal share: %v",
 						funcName, err)
-					return dbError(ErrParse, desc)
+					return errors.DBError(errors.Parse, desc)
 				}
 				eligibleShares = append(eligibleShares, &share)
 			}
@@ -1176,7 +1177,7 @@ func (db *BoltDB) pplnsEligibleShares(min int64) ([]*Share, error) {
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to decode share "+
 					"created-on bytes: %v", funcName, err)
-				return dbError(ErrDecode, desc)
+				return errors.DBError(errors.Decode, desc)
 			}
 
 			if bytes.Compare(createdOnB, minB) > 0 {
@@ -1185,7 +1186,7 @@ func (db *BoltDB) pplnsEligibleShares(min int64) ([]*Share, error) {
 				if err != nil {
 					desc := fmt.Sprintf("%s: unable to unmarshal "+
 						"share: %v", funcName, err)
-					return dbError(ErrParse, desc)
+					return errors.DBError(errors.Parse, desc)
 				}
 				eligibleShares = append(eligibleShares, &share)
 			}
@@ -1217,7 +1218,7 @@ func (db *BoltDB) pruneShares(minNano int64) error {
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to decode share created-on "+
 					"bytes: %v", funcName, err)
-				return dbError(ErrDecode, desc)
+				return errors.DBError(errors.Decode, desc)
 			}
 			if bytes.Compare(minB, createdOnB) > 0 {
 				toDelete = append(toDelete, k)

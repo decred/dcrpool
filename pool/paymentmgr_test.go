@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/big"
 	"testing"
@@ -19,6 +18,8 @@ import (
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
 	"google.golang.org/grpc"
+
+	"github.com/decred/dcrpool/errors"
 )
 
 var (
@@ -118,7 +119,7 @@ func TestSharePercentages(t *testing.T) {
 				NewShare("e", new(big.Rat)),
 			},
 			output: nil,
-			err:    poolError(ErrDivideByZero, "division by zero"),
+			err:    errors.PoolError(errors.DivideByZero, "division by zero"),
 		},
 	}
 
@@ -515,7 +516,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	// Ensure orphaned payments pruning returns an errors if it encounters
 	// an invalid block hash as a key.
 	_, err = mgr.pruneOrphanedPayments(ctx, mPmts)
-	if !errors.Is(err, ErrCreateHash) {
+	if !errors.Is(err, errors.CreateHash) {
 		cancel()
 		t.Fatalf("expected a hash error, got %v", err)
 	}
@@ -581,14 +582,14 @@ func testPaymentMgrPayment(t *testing.T) {
 	// Ensure providing no tx inputs triggers an error.
 	_, _, err = mgr.applyTxFees([]chainjson.TransactionInput{},
 		out, outV, poolFeeAddrs)
-	if !errors.Is(err, ErrTxIn) {
+	if !errors.Is(err, errors.TxIn) {
 		t.Fatalf("expected a tx input error, got %v", err)
 	}
 
 	// Ensure providing no tx outputs triggers an error.
 	_, _, err = mgr.applyTxFees([]chainjson.TransactionInput{in},
 		make(map[string]dcrutil.Amount), outV, poolFeeAddrs)
-	if !errors.Is(err, ErrTxOut) {
+	if !errors.Is(err, errors.TxOut) {
 		t.Fatalf("expected a tx output error, got %v", err)
 	}
 
@@ -628,7 +629,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	// Ensure confirming coinbases returns an error if the provided context
 	// is cancelled.
 	err = mgr.confirmCoinbases(ctx, txHashes, spendableHeight)
-	if !errors.Is(err, ErrContextCancelled) {
+	if !errors.Is(err, errors.ContextCancelled) {
 		t.Fatalf("expected a context cancellation error")
 	}
 
@@ -643,7 +644,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	// Ensure confirming coinbases returns an error if notification source
 	// cannot confirm transactions.
 	err = mgr.confirmCoinbases(ctx, txHashes, spendableHeight)
-	if !errors.Is(err, ErrTxConf) {
+	if !errors.Is(err, errors.TxConf) {
 		cancel()
 		t.Fatalf("expected tx confirmation error, got %v", err)
 	}
@@ -705,7 +706,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 	_, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, poolFeeAddrs,
 		mPmts, treasuryActive)
-	if !errors.Is(err, ErrTxOut) {
+	if !errors.Is(err, errors.TxOut) {
 		cancel()
 		t.Fatalf("expected a fetch txOut error, got %v", err)
 	}
@@ -725,7 +726,7 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	_, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, poolFeeAddrs,
 		mPmts, treasuryActive)
-	if !errors.Is(err, ErrCoinbase) {
+	if !errors.Is(err, errors.Coinbase) {
 		cancel()
 		t.Fatalf("expected a spendable error")
 	}
@@ -749,7 +750,7 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	_, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, poolFeeAddrs,
 		mPmts, treasuryActive)
-	if !errors.Is(err, ErrValueNotFound) {
+	if !errors.Is(err, errors.ValueNotFound) {
 		cancel()
 		t.Fatalf("expected an account not found error")
 	}
@@ -770,7 +771,7 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	_, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, poolFeeAddrs,
 		mPmts, treasuryActive)
-	if !errors.Is(err, ErrCreateTx) {
+	if !errors.Is(err, errors.CreateTx) {
 		cancel()
 		t.Fatalf("expected an input output mismatch error")
 	}
@@ -791,7 +792,7 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	_, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, poolFeeAddrs,
 		mPmts, treasuryActive)
-	if !errors.Is(err, ErrCreateTx) {
+	if !errors.Is(err, errors.CreateTx) {
 		cancel()
 		t.Fatalf("expected an unclaimed input value error, got %v", err)
 	}
@@ -894,7 +895,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
-	if !errors.Is(err, ErrDisconnected) {
+	if !errors.Is(err, errors.Disconnected) {
 		cancel()
 		t.Fatalf("expected a nil tx creator error, got %v", err)
 	}
@@ -928,7 +929,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
-	if !errors.Is(err, ErrTxOut) {
+	if !errors.Is(err, errors.TxOut) {
 		cancel()
 		t.Fatalf("expected a generate payout tx details error, got %v", err)
 	}
@@ -942,7 +943,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
-	if !errors.Is(err, ErrTxIn) {
+	if !errors.Is(err, errors.TxIn) {
 		cancel()
 		t.Fatalf("expected an apply tx fee error, got %v", err)
 	}
@@ -1058,7 +1059,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
-	if !errors.Is(err, ErrDisconnected) {
+	if !errors.Is(err, errors.Disconnected) {
 		cancel()
 		t.Fatalf("expected a fetch tx broadcaster error, got %v", err)
 	}
@@ -1089,7 +1090,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
-	if !errors.Is(err, ErrSignTx) {
+	if !errors.Is(err, errors.SignTx) {
 		cancel()
 		t.Fatalf("expected a signing error, got %v", err)
 	}
@@ -1118,7 +1119,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
-	if !errors.Is(err, ErrPublishTx) {
+	if !errors.Is(err, errors.PublishTx) {
 		cancel()
 		t.Fatalf("expected a publish error, got %v", err)
 	}

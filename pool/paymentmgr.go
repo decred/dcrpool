@@ -2,7 +2,6 @@ package pool
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -17,6 +16,8 @@ import (
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
 	"google.golang.org/grpc"
+
+	"github.com/decred/dcrpool/errors"
 )
 
 const (
@@ -114,7 +115,7 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	// Initialize last payment info (height and paid-on).
 	_, _, err := pm.cfg.db.loadLastPaymentInfo()
 	if err != nil {
-		if errors.Is(err, ErrValueNotFound) {
+		if errors.Is(err, errors.ValueNotFound) {
 			// Initialize with zeros.
 			err = pm.cfg.db.persistLastPaymentInfo(0, 0)
 			if err != nil {
@@ -128,7 +129,7 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	// Initialize last payment created-on.
 	_, err = pm.cfg.db.loadLastPaymentCreatedOn()
 	if err != nil {
-		if errors.Is(err, ErrValueNotFound) {
+		if errors.Is(err, errors.ValueNotFound) {
 			// Initialize with zero.
 			err = pm.cfg.db.persistLastPaymentCreatedOn(0)
 			if err != nil {
@@ -163,7 +164,7 @@ func (pm *PaymentMgr) sharePercentages(shares []*Share) (map[string]*big.Rat, er
 	// Calculate each participating account percentage to be claimed.
 	for account, shareCount := range tally {
 		if tally[account].Cmp(ZeroRat) == 0 {
-			return nil, poolError(ErrDivideByZero, "division by zero")
+			return nil, errors.PoolError(errors.DivideByZero, "division by zero")
 		}
 		accPercent := new(big.Rat).Quo(shareCount, totalShares)
 		percentages[account] = accPercent
@@ -218,7 +219,7 @@ func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *Paym
 	if len(ratios) == 0 {
 		desc := fmt.Sprintf("%s: valid share ratios required to "+
 			"generate payments", funcName)
-		return nil, 0, poolError(ErrShareRatio, desc)
+		return nil, 0, errors.PoolError(errors.ShareRatio, desc)
 	}
 
 	// Deduct pool fee from the amount to be shared.
@@ -265,7 +266,7 @@ func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *Paym
 		desc := fmt.Sprintf("%s: total payments (%s) is greater than "+
 			"the remaining coinbase amount after fees (%s). Difference is %s",
 			funcName, paymentTotal, amtSansFees, diff)
-		return nil, 0, poolError(ErrPaymentSource, desc)
+		return nil, 0, errors.PoolError(errors.PaymentSource, desc)
 	}
 
 	// Add a payout entry for pool fees, which includes any dust payments
@@ -359,7 +360,7 @@ func (pm *PaymentMgr) pruneOrphanedPayments(ctx context.Context, pmts map[string
 		blockHash, err := chainhash.NewHashFromStr(key)
 		if err != nil {
 			desc := fmt.Sprintf("unable to generate hash: %v", err)
-			return nil, poolError(ErrCreateHash, desc)
+			return nil, errors.PoolError(errors.CreateHash, desc)
 		}
 
 		confs, err := pm.cfg.GetBlockConfirmations(ctx, blockHash)
@@ -394,12 +395,12 @@ func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs m
 	if len(inputs) == 0 {
 		desc := fmt.Sprint("%s: cannot create a payout transaction "+
 			"without a tx input", funcName)
-		return 0, 0, poolError(ErrTxIn, desc)
+		return 0, 0, errors.PoolError(errors.TxIn, desc)
 	}
 	if len(outputs) == 0 {
 		desc := fmt.Sprint("%s:cannot create a payout transaction "+
 			"without a tx output", funcName)
-		return 0, 0, poolError(ErrTxOut, desc)
+		return 0, 0, errors.PoolError(errors.TxOut, desc)
 	}
 	inSizes := make([]int, len(inputs))
 	for range inputs {
@@ -448,13 +449,13 @@ func fetchTxConfNotifications(ctx context.Context, notifSource func() (*walletrp
 	case <-ctx.Done():
 		log.Tracef("%s: unable to fetch tx confirmation notifications",
 			funcName)
-		return nil, ErrContextCancelled
+		return nil, errors.ContextCancelled
 	case notif := <-notifCh:
 		close(notifCh)
 		if notif.err != nil {
 			desc := fmt.Sprintf("%s: unable to fetch tx confirmation "+
 				"notifications, %s", funcName, notif.err)
-			return nil, poolError(ErrTxConf, desc)
+			return nil, errors.PoolError(errors.TxConf, desc)
 		}
 		return notif.resp, nil
 	}
@@ -484,10 +485,10 @@ func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txHashes map[string]
 	for {
 		resp, err := fetchTxConfNotifications(ctx, notifSource)
 		if err != nil {
-			if errors.Is(err, ErrContextCancelled) {
+			if errors.Is(err, errors.ContextCancelled) {
 				desc := fmt.Sprintf("%s: cancelled confirming %d coinbase "+
 					"transaction(s)", funcName, len(txHashes))
-				return poolError(ErrContextCancelled, desc)
+				return errors.PoolError(errors.ContextCancelled, desc)
 			}
 			return err
 		}
@@ -499,7 +500,7 @@ func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txHashes map[string]
 				if err != nil {
 					desc := fmt.Sprintf("%s: unable to create tx hash: %v",
 						funcName, err)
-					return poolError(ErrCreateHash, desc)
+					return errors.PoolError(errors.CreateHash, desc)
 				}
 
 				// Remove spendable coinbase from the tx hash set. All
@@ -539,7 +540,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to create tx hash: %v",
 				funcName, err)
-			return nil, nil, nil, 0, poolError(ErrCreateHash, desc)
+			return nil, nil, nil, 0, errors.PoolError(errors.CreateHash, desc)
 		}
 
 		// Ensure the referenced prevout to be spent is spendable at
@@ -548,13 +549,13 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to find tx output: %v",
 				funcName, err)
-			return nil, nil, nil, 0, poolError(ErrTxOut, desc)
+			return nil, nil, nil, 0, errors.PoolError(errors.TxOut, desc)
 		}
 		if txOutResult.Confirmations < int64(pm.cfg.ActiveNet.CoinbaseMaturity+1) {
 			desc := fmt.Sprintf("%s: referenced coinbase at "+
 				"index %d for tx %v is not spendable", funcName,
 				coinbaseIndex, txHash.String())
-			return nil, nil, nil, 0, poolError(ErrCoinbase, desc)
+			return nil, nil, nil, 0, errors.PoolError(errors.Coinbase, desc)
 		}
 
 		// Create the transaction input using the provided prevOut.
@@ -571,7 +572,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable create the input amount: %v",
 				funcName, err)
-			return nil, nil, nil, 0, poolError(ErrCreateAmount, desc)
+			return nil, nil, nil, 0, errors.PoolError(errors.CreateAmount, desc)
 		}
 		tIn += prevOutV
 
@@ -611,7 +612,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 		desc := fmt.Sprintf("%s: total output values for the "+
 			"transaction (%s) is greater than the provided inputs (%s)",
 			funcName, tOut, tIn)
-		return nil, nil, nil, 0, poolError(ErrCreateTx, desc)
+		return nil, nil, nil, 0, errors.PoolError(errors.CreateTx, desc)
 	}
 
 	diff := tIn - tOut
@@ -619,7 +620,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 		desc := fmt.Sprintf("%s: difference between total output "+
 			"values and the provided inputs (%s) exceeds the maximum "+
 			"allowed for rounding errors (%s)", funcName, diff, maxRoundingDiff)
-		return nil, nil, nil, 0, poolError(ErrCreateTx, desc)
+		return nil, nil, nil, 0, errors.PoolError(errors.CreateTx, desc)
 	}
 
 	return inputs, inputTxHashes, outputs, tOut, nil
@@ -641,7 +642,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	txC := pm.cfg.FetchTxCreator()
 	if txC == nil {
 		desc := fmt.Sprintf("%s: tx creator cannot be nil", funcName)
-		return poolError(ErrDisconnected, desc)
+		return errors.PoolError(errors.Disconnected, desc)
 	}
 
 	// remove all matured orphaned payments. Since the associated blocks
@@ -676,7 +677,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to decode payout address: %v",
 				funcName, err)
-			return poolError(ErrDecode, desc)
+			return errors.PoolError(errors.Decode, desc)
 		}
 		outs[addr] = amt
 	}
@@ -700,7 +701,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	if err != nil {
 		// Do not error if coinbase spendable confirmation requests are
 		// terminated by the context cancellation.
-		if !errors.Is(err, ErrContextCancelled) {
+		if !errors.Is(err, errors.ContextCancelled) {
 			return err
 		}
 
@@ -712,7 +713,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to create transaction: %v",
 			funcName, err)
-		return poolError(ErrCreateTx, desc)
+		return errors.PoolError(errors.CreateTx, desc)
 	}
 	txBytes, err := tx.Bytes()
 	if err != nil {
@@ -722,7 +723,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	txB := pm.cfg.FetchTxBroadcaster()
 	if txB == nil {
 		desc := fmt.Sprintf("%s: tx broadcaster cannot be nil", funcName)
-		return poolError(ErrDisconnected, desc)
+		return errors.PoolError(errors.Disconnected, desc)
 	}
 	signTxReq := &walletrpc.SignTransactionRequest{
 		SerializedTransaction: txBytes,
@@ -732,7 +733,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to sign transaction: %v",
 			funcName, err)
-		return poolError(ErrSignTx, desc)
+		return errors.PoolError(errors.SignTx, desc)
 
 	}
 
@@ -743,13 +744,13 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to publish transaction: %v",
 			funcName, err)
-		return poolError(ErrPublishTx, desc)
+		return errors.PoolError(errors.PublishTx, desc)
 	}
 
 	txid, err := chainhash.NewHash(pubTxResp.TransactionHash)
 	if err != nil {
 		desc := fmt.Sprintf("unable to create transaction hash: %v", err)
-		return poolError(ErrCreateHash, desc)
+		return errors.PoolError(errors.CreateHash, desc)
 	}
 	fees := outputs[feeAddr.String()]
 
@@ -765,13 +766,13 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to update payment: %v",
 					funcName, err)
-				return poolError(ErrPersistEntry, desc)
+				return errors.PoolError(errors.PersistEntry, desc)
 			}
 			err = pm.cfg.db.ArchivePayment(pmt)
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to archive payment: %v",
 					funcName, err)
-				return poolError(ErrPersistEntry, desc)
+				return errors.PoolError(errors.PersistEntry, desc)
 			}
 		}
 	}
