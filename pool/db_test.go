@@ -231,23 +231,23 @@ func testLastPaymentCreatedOn(t *testing.T) {
 	// Expect an error if no value set.
 	_, err := db.loadLastPaymentCreatedOn()
 	if !errors.Is(err, ErrValueNotFound) {
-		t.Fatalf("[loadLastPaymentCreatedOn] expected value not found error, got: %v", err)
+		t.Fatalf("expected value not found error, got: %v", err)
 	}
 
 	// Set some values.
 	lastPaymentCreatedOn := time.Now().UnixNano()
 	err = db.persistLastPaymentCreatedOn(lastPaymentCreatedOn)
 	if err != nil {
-		t.Fatalf("[persistLastPaymentCreatedOn] unable to persist last payment created on: %v", err)
+		t.Fatalf("unable to persist last payment created on: %v", err)
 	}
 
 	// Ensure values can be retrieved.
 	paymentCreatedOn, err := db.loadLastPaymentCreatedOn()
 	if err != nil {
-		t.Fatalf("[loadLastPaymentCreatedOn] unable to load last payment created on: %v", err)
+		t.Fatalf("unable to load last payment created on: %v", err)
 	}
 	if lastPaymentCreatedOn != paymentCreatedOn {
-		t.Fatalf("[loadLastPaymentCreatedOn] expected last payment created on to be %d, got %d",
+		t.Fatalf("expected last payment created on to be %d, got %d",
 			lastPaymentCreatedOn, paymentCreatedOn)
 	}
 }
@@ -294,7 +294,7 @@ func testLastPaymentInfo(t *testing.T) {
 	// Expect an error if no value set.
 	_, _, err := db.loadLastPaymentInfo()
 	if !errors.Is(err, ErrValueNotFound) {
-		t.Fatalf("[loadLastPaymentInfo] expected value not found error, got: %v", err)
+		t.Fatalf("expected value not found error, got: %v", err)
 	}
 
 	// Set some values.
@@ -302,22 +302,22 @@ func testLastPaymentInfo(t *testing.T) {
 	lastPaymentPaidOn := time.Now().UnixNano()
 	err = db.persistLastPaymentInfo(lastPaymentHeight, lastPaymentPaidOn)
 	if err != nil {
-		t.Fatalf("[persistLastPaymentInfo] unable to persist last payment info: %v", err)
+		t.Fatalf("unable to persist last payment info: %v", err)
 	}
 
 	// Ensure values can be retrieved.
 	paymentHeight, paymentPaidOn, err := db.loadLastPaymentInfo()
 	if err != nil {
-		t.Fatalf("[loadLastPaymentInfo] unable to load last payment info: %v", err)
+		t.Fatalf("unable to load last payment info: %v", err)
 	}
 
 	if lastPaymentHeight != paymentHeight {
-		t.Fatalf("[loadLastPaymentInfo] expected last payment height to be %d, got %d",
+		t.Fatalf("expected last payment height to be %d, got %d",
 			paymentHeight, paymentHeight)
 	}
 
 	if lastPaymentPaidOn != paymentPaidOn {
-		t.Fatalf("[loadLastPaymentInfo] expected last payment paid on to be %d, got %d",
+		t.Fatalf("expected last payment paid on to be %d, got %d",
 			lastPaymentPaidOn, paymentPaidOn)
 	}
 }
