@@ -1,5 +1,7 @@
 package pool
 
+//go:generate mockgen -source database.go -destination mock_database.go -package pool
+
 import (
 	"database/sql"
 	"net/http"

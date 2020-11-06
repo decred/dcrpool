@@ -105,8 +105,6 @@ func TestPool(t *testing.T) {
 		"testPaymentAccessors":       testPaymentAccessors,
 		"testEndpoint":               testEndpoint,
 		"testClient":                 testClient,
-		"testPaymentMgrPPS":          testPaymentMgrPPS,
-		"testPaymentMgrPPLNS":        testPaymentMgrPPLNS,
 		"testPaymentMgrMaturity":     testPaymentMgrMaturity,
 		"testPaymentMgrPayment":      testPaymentMgrPayment,
 		"testPaymentMgrDust":         testPaymentMgrDust,

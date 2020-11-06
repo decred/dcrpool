@@ -18,6 +18,7 @@ import (
 	"github.com/decred/dcrd/dcrutil/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
+	"github.com/golang/mock/gomock"
 	"google.golang.org/grpc"
 
 	errs "github.com/decred/dcrpool/errors"
@@ -140,7 +141,7 @@ func TestSharePercentages(t *testing.T) {
 	}
 }
 
-func createPaymentMgr(paymentMethod string) (*PaymentMgr, error) {
+func createPaymentMgr(paymentMethod string, db Database) (*PaymentMgr, error) {
 	activeNet := chaincfg.SimNetParams()
 
 	getBlockConfirmations := func(context.Context, *chainhash.Hash) (int64, error) {
@@ -170,8 +171,21 @@ func createPaymentMgr(paymentMethod string) (*PaymentMgr, error) {
 	return NewPaymentMgr(pCfg)
 }
 
-func testPaymentMgrPPS(t *testing.T) {
-	mgr, err := createPaymentMgr(PPS)
+func TestPaymentMgrPPS(t *testing.T) {
+	// Create a mock database.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockDB := NewMockDatabase(ctrl)
+
+	// Creating a new PaymentMgr calls loadLastPaymentInfo and
+	// loadLastPaymentCreatedOn.
+	mockDB.EXPECT().
+		loadLastPaymentInfo()
+	mockDB.EXPECT().
+		loadLastPaymentCreatedOn()
+
+	// Create PaymentMgr.
+	mgr, err := createPaymentMgr(PPS, mockDB)
 	if err != nil {
 		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
@@ -181,57 +195,65 @@ func testPaymentMgrPPS(t *testing.T) {
 	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
 	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
 	shareCount := 10
-	coinbaseValue := 80
 	height := uint32(20)
-	weight := new(big.Rat).SetFloat64(1.0)
-
-	// Create shares for account x and y.
-	for i := 0; i < shareCount; i++ {
-		err := persistShare(db, xID, weight, sixtyBefore+int64(i))
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = persistShare(db, yID, weight, thirtyBefore+int64(i))
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	coinbase, err := dcrutil.NewAmount(float64(coinbaseValue))
+	coinbase, err := dcrutil.NewAmount(float64(80))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Ensure the last payment created on time was updated.
-	previousPaymentCreatedOn, err := db.loadLastPaymentCreatedOn()
-	if err != nil {
-		t.Fatalf("unable to get previous payment created-on: %v", err)
+	// Create shares for account x and y.
+	shares := make([]*Share, 0)
+	for i := 0; i < shareCount; i++ {
+		shares = append(shares, &Share{
+			UUID:      shareID(xID, sixtyBefore+int64(i)),
+			Account:   xID,
+			Weight:    new(big.Rat).SetFloat64(1.0),
+			CreatedOn: sixtyBefore + int64(i),
+		})
+		shares = append(shares, &Share{
+			UUID:      shareID(yID, thirtyBefore+int64(i)),
+			Account:   yID,
+			Weight:    new(big.Rat).SetFloat64(1.0),
+			CreatedOn: thirtyBefore + int64(i),
+		})
 	}
+
+	mockDB.EXPECT().
+		ppsEligibleShares(gomock.Any()).
+		Return(shares, nil)
+
+	// Record persisted payments.
+	pmts := make([]*Payment, 0)
+	mockDB.EXPECT().
+		PersistPayment(gomock.Any()).
+		DoAndReturn(func(pmt *Payment) error {
+			pmts = append(pmts, pmt)
+			return nil
+		}).
+		Times(3)
+
+	// Ensure the lastPaymentCreatedOn time is updated.
+	mockDB.EXPECT().
+		persistLastPaymentCreatedOn(gomock.Any()).
+		DoAndReturn(func(param int64) error {
+			if param < now.UnixNano() {
+				t.Fatalf("expected persistLastPaymentCreatedOn to be invoked "+
+					"with param greater than %v, got %v", now.UnixNano(), param)
+			}
+			return nil
+		})
+
+	mockDB.EXPECT().
+		pruneShares(gomock.Any()).
+		Times(1)
+
 	err = mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
 	if err != nil {
 		t.Fatalf("unable to generate payments: %v", err)
 	}
-	currentPaymentCreatedOn, err := db.loadLastPaymentCreatedOn()
-	if err != nil {
-		t.Fatalf("unable to get current payment created-on: %v", err)
-	}
-	if currentPaymentCreatedOn < now.UnixNano() {
-		t.Fatalf("expected last payment created on time to "+
-			"be greater than %v,got %v", now, currentPaymentCreatedOn)
-	}
-	if currentPaymentCreatedOn < previousPaymentCreatedOn {
-		t.Fatalf("expected last payment created on time to "+
-			"be greater than %v,got %v", previousPaymentCreatedOn,
-			currentPaymentCreatedOn)
-	}
 
 	// Ensure the payments created are for accounts x, y and a fee
 	// payment entry.
-	pmts, err := db.fetchPendingPayments()
-	if err != nil {
-		t.Error(err)
-	}
-
 	var xt, yt, ft dcrutil.Amount
 	for _, pmt := range pmts {
 		if pmt.Account == xID {
@@ -267,8 +289,21 @@ func testPaymentMgrPPS(t *testing.T) {
 	}
 }
 
-func testPaymentMgrPPLNS(t *testing.T) {
-	mgr, err := createPaymentMgr(PPLNS)
+func TestPaymentMgrPPLNS(t *testing.T) {
+	// Create a mock database.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockDB := NewMockDatabase(ctrl)
+
+	// Creating a new PaymentMgr calls loadLastPaymentInfo and
+	// loadLastPaymentCreatedOn.
+	mockDB.EXPECT().
+		loadLastPaymentInfo()
+	mockDB.EXPECT().
+		loadLastPaymentCreatedOn()
+
+	// Create PaymentMgr.
+	mgr, err := createPaymentMgr(PPLNS, mockDB)
 	if err != nil {
 		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
@@ -276,59 +311,67 @@ func testPaymentMgrPPLNS(t *testing.T) {
 	// Ensure Pay-Per-Last-N-Shares (PPLNS) works as expected.
 	now := time.Now()
 	shareCount := 5
-	coinbaseValue := 60
 	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
 	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
 	height := uint32(20)
-	weight := new(big.Rat).SetFloat64(1.0)
-
-	// Create shares for account x and y.
-	for i := 0; i < shareCount; i++ {
-		err := persistShare(db, xID, weight, sixtyBefore+int64(i))
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = persistShare(db, yID, weight, thirtyBefore+int64(i))
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	coinbase, err := dcrutil.NewAmount(float64(coinbaseValue))
+	coinbase, err := dcrutil.NewAmount(float64(60))
 	if err != nil {
 		t.Fatalf("[NewAmount] unexpected error: %v", err)
 	}
 
-	// Ensure the last payment created on time was updated.
-	previousPaymentCreatedOn, err := db.loadLastPaymentCreatedOn()
-	if err != nil {
-		t.Fatalf("unable to get previous payment created-on: %v", err)
+	// Create shares for account x and y.
+	shares := make([]*Share, 0)
+	for i := 0; i < shareCount; i++ {
+		shares = append(shares, &Share{
+			UUID:      shareID(xID, sixtyBefore+int64(i)),
+			Account:   xID,
+			Weight:    new(big.Rat).SetFloat64(1.0),
+			CreatedOn: sixtyBefore + int64(i),
+		})
+		shares = append(shares, &Share{
+			UUID:      shareID(yID, thirtyBefore+int64(i)),
+			Account:   yID,
+			Weight:    new(big.Rat).SetFloat64(1.0),
+			CreatedOn: thirtyBefore + int64(i),
+		})
 	}
+
+	mockDB.EXPECT().
+		pplnsEligibleShares(gomock.Any()).
+		Return(shares, nil)
+
+	// Record persisted payments.
+	pmts := make([]*Payment, 0)
+	mockDB.EXPECT().
+		PersistPayment(gomock.Any()).
+		DoAndReturn(func(pmt *Payment) error {
+			pmts = append(pmts, pmt)
+			return nil
+		}).
+		Times(3)
+
+	// Ensure the lastPaymentCreatedOn time is updated.
+	mockDB.EXPECT().
+		persistLastPaymentCreatedOn(gomock.Any()).
+		DoAndReturn(func(param int64) error {
+			if param < now.UnixNano() {
+				t.Fatalf("expected persistLastPaymentCreatedOn to be invoked "+
+					"with param greater than %v, got %v", now.UnixNano(), param)
+			}
+			return nil
+		})
+
+	mockDB.EXPECT().
+		pruneShares(gomock.Any()).
+		Times(1)
+
 	err = mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
 	if err != nil {
 		t.Fatalf("unable to generate payments: %v", err)
 	}
-	currentPaymentCreatedOn, err := db.loadLastPaymentCreatedOn()
-	if err != nil {
-		t.Fatalf("unable to get current payment created-on: %v", err)
-	}
-	if currentPaymentCreatedOn < now.UnixNano() {
-		t.Fatalf("expected last payment created on time "+
-			"to be greater than %v,got %v", now, currentPaymentCreatedOn)
-	}
-	if currentPaymentCreatedOn < previousPaymentCreatedOn {
-		t.Fatalf("expected last payment created on time "+
-			"to be greater than %v,got %v", previousPaymentCreatedOn,
-			currentPaymentCreatedOn)
-	}
 
 	// Ensure the payments created are for accounts x, y and a fee
 	// payment entry.
-	pmts, err := db.fetchPendingPayments()
-	if err != nil {
-		t.Fatalf("pendingPayments error: %v", err)
-	}
-
 	var xt, yt, ft dcrutil.Amount
 	for _, pmt := range pmts {
 		if pmt.Account == xID {
@@ -366,7 +409,7 @@ func testPaymentMgrPPLNS(t *testing.T) {
 }
 
 func testPaymentMgrMaturity(t *testing.T) {
-	mgr, err := createPaymentMgr(PPLNS)
+	mgr, err := createPaymentMgr(PPLNS, db)
 	if err != nil {
 		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
@@ -462,7 +505,7 @@ func testPaymentMgrPayment(t *testing.T) {
 		t.Fatalf("failed to insert account: %v", err)
 	}
 
-	mgr, err := createPaymentMgr(PPS)
+	mgr, err := createPaymentMgr(PPS, db)
 	if err != nil {
 		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
@@ -1162,7 +1205,7 @@ func testPaymentMgrPayment(t *testing.T) {
 }
 
 func testPaymentMgrDust(t *testing.T) {
-	mgr, err := createPaymentMgr(PPLNS)
+	mgr, err := createPaymentMgr(PPLNS, db)
 	if err != nil {
 		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}

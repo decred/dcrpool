@@ -15,6 +15,7 @@ require (
 	github.com/decred/dcrd/rpcclient/v6 v6.0.0
 	github.com/decred/dcrd/wire v1.4.0
 	github.com/decred/slog v1.1.0
+	github.com/golang/mock v1.4.4
 	github.com/gorilla/csrf v1.7.0
 	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/sessions v1.2.0
