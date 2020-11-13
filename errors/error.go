@@ -27,11 +27,26 @@ const (
 	// DBOpen indicates a database open error.
 	DBOpen = ErrorKind("ErrDBOpen")
 
+	// DBOpen indicates a database close error.
+	DBClose = ErrorKind("ErrDBClose")
+
 	// DBUpgrade indicates a database upgrade error.
 	DBUpgrade = ErrorKind("ErrDBUpgrade")
 
 	// PersistEntry indicates a database persistence error.
 	PersistEntry = ErrorKind("ErrPersistEntry")
+
+	// CreateTable indicates a database table creation error.
+	CreateTable = ErrorKind("CreateTable")
+
+	// BeginTx indicates a database transaction begin error.
+	BeginTx = ErrorKind("BeginTx")
+
+	// RollbackTx indicates a database transaction rollback error.
+	RollbackTx = ErrorKind("RollbackTx")
+
+	// CommitTx indicates a database transaction commit error.
+	CommitTx = ErrorKind("CommitTx")
 
 	// DeleteEntry indicates a database entry delete error.
 	DeleteEntry = ErrorKind("ErrDeleteEntry")
