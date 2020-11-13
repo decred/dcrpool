@@ -423,8 +423,11 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	// Only submit work to the network if the submitted blockhash is
 	// less than the network target difficulty.
 	if hashTarget.Cmp(target) > 0 {
-		resp := SubmitWorkResponse(*req.ID, false, nil)
+		// Accept the submitted work but note it is not less than the
+		// network target difficulty.
+		resp := SubmitWorkResponse(*req.ID, true, nil)
 		c.ch <- resp
+
 		desc := fmt.Sprintf("submitted work from %s is not "+
 			"less than the network target difficulty", c.id)
 		return errs.PoolError(errs.Difficulty, desc)
