@@ -44,40 +44,46 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string) (*Postg
 		return nil, errs.DBError(errs.DBOpen, desc)
 	}
 
+	makeErr := func(funcName string, table string, err error) error {
+		desc := fmt.Sprintf("%s: unable to create %s table: %v",
+			funcName, table, err)
+		return errs.DBError(errs.CreateTable, desc)
+	}
+
 	// Create all of the tables required by dcrpool.
 	_, err = db.Exec(createTableMetadata)
 	if err != nil {
-		return nil, err
+		return nil, makeErr(funcName, "metadata", err)
 	}
 
 	_, err = db.Exec(createTableAccounts)
 	if err != nil {
-		return nil, err
+		return nil, makeErr(funcName, "accounts", err)
 	}
 
 	_, err = db.Exec(createTablePayments)
 	if err != nil {
-		return nil, err
+		return nil, makeErr(funcName, "payments", err)
 	}
 
 	_, err = db.Exec(createTableArchivedPayments)
 	if err != nil {
-		return nil, err
+		return nil, makeErr(funcName, "archived payments", err)
 	}
 
 	_, err = db.Exec(createTableJobs)
 	if err != nil {
-		return nil, err
+		return nil, makeErr(funcName, "jobs", err)
 	}
 
 	_, err = db.Exec(createTableShares)
 	if err != nil {
-		return nil, err
+		return nil, makeErr(funcName, "shares", err)
 	}
 
 	_, err = db.Exec(createTableAcceptedWork)
 	if err != nil {
-		return nil, err
+		return nil, makeErr(funcName, "accepted work", err)
 	}
 
 	return &PostgresDB{db}, nil
@@ -85,12 +91,19 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string) (*Postg
 
 // Close closes the postgres database connection.
 func (db *PostgresDB) Close() error {
-	return db.DB.Close()
+	funcName := "Close"
+	err := db.DB.Close()
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to close db: %v", funcName, err)
+		return errs.DBError(errs.DBClose, desc)
+	}
+	return nil
 }
 
 // decodePaymentRows deserializes the provided SQL rows into a slice of Payment
 // structs.
 func decodePaymentRows(rows *sql.Rows) ([]*Payment, error) {
+	const funcName = "decodePaymentRows"
 	var toReturn []*Payment
 	for rows.Next() {
 		var uuid, account, transactionID, sourceBlockHash, sourceCoinbase string
@@ -100,7 +113,9 @@ func decodePaymentRows(rows *sql.Rows) ([]*Payment, error) {
 			&height, &amount, &createdon, &paidOnHeight, &transactionID,
 			&sourceBlockHash, &sourceCoinbase)
 		if err != nil {
-			return nil, err
+			desc := fmt.Sprintf("%s: unable to scan payment entry: %v",
+				funcName, err)
+			return nil, errs.DBError(errs.Decode, desc)
 		}
 
 		payment := &Payment{uuid, account, estimatedMaturity,
@@ -111,7 +126,9 @@ func decodePaymentRows(rows *sql.Rows) ([]*Payment, error) {
 
 	err := rows.Err()
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to decode payments: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.Decode, desc)
 	}
 
 	return toReturn, nil
@@ -120,6 +137,7 @@ func decodePaymentRows(rows *sql.Rows) ([]*Payment, error) {
 // decodeWorkRows deserializes the provided SQL rows into a slice of
 // AcceptedWork structs.
 func decodeWorkRows(rows *sql.Rows) ([]*AcceptedWork, error) {
+	const funcName = "decodeWorkRows"
 	var toReturn []*AcceptedWork
 	for rows.Next() {
 		var uuid, blockhash, prevhash, minedby, miner string
@@ -129,7 +147,9 @@ func decodeWorkRows(rows *sql.Rows) ([]*AcceptedWork, error) {
 		err := rows.Scan(&uuid, &blockhash, &prevhash, &height,
 			&minedby, &miner, &createdOn, &confirmed)
 		if err != nil {
-			return nil, err
+			desc := fmt.Sprintf("%s: unable to scan work entry: %v",
+				funcName, err)
+			return nil, errs.DBError(errs.Decode, desc)
 		}
 
 		work := &AcceptedWork{uuid, blockhash, prevhash, height,
@@ -139,7 +159,9 @@ func decodeWorkRows(rows *sql.Rows) ([]*AcceptedWork, error) {
 
 	err := rows.Err()
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to decode work: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.Decode, desc)
 	}
 
 	return toReturn, nil
@@ -148,18 +170,21 @@ func decodeWorkRows(rows *sql.Rows) ([]*AcceptedWork, error) {
 // decodeShareRows deserializes the provided SQL rows into a slice of Share
 // structs.
 func decodeShareRows(rows *sql.Rows) ([]*Share, error) {
+	const funcName = "decodeShareRows"
 	var toReturn []*Share
 	for rows.Next() {
 		var uuid, account, weight string
 		var createdon int64
 		err := rows.Scan(&uuid, &account, &weight, &createdon)
 		if err != nil {
-			return nil, err
+			desc := fmt.Sprintf("%s: unable to scan share entry: %v",
+				funcName, err)
+			return nil, errs.DBError(errs.Decode, desc)
 		}
 
 		weightRat, ok := new(big.Rat).SetString(weight)
 		if !ok {
-			desc := fmt.Sprintf("unable to decode rat string: %v", err)
+			desc := fmt.Sprintf("unable to decode big.Rat string: %v", err)
 			return nil, errs.DBError(errs.Parse, desc)
 		}
 		share := &Share{uuid, account, weightRat, createdon}
@@ -168,7 +193,9 @@ func decodeShareRows(rows *sql.Rows) ([]*Share, error) {
 
 	err := rows.Err()
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to decode shares: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.Decode, desc)
 	}
 
 	return toReturn, nil
@@ -196,7 +223,8 @@ func (db *PostgresDB) fetchPoolMode() (uint32, error) {
 			return 0, errs.DBError(errs.ValueNotFound, desc)
 		}
 
-		return 0, err
+		desc := fmt.Sprintf("%s: unable to fetch pool mode: %v", funcName, err)
+		return 0, errs.DBError(errs.FetchEntry, desc)
 	}
 	return poolmode, nil
 }
@@ -204,8 +232,14 @@ func (db *PostgresDB) fetchPoolMode() (uint32, error) {
 // persistPoolMode stores the pool mode in the database. PoolMode is stored as a
 // uint32 for historical reasons. 0 indicates Public, 1 indicates Solo.
 func (db *PostgresDB) persistPoolMode(mode uint32) error {
+	const funcName = "persistPoolMode"
 	_, err := db.DB.Exec(insertPoolMode, mode)
-	return err
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to persist pool mode: %v",
+			funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
+	}
+	return nil
 }
 
 // fetchCSRFSecret retrieves the bytes used for the CSRF secret from the database.
@@ -219,7 +253,9 @@ func (db *PostgresDB) fetchCSRFSecret() ([]byte, error) {
 			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch CSRF secret: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.PersistEntry, desc)
 	}
 
 	decoded, err := hex.DecodeString(secret)
@@ -234,13 +270,20 @@ func (db *PostgresDB) fetchCSRFSecret() ([]byte, error) {
 
 // persistCSRFSecret stores the bytes used for the CSRF secret in the database.
 func (db *PostgresDB) persistCSRFSecret(secret []byte) error {
+	const funcName = "persistCSRFSecret"
 	_, err := db.DB.Exec(insertCSRFSecret, hex.EncodeToString(secret))
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to persist CSRF secrets: %v",
+			funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
+	}
 	return err
 }
 
 // persistLastPaymentInfo stores the last payment height and paidOn timestamp
 // in the database.
 func (db *PostgresDB) persistLastPaymentInfo(height uint32, paidOn int64) error {
+	const funcName = "persistLastPaymentInfo"
 	tx, err := db.DB.Begin()
 	if err != nil {
 		return err
@@ -248,14 +291,30 @@ func (db *PostgresDB) persistLastPaymentInfo(height uint32, paidOn int64) error 
 
 	_, err = tx.Exec(insertLastPaymentHeight, height)
 	if err != nil {
-		tx.Rollback()
-		return err
+		rErr := tx.Rollback()
+		if rErr != nil {
+			desc := fmt.Sprintf("%s: unable to rollback persisting last "+
+				"payment height tx: %v", funcName, rErr)
+			return errs.DBError(errs.RollbackTx, desc)
+		}
+
+		desc := fmt.Sprintf("%s: unable to persist last payment height: %s",
+			funcName, err.Error())
+		return errs.DBError(errs.PersistEntry, desc)
 	}
 
 	_, err = tx.Exec(insertLastPaymentPaidOn, paidOn)
 	if err != nil {
-		tx.Rollback()
-		return err
+		rErr := tx.Rollback()
+		if rErr != nil {
+			desc := fmt.Sprintf("%s: unable to rollback persist last payment "+
+				"paid on time tx: %v", funcName, rErr)
+			return errs.DBError(errs.RollbackTx, desc)
+		}
+
+		desc := fmt.Sprintf("%s: unable to persist last payment paid on "+
+			"time: %s", funcName, err.Error())
+		return errs.DBError(errs.PersistEntry, desc)
 	}
 
 	return tx.Commit()
@@ -275,7 +334,9 @@ func (db *PostgresDB) loadLastPaymentInfo() (uint32, int64, error) {
 			return 0, 0, errs.DBError(errs.ValueNotFound, desc)
 		}
 
-		return 0, 0, err
+		desc := fmt.Sprintf("%s: unable to load last payment height: %v",
+			funcName, err)
+		return 0, 0, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	var paidOn int64
@@ -287,7 +348,9 @@ func (db *PostgresDB) loadLastPaymentInfo() (uint32, int64, error) {
 			return 0, 0, errs.DBError(errs.ValueNotFound, desc)
 		}
 
-		return 0, 0, err
+		desc := fmt.Sprintf("%s: unable to load last payment paid on "+
+			"time: %v", funcName, err)
+		return 0, 0, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	return height, paidOn, nil
@@ -296,8 +359,14 @@ func (db *PostgresDB) loadLastPaymentInfo() (uint32, int64, error) {
 // persistLastPaymentCreatedOn stores the last payment createdOn timestamp in
 // the database.
 func (db *PostgresDB) persistLastPaymentCreatedOn(createdOn int64) error {
+	const funcName = "persistLastPaymentCreatedOn"
 	_, err := db.DB.Exec(insertLastPaymentCreatedOn, createdOn)
-	return err
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to persist last payment created "+
+			"on time: %v", funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
+	}
+	return nil
 }
 
 // loadLastPaymentCreatedOn retrieves the last payment createdOn timestamp from
@@ -313,7 +382,9 @@ func (db *PostgresDB) loadLastPaymentCreatedOn() (int64, error) {
 			return 0, errs.DBError(errs.ValueNotFound, desc)
 		}
 
-		return 0, err
+		desc := fmt.Sprintf("%s: unable to load last payment created "+
+			"on time: %v", funcName, err)
+		return 0, errs.DBError(errs.PersistEntry, desc)
 	}
 	return createdOn, nil
 }
@@ -325,7 +396,6 @@ func (db *PostgresDB) persistAccount(acc *Account) error {
 	const funcName = "persistAccount"
 	_, err := db.DB.Exec(insertAccount, acc.UUID, acc.Address, uint64(time.Now().Unix()))
 	if err != nil {
-
 		var pqError *pq.Error
 		if errors.As(err, &pqError) {
 			if pqError.Code.Name() == "unique_violation" {
@@ -335,7 +405,8 @@ func (db *PostgresDB) persistAccount(acc *Account) error {
 			}
 		}
 
-		return err
+		desc := fmt.Sprintf("%s: unable to persist account: %v", funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
 	}
 	return nil
 }
@@ -353,15 +424,22 @@ func (db *PostgresDB) fetchAccount(id string) (*Account, error) {
 			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch account with id (%s): %v",
+			funcName, id, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 	return &Account{uuid, address, createdOn}, nil
 }
 
 // deleteAccount purges the referenced account from the database.
 func (db *PostgresDB) deleteAccount(id string) error {
+	const funcName = "deleteAccount"
 	_, err := db.DB.Exec(deleteAccount, id)
-	return err
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to delete account: %v", funcName, err)
+		return errs.DBError(errs.FetchEntry, desc)
+	}
+	return nil
 }
 
 // fetchPayment fetches the payment referenced by the provided id. Returns an
@@ -381,22 +459,22 @@ func (db *PostgresDB) fetchPayment(id string) (*Payment, error) {
 			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch payment with id (%s): %v",
+			funcName, id, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
-	return &Payment{uuid, account, estimatedMaturity,
-		height, dcrutil.Amount(amount), createdOn, paidOnHeight, transactionID,
+	return &Payment{uuid, account, estimatedMaturity, height,
+		dcrutil.Amount(amount), createdOn, paidOnHeight, transactionID,
 		&PaymentSource{sourceBlockHash, sourceCoinbase}}, nil
 }
 
 // PersistPayment saves a payment to the database.
 func (db *PostgresDB) PersistPayment(p *Payment) error {
 	const funcName = "PersistPayment"
-
 	_, err := db.DB.Exec(insertPayment,
 		p.UUID, p.Account, p.EstimatedMaturity, p.Height, p.Amount, p.CreatedOn,
 		p.PaidOnHeight, p.TransactionID, p.Source.BlockHash, p.Source.Coinbase)
 	if err != nil {
-
 		var pqError *pq.Error
 		if errors.As(err, &pqError) {
 			if pqError.Code.Name() == "unique_violation" {
@@ -406,24 +484,35 @@ func (db *PostgresDB) PersistPayment(p *Payment) error {
 			}
 		}
 
-		return err
+		desc := fmt.Sprintf("%s: unable to persist payment: %v", funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
 	}
 	return nil
 }
 
 // updatePayment persists the updated payment to the database.
 func (db *PostgresDB) updatePayment(p *Payment) error {
+	const funcName = "updatePayment"
 	_, err := db.DB.Exec(updatePayment,
 		p.UUID, p.Account, p.EstimatedMaturity, p.Height, p.Amount, p.CreatedOn,
 		p.PaidOnHeight, p.TransactionID, p.Source.BlockHash, p.Source.Coinbase)
-	return err
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to update payment: %v", funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
+	}
+	return nil
 }
 
 // deletePayment purges the referenced payment from the database. Note that
 // archived payments cannot be deleted.
 func (db *PostgresDB) deletePayment(id string) error {
+	const funcName = "deletePayment"
 	_, err := db.DB.Exec(deletePayment, id)
-	return err
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to delete payment: %v", funcName, err)
+		return errs.DBError(errs.DeleteEntry, desc)
+	}
+	return nil
 }
 
 // ArchivePayment removes the associated payment from active payments and archives it.
@@ -432,13 +521,22 @@ func (db *PostgresDB) ArchivePayment(p *Payment) error {
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		return err
+		desc := fmt.Sprintf("%s: unable to begin payment archive tx: %v",
+			funcName, err)
+		return errs.DBError(errs.BeginTx, desc)
 	}
 
 	_, err = tx.Exec(deletePayment, p.UUID)
 	if err != nil {
-		tx.Rollback()
-		return err
+		rErr := tx.Rollback()
+		if rErr != nil {
+			desc := fmt.Sprintf("%s: unable to rollback delete payment tx: %v",
+				funcName, rErr)
+			return errs.DBError(errs.BeginTx, desc)
+		}
+
+		desc := fmt.Sprintf("%s: unable to delete payment: %v", funcName, rErr)
+		return errs.DBError(errs.DeleteEntry, desc)
 	}
 
 	aPmt := NewPayment(p.Account, p.Source, p.Amount, p.Height,
@@ -449,19 +547,35 @@ func (db *PostgresDB) ArchivePayment(p *Payment) error {
 		aPmt.CreatedOn, aPmt.PaidOnHeight, aPmt.TransactionID, aPmt.Source.BlockHash,
 		p.Source.Coinbase)
 	if err != nil {
-		tx.Rollback()
-		return err
+		rErr := tx.Rollback()
+		if rErr != nil {
+			desc := fmt.Sprintf("%s: unable to rollback archived payment "+
+				"tx: %v", funcName, rErr)
+			return errs.DBError(errs.BeginTx, desc)
+		}
+
+		desc := fmt.Sprintf("%s: unable to archive payment: %v", funcName, err)
+		return errs.DBError(errs.DeleteEntry, desc)
 	}
 
-	return tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to commit archived payment tx: %v",
+			funcName, err)
+		return errs.DBError(errs.CommitTx, desc)
+	}
+	return nil
 }
 
 // fetchPaymentsAtHeight returns all payments sourcing from orphaned blocks at
 // the provided height.
 func (db *PostgresDB) fetchPaymentsAtHeight(height uint32) ([]*Payment, error) {
+	const funcName = "fetchPaymentsAtHeight"
 	rows, err := db.DB.Query(selectPaymentsAtHeight, height)
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch payments at height %d: %v",
+			funcName, height, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	return decodePaymentRows(rows)
@@ -469,9 +583,12 @@ func (db *PostgresDB) fetchPaymentsAtHeight(height uint32) ([]*Payment, error) {
 
 // fetchPendingPayments fetches all unpaid payments.
 func (db *PostgresDB) fetchPendingPayments() ([]*Payment, error) {
+	const funcName = "fetchPendingPayments"
 	rows, err := db.DB.Query(selectPendingPayments)
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch pending payments: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	return decodePaymentRows(rows)
@@ -480,10 +597,13 @@ func (db *PostgresDB) fetchPendingPayments() ([]*Payment, error) {
 // pendingPaymentsForBlockHash returns the number of pending payments with the
 // provided block hash as their source.
 func (db *PostgresDB) pendingPaymentsForBlockHash(blockHash string) (uint32, error) {
+	const funcName = "pendingPaymentsForBlockHash"
 	var count uint32
 	err := db.DB.QueryRow(countPaymentsAtBlockHash, blockHash).Scan(&count)
 	if err != nil {
-		return 0, err
+		desc := fmt.Sprintf("%s: unable to fetch pending payments for "+
+			"blockhash (%s): %v", funcName, blockHash, err)
+		return 0, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	return count, nil
@@ -492,9 +612,12 @@ func (db *PostgresDB) pendingPaymentsForBlockHash(blockHash string) (uint32, err
 // archivedPayments fetches all archived payments. List is ordered, most
 // recent comes first.
 func (db *PostgresDB) archivedPayments() ([]*Payment, error) {
+	const funcName = "archivedPayments"
 	rows, err := db.DB.Query(selectArchivedPayments)
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch archived payments: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	return decodePaymentRows(rows)
@@ -503,9 +626,12 @@ func (db *PostgresDB) archivedPayments() ([]*Payment, error) {
 // maturePendingPayments fetches all mature pending payments at the
 // provided height.
 func (db *PostgresDB) maturePendingPayments(height uint32) (map[string][]*Payment, error) {
+	const funcName = "maturePendingPayments"
 	rows, err := db.DB.Query(selectMaturePendingPayments, height)
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch mature pending payments: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	payments, err := decodePaymentRows(rows)
@@ -539,12 +665,14 @@ func (db *PostgresDB) fetchShare(id string) (*Share, error) {
 			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch share with id (%s): %v",
+			funcName, id, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	weightRat, ok := new(big.Rat).SetString(weight)
 	if !ok {
-		desc := fmt.Sprintf("%s: unable to decode rat string: %v",
+		desc := fmt.Sprintf("%s: unable to decode big.Rat string: %v",
 			funcName, err)
 		return nil, errs.DBError(errs.Parse, desc)
 	}
@@ -557,9 +685,9 @@ func (db *PostgresDB) fetchShare(id string) (*Share, error) {
 func (db *PostgresDB) PersistShare(share *Share) error {
 	const funcName = "PersistShare"
 
-	_, err := db.DB.Exec(insertShare, share.UUID, share.Account, share.Weight.RatString(), share.CreatedOn)
+	_, err := db.DB.Exec(insertShare, share.UUID, share.Account,
+		share.Weight.RatString(), share.CreatedOn)
 	if err != nil {
-
 		var pqError *pq.Error
 		if errors.As(err, &pqError) {
 			if pqError.Code.Name() == "unique_violation" {
@@ -569,16 +697,20 @@ func (db *PostgresDB) PersistShare(share *Share) error {
 			}
 		}
 
-		return err
+		desc := fmt.Sprintf("%s: unable to persist share: %v", funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
 	}
 	return nil
 }
 
 // ppsEligibleShares fetches all shares created before or at the provided time.
 func (db *PostgresDB) ppsEligibleShares(max int64) ([]*Share, error) {
+	const funcName = "ppsEligibleShares"
 	rows, err := db.DB.Query(selectSharesOnOrBeforeTime, max)
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch PPS eligible shares: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	return decodeShareRows(rows)
@@ -586,9 +718,12 @@ func (db *PostgresDB) ppsEligibleShares(max int64) ([]*Share, error) {
 
 // pplnsEligibleShares fetches all shares created after the provided time.
 func (db *PostgresDB) pplnsEligibleShares(min int64) ([]*Share, error) {
+	const funcName = "pplnsEligibleShares"
 	rows, err := db.DB.Query(selectSharesAfterTime, min)
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch PPLNS eligible shares: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	return decodeShareRows(rows)
@@ -597,8 +732,13 @@ func (db *PostgresDB) pplnsEligibleShares(min int64) ([]*Share, error) {
 // pruneShares removes shares with a createdOn time earlier than the provided
 // time.
 func (db *PostgresDB) pruneShares(minNano int64) error {
+	const funcName = "pruneShares"
 	_, err := db.DB.Exec(deleteShareCreatedBefore, minNano)
-	return err
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to prune shares: %v", funcName, err)
+		return errs.DBError(errs.DeleteEntry, desc)
+	}
+	return nil
 }
 
 // fetchAcceptedWork fetches the accepted work referenced by the provided id.
@@ -618,7 +758,9 @@ func (db *PostgresDB) fetchAcceptedWork(id string) (*AcceptedWork, error) {
 			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch accepted work: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	return &AcceptedWork{uuid, blockhash, prevhash, height,
@@ -642,7 +784,9 @@ func (db *PostgresDB) persistAcceptedWork(work *AcceptedWork) error {
 			}
 		}
 
-		return err
+		desc := fmt.Sprintf("%s: unable to persist accepted work: %v",
+			funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
 	}
 	return nil
 }
@@ -661,7 +805,9 @@ func (db *PostgresDB) updateAcceptedWork(work *AcceptedWork) error {
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return err
+		desc := fmt.Sprintf("%s: unable to update accepted work: %v",
+			funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
 	}
 
 	if rowsAffected == 0 {
@@ -674,8 +820,14 @@ func (db *PostgresDB) updateAcceptedWork(work *AcceptedWork) error {
 
 // deleteAcceptedWork removes the associated accepted work from the database.
 func (db *PostgresDB) deleteAcceptedWork(id string) error {
+	const funcName = "deleteAcceptedWork"
 	_, err := db.DB.Exec(deleteAcceptedWork, id)
-	return err
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to delete account work: %v",
+			funcName, err)
+		return errs.DBError(errs.DeleteEntry, desc)
+	}
+	return nil
 }
 
 // listMinedWork returns work data associated with all blocks mined by the pool
@@ -683,9 +835,11 @@ func (db *PostgresDB) deleteAcceptedWork(id string) error {
 //
 // List is ordered, most recent comes first.
 func (db *PostgresDB) listMinedWork() ([]*AcceptedWork, error) {
+	const funcName = "listMinedWork"
 	rows, err := db.DB.Query(selectMinedWork)
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch mined work: %v", funcName, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	return decodeWorkRows(rows)
@@ -694,9 +848,11 @@ func (db *PostgresDB) listMinedWork() ([]*AcceptedWork, error) {
 // fetchUnconfirmedWork returns all work which is not confirmed as mined with
 // height less than the provided height.
 func (db *PostgresDB) fetchUnconfirmedWork(height uint32) ([]*AcceptedWork, error) {
+	const funcName = "fetchUnconfirmedWork"
 	rows, err := db.DB.Query(selectUnconfirmedWork, height)
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch unconfirmed work: %v", funcName, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	return decodeWorkRows(rows)
@@ -715,7 +871,9 @@ func (db *PostgresDB) fetchJob(id string) (*Job, error) {
 			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
-		return nil, err
+		desc := fmt.Sprintf("%s: unable to fetch job with id (%s): %v",
+			funcName, id, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 	return &Job{uuid, height, header}, nil
 }
@@ -737,20 +895,33 @@ func (db *PostgresDB) persistJob(job *Job) error {
 			}
 		}
 
-		return err
+		desc := fmt.Sprintf("%s: unable to persist job: %v", funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
 	}
 	return nil
 }
 
 // deleteJob removes the associated job from the database.
 func (db *PostgresDB) deleteJob(id string) error {
+	const funcName = "deleteJob"
 	_, err := db.DB.Exec(deleteJob, id)
-	return err
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to delete job entry: %v",
+			funcName, err)
+		return errs.DBError(errs.DeleteEntry, desc)
+	}
+	return nil
 }
 
 // deleteJobsBeforeHeight removes all jobs with heights less than the provided
 // height.
 func (db *PostgresDB) deleteJobsBeforeHeight(height uint32) error {
+	const funcName = "deleteJobsBeforeHeight"
 	_, err := db.DB.Exec(deleteJobBeforeHeight, height)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to delete jobs before height %d: %v",
+			funcName, height, err)
+		return errs.DBError(errs.DeleteEntry, desc)
+	}
 	return err
 }
