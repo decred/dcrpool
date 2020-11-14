@@ -82,7 +82,7 @@ func createNestedBucket(parent *bolt.Bucket, child []byte) error {
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to create %s bucket: %v",
 			funcName, string(child), err)
-		return errs.DBError(errs.BucketCreate, desc)
+		return errs.DBError(errs.CreateStorage, desc)
 	}
 	return nil
 }
@@ -98,7 +98,7 @@ func createBuckets(db *BoltDB) error {
 			if err != nil {
 				desc := fmt.Sprintf("%s: unable to create %s bucket: %v",
 					funcName, string(poolBkt), err)
-				return errs.DBError(errs.BucketCreate, desc)
+				return errs.DBError(errs.CreateStorage, desc)
 			}
 			vbytes := make([]byte, 4)
 			binary.LittleEndian.PutUint32(vbytes, BoltDBVersion)

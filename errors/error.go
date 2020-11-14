@@ -16,134 +16,122 @@ const (
 	// ------------------------------------------
 
 	// ValueNotFound indicates no value found.
-	ValueNotFound = ErrorKind("ErrValueNotFound")
+	ValueNotFound = ErrorKind("ValueNotFound")
 
 	// BucketNotFound indicates no bucket found.
-	BucketNotFound = ErrorKind("ErrBucketNotFound")
+	BucketNotFound = ErrorKind("BucketNotFound")
 
-	// BucketCreate indicates bucket creation failed.
-	BucketCreate = ErrorKind("ErrBucketCreate")
+	// CreateStorage indicates a storage creation error.
+	CreateStorage = ErrorKind("CreateStorage")
 
 	// DBOpen indicates a database open error.
-	DBOpen = ErrorKind("ErrDBOpen")
+	DBOpen = ErrorKind("DBOpen")
 
 	// DBOpen indicates a database close error.
-	DBClose = ErrorKind("ErrDBClose")
+	DBClose = ErrorKind("DBClose")
 
 	// DBUpgrade indicates a database upgrade error.
-	DBUpgrade = ErrorKind("ErrDBUpgrade")
+	DBUpgrade = ErrorKind("DBUpgrade")
 
 	// PersistEntry indicates a database persistence error.
-	PersistEntry = ErrorKind("ErrPersistEntry")
-
-	// CreateTable indicates a database table creation error.
-	CreateTable = ErrorKind("CreateTable")
-
-	// BeginTx indicates a database transaction begin error.
-	BeginTx = ErrorKind("BeginTx")
-
-	// RollbackTx indicates a database transaction rollback error.
-	RollbackTx = ErrorKind("RollbackTx")
-
-	// CommitTx indicates a database transaction commit error.
-	CommitTx = ErrorKind("CommitTx")
+	PersistEntry = ErrorKind("PersistEntry")
 
 	// DeleteEntry indicates a database entry delete error.
-	DeleteEntry = ErrorKind("ErrDeleteEntry")
+	DeleteEntry = ErrorKind("DeleteEntry")
 
 	// FetchEntry indicates a database entry fetching error.
-	FetchEntry = ErrorKind("ErrFetchEntry")
+	FetchEntry = ErrorKind("FetchEntry")
 
 	// Backup indicates database backup error.
-	Backup = ErrorKind("ErrBackup")
+	Backup = ErrorKind("Backup")
 
 	// Parse indicates a parsing error.
-	Parse = ErrorKind("ErrParse")
+	Parse = ErrorKind("Parse")
 
 	// Decode indicates a decoding error.
-	Decode = ErrorKind("ErrDecode")
+	Decode = ErrorKind("Decode")
 
 	// ValueFound indicates a an unexpected value found.
-	ValueFound = ErrorKind("ErrValueFound")
+	ValueFound = ErrorKind("ValueFound")
 
 	// ------------------------------------------
 	// Errors related to pool operations.
 	// ------------------------------------------
 
 	// GetWork indicates current work could not be fetched.
-	GetWork = ErrorKind("ErrGetWork")
+	GetWork = ErrorKind("GetWork")
 
 	// GetBlock indicates a block could not be fetched.
-	GetBlock = ErrorKind("ErrGetBlock")
+	GetBlock = ErrorKind("GetBlock")
 
 	// Disconnected indicates a disconnected resource.
-	Disconnected = ErrorKind("ErrDisconnected")
+	Disconnected = ErrorKind("Disconnected")
 
 	// Listener indicates a miner listener error.
-	Listener = ErrorKind("ErrListener")
+	Listener = ErrorKind("Listener")
 
 	// HeaderInvalid indicates header creation failed.
-	HeaderInvalid = ErrorKind("ErrHeaderInvalid")
+	HeaderInvalid = ErrorKind("HeaderInvalid")
 
 	// MinerUnknown indicates an unknown miner.
-	MinerUnknown = ErrorKind("ErrMinerUnknown")
+	MinerUnknown = ErrorKind("MinerUnknown")
 
 	// DivideByZero indicates a division by zero error.
-	DivideByZero = ErrorKind("ErrDivideByZero")
+	DivideByZero = ErrorKind("DivideByZero")
 
 	// HexLength indicates an invalid hex length.
-	HexLength = ErrorKind("ErrHexLength")
+	HexLength = ErrorKind("HexLength")
 
 	// TxConf indicates a transaction confirmation error.
-	TxConf = ErrorKind("ErrTxConf")
+	TxConf = ErrorKind("TxConf")
 
 	// BlockConf indicates a block confirmation error.
-	BlockConf = ErrorKind("ErrBlockConf")
+	BlockConf = ErrorKind("BlockConf")
 
 	// ClaimShare indicates a share claim error.
-	ClaimShare = ErrorKind("ErrClaimShare")
+	ClaimShare = ErrorKind("ClaimShare")
 
 	// LimitExceeded indicates a rate limit exhaustion error.
-	LimitExceeded = ErrorKind("ErrLimitExceeded")
+	LimitExceeded = ErrorKind("LimitExceeded")
 
 	// Difficulty indicates a difficulty related error.
-	Difficulty = ErrorKind("ErrDifficulty")
+	Difficulty = ErrorKind("Difficulty")
 
 	// WorkRejected indicates the rejected submitted work.
-	WorkRejected = ErrorKind("ErrWorkRejected")
+	WorkRejected = ErrorKind("WorkRejected")
 
 	// PaymentSource indicates a payment source error.
-	PaymentSource = ErrorKind("ErrPaymentSource")
+	PaymentSource = ErrorKind("PaymentSource")
 
 	// ShareRatio indicates a share ratio error.
-	ShareRatio = ErrorKind("ErrShareRatio")
+	ShareRatio = ErrorKind("ShareRatio")
 
 	// CreateHash indicates a hash creation error.
-	CreateHash = ErrorKind("ErrCreateHash")
+	CreateHash = ErrorKind("CreateHash")
 
 	// Coinbase indicates a coinbase related error.
-	Coinbase = ErrorKind("ErrCoinbase")
+	Coinbase = ErrorKind("Coinbase")
 
 	// CreateTx indicates a transaction creation error.
-	CreateTx = ErrorKind("ErrCreateTx")
+	CreateTx = ErrorKind("CreateTx")
 
 	// SignTx indicates a transaction signing error.
-	SignTx = ErrorKind("ErrSignTx")
+	SignTx = ErrorKind("SignTx")
 
 	// PublishTx indicates a transaction pubishing error.
-	PublishTx = ErrorKind("ErrPublishTx")
+	PublishTx = ErrorKind("PublishTx")
 
 	// TxOut indicates a transaction output related error.
-	TxOut = ErrorKind("ErrTxOut")
+	TxOut = ErrorKind("TxOut")
 
 	// TxIn indicates a transaction input related error.
-	TxIn = ErrorKind("ErrTxIn")
+	TxIn = ErrorKind("TxIn")
 
 	// ContextCancelled indicates a context cancellation related error.
-	ContextCancelled = ErrorKind("ErrContextCancelled")
+	ContextCancelled = ErrorKind("ContextCancelled")
 
 	// CreateAmount indicates an amount creation error.
-	CreateAmount = ErrorKind("ErrCreateAmount")
+	CreateAmount = ErrorKind("CreateAmount")
 )
 
 // Error satisfies the error interface and prints human-readable errors.

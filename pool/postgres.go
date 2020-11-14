@@ -47,7 +47,7 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string) (*Postg
 	makeErr := func(funcName string, table string, err error) error {
 		desc := fmt.Sprintf("%s: unable to create %s table: %v",
 			funcName, table, err)
-		return errs.DBError(errs.CreateTable, desc)
+		return errs.DBError(errs.CreateStorage, desc)
 	}
 
 	// Create all of the tables required by dcrpool.
@@ -295,7 +295,7 @@ func (db *PostgresDB) persistLastPaymentInfo(height uint32, paidOn int64) error 
 		if rErr != nil {
 			desc := fmt.Sprintf("%s: unable to rollback persisting last "+
 				"payment height tx: %v", funcName, rErr)
-			return errs.DBError(errs.RollbackTx, desc)
+			return errs.DBError(errs.PersistEntry, desc)
 		}
 
 		desc := fmt.Sprintf("%s: unable to persist last payment height: %s",
@@ -309,7 +309,7 @@ func (db *PostgresDB) persistLastPaymentInfo(height uint32, paidOn int64) error 
 		if rErr != nil {
 			desc := fmt.Sprintf("%s: unable to rollback persist last payment "+
 				"paid on time tx: %v", funcName, rErr)
-			return errs.DBError(errs.RollbackTx, desc)
+			return errs.DBError(errs.PersistEntry, desc)
 		}
 
 		desc := fmt.Sprintf("%s: unable to persist last payment paid on "+
@@ -523,7 +523,7 @@ func (db *PostgresDB) ArchivePayment(p *Payment) error {
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to begin payment archive tx: %v",
 			funcName, err)
-		return errs.DBError(errs.BeginTx, desc)
+		return errs.DBError(errs.PersistEntry, desc)
 	}
 
 	_, err = tx.Exec(deletePayment, p.UUID)
@@ -532,7 +532,7 @@ func (db *PostgresDB) ArchivePayment(p *Payment) error {
 		if rErr != nil {
 			desc := fmt.Sprintf("%s: unable to rollback delete payment tx: %v",
 				funcName, rErr)
-			return errs.DBError(errs.BeginTx, desc)
+			return errs.DBError(errs.PersistEntry, desc)
 		}
 
 		desc := fmt.Sprintf("%s: unable to delete payment: %v", funcName, rErr)
@@ -551,7 +551,7 @@ func (db *PostgresDB) ArchivePayment(p *Payment) error {
 		if rErr != nil {
 			desc := fmt.Sprintf("%s: unable to rollback archived payment "+
 				"tx: %v", funcName, rErr)
-			return errs.DBError(errs.BeginTx, desc)
+			return errs.DBError(errs.PersistEntry, desc)
 		}
 
 		desc := fmt.Sprintf("%s: unable to archive payment: %v", funcName, err)
@@ -562,7 +562,7 @@ func (db *PostgresDB) ArchivePayment(p *Payment) error {
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to commit archived payment tx: %v",
 			funcName, err)
-		return errs.DBError(errs.CommitTx, desc)
+		return errs.DBError(errs.PersistEntry, desc)
 	}
 	return nil
 }

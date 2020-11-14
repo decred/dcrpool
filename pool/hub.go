@@ -561,6 +561,7 @@ func (h *Hub) shutdown() {
 // Run handles the process lifecycles of the pool hub.
 func (h *Hub) Run(ctx context.Context) {
 	for _, e := range h.endpoints {
+		e.wg.Add(1)
 		go e.run(ctx)
 		h.wg.Add(1)
 	}
