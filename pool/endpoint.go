@@ -222,7 +222,6 @@ func (e *Endpoint) disconnect(ctx context.Context) {
 // run handles the lifecycle of all endpoint related processes.
 // This should be run as a goroutine.
 func (e *Endpoint) run(ctx context.Context) {
-	e.wg.Add(1)
 	go e.listen()
 	go e.connect(ctx)
 	go e.disconnect(ctx)

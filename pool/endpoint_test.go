@@ -83,6 +83,7 @@ func testEndpoint(t *testing.T) {
 	}
 	endpoint.cfg.HubWg.Add(1)
 	ctx, cancel := context.WithCancel(context.Background())
+	endpoint.wg.Add(1)
 	go endpoint.run(ctx)
 	time.Sleep(time.Millisecond * 100)
 
