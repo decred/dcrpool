@@ -44,7 +44,7 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string) (*Postg
 		return nil, errs.DBError(errs.DBOpen, desc)
 	}
 
-	makeErr := func(funcName string, table string, err error) error {
+	makeErr := func(table string, err error) error {
 		desc := fmt.Sprintf("%s: unable to create %s table: %v",
 			funcName, table, err)
 		return errs.DBError(errs.CreateStorage, desc)
@@ -53,37 +53,37 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string) (*Postg
 	// Create all of the tables required by dcrpool.
 	_, err = db.Exec(createTableMetadata)
 	if err != nil {
-		return nil, makeErr(funcName, "metadata", err)
+		return nil, makeErr("metadata", err)
 	}
 
 	_, err = db.Exec(createTableAccounts)
 	if err != nil {
-		return nil, makeErr(funcName, "accounts", err)
+		return nil, makeErr("accounts", err)
 	}
 
 	_, err = db.Exec(createTablePayments)
 	if err != nil {
-		return nil, makeErr(funcName, "payments", err)
+		return nil, makeErr("payments", err)
 	}
 
 	_, err = db.Exec(createTableArchivedPayments)
 	if err != nil {
-		return nil, makeErr(funcName, "archived payments", err)
+		return nil, makeErr("archived payments", err)
 	}
 
 	_, err = db.Exec(createTableJobs)
 	if err != nil {
-		return nil, makeErr(funcName, "jobs", err)
+		return nil, makeErr("jobs", err)
 	}
 
 	_, err = db.Exec(createTableShares)
 	if err != nil {
-		return nil, makeErr(funcName, "shares", err)
+		return nil, makeErr("shares", err)
 	}
 
 	_, err = db.Exec(createTableAcceptedWork)
 	if err != nil {
-		return nil, makeErr(funcName, "accepted work", err)
+		return nil, makeErr("accepted work", err)
 	}
 
 	return &PostgresDB{db}, nil
@@ -255,7 +255,7 @@ func (db *PostgresDB) fetchCSRFSecret() ([]byte, error) {
 
 		desc := fmt.Sprintf("%s: unable to fetch CSRF secret: %v",
 			funcName, err)
-		return nil, errs.DBError(errs.PersistEntry, desc)
+		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
 	decoded, err := hex.DecodeString(secret)
@@ -294,12 +294,13 @@ func (db *PostgresDB) persistLastPaymentInfo(height uint32, paidOn int64) error 
 		rErr := tx.Rollback()
 		if rErr != nil {
 			desc := fmt.Sprintf("%s: unable to rollback persisting last "+
-				"payment height tx: %v", funcName, rErr)
+				"payment height tx: %v, initial error: %v", funcName,
+				rErr, err)
 			return errs.DBError(errs.PersistEntry, desc)
 		}
 
-		desc := fmt.Sprintf("%s: unable to persist last payment height: %s",
-			funcName, err.Error())
+		desc := fmt.Sprintf("%s: unable to persist last payment height: %v",
+			funcName, err)
 		return errs.DBError(errs.PersistEntry, desc)
 	}
 
@@ -308,7 +309,8 @@ func (db *PostgresDB) persistLastPaymentInfo(height uint32, paidOn int64) error 
 		rErr := tx.Rollback()
 		if rErr != nil {
 			desc := fmt.Sprintf("%s: unable to rollback persist last payment "+
-				"paid on time tx: %v", funcName, rErr)
+				"paid on time tx: %v, initial error: %v", funcName,
+				rErr, err)
 			return errs.DBError(errs.PersistEntry, desc)
 		}
 
@@ -436,8 +438,9 @@ func (db *PostgresDB) deleteAccount(id string) error {
 	const funcName = "deleteAccount"
 	_, err := db.DB.Exec(deleteAccount, id)
 	if err != nil {
-		desc := fmt.Sprintf("%s: unable to delete account: %v", funcName, err)
-		return errs.DBError(errs.FetchEntry, desc)
+		desc := fmt.Sprintf("%s: unable to delete account with id (%s): %v",
+			funcName, id, err)
+		return errs.DBError(errs.DeleteEntry, desc)
 	}
 	return nil
 }
@@ -497,7 +500,8 @@ func (db *PostgresDB) updatePayment(p *Payment) error {
 		p.UUID, p.Account, p.EstimatedMaturity, p.Height, p.Amount, p.CreatedOn,
 		p.PaidOnHeight, p.TransactionID, p.Source.BlockHash, p.Source.Coinbase)
 	if err != nil {
-		desc := fmt.Sprintf("%s: unable to update payment: %v", funcName, err)
+		desc := fmt.Sprintf("%s: unable to update payment with id (%s): %v",
+			funcName, p.UUID, err)
 		return errs.DBError(errs.PersistEntry, desc)
 	}
 	return nil
@@ -509,7 +513,8 @@ func (db *PostgresDB) deletePayment(id string) error {
 	const funcName = "deletePayment"
 	_, err := db.DB.Exec(deletePayment, id)
 	if err != nil {
-		desc := fmt.Sprintf("%s: unable to delete payment: %v", funcName, err)
+		desc := fmt.Sprintf("%s: unable to delete payment with id (%s): %v",
+			funcName, id, err)
 		return errs.DBError(errs.DeleteEntry, desc)
 	}
 	return nil
@@ -530,8 +535,8 @@ func (db *PostgresDB) ArchivePayment(p *Payment) error {
 	if err != nil {
 		rErr := tx.Rollback()
 		if rErr != nil {
-			desc := fmt.Sprintf("%s: unable to rollback delete payment tx: %v",
-				funcName, rErr)
+			desc := fmt.Sprintf("%s: unable to rollback payment deletion "+
+				"tx %v, initial error: %v", funcName, rErr, err)
 			return errs.DBError(errs.PersistEntry, desc)
 		}
 
@@ -758,8 +763,8 @@ func (db *PostgresDB) fetchAcceptedWork(id string) (*AcceptedWork, error) {
 			return nil, errs.DBError(errs.ValueNotFound, desc)
 		}
 
-		desc := fmt.Sprintf("%s: unable to fetch accepted work: %v",
-			funcName, err)
+		desc := fmt.Sprintf("%s: unable to fetch accepted work with id "+
+			"(%s): %v", funcName, id, err)
 		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
@@ -805,8 +810,8 @@ func (db *PostgresDB) updateAcceptedWork(work *AcceptedWork) error {
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		desc := fmt.Sprintf("%s: unable to update accepted work: %v",
-			funcName, err)
+		desc := fmt.Sprintf("%s: unable to update accepted work with id "+
+			"(%s): %v", funcName, work.UUID, err)
 		return errs.DBError(errs.PersistEntry, desc)
 	}
 
@@ -823,8 +828,8 @@ func (db *PostgresDB) deleteAcceptedWork(id string) error {
 	const funcName = "deleteAcceptedWork"
 	_, err := db.DB.Exec(deleteAcceptedWork, id)
 	if err != nil {
-		desc := fmt.Sprintf("%s: unable to delete account work: %v",
-			funcName, err)
+		desc := fmt.Sprintf("%s: unable to delete account work with id "+
+			"(%s): %v", funcName, id, err)
 		return errs.DBError(errs.DeleteEntry, desc)
 	}
 	return nil
@@ -906,8 +911,8 @@ func (db *PostgresDB) deleteJob(id string) error {
 	const funcName = "deleteJob"
 	_, err := db.DB.Exec(deleteJob, id)
 	if err != nil {
-		desc := fmt.Sprintf("%s: unable to delete job entry: %v",
-			funcName, err)
+		desc := fmt.Sprintf("%s: unable to delete job entry with id "+
+			"(%s): %v", funcName, id, err)
 		return errs.DBError(errs.DeleteEntry, desc)
 	}
 	return nil

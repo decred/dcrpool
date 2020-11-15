@@ -16,7 +16,7 @@ func TestErrorKindStringer(t *testing.T) {
 		want string
 	}{
 		{ValueNotFound, "ValueNotFound"},
-		{BucketNotFound, "BucketNotFound"},
+		{StorageNotFound, "StorageNotFound"},
 		{CreateStorage, "CreateStorage"},
 		{DBOpen, "DBOpen"},
 		{DBClose, "DBClose"},
@@ -117,27 +117,27 @@ func TestErrorKindIsAs(t *testing.T) {
 		wantMatch: true,
 		wantAs:    ValueNotFound,
 	}, {
-		name:      "ValueNotFound != BucketNotFound",
+		name:      "ValueNotFound != StorageNotFound",
 		err:       ValueNotFound,
-		target:    BucketNotFound,
+		target:    StorageNotFound,
 		wantMatch: false,
 		wantAs:    ValueNotFound,
 	}, {
 		name:      "Error.ValueNotFound != BucketNotFound",
 		err:       PoolError(ValueNotFound, ""),
-		target:    BucketNotFound,
+		target:    StorageNotFound,
 		wantMatch: false,
 		wantAs:    ValueNotFound,
 	}, {
-		name:      "ValueNotFound != Error.BucketNotFound",
+		name:      "ValueNotFound != Error.StorageNotFound",
 		err:       ValueNotFound,
-		target:    PoolError(BucketNotFound, ""),
+		target:    PoolError(StorageNotFound, ""),
 		wantMatch: false,
 		wantAs:    ValueNotFound,
 	}, {
 		name:      "Error.ValueNotFound != Error.BucketNotFound",
 		err:       PoolError(ValueNotFound, ""),
-		target:    PoolError(BucketNotFound, ""),
+		target:    PoolError(StorageNotFound, ""),
 		wantMatch: false,
 		wantAs:    ValueNotFound,
 	}, {

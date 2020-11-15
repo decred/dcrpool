@@ -177,7 +177,7 @@ func deleteEntry(db *BoltDB, bucket []byte, key string) error {
 		if pbkt == nil {
 			desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 				string(poolBkt))
-			return errs.DBError(errs.BucketNotFound, desc)
+			return errs.DBError(errs.StorageNotFound, desc)
 		}
 		b := pbkt.Bucket(bucket)
 
@@ -202,7 +202,7 @@ func fetchBucket(tx *bolt.Tx, bucketID []byte) (*bolt.Bucket, error) {
 	if bkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(bucketID))
-		return nil, errs.DBError(errs.BucketNotFound, desc)
+		return nil, errs.DBError(errs.StorageNotFound, desc)
 	}
 	return bkt, nil
 }
@@ -214,7 +214,7 @@ func fetchPoolBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return nil, errs.DBError(errs.BucketNotFound, desc)
+		return nil, errs.DBError(errs.StorageNotFound, desc)
 	}
 	return pbkt, nil
 }
@@ -276,7 +276,7 @@ func (db *BoltDB) fetchCSRFSecret() ([]byte, error) {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return errs.DBError(errs.BucketNotFound, desc)
+			return errs.DBError(errs.StorageNotFound, desc)
 		}
 		v := pbkt.Get(csrfSecret)
 		if v == nil {
@@ -303,7 +303,7 @@ func (db *BoltDB) persistCSRFSecret(secret []byte) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
 			desc := fmt.Sprintf("bucket %s not found", string(poolBkt))
-			return errs.DBError(errs.BucketNotFound, desc)
+			return errs.DBError(errs.StorageNotFound, desc)
 		}
 
 		return pbkt.Put(csrfSecret, secret)
