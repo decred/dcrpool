@@ -62,7 +62,7 @@ func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
 	if poolBkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return 0, errs.DBError(errs.BucketNotFound, desc)
+		return 0, errs.DBError(errs.StorageNotFound, desc)
 	}
 	v := pbkt.Get(versionK)
 	if v == nil {
@@ -79,7 +79,7 @@ func setDBVersion(tx *bolt.Tx, newVersion uint32) error {
 	if poolBkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	vBytes := make([]byte, 4)
@@ -113,7 +113,7 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	// Update all entries in the payment and payment archive buckets.
@@ -125,7 +125,7 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 	if pmtbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(paymentBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	pmtCursor := pmtbkt.Cursor()
@@ -157,7 +157,7 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 	if abkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(paymentArchiveBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	aCursor := abkt.Cursor()
@@ -208,14 +208,14 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	sbkt := pbkt.Bucket(shareBkt)
 	if sbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(shareBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	toDelete := [][]byte{}
@@ -281,7 +281,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	// Update all entries in the payment and payment archive buckets.
@@ -293,7 +293,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 	if pmtbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(paymentBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	zeroSource := &PaymentSource{}
@@ -342,7 +342,7 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 	if abkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(paymentArchiveBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	toDelete = [][]byte{}
@@ -407,7 +407,7 @@ func removeTxFeeReserveUpgrade(tx *bolt.Tx) error {
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	err = pbkt.Delete([]byte("txfeereserve"))
@@ -440,14 +440,14 @@ func shareCreatedOnUpgrade(tx *bolt.Tx) error {
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	sbkt := pbkt.Bucket(shareBkt)
 	if sbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(shareBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	c := sbkt.Cursor()
@@ -509,14 +509,14 @@ func paymentUUIDUpgrade(tx *bolt.Tx) error {
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(poolBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	pmtbkt := pbkt.Bucket(paymentBkt)
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(paymentBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	c := pmtbkt.Cursor()
@@ -551,7 +551,7 @@ func paymentUUIDUpgrade(tx *bolt.Tx) error {
 	if pbkt == nil {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(paymentArchiveBkt))
-		return errs.DBError(errs.BucketNotFound, desc)
+		return errs.DBError(errs.StorageNotFound, desc)
 	}
 
 	c = abkt.Cursor()

@@ -18,8 +18,8 @@ const (
 	// ValueNotFound indicates no value found.
 	ValueNotFound = ErrorKind("ValueNotFound")
 
-	// BucketNotFound indicates no bucket found.
-	BucketNotFound = ErrorKind("BucketNotFound")
+	// StorageNotFound indicates a missing storage error.
+	StorageNotFound = ErrorKind("StorageNotFound")
 
 	// CreateStorage indicates a storage creation error.
 	CreateStorage = ErrorKind("CreateStorage")

@@ -59,7 +59,7 @@ func Test_BoltDB_FetchBucketHelpers(t *testing.T) {
 		_, err := fetchBucket(tx, workBkt)
 		return err
 	})
-	if !errors.Is(err, errs.BucketNotFound) {
+	if !errors.Is(err, errs.StorageNotFound) {
 		t.Fatalf("expected bucket not found error, got %v", err)
 	}
 
@@ -98,7 +98,7 @@ func Test_BoltDB_FetchBucketHelpers(t *testing.T) {
 		_, err := fetchBucket(tx, workBkt)
 		return err
 	})
-	if !errors.Is(err, errs.BucketNotFound) {
+	if !errors.Is(err, errs.StorageNotFound) {
 		t.Fatalf("expected bucket not found error, got %v", err)
 	}
 }
