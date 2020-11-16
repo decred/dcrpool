@@ -315,7 +315,7 @@ func (db *PostgresDB) persistLastPaymentInfo(height uint32, paidOn int64) error 
 		}
 
 		desc := fmt.Sprintf("%s: unable to persist last payment paid on "+
-			"time: %s", funcName, err.Error())
+			"time: %v", funcName, err)
 		return errs.DBError(errs.PersistEntry, desc)
 	}
 
@@ -555,7 +555,7 @@ func (db *PostgresDB) ArchivePayment(p *Payment) error {
 		rErr := tx.Rollback()
 		if rErr != nil {
 			desc := fmt.Sprintf("%s: unable to rollback archived payment "+
-				"tx: %v", funcName, rErr)
+				"tx: %v, initial error: %v", funcName, rErr, err)
 			return errs.DBError(errs.PersistEntry, desc)
 		}
 
