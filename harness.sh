@@ -31,7 +31,7 @@ LAST_N_PERIOD=5m
 GUI_DIR="${HARNESS_ROOT}/gui"
 
 # Using postgres requires the DB specified below to exist and contain no data.
-USE_POSTGRES=true
+USE_POSTGRES=1
 POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=5432
 POSTGRES_USER=dcrpooluser
@@ -74,7 +74,7 @@ CLIENT_ADDRS=(
 
 # Number of mining clients to create. Maximum is determined by number of client
 # addresses above - currently 20.
-NUMBER_OF_CLIENTS=2
+NUMBER_OF_CLIENTS=1
 
 if [ -d "${HARNESS_ROOT}" ]; then
   rm -R "${HARNESS_ROOT}"
@@ -143,6 +143,7 @@ postgresport=${POSTGRES_PORT}
 postgresuser=${POSTGRES_USER}
 postgrespass=${POSTGRES_PASS}
 postgresdbname=${POSTGRES_DBNAME}
+purgedb=1
 EOF
 
 cat > "${HARNESS_ROOT}/mwallet/dcrmwctl.conf" <<EOF
@@ -205,7 +206,7 @@ echo "Starting simnet master node"
 tmux send-keys "dcrd --appdata=${HARNESS_ROOT}/master \
 --rpcuser=${RPC_USER} --rpcpass=${RPC_PASS} \
 --miningaddr=${POOL_MINING_ADDR} \
---txindex --debuglevel=info \
+--txindex --debuglevel=debug \
 --simnet" C-m
 
 ################################################################################

@@ -73,6 +73,15 @@ const (
 		confirmed BOOLEAN NOT NULL
 	);`
 
+	purgeDB = `DROP TABLE IF EXISTS 
+		acceptedwork, 
+		accounts, 
+		archivedpayments, 
+		jobs, 
+		metadata, 
+		payments, 
+		shares;`
+
 	selectPoolMode = `
 	SELECT value
 	FROM metadata

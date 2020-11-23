@@ -33,7 +33,8 @@ func setupPostgresDB() (*PostgresDB, error) {
 	pgUser := "dcrpooluser"
 	pgPass := "12345"
 	pgDBName := "dcrpooltestdb"
-	return InitPostgresDB(pgHost, pgPort, pgUser, pgPass, pgDBName)
+	purgeDB := false
+	return InitPostgresDB(pgHost, pgPort, pgUser, pgPass, pgDBName, purgeDB)
 }
 
 func teardownPostgresDB(db *PostgresDB) error {
