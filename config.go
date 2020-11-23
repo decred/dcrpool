@@ -140,6 +140,7 @@ type config struct {
 	PGUser                string        `long:"postgresuser" ini-name:"postgresuser" description:"Username for postgres authentication."`
 	PGPass                string        `long:"postgrespass" ini-name:"postgrespass" description:"Password for postgres authentication."`
 	PGDBName              string        `long:"postgresdbname" ini-name:"postgresdbname" description:"Postgres database name."`
+	PurgeDB               bool          `long:"purgedb" ini-name:"purgedb" description:"Wipes all existing data on startup for a postgres backend. This intended for simnet testing purposes only."`
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
 	net                   *params
@@ -761,6 +762,11 @@ func loadConfig() (*config, []string, error) {
 						"cert/key: %v", err)
 			}
 		}
+	}
+
+	if cfg.ActiveNet != chaincfg.SimNetParams().Name && cfg.PurgeDB {
+		return nil, nil, fmt.Errorf("database purging at startup is " +
+			"reserved for simnet testing only")
 	}
 
 	// Warn about deprecated config options if they have been set.

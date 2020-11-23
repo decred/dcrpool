@@ -22,7 +22,7 @@ import (
 
 // InitPostgresDB connects to the specified database and creates all tables
 // required by dcrpool.
-func InitPostgresDB(host string, port uint32, user, pass, dbName string) (*PostgresDB, error) {
+func InitPostgresDB(host string, port uint32, user, pass, dbName string, purgeDB bool) (*PostgresDB, error) {
 	const funcName = "InitPostgresDB"
 
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
@@ -33,6 +33,15 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string) (*Postg
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to open postgres: %v", funcName, err)
 		return nil, errs.DBError(errs.DBOpen, desc)
+	}
+
+	pdb := &PostgresDB{db}
+	if purgeDB {
+		err := pdb.purge()
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to purge db: %v", funcName, err)
+			return nil, errs.DBError(errs.PersistEntry, desc)
+		}
 	}
 
 	// Send a Ping() to validate the db connection. This is because the Open()
@@ -97,6 +106,18 @@ func (db *PostgresDB) Close() error {
 		desc := fmt.Sprintf("%s: unable to close db: %v", funcName, err)
 		return errs.DBError(errs.DBClose, desc)
 	}
+	return nil
+}
+
+// Purge wipes all persisted data.
+func (db *PostgresDB) purge() error {
+	funcName := "Purge"
+	_, err := db.DB.Exec(purgeDB)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to purge db: %v", funcName, err)
+		return errs.DBError(errs.DeleteEntry, desc)
+	}
+
 	return nil
 }
 
