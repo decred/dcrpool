@@ -143,7 +143,6 @@ postgresport=${POSTGRES_PORT}
 postgresuser=${POSTGRES_USER}
 postgrespass=${POSTGRES_PASS}
 postgresdbname=${POSTGRES_DBNAME}
-purgedb=1
 EOF
 
 cat > "${HARNESS_ROOT}/mwallet/dcrmwctl.conf" <<EOF
@@ -378,7 +377,8 @@ echo "Starting dcrpool"
 sleep 5
 tmux new-window -t $TMUX_SESSION -n 'pool'
 tmux send-keys "cd ${HARNESS_ROOT}/pool" C-m
-tmux send-keys "dcrpool --configfile=pool.conf --homedir=${HARNESS_ROOT}/pool" C-m
+tmux send-keys "dcrpool --configfile=pool.conf --homedir=${HARNESS_ROOT}/pool \
+--purgedb" C-m
 
 ################################################################################
 # Setup the mining clients.

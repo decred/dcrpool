@@ -39,8 +39,7 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string, purgeDB
 	if purgeDB {
 		err := pdb.purge()
 		if err != nil {
-			desc := fmt.Sprintf("%s: unable to purge db: %v", funcName, err)
-			return nil, errs.DBError(errs.PersistEntry, desc)
+			return nil, err
 		}
 	}
 
@@ -109,9 +108,10 @@ func (db *PostgresDB) Close() error {
 	return nil
 }
 
-// Purge wipes all persisted data.
+// purge wipes all persisted data. This is intended for use with tesnet and
+// simnet testing purposes only.
 func (db *PostgresDB) purge() error {
-	funcName := "Purge"
+	funcName := "purge"
 	_, err := db.DB.Exec(purgeDB)
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to purge db: %v", funcName, err)
