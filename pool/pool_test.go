@@ -37,23 +37,6 @@ func setupPostgresDB() (*PostgresDB, error) {
 	return InitPostgresDB(pgHost, pgPort, pgUser, pgPass, pgDBName, purgeDB)
 }
 
-func teardownPostgresDB(db *PostgresDB) error {
-	const stmt = `
-		DROP TABLE IF EXISTS accounts;
-		DROP TABLE IF EXISTS jobs;
-		DROP TABLE IF EXISTS shares;
-		DROP TABLE IF EXISTS payments;
-		DROP TABLE IF EXISTS archivedpayments;
-		DROP TABLE IF EXISTS acceptedwork;
-		DROP TABLE IF EXISTS metadata;
-	`
-	_, err := db.DB.Exec(stmt)
-	if err != nil {
-		return err
-	}
-	return db.Close()
-}
-
 // setupBoltDB initializes a bolt database.
 func setupBoltDB() (*BoltDB, error) {
 	os.Remove(testDB)
@@ -126,10 +109,12 @@ func TestPool(t *testing.T) {
 
 		t.Run(testName+"_Bolt", test)
 
-		err = teardownBoltDB(boltDB, testDB)
+		err = boltDB.purge()
 		if err != nil {
 			t.Fatalf("bolt teardown error: %v", err)
 		}
+
+		boltDB.Close()
 	}
 
 	// Run all tests with postgres DB.
@@ -143,10 +128,12 @@ func TestPool(t *testing.T) {
 
 		t.Run(testName+"_Postgres", test)
 
-		err = teardownPostgresDB(postgresDB)
+		err = postgresDB.purge()
 		if err != nil {
 			t.Fatalf("postgres teardown error: %v", err)
 		}
+
+		postgresDB.Close()
 	}
 
 }

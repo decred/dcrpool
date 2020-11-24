@@ -12,6 +12,7 @@ import (
 type Database interface {
 	// Utils
 	httpBackup(w http.ResponseWriter) error
+	purge() error
 	Backup(fileName string) error
 	Close() error
 

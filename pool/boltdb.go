@@ -424,6 +424,106 @@ func (db *BoltDB) Close() error {
 	return db.DB.Close()
 }
 
+// purge wipes all persisted data. This is intended for use with tesnet and
+// simnet testing purposes only.
+func (db *BoltDB) purge() error {
+	funcName := "purge"
+	return db.DB.Update(func(tx *bolt.Tx) error {
+		pbkt, err := fetchPoolBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		// Delete all metadata.
+		err = pbkt.Delete(csrfSecret)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete csrf secret: %v",
+				funcName, err)
+			return errs.DBError(errs.DeleteEntry, desc)
+		}
+
+		err = pbkt.Delete(soloPool)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete solo pool status: %v",
+				funcName, err)
+			return errs.DBError(errs.DeleteEntry, desc)
+		}
+
+		err = pbkt.Delete(lastPaymentHeight)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete last payment "+
+				"height: %v", funcName, err)
+			return errs.DBError(errs.DeleteEntry, desc)
+		}
+
+		err = pbkt.Delete(lastPaymentPaidOn)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete last payment "+
+				"paid on: %v", funcName, err)
+			return errs.DBError(errs.DeleteEntry, desc)
+		}
+
+		err = pbkt.Delete(lastPaymentCreatedOn)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete last payment "+
+				"created on: %v", funcName, err)
+			return errs.DBError(errs.DeleteEntry, desc)
+		}
+
+		err = pbkt.Delete(versionK)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete db "+
+				"version: %v", funcName, err)
+			return errs.DBError(errs.DeleteEntry, desc)
+		}
+
+		// Delete all pool buckets.
+		err = pbkt.DeleteBucket(paymentArchiveBkt)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete payment archive "+
+				"bucket: %v", funcName, err)
+			return errs.DBError(errs.DeleteEntry, desc)
+		}
+
+		err = pbkt.DeleteBucket(paymentBkt)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete payment bucket: %v",
+				funcName, err)
+			return errs.DBError(errs.DeleteEntry, desc)
+		}
+
+		err = pbkt.DeleteBucket(workBkt)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete work bucket: %v",
+				funcName, err)
+			return errs.DBError(errs.DeleteEntry, desc)
+		}
+
+		err = pbkt.DeleteBucket(jobBkt)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete job bucket: %v",
+				funcName, err)
+			return errs.DBError(errs.DeleteEntry, desc)
+		}
+
+		err = pbkt.DeleteBucket(shareBkt)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete share bucket: %v",
+				funcName, err)
+			return errs.DBError(errs.DeleteEntry, desc)
+		}
+
+		err = pbkt.DeleteBucket(accountBkt)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to delete account bucket: %v",
+				funcName, err)
+			return errs.DBError(errs.DeleteEntry, desc)
+		}
+
+		return nil
+	})
+}
+
 // httpBackup streams a backup of the entire database over the provided HTTP
 // response writer.
 func (db *BoltDB) httpBackup(w http.ResponseWriter) error {
