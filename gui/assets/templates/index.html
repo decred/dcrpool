@@ -16,7 +16,7 @@
                 </div>
             </div>
         </div>
-        
+
     </div>
 </div>
 
@@ -40,12 +40,12 @@
 
         <p class="pt-1 pb-2">To mine, point your miner to the pool and set the username as described below in the miner
             configuration section.</p>
-        
+
         {{template "pool-stats" .PoolStatsData}}
-        
+
     </div>
 </div>
-    
+
 <div class="container">
 
     <div class="row">
@@ -72,7 +72,8 @@
                                     <li>Whatsminer&nbsp;D1</li>
                                 </ul>
                             </div>
-                            <p>For Innosilicon D9 the pool only supports <a href="https://github.com/decred/dcrpool/releases/download/v1.1.0-rc1/D9_20180602_094459.swu">D9_20180602_094459.swu</a> 
+                            <p>For Innosilicon D9 the pool only supports <a
+                                    href="https://github.com/decred/dcrpool/releases/download/v1.1.0-rc1/D9_20180602_094459.swu">D9_20180602_094459.swu</a>
                                 firmware, ensure the D9 has the supported firmware before connecting.</p>
                         </div>
                     </div>
@@ -85,29 +86,11 @@
                         </div>
                         <div class="carousel-text col-lg-8 col-12 px-4">
                             <h2>Connect the Miner</h2>
-                            <p>To connect, set the pool URL to <span class="config">'localhost'</span>, and the miner port to:</p>
-                            <div class="d-flex flex-row">
-                                <ul>
-                                    <li>
-                                        <span class="config">{{.MinerPorts.innosilicond9}}</span> (Innosilicon&nbsp;D9)
-                                    </li>
-                                    <li>
-                                        <span class="config">{{.MinerPorts.antminerdr3}}</span> (Antminer&nbsp;DR3)
-                                    </li>
-                                    <li>
-                                        <span class="config">{{.MinerPorts.obeliskdcr1}}</span> (Obelisk&nbsp;DCR1)
-                                    </li>
-                                </ul>
-                                <ul>
-                                    <li>
-                                        <span class="config">{{.MinerPorts.antminerdr5}}</span> (Antminer&nbsp;DR5)
-                                    </li>
-                                    <li>
-                                        <span class="config">{{.MinerPorts.whatsminerd1}}</span> (Whatsminer&nbsp;D1)
-                                    </li>
-                                </ul>
-                            </div>
-                            <p>The username of the miner should be the payment address for receiving rewards and a unique name identifying the client, formatted as <span class="config">'address.name'</span></p>
+                            <p>To connect, set the pool URL to <span class="config">'localhost'</span>, and the miner
+                                port to: <span class="config">{{.MinerPort}}</span></p>
+                            <p>The username of the miner should be the payment address for receiving rewards and a
+                                unique name identifying the client, formatted as <span
+                                    class="config">'address.name'</span></p>
                         </div>
                     </div>
                 </div>
@@ -119,9 +102,9 @@
                         </div>
                         <div class="carousel-text col-lg-8 col-12 px-4">
                             <h2>Confirm Miner Connection</h2>
-                            <p>To confirm a miner connection, look up its account information with 
+                            <p>To confirm a miner connection, look up its account information with
                                 its associated miner address.</p>
-                            <p>The miner should be listed as a connected miner with its 
+                            <p>The miner should be listed as a connected miner with its
                                 curent hash rate in the 'Connected Clients' section.</p>
                         </div>
                     </div>
@@ -189,7 +172,7 @@
                         {{end}}
                     </tbody>
                 </table>
-                
+
                 <div id="reward-quotas-page-select" class="page-select"></div>
 
             </div>
@@ -206,5 +189,6 @@
 <script src='/assets/js/pagination.js'></script>
 
 </body>
+
 </html>
 {{end}}
