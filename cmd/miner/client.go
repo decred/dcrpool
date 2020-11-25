@@ -92,7 +92,7 @@ func (m *Miner) authenticate() error {
 // subscribe sends a stratum miner subscribe message.
 func (m *Miner) subscribe() error {
 	id := m.nextID()
-	req := pool.SubscribeRequest(&id, "cpuminer", version(), m.notifyID)
+	req := pool.SubscribeRequest(&id, "cpuminer", minerVersion(), m.notifyID)
 	err := m.encoder.Encode(req)
 	if err != nil {
 		return err
@@ -284,6 +284,7 @@ func (m *Miner) process(ctx context.Context) {
 					m.extraNonce2Size = extraNonce2Size
 					m.notifyID = notifyID
 					m.subscribed = true
+					log.Trace("Miner successfully subscribed.")
 
 				case pool.Submit:
 					accepted, sErr, err := pool.ParseSubmitWorkResponse(resp)

@@ -43,11 +43,16 @@ var (
 	appBuild = "dev"
 )
 
+// minerVersion returns the version of the miner per semantic versioning.
+func minerVersion() string {
+	return fmt.Sprintf("%d.%d.%d", appMajor, appMinor, appPatch)
+}
+
 // version returns the application version as a properly formed string per the
 // semantic versioning 2.0.0 spec (http://semver.org/).
 func version() string {
 	// Start with the major, minor, and patch versions.
-	version := fmt.Sprintf("%d.%d.%d", appMajor, appMinor, appPatch)
+	version := minerVersion()
 
 	// Append pre-release version if there is one.  The hyphen called for
 	// by the semantic versioning spec is automatically appended and should
