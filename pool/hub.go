@@ -155,7 +155,7 @@ type Hub struct {
 	connections    map[string]uint32
 	connectionsMtx sync.RWMutex
 	cancel         context.CancelFunc
-	endpoints      []*Endpoint
+	endpoint       *Endpoint
 	blake256Pad    []byte
 	wg             *sync.WaitGroup
 	cacheCh        chan CacheUpdateEvent
@@ -291,6 +291,32 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		log.Infof("Payment method is %s.", strings.ToUpper(hcfg.PaymentMethod))
 	} else {
 		log.Infof("Solo pool mode active.")
+	}
+
+	eCfg := &EndpointConfig{
+		ActiveNet:             h.cfg.ActiveNet,
+		db:                    h.cfg.DB,
+		SoloPool:              h.cfg.SoloPool,
+		Blake256Pad:           h.blake256Pad,
+		NonceIterations:       h.cfg.NonceIterations,
+		MaxConnectionsPerHost: h.cfg.MaxConnectionsPerHost,
+		HubWg:                 h.wg,
+		FetchMinerDifficulty:  h.poolDiffs.fetchMinerDifficulty,
+		SubmitWork:            h.submitWork,
+		FetchCurrentWork:      h.chainState.fetchCurrentWork,
+		WithinLimit:           h.limiter.withinLimit,
+		AddConnection:         h.addConnection,
+		RemoveConnection:      h.removeConnection,
+		FetchHostConnections:  h.fetchHostConnections,
+		MaxGenTime:            h.cfg.MaxGenTime,
+		SignalCache:           h.SignalCache,
+		MonitorCycle:          h.cfg.MonitorCycle,
+		MaxUpgradeTries:       h.cfg.MaxUpgradeTries,
+	}
+
+	h.endpoint, err = NewEndpoint(eCfg, h.cfg.MinerPort)
+	if err != nil {
+		return nil, err
 	}
 
 	return h, nil
@@ -443,59 +469,15 @@ func (h *Hub) processWork(headerE string) {
 	}
 	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
 		blockVersion, nBits, nTime, true)
-	for _, endpoint := range h.endpoints {
-		endpoint.clientsMtx.Lock()
-		for _, client := range endpoint.clients {
-			select {
-			case client.ch <- workNotif:
-			default:
-			}
+	h.endpoint.clientsMtx.Lock()
+	for _, client := range h.endpoint.clients {
+		select {
+		case client.ch <- workNotif:
+		default:
+			// Non-blocking send fallthrough.
 		}
-		endpoint.clientsMtx.Unlock()
 	}
-}
-
-// Listen creates listeners for all supported pool clients.
-func (h *Hub) Listen() error {
-	for miner, port := range h.cfg.MinerPorts {
-		diffInfo, err := h.poolDiffs.fetchMinerDifficulty(miner)
-		if err != nil {
-			return err
-		}
-		eCfg := &EndpointConfig{
-			ActiveNet:             h.cfg.ActiveNet,
-			db:                    h.cfg.DB,
-			SoloPool:              h.cfg.SoloPool,
-			Blake256Pad:           h.blake256Pad,
-			NonceIterations:       h.cfg.NonceIterations,
-			MaxConnectionsPerHost: h.cfg.MaxConnectionsPerHost,
-			HubWg:                 h.wg,
-			SubmitWork:            h.submitWork,
-			FetchCurrentWork:      h.chainState.fetchCurrentWork,
-			WithinLimit:           h.limiter.withinLimit,
-			AddConnection:         h.addConnection,
-			RemoveConnection:      h.removeConnection,
-			FetchHostConnections:  h.fetchHostConnections,
-			MaxGenTime:            h.cfg.MaxGenTime,
-			SignalCache:           h.SignalCache,
-		}
-		endpoint, err := NewEndpoint(eCfg, diffInfo, port, miner)
-		if err != nil {
-			desc := fmt.Sprintf("unable to create %s endpoint on port %d",
-				miner, port)
-			return errs.PoolError(errs.Listener, desc)
-		}
-		h.endpoints = append(h.endpoints, endpoint)
-	}
-	return nil
-}
-
-// CloseListeners terminates listeners created by endpoints of the hub. This
-// should only be used in the pool's shutdown process the hub is not running.
-func (h *Hub) CloseListeners() {
-	for _, e := range h.endpoints {
-		e.listener.Close()
-	}
+	h.endpoint.clientsMtx.Unlock()
 }
 
 // CreateNotificationHandlers returns handlers for block and work notifications.
@@ -528,7 +510,7 @@ func (h *Hub) CreateNotificationHandlers() *rpcclient.NotificationHandlers {
 }
 
 // FetchWork queries the mining node for work. This should be called
-// immediately the pool starts to avoid for a work notification.
+// immediately the pool starts to avoid waiting for a work notification.
 func (h *Hub) FetchWork(ctx context.Context) error {
 	work, _, err := h.getWork(ctx)
 	if err != nil {
@@ -545,6 +527,9 @@ func (h *Hub) HasClients() bool {
 
 // shutdown tears down the hub and releases resources used.
 func (h *Hub) shutdown() {
+	if h.endpoint.listener != nil {
+		h.endpoint.listener.Close()
+	}
 	if !h.cfg.SoloPool {
 		if h.walletClose != nil {
 			_ = h.walletClose()
@@ -560,13 +545,9 @@ func (h *Hub) shutdown() {
 
 // Run handles the process lifecycles of the pool hub.
 func (h *Hub) Run(ctx context.Context) {
-	for _, e := range h.endpoints {
-		e.wg.Add(1)
-		go e.run(ctx)
-		h.wg.Add(1)
-	}
+	h.wg.Add(2)
+	go h.endpoint.run(ctx)
 	go h.chainState.handleChainUpdates(ctx)
-	h.wg.Add(1)
 
 	// Wait until all hub processes have terminated, and then shutdown.
 	h.wg.Wait()
@@ -576,13 +557,12 @@ func (h *Hub) Run(ctx context.Context) {
 // FetchClients returns all connected pool clients.
 func (h *Hub) FetchClients() []*Client {
 	clients := make([]*Client, 0)
-	for _, endpoint := range h.endpoints {
-		endpoint.clientsMtx.Lock()
-		for _, c := range endpoint.clients {
-			clients = append(clients, c)
-		}
-		endpoint.clientsMtx.Unlock()
+	h.endpoint.clientsMtx.Lock()
+	for _, c := range h.endpoint.clients {
+		clients = append(clients, c)
 	}
+	h.endpoint.clientsMtx.Unlock()
+
 	return clients
 }
 

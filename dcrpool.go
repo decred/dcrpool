@@ -144,10 +144,6 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = p.hub.Listen()
-	if err != nil {
-		return nil, err
-	}
 
 	csrfSecret, err := p.hub.CSRFSecret()
 	if err != nil {
@@ -187,7 +183,6 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 
 	p.gui, err = gui.NewGUI(gcfg)
 	if err != nil {
-		p.hub.CloseListeners()
 		return nil, err
 	}
 	return p, nil

@@ -14,7 +14,71 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/v3"
+	errs "github.com/decred/dcrpool/errors"
 )
+
+var (
+	// These miner ids represent the expected identifications returned by
+	// supported miners in their mining.subscribe requests.
+
+	CPUID  = "cpuminer/1.0.0"
+	DCR1ID = "cgminer/4.10.0"
+	D9ID   = "sgminer/4.4.2"
+	DR3ID  = "cgminer/4.9.0"
+	D1ID   = "whatsminer/d1-v1.0"
+)
+
+// minerIDPair represents miner subscription identification pairing
+// between the id and the miners that identify as.
+type minerIDPair struct {
+	id     string
+	miners map[int]string
+}
+
+// newMinerIDPair creates a new miner ID pair.
+func newMinerIDPair(id string, miners ...string) *minerIDPair {
+	set := make(map[int]string, len(miners))
+	for id, entry := range miners {
+		set[id] = entry
+	}
+	sub := &minerIDPair{
+		id:     id,
+		miners: set,
+	}
+	return sub
+}
+
+// generateMinerIDs creates the miner id pairings for all supported miners.
+func generateMinerIDs() map[string]*minerIDPair {
+	ids := make(map[string]*minerIDPair)
+	cpu := newMinerIDPair(CPUID, CPU)
+	obelisk := newMinerIDPair(DCR1ID, ObeliskDCR1)
+	innosilicon := newMinerIDPair(D9ID, InnosiliconD9)
+	antminer := newMinerIDPair(DR3ID, AntminerDR3, AntminerDR5)
+	whatsminer := newMinerIDPair(D1ID, WhatsminerD1)
+
+	ids[cpu.id] = cpu
+	ids[obelisk.id] = obelisk
+	ids[innosilicon.id] = innosilicon
+	ids[antminer.id] = antminer
+	ids[whatsminer.id] = whatsminer
+	return ids
+}
+
+var (
+	// minerIDs represents the minder id pairings for all supported miners.
+	minerIDs = generateMinerIDs()
+)
+
+// identifyMiner determines if the provided miner id is supported by the pool.
+func identifyMiner(id string) (*minerIDPair, error) {
+	mID, ok := minerIDs[id]
+	if !ok {
+		msg := fmt.Sprintf("connected miner with id %s is unsupported", id)
+		return nil, errs.PoolError(errs.MinerUnknown, msg)
+	}
+	return mID, nil
+}
 
 // EndpointConfig contains all of the configuration values which should be
 // provided when creating a new instance of Endpoint.
@@ -37,6 +101,9 @@ type EndpointConfig struct {
 	MaxGenTime time.Duration
 	// HubWg represents the hub's waitgroup.
 	HubWg *sync.WaitGroup
+	// FetchMinerDifficulty returns the difficulty information for the
+	// provided miner if it exists.
+	FetchMinerDifficulty func(string) (*DifficultyInfo, error)
 	// SubmitWork sends solved block data to the consensus daemon.
 	SubmitWork func(context.Context, *string) (bool, error)
 	// FetchCurrentWork returns the current work of the pool.
@@ -51,6 +118,12 @@ type EndpointConfig struct {
 	FetchHostConnections func(string) uint32
 	// SignalCache sends the provided cache update event to the gui cache.
 	SignalCache func(event CacheUpdateEvent)
+	// MonitorCycle represents the time monitoring a mining client to access
+	// possible upgrades if needed
+	MonitorCycle time.Duration
+	// MaxUpgradeTries represents the maximum number of miner monitoring and
+	// upgrade tries before the process is terminated.
+	MaxUpgradeTries int
 }
 
 // connection wraps a client connection and a done channel.
@@ -61,9 +134,7 @@ type connection struct {
 
 // Endpoint represents a stratum endpoint.
 type Endpoint struct {
-	miner      string
 	port       uint32
-	diffInfo   *DifficultyInfo
 	connCh     chan *connection
 	discCh     chan struct{}
 	listener   net.Listener
@@ -74,19 +145,18 @@ type Endpoint struct {
 }
 
 // NewEndpoint creates an new miner endpoint.
-func NewEndpoint(eCfg *EndpointConfig, diffInfo *DifficultyInfo, port uint32, miner string) (*Endpoint, error) {
+func NewEndpoint(eCfg *EndpointConfig, port uint32) (*Endpoint, error) {
 	endpoint := &Endpoint{
-		port:     port,
-		miner:    miner,
-		diffInfo: diffInfo,
-		cfg:      eCfg,
-		clients:  make(map[string]*Client),
-		connCh:   make(chan *connection, bufferSize),
-		discCh:   make(chan struct{}, bufferSize),
+		port:    port,
+		cfg:     eCfg,
+		clients: make(map[string]*Client),
+		connCh:  make(chan *connection, bufferSize),
+		discCh:  make(chan struct{}, bufferSize),
 	}
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "0.0.0.0", endpoint.port))
 	if err != nil {
-		return nil, err
+		desc := fmt.Sprintf("unable to create endpoint on port %d", port)
+		return nil, errs.PoolError(errs.Listener, desc)
 	}
 	endpoint.listener = listener
 	return endpoint, nil
@@ -95,7 +165,7 @@ func NewEndpoint(eCfg *EndpointConfig, diffInfo *DifficultyInfo, port uint32, mi
 // removeClient removes a disconnected pool client from its associated endpoint.
 func (e *Endpoint) removeClient(c *Client) {
 	e.clientsMtx.Lock()
-	delete(e.clients, c.id)
+	delete(e.clients, c.extraNonce1)
 	e.clientsMtx.Unlock()
 	e.cfg.RemoveConnection(c.addr.IP.String())
 }
@@ -103,7 +173,7 @@ func (e *Endpoint) removeClient(c *Client) {
 // listen accepts incoming client connections on the endpoint.
 // It must be run as a goroutine.
 func (e *Endpoint) listen() {
-	log.Infof("%s listening on :%d", e.miner, e.port)
+	log.Infof("listening on :%d", e.port)
 	for {
 		conn, err := e.listener.Accept()
 		if err != nil {
@@ -116,8 +186,7 @@ func (e *Endpoint) listen() {
 					}
 				}
 			}
-			log.Errorf("unable to accept client connection for "+
-				"%s endpoint: %v", e.miner, err)
+			log.Errorf("unable to accept client connection: %v", err)
 			return
 		}
 		e.connCh <- &connection{
@@ -153,25 +222,23 @@ func (e *Endpoint) connect(ctx context.Context) {
 				continue
 			}
 			cCfg := &ClientConfig{
-				ActiveNet:       e.cfg.ActiveNet,
-				db:              e.cfg.db,
-				Blake256Pad:     e.cfg.Blake256Pad,
-				NonceIterations: e.cfg.NonceIterations,
-				FetchMiner: func() string {
-					return e.miner
-				},
-				DifficultyInfo: e.diffInfo,
-				Disconnect: func() {
-					e.wg.Done()
-				},
-				RemoveClient:      e.removeClient,
-				SubmitWork:        e.cfg.SubmitWork,
-				FetchCurrentWork:  e.cfg.FetchCurrentWork,
-				WithinLimit:       e.cfg.WithinLimit,
-				HashCalcThreshold: hashCalcThreshold,
-				MaxGenTime:        e.cfg.MaxGenTime,
-				ClientTimeout:     clientTimeout,
-				SignalCache:       e.cfg.SignalCache,
+				ActiveNet:            e.cfg.ActiveNet,
+				db:                   e.cfg.db,
+				SoloPool:             e.cfg.SoloPool,
+				Blake256Pad:          e.cfg.Blake256Pad,
+				NonceIterations:      e.cfg.NonceIterations,
+				FetchMinerDifficulty: e.cfg.FetchMinerDifficulty,
+				Disconnect:           func() { e.wg.Done() },
+				RemoveClient:         e.removeClient,
+				SubmitWork:           e.cfg.SubmitWork,
+				FetchCurrentWork:     e.cfg.FetchCurrentWork,
+				WithinLimit:          e.cfg.WithinLimit,
+				HashCalcThreshold:    hashCalcThreshold,
+				MaxGenTime:           e.cfg.MaxGenTime,
+				ClientTimeout:        clientTimeout,
+				SignalCache:          e.cfg.SignalCache,
+				MonitorCycle:         e.cfg.MonitorCycle,
+				MaxUpgradeTries:      e.cfg.MaxUpgradeTries,
 			}
 			client, err := NewClient(ctx, msg.Conn, tcpAddr, cCfg)
 			if err != nil {
@@ -181,7 +248,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 				continue
 			}
 			e.clientsMtx.Lock()
-			e.clients[client.id] = client
+			e.clients[client.extraNonce1] = client
 			e.clientsMtx.Unlock()
 			e.cfg.AddConnection(host)
 			e.wg.Add(1)
@@ -190,7 +257,8 @@ func (e *Endpoint) connect(ctx context.Context) {
 			// Signal the gui cache of the connected client.
 			e.cfg.SignalCache(ConnectedClient)
 
-			log.Debugf("Mining client connected. id=%s, addr=%s", client.id, client.addr)
+			log.Debugf("Mining client connected. extranonce1=%s, addr=%s",
+				client.extraNonce1, client.addr)
 
 			close(msg.Done)
 		}
@@ -222,6 +290,7 @@ func (e *Endpoint) disconnect(ctx context.Context) {
 // run handles the lifecycle of all endpoint related processes.
 // This should be run as a goroutine.
 func (e *Endpoint) run(ctx context.Context) {
+	e.wg.Add(1)
 	go e.listen()
 	go e.connect(ctx)
 	go e.disconnect(ctx)
