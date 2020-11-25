@@ -87,6 +87,7 @@ func NewStratumError(code uint32, err error) *StratumError {
 // Message defines a message interface.
 type Message interface {
 	MessageType() int
+	String() string
 }
 
 // Request defines a request message.
@@ -99,6 +100,17 @@ type Request struct {
 // MessageType returns the request message type.
 func (req *Request) MessageType() int {
 	return RequestMessage
+}
+
+// String returns the string representation of the request message type.
+func (req *Request) String() string {
+	b, err := json.Marshal(req)
+	if err != nil {
+		log.Errorf("unable to marshal request: %v", err)
+		return ""
+	}
+
+	return string(b)
 }
 
 // NewRequest creates a request instance.
@@ -115,6 +127,17 @@ type Response struct {
 	ID     uint64        `json:"id"`
 	Error  *StratumError `json:"error"`
 	Result interface{}   `json:"result,omitempty"`
+}
+
+// String returns the string representation of the response message type.
+func (req *Response) String() string {
+	b, err := json.Marshal(req)
+	if err != nil {
+		log.Errorf("unable to marshal request: %v", err)
+		return ""
+	}
+
+	return string(b)
 }
 
 // MessageType returns the response message type.

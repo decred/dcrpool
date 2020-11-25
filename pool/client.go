@@ -72,10 +72,9 @@ type ClientConfig struct {
 	Blake256Pad []byte
 	// NonceIterations returns the possible header nonce iterations.
 	NonceIterations float64
-	// Miner returns the endpoint miner type.
-	FetchMiner func() string
-	// DifficultyInfo represents the difficulty info for the client.
-	DifficultyInfo *DifficultyInfo
+	// FetchMinerDifficulty returns the difficulty information for the
+	// provided miner, if it exists.
+	FetchMinerDifficulty func(string) (*DifficultyInfo, error)
 	// Disconnect relays a disconnection signal to the client endpoint.
 	Disconnect func()
 	// RemoveClient removes the client from the pool.
@@ -108,26 +107,29 @@ type Client struct {
 	submissions  int64 // update atomically.
 	lastWorkTime int64 // update atomically.
 
-	id            string
-	addr          *net.TCPAddr
-	cfg           *ClientConfig
-	conn          net.Conn
-	encoder       *json.Encoder
-	reader        *bufio.Reader
-	ctx           context.Context
-	cancel        context.CancelFunc
-	name          string
-	extraNonce1   string
-	ch            chan Message
-	readCh        chan readPayload
-	account       string
-	authorized    bool
-	authorizedMtx sync.Mutex
-	subscribed    bool
-	subscribedMtx sync.Mutex
-	hashRate      *big.Rat
-	hashRateMtx   sync.RWMutex
-	wg            sync.WaitGroup
+	miner    string
+	id       string
+	diffInfo *DifficultyInfo
+	mtx      sync.RWMutex
+
+	addr        *net.TCPAddr
+	cfg         *ClientConfig
+	conn        net.Conn
+	encoder     *json.Encoder
+	reader      *bufio.Reader
+	ctx         context.Context
+	cancel      context.CancelFunc
+	name        string
+	extraNonce1 string
+	ch          chan Message
+	readCh      chan readPayload
+	account     string
+	authorized  bool
+	subscribed  bool
+	statusMtx   sync.RWMutex
+	hashRate    *big.Rat
+	hashRateMtx sync.RWMutex
+	wg          sync.WaitGroup
 }
 
 // generateExtraNonce1 generates a random 4-byte extraNonce1
@@ -161,14 +163,19 @@ func NewClient(ctx context.Context, conn net.Conn, addr *net.TCPAddr, cCfg *Clie
 	if err != nil {
 		return nil, err
 	}
-	c.id = fmt.Sprintf("%v/%v", c.extraNonce1, c.cfg.FetchMiner())
+
 	return c, nil
 }
 
 // shutdown terminates all client processes and established connections.
 func (c *Client) shutdown() {
 	c.cfg.RemoveClient(c)
-	log.Tracef("%s connection terminated.", c.id)
+
+	c.mtx.RLock()
+	id := c.id
+	c.mtx.RUnlock()
+
+	log.Tracef("%s connection terminated.", id)
 }
 
 // claimWeightedShare records a weighted share for the pool client. This
@@ -178,13 +185,17 @@ func (c *Client) claimWeightedShare() error {
 		desc := "cannot claim shares in solo pool mode"
 		return errs.PoolError(errs.ClaimShare, desc)
 	}
-	if c.cfg.ActiveNet.Name == chaincfg.MainNetParams().Name &&
-		c.cfg.FetchMiner() == CPU {
+
+	c.mtx.RLock()
+	miner := c.miner
+	c.mtx.RUnlock()
+
+	if c.cfg.ActiveNet.Name == chaincfg.MainNetParams().Name && miner == CPU {
 		desc := "cannot claim shares for cpu miners on mainnet, " +
 			"reserved for testing purposes only (simnet, testnet)"
 		return errs.PoolError(errs.ClaimShare, desc)
 	}
-	weight := ShareWeights[c.cfg.FetchMiner()]
+	weight := ShareWeights[miner]
 	share := NewShare(c.account, weight)
 	return c.cfg.db.PersistShare(share)
 }
@@ -255,13 +266,88 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 		c.name = username
 	}
 
-	c.authorizedMtx.Lock()
+	c.statusMtx.Lock()
 	c.authorized = true
-	c.authorizedMtx.Unlock()
+	c.statusMtx.Unlock()
 	resp := AuthorizeResponse(*req.ID, true, nil)
 	c.ch <- resp
 
 	return nil
+}
+
+// monitor periodically checks the miner details set against expected
+// incoming submission tally and upgrades the miner if possible when the
+// submission tallies exceed the expected number by 30 percent.
+func (c *Client) monitor(idx int, pair *minerIDPair, monitorCycle time.Duration, maxTries int) {
+	subs := float64(0)
+	tries := int(0)
+	if len(pair.miners) <= 1 {
+		// Nothing to do if there are no more miner ids to upgrade to.
+		return
+	}
+
+	expected := float64(monitorCycle / c.cfg.MaxGenTime)
+	for {
+		ticker := time.NewTicker(monitorCycle)
+		defer ticker.Stop()
+
+		select {
+		case <-ticker.C:
+			if idx == len(pair.miners)-1 {
+				// No more miner upgrades possible.
+				c.mtx.RLock()
+				defer c.mtx.RUnlock()
+
+				return
+			}
+
+			// Stop montiring for possible upgrades when maxTries is reached.
+			if tries == maxTries {
+				return
+			}
+
+			subs = float64(atomic.LoadInt64(&c.submissions)) - subs
+			delta := subs - expected
+
+			// Upgrade the miner only if there are 30 percent more
+			// submissions than expected.
+			if delta < 0.0 || delta < expected*0.3 {
+				tries++
+
+				continue
+			}
+
+			idx++
+
+			// Update the miner's details and send a new mining.set_difficulty
+			// message to the client.
+			c.mtx.Lock()
+			miner := pair.miners[idx]
+			newID := fmt.Sprintf("%v/%v", c.extraNonce1, miner)
+			log.Infof("upgrading %s to %s", c.id, newID)
+			c.miner = miner
+			c.id = newID
+			info, err := c.cfg.FetchMinerDifficulty(miner)
+			if err != nil {
+				tries++
+				log.Error(err)
+				continue
+			}
+			c.diffInfo = info
+			c.mtx.Unlock()
+
+			c.setDifficulty()
+			log.Infof("updated difficulty (%s) for %s sent",
+				c.diffInfo.difficulty.FloatString(3), c.id)
+			time.Sleep(time.Millisecond * 500)
+			c.updateWork()
+
+			tries++
+
+		case <-c.ctx.Done():
+			return
+		}
+	}
 }
 
 // handleSubscribeRequest processes subscription request messages received.
@@ -275,7 +361,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 		return errs.PoolError(errs.LimitExceeded, err.Error())
 	}
 
-	_, nid, err := ParseSubscribeRequest(req)
+	mid, nid, err := ParseSubscribeRequest(req)
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
@@ -283,13 +369,37 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 		return err
 	}
 
+	// Identify the miner and fetch needed mining information for it.
+	idPair, err := identifyMiner(mid)
+	if err != nil {
+		sErr := NewStratumError(Unknown, err)
+		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
+		c.ch <- resp
+		return errs.PoolError(errs.MinerUnknown, err.Error())
+	}
+
+	c.mtx.Lock()
+	minerIdx := 0
+	miner := idPair.miners[minerIdx]
+	c.miner = miner
+	c.id = fmt.Sprintf("%v/%v", c.extraNonce1, miner)
+	info, err := c.cfg.FetchMinerDifficulty(miner)
+	if err != nil {
+		c.mtx.Unlock()
+		return err
+	}
+	c.diffInfo = info
+	c.mtx.Unlock()
+
 	// Generate a subscription id if none exists.
 	if nid == "" {
 		nid = fmt.Sprintf("mn%v", c.extraNonce1)
 	}
 
+	go c.monitor(minerIdx, idPair, c.cfg.MonitorCycle, c.cfg.MaxUpgradeTries)
+
 	var resp *Response
-	switch c.cfg.FetchMiner() {
+	switch miner {
 	case ObeliskDCR1:
 		// The DCR1 is not fully complaint with the stratum spec.
 		// It uses a 4-byte extraNonce2 regardless of the
@@ -328,9 +438,9 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 		resp = SubscribeResponse(*req.ID, nid, c.extraNonce1, ExtraNonce2Size, nil)
 	}
 
-	c.subscribedMtx.Lock()
+	c.statusMtx.Lock()
 	c.subscribed = true
-	c.subscribedMtx.Unlock()
+	c.statusMtx.Unlock()
 
 	c.ch <- resp
 
@@ -339,7 +449,10 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 
 // setDifficulty sends the pool client's difficulty ratio.
 func (c *Client) setDifficulty() {
-	diff := new(big.Rat).Set(c.cfg.DifficultyInfo.difficulty)
+	c.mtx.RLock()
+	diffRat := c.diffInfo.difficulty
+	c.mtx.RUnlock()
+	diff := new(big.Rat).Set(diffRat)
 	diffNotif := SetDifficultyNotification(diff)
 	c.ch <- diffNotif
 }
@@ -355,8 +468,16 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		return errs.PoolError(errs.LimitExceeded, err.Error())
 	}
 
+	c.mtx.RLock()
+	id := c.id
+	miner := c.miner
+	powLimit := c.diffInfo.powLimit
+	diff := c.diffInfo.difficulty
+	tgt := c.diffInfo.target
+	c.mtx.RUnlock()
+
 	_, jobID, extraNonce2E, nTimeE, nonceE, err :=
-		ParseSubmitWorkRequest(req, c.cfg.FetchMiner())
+		ParseSubmitWorkRequest(req, miner)
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
@@ -371,14 +492,13 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		return err
 	}
 	header, err := GenerateSolvedBlockHeader(job.Header, c.extraNonce1,
-		extraNonce2E, nTimeE, nonceE, c.cfg.FetchMiner())
+		extraNonce2E, nTimeE, nonceE, miner)
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
 		return err
 	}
-	diffInfo := c.cfg.DifficultyInfo
 	target := new(big.Rat).SetInt(standalone.CompactToBig(header.Bits))
 
 	// The target difficulty must be larger than zero.
@@ -392,17 +512,17 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	}
 	hash := header.BlockHash()
 	hashTarget := new(big.Rat).SetInt(standalone.HashToBig(&hash))
-	netDiff := new(big.Rat).Quo(diffInfo.powLimit, target)
-	hashDiff := new(big.Rat).Quo(diffInfo.powLimit, hashTarget)
+	netDiff := new(big.Rat).Quo(powLimit, target)
+	hashDiff := new(big.Rat).Quo(powLimit, hashTarget)
 	log.Tracef("network difficulty is: %s", netDiff.FloatString(4))
-	log.Tracef("pool difficulty is: %s", diffInfo.difficulty.FloatString(4))
+	log.Tracef("pool difficulty is: %s", diff.FloatString(4))
 	log.Tracef("hash difficulty is: %s", hashDiff.FloatString(4))
 
 	// Only submit work to the network if the submitted blockhash is
 	// less than the pool target for the client.
-	if hashTarget.Cmp(diffInfo.target) > 0 {
+	if hashTarget.Cmp(tgt) > 0 {
 		err := fmt.Errorf("submitted work from %s is not less than its "+
-			"corresponding pool target", c.id)
+			"corresponding pool target", id)
 		sErr := NewStratumError(LowDifficultyShare, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
@@ -415,7 +535,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	if !c.cfg.SoloPool {
 		err := c.claimWeightedShare()
 		if err != nil {
-			err := fmt.Errorf("%s: %v", c.id, err)
+			err := fmt.Errorf("%s: %v", id, err)
 			sErr := NewStratumError(Unknown, err)
 			resp := SubmitWorkResponse(*req.ID, false, sErr)
 			c.ch <- resp
@@ -435,7 +555,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.ch <- resp
 
 		desc := fmt.Sprintf("submitted work from %s is not "+
-			"less than the network target difficulty", c.id)
+			"less than the network target difficulty", id)
 		return errs.PoolError(errs.Difficulty, desc)
 	}
 
@@ -463,14 +583,14 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	if !accepted {
 		c.ch <- SubmitWorkResponse(*req.ID, false, nil)
 		desc := fmt.Sprintf("%s: work %s rejected by the network",
-			c.id, hash.String())
+			id, hash.String())
 		return errs.PoolError(errs.WorkRejected, desc)
 	}
 
 	// Create accepted work if the work submission is accepted
 	// by the mining node.
 	work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
-		header.Height, c.account, c.cfg.FetchMiner())
+		header.Height, c.account, miner)
 	err = c.cfg.db.persistAcceptedWork(work)
 	if err != nil {
 		// If the submitted accepted work already exists, ignore the
@@ -524,31 +644,35 @@ func (c *Client) rollWork() {
 // processing. This must be run as goroutine.
 func (c *Client) read() {
 	for {
+		c.mtx.RLock()
+		id := c.id
+		c.mtx.RUnlock()
+
 		err := c.conn.SetDeadline(time.Now().Add(c.cfg.ClientTimeout))
 		if err != nil {
-			log.Errorf("%s: unable to set deadline: %v", c.id, err)
+			log.Errorf("%s: unable to set deadline: %v", id, err)
 			c.cancel()
 			return
 		}
 		data, err := c.reader.ReadBytes('\n')
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				log.Errorf("%s: EOF", c.id)
+				log.Errorf("%s: EOF", id)
 				c.cancel()
 				return
 			}
 			var nErr *net.OpError
 			if !errors.As(err, &nErr) {
-				log.Errorf("%s: unable to read bytes: %v", c.id, err)
+				log.Errorf("%s: unable to read bytes: %v", id, err)
 				c.cancel()
 				return
 			}
 			if nErr.Op == "read" && nErr.Net == "tcp" {
 				switch {
 				case nErr.Timeout():
-					log.Errorf("%s: read timeout: %v", c.id, err)
+					log.Errorf("%s: read timeout: %v", id, err)
 				case !nErr.Timeout():
-					log.Errorf("%s: read error: %v", c.id, err)
+					log.Errorf("%s: read error: %v", id, err)
 				}
 				c.cancel()
 				return
@@ -559,7 +683,8 @@ func (c *Client) read() {
 		}
 		msg, reqType, err := IdentifyMessage(data)
 		if err != nil {
-			log.Errorf("unable to identify message: %v", err)
+			log.Errorf("unable to identify message %s: %v",
+				string(data), err)
 			c.cancel()
 			return
 		}
@@ -574,12 +699,10 @@ func (c *Client) read() {
 func (c *Client) updateWork() {
 	const funcName = "updateWork"
 	// Only timestamp-roll current work for authorized and subscribed clients.
-	c.authorizedMtx.Lock()
+	c.statusMtx.RLock()
 	authorized := c.authorized
-	c.authorizedMtx.Unlock()
-	c.subscribedMtx.Lock()
 	subscribed := c.subscribed
-	c.subscribedMtx.Unlock()
+	c.statusMtx.RUnlock()
 
 	if !subscribed || !authorized {
 		return
@@ -625,22 +748,28 @@ func (c *Client) updateWork() {
 		blockVersion, nBits, nTime, true)
 	select {
 	case c.ch <- workNotif:
+		c.mtx.RLock()
+		id := c.id
+		c.mtx.RUnlock()
 		log.Tracef("Sent a timestamp-rolled current work at "+
-			"height #%v to %v", height, c.id)
+			"height #%v to %v", height, id)
 	default:
+		// Non-blocking send fallthrough.
 	}
 }
 
 // process  handles incoming messages from the connected pool client.
 // It must be run as a goroutine.
 func (c *Client) process() {
-	ip := c.addr.String()
 	for {
 		select {
 		case <-c.ctx.Done():
 			_, err := c.conn.Write([]byte{})
 			if err != nil {
-				log.Errorf("%s: unable to send close message: %v", c.id, err)
+				c.mtx.RLock()
+				id := c.id
+				c.mtx.RUnlock()
+				log.Errorf("%s: unable to send close message: %v", id, err)
 			}
 			c.wg.Done()
 			return
@@ -648,7 +777,7 @@ func (c *Client) process() {
 		case payload := <-c.readCh:
 			msg := payload.msg
 			msgType := payload.msgType
-			allowed := c.cfg.WithinLimit(ip, PoolClient)
+			allowed := c.cfg.WithinLimit(c.addr.String(), PoolClient)
 			switch msgType {
 			case RequestMessage:
 				req := msg.(*Request)
@@ -683,7 +812,8 @@ func (c *Client) process() {
 					}
 
 				default:
-					log.Errorf("unknown request method: %s", req.Method)
+					log.Errorf("unknown request method for message %s: %s",
+						req.String(), req.Method)
 					c.cancel()
 					continue
 				}
@@ -697,12 +827,13 @@ func (c *Client) process() {
 					continue
 				}
 
-				log.Errorf("unexpected response message received: %v", string(r))
+				log.Errorf("unexpected response message received: %s", string(r))
 				c.cancel()
 				continue
 
 			default:
-				log.Errorf("unknown message type received: %d", msgType)
+				log.Errorf("unknown type received for message %s: %d",
+					msg.String(), msgType)
 				c.cancel()
 				continue
 			}
@@ -841,7 +972,7 @@ func (c *Client) handleCPUWork(req *Request) {
 	miner := "CPU"
 	err := c.encoder.Encode(req)
 	if err != nil {
-		log.Errorf("%s: work encoding error, %v", miner, err)
+		log.Errorf("%s: work encoding error: %v", miner, err)
 		c.cancel()
 		return
 	}
@@ -908,7 +1039,10 @@ func (c *Client) FetchIPAddr() string {
 
 // FetchMinerType gets the client's miner type.
 func (c *Client) FetchMinerType() string {
-	return c.cfg.FetchMiner()
+	c.mtx.RLock()
+	miner := c.miner
+	c.mtx.RUnlock()
+	return miner
 }
 
 // FetchAccountID gets the client's account ID.
@@ -919,6 +1053,7 @@ func (c *Client) FetchAccountID() string {
 // hashMonitor calculates the total number of hashes being solved by the
 // client periodically.
 func (c *Client) hashMonitor() {
+	subs := int64(0)
 	ticker := time.NewTicker(time.Second * time.Duration(c.cfg.HashCalcThreshold))
 	defer ticker.Stop()
 	for {
@@ -932,14 +1067,19 @@ func (c *Client) hashMonitor() {
 			if submissions == 0 {
 				continue
 			}
-			average := float64(c.cfg.HashCalcThreshold) / float64(submissions)
-			diffInfo := c.cfg.DifficultyInfo
-			num := new(big.Rat).Mul(diffInfo.difficulty,
+
+			c.mtx.RLock()
+			diff := c.diffInfo.difficulty
+			c.mtx.RUnlock()
+
+			delta := submissions - subs
+			average := float64(c.cfg.HashCalcThreshold) / float64(delta)
+			num := new(big.Rat).Mul(diff,
 				new(big.Rat).SetFloat64(c.cfg.NonceIterations))
 			denom := new(big.Rat).SetFloat64(average)
 			hash := new(big.Rat).Quo(num, denom)
 			c.setHashRate(hash)
-			atomic.StoreInt64(&c.submissions, 0)
+			subs = submissions
 		}
 	}
 }
@@ -959,7 +1099,8 @@ func (c *Client) send() {
 			if msg.MessageType() == ResponseMessage {
 				err := c.encoder.Encode(msg)
 				if err != nil {
-					log.Errorf("message encoding error: %v", err)
+					log.Errorf("encoding error for message %s: %v",
+						msg.String(), err)
 					c.cancel()
 					continue
 				}
@@ -969,40 +1110,43 @@ func (c *Client) send() {
 				req := msg.(*Request)
 				if req.Method == Notify {
 					// Only send work to authorized and subscribed clients.
-					c.authorizedMtx.Lock()
+					c.statusMtx.Lock()
 					authorized := c.authorized
-					c.authorizedMtx.Unlock()
-					c.subscribedMtx.Lock()
 					subscribed := c.subscribed
-					c.subscribedMtx.Unlock()
+					c.statusMtx.Unlock()
 					if !authorized || !subscribed {
 						continue
 					}
 
-					switch c.cfg.FetchMiner() {
+					c.mtx.RLock()
+					miner := c.miner
+					id := c.id
+					c.mtx.RUnlock()
+
+					switch miner {
 					case CPU:
 						c.handleCPUWork(req)
-						log.Tracef("%s notified of new work", c.id)
+						log.Tracef("%s notified of new work", id)
 
 					case AntminerDR3, AntminerDR5:
 						c.handleAntminerDR3Work(req)
-						log.Tracef("%s notified of new work", c.id)
+						log.Tracef("%s notified of new work", id)
 
 					case InnosiliconD9:
 						c.handleInnosiliconD9Work(req)
-						log.Tracef("%s notified of new work", c.id)
+						log.Tracef("%s notified of new work", id)
 
 					case WhatsminerD1:
 						c.handleWhatsminerD1Work(req)
-						log.Tracef("%s notified of new work", c.id)
+						log.Tracef("%s notified of new work", id)
 
 					case ObeliskDCR1:
 						c.handleObeliskDCR1Work(req)
-						log.Tracef("%s notified of new work", c.id)
+						log.Tracef("%s notified of new work", id)
 
 					default:
-						log.Errorf("unknown miner provided: %s",
-							c.cfg.FetchMiner())
+						log.Errorf("unknown miner for client: %s, "+
+							"message: %s", miner, req.String())
 						c.cancel()
 						continue
 					}
@@ -1010,7 +1154,8 @@ func (c *Client) send() {
 				if req.Method != Notify {
 					err := c.encoder.Encode(msg)
 					if err != nil {
-						log.Errorf("message encoding error: %v", err)
+						log.Errorf("encoding error for message %s: %v",
+							msg.String(), err)
 						c.cancel()
 						continue
 					}
