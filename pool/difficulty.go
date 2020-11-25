@@ -23,8 +23,8 @@ const (
 )
 
 var (
-	// minerHashes is a map of all known DCR miners and their corresponding
-	// hashrates.
+	// minerHashes is a map of all supported decred miners and their
+	// corresponding hash rates.
 	minerHashes = map[string]*big.Int{
 		CPU:           new(big.Int).SetInt64(5e3),
 		ObeliskDCR1:   new(big.Int).SetInt64(1.2e12),
