@@ -120,22 +120,45 @@ type NodeConnection interface {
 
 // HubConfig represents configuration details for the hub.
 type HubConfig struct {
-	ActiveNet             *chaincfg.Params
-	DB                    Database
-	PoolFee               float64
-	MaxGenTime            time.Duration
-	PaymentMethod         string
-	LastNPeriod           time.Duration
-	WalletPass            string
-	SoloPool              bool
-	PoolFeeAddrs          []dcrutil.Address
-	AdminPass             string
-	Secret                string
-	NonceIterations       float64
-	MinerPort             uint32
+	// ActiveNet represents the active network being mined on.
+	ActiveNet *chaincfg.Params
+	// DB represents the pool database.
+	DB Database
+	// PoolFee represents the fee charged to participating accounts of the pool.
+	PoolFee float64
+	// MaxGenTime represents the share creation target time for the pool.
+	MaxGenTime time.Duration
+	// PaymentMethod represents the payment scheme of the pool.
+	PaymentMethod string
+	// LastNPeriod represents the period to source shares from when using the
+	// PPLNS payment scheme.
+	LastNPeriod time.Duration
+	// WalletPass represents the passphrase to unlock the wallet with.
+	WalletPass string
+	// SoloPool represents the solo pool mining mode.
+	SoloPool bool
+	// PoolFeeAddrs represents the pool fee addresses of the pool.
+	PoolFeeAddrs []dcrutil.Address
+	// AdminPass represents the admin password.
+	AdminPass string
+	// NonceIterations returns the possible header nonce iterations.
+	NonceIterations float64
+	// MinerPort represents the miner connection port for the pool.
+	MinerPort uint32
+	// MaxConnectionsPerHost represents the maximum number of connections
+	// allowed per host.
 	MaxConnectionsPerHost uint32
-	WalletAccount         uint32
-	CoinbaseConfTimeout   time.Duration
+	// WalletAccount represents the wallet account to process payments from.
+	WalletAccount uint32
+	// CoinbaseConfTimeout is the duration to wait for coinbase confirmations
+	// when generating a payout transaction.
+	CoinbaseConfTimeout time.Duration
+	// MonitorCycle represents the time monitoring a mining client to access
+	// possible upgrades if needed
+	MonitorCycle time.Duration
+	// MaxUpgradeTries represents the maximum number of miner monitoring and
+	// upgrade tries before the process is terminated.
+	MaxUpgradeTries int
 }
 
 // Hub maintains the set of active clients and facilitates message broadcasting

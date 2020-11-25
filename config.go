@@ -59,6 +59,8 @@ const (
 	defaultPGUser                = "dcrpooluser"
 	defaultPGPass                = "12345"
 	defaultPGDBName              = "dcrpooldb"
+	defaultMonitorCycle          = time.Minute * 2
+	defaultMaxUpgradeTries       = 10
 )
 
 var (
@@ -131,6 +133,8 @@ type config struct {
 	PGPass                string        `long:"postgrespass" ini-name:"postgrespass" description:"Password for postgres authentication."`
 	PGDBName              string        `long:"postgresdbname" ini-name:"postgresdbname" description:"Postgres database name."`
 	PurgeDB               bool          `long:"purgedb" ini-name:"purgedb" description:"Wipes all existing data on startup for a postgres backend. This intended for simnet testing purposes only."`
+	MonitorCycle          time.Duration `long:"monitorcycle" ini-name:"monitorcycle" description:"Time spent monitoring a mining client for possible upgrades."`
+	MaxUpgradeTries       int           `long:"maxupgradetries" ini-name:"maxupgradetries" description:"Maximum monitor cycles before the process is terminated."`
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
 	net                   *params
@@ -366,6 +370,8 @@ func loadConfig() (*config, []string, error) {
 		PGUser:                defaultPGUser,
 		PGPass:                defaultPGPass,
 		PGDBName:              defaultPGDBName,
+		MonitorCycle:          defaultMonitorCycle,
+		MaxUpgradeTries:       defaultMaxUpgradeTries,
 	}
 
 	// Service options which are only added on Windows.

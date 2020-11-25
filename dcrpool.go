@@ -66,6 +66,8 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 		MaxConnectionsPerHost: cfg.MaxConnectionsPerHost,
 		WalletAccount:         cfg.WalletAccount,
 		CoinbaseConfTimeout:   cfg.CoinbaseConfTimeout,
+		MonitorCycle:          cfg.MonitorCycle,
+		MaxUpgradeTries:       cfg.MaxUpgradeTries,
 	}
 
 	var err error
