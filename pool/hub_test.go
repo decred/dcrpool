@@ -234,15 +234,8 @@ func testHub(t *testing.T) {
 		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
 		MaxConnectionsPerHost: 10,
 		NonceIterations:       iterations,
-		MinerPorts: map[string]uint32{
-			CPU:           5050,
-			InnosiliconD9: 5052,
-			AntminerDR3:   5553,
-			AntminerDR5:   5554,
-			WhatsminerD1:  5555,
-			ObeliskDCR1:   5551,
-		},
-		WalletAccount: 69,
+		MinerPort:             5050,
+		WalletAccount:         69,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	hub, err := NewHub(cancel, hcfg)

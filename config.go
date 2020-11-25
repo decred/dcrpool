@@ -48,12 +48,7 @@ const (
 	defaultGUIPort               = 8080
 	defaultGUIDir                = "gui"
 	defaultUseLEHTTPS            = false
-	defaultCPUPort               = 5550
-	defaultDCR1Port              = 5551
-	defaultD9Port                = 5552
-	defaultDR3Port               = 5553
-	defaultDR5Port               = 5554
-	defaultD1Port                = 5555
+	defaultMinerPort             = 5550
 	defaultDesignation           = "YourPoolNameHere"
 	defaultMaxConnectionsPerHost = 100 // 100 connected clients per host
 	defaultWalletAccount         = 0
@@ -126,12 +121,7 @@ type config struct {
 	Designation           string        `long:"designation" ini-name:"designation" description:"The designated codename for this pool. Customises the logo in the top toolbar."`
 	MaxConnectionsPerHost uint32        `long:"maxconnperhost" ini-name:"maxconnperhost" description:"The maximum number of connections allowed per host."`
 	Profile               string        `long:"profile" ini-name:"profile" description:"Enable HTTP profiling on given [addr:]port -- NOTE port must be between 1024 and 65536"`
-	CPUPort               uint32        `long:"cpuport" ini-name:"cpuport" description:"CPU miner connection port."`
-	D9Port                uint32        `long:"d9port" ini-name:"d9port" description:"Innosilicon D9 connection port."`
-	DR3Port               uint32        `long:"dr3port" ini-name:"dr3port" description:"Antminer DR3 connection port."`
-	DR5Port               uint32        `long:"dr5port" ini-name:"dr5port" description:"Antminer DR5 connection port."`
-	D1Port                uint32        `long:"d1port" ini-name:"d1port" description:"Whatsminer D1 connection port."`
-	DCR1Port              uint32        `long:"dcr1port" ini-name:"dcr1port" description:"Obelisk DCR1 connection port."`
+	MinerPort             uint32        `long:"minerport" ini-name:"minerport" description:"Miner connection port."`
 	CoinbaseConfTimeout   time.Duration `long:"conftimeout" ini-name:"conftimeout" description:"The duration to wait for coinbase confirmations."`
 	GenCertsOnly          bool          `long:"gencertsonly" ini-name:"gencertsonly" description:"Only generate needed TLS key pairs and terminate."`
 	UsePostgres           bool          `long:"postgres" ini-name:"postgres" description:"Use postgres database instead of bolt."`
@@ -367,12 +357,7 @@ func loadConfig() (*config, []string, error) {
 		WalletTLSKey:          defaultWalletTLSKeyFile,
 		Designation:           defaultDesignation,
 		MaxConnectionsPerHost: defaultMaxConnectionsPerHost,
-		CPUPort:               defaultCPUPort,
-		D9Port:                defaultD9Port,
-		DR3Port:               defaultDR3Port,
-		DR5Port:               defaultDR5Port,
-		D1Port:                defaultD1Port,
-		DCR1Port:              defaultDCR1Port,
+		MinerPort:             defaultMinerPort,
 		WalletAccount:         defaultWalletAccount,
 		CoinbaseConfTimeout:   defaultCoinbaseConfTimeout,
 		UsePostgres:           defaultUsePostgres,

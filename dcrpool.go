@@ -50,46 +50,6 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 	powLimit := cfg.net.PowLimit
 	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
 	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
-	addPort := func(ports map[string]uint32, key string, entry uint32) error {
-		var match bool
-		var miner string
-		for m, port := range ports {
-			if port == entry {
-				match = true
-				miner = m
-				break
-			}
-		}
-		if match {
-			return fmt.Errorf("%s and %s share port %d", key, miner, entry)
-		}
-		ports[key] = entry
-		return nil
-	}
-
-	// Ensure provided miner ports are unique.
-	minerPorts := make(map[string]uint32)
-	_ = addPort(minerPorts, pool.CPU, cfg.CPUPort)
-	err := addPort(minerPorts, pool.InnosiliconD9, cfg.D9Port)
-	if err != nil {
-		return nil, err
-	}
-	err = addPort(minerPorts, pool.AntminerDR3, cfg.DR3Port)
-	if err != nil {
-		return nil, err
-	}
-	err = addPort(minerPorts, pool.AntminerDR5, cfg.DR5Port)
-	if err != nil {
-		return nil, err
-	}
-	err = addPort(minerPorts, pool.WhatsminerD1, cfg.D1Port)
-	if err != nil {
-		return nil, err
-	}
-	err = addPort(minerPorts, pool.ObeliskDCR1, cfg.DCR1Port)
-	if err != nil {
-		return nil, err
-	}
 
 	hcfg := &pool.HubConfig{
 		DB:                    db,
@@ -102,11 +62,13 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 		PoolFeeAddrs:          cfg.poolFeeAddrs,
 		SoloPool:              cfg.SoloPool,
 		NonceIterations:       iterations,
-		MinerPorts:            minerPorts,
+		MinerPort:             cfg.MinerPort,
 		MaxConnectionsPerHost: cfg.MaxConnectionsPerHost,
 		WalletAccount:         cfg.WalletAccount,
 		CoinbaseConfTimeout:   cfg.CoinbaseConfTimeout,
 	}
+
+	var err error
 	p.hub, err = pool.NewHub(p.cancel, hcfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize hub: %v", err)
@@ -206,7 +168,7 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 		Designation:           cfg.Designation,
 		PoolFee:               cfg.PoolFee,
 		CSRFSecret:            csrfSecret,
-		MinerPorts:            minerPorts,
+		MinerPort:             cfg.MinerPort,
 		WithinLimit:           p.hub.WithinLimit,
 		FetchLastWorkHeight:   p.hub.FetchLastWorkHeight,
 		FetchLastPaymentInfo:  p.hub.FetchLastPaymentInfo,

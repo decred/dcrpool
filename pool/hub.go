@@ -132,7 +132,7 @@ type HubConfig struct {
 	AdminPass             string
 	Secret                string
 	NonceIterations       float64
-	MinerPorts            map[string]uint32
+	MinerPort             uint32
 	MaxConnectionsPerHost uint32
 	WalletAccount         uint32
 	CoinbaseConfTimeout   time.Duration
