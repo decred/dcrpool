@@ -95,6 +95,12 @@ type ClientConfig struct {
 	ClientTimeout time.Duration
 	// SignalCache sends the provided cache update event to the gui cache.
 	SignalCache func(event CacheUpdateEvent)
+	// MonitorCycle represents the time monitoring a mining client to access
+	// possible upgrades if needed
+	MonitorCycle time.Duration
+	// MaxUpgradeTries represents the maximum number of miner monitoring and
+	// upgrade tries before the process is terminated.
+	MaxUpgradeTries int
 }
 
 // Client represents a client connection.
