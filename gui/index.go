@@ -15,7 +15,7 @@ import (
 type indexPageData struct {
 	HeaderData    headerData
 	PoolStatsData poolStatsData
-	MinerPorts    map[string]uint32
+	MinerPort     uint32
 	MinedWork     []*minedWork
 	RewardQuotas  []*rewardQuota
 	Address       string
@@ -55,7 +55,7 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 		},
 		RewardQuotas: rewardQuotas,
 		MinedWork:    confirmedWork,
-		MinerPorts:   ui.cfg.MinerPorts,
+		MinerPort:    ui.cfg.MinerPort,
 		ModalError:   modalError,
 	}
 

@@ -59,8 +59,8 @@ type Config struct {
 	Designation string
 	// PoolFee represents the fee charged to participating accounts of the pool.
 	PoolFee float64
-	// MinerPorts represents the configured ports for supported miners.
-	MinerPorts map[string]uint32
+	// MinerPort represents the miner connection port for the pool.
+	MinerPort uint32
 	// WithinLimit returns if a client is within its request limits.
 	WithinLimit func(string, int) bool
 	// FetchLastWorkHeight returns the last work height of the pool.
