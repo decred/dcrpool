@@ -108,7 +108,7 @@ func (db *PostgresDB) Close() error {
 	return nil
 }
 
-// purge wipes all persisted data. This is intended for use with tesnet and
+// purge wipes all persisted data. This is intended for use with testnet and
 // simnet testing purposes only.
 func (db *PostgresDB) purge() error {
 	funcName := "purge"
