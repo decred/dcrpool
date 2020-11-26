@@ -236,6 +236,8 @@ func testHub(t *testing.T) {
 		NonceIterations:       iterations,
 		MinerPort:             5050,
 		WalletAccount:         69,
+		MonitorCycle:          time.Minute,
+		MaxUpgradeTries:       5,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	hub, err := NewHub(cancel, hcfg)
@@ -257,10 +259,6 @@ func testHub(t *testing.T) {
 		return nil
 	}
 	hub.SetWalletConnection(walletConn, walletClose)
-	err = hub.Listen()
-	if err != nil {
-		t.Fatalf("[Listen] uexpected error: %v", err)
-	}
 	err = hub.FetchWork(ctx)
 	if err != nil {
 		t.Fatalf("[FetchWork] unexpected error: %v", err)
@@ -365,15 +363,6 @@ func testHub(t *testing.T) {
 		}
 	}()
 
-	// Fetch the CPU endpoint.
-	var ce *Endpoint
-	for _, e := range hub.endpoints {
-		if e.miner == CPU {
-			ce = e
-			break
-		}
-	}
-
 	// Make a CPU client connection.
 	conn, srvr, err := makeConn(ln, serverCh)
 	if err != nil {
@@ -387,7 +376,7 @@ func testHub(t *testing.T) {
 		Conn: conn,
 		Done: make(chan bool),
 	}
-	ce.connCh <- msgA
+	hub.endpoint.connCh <- msgA
 	<-msgA.Done
 
 	// Ensure the hub has a connected client.
@@ -401,14 +390,12 @@ func testHub(t *testing.T) {
 
 	// Force subscribe and authorize connected clients to allow
 	// receiving work notifications.
-	for _, endpoint := range hub.endpoints {
-		endpoint.clientsMtx.Lock()
-		for _, client := range endpoint.clients {
-			client.authorized = true
-			client.subscribed = true
-		}
-		endpoint.clientsMtx.Unlock()
+	hub.endpoint.clientsMtx.Lock()
+	for _, client := range hub.endpoint.clients {
+		client.authorized = true
+		client.subscribed = true
 	}
+	hub.endpoint.clientsMtx.Unlock()
 
 	// Ensure the hub can process and distribute work to connected clients.
 	workE := "07000000ddb9fb70cb6ed184f57bfb94abebe7e7b9819e27d6e3ca8" +
