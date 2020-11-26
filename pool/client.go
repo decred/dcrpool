@@ -35,9 +35,9 @@ const (
 	// allowed, in bytes.
 	maxMessageSize = 250
 
-	// hashCalcThreshold represents the minimum operating time in seconds
-	// before a client's hash rate is calculated.
-	hashCalcThreshold = 20
+	// hashCalcThreshold represents the minimum operating time before a
+	// client's hash rate is calculated.
+	hashCalcThreshold = time.Second * 20
 
 	// clientTimeout represents the read/write timeout for the client.
 	clientTimeout = time.Minute * 4
@@ -85,9 +85,9 @@ type ClientConfig struct {
 	FetchCurrentWork func() string
 	// WithinLimit returns if the client is still within its request limits.
 	WithinLimit func(string, int) bool
-	// HashCalcThreshold represents the minimum operating time in seconds
-	// before a client's hash rate is calculated.
-	HashCalcThreshold uint32
+	// HashCalcThreshold represents the minimum operating time before a
+	// client's hash rate is calculated.
+	HashCalcThreshold time.Duration
 	// MaxGenTime represents the share creation target time for the pool.
 	MaxGenTime time.Duration
 	// ClientTimeout represents the connection read/write timeout.
@@ -1054,7 +1054,10 @@ func (c *Client) FetchAccountID() string {
 // client periodically.
 func (c *Client) hashMonitor() {
 	subs := int64(0)
-	ticker := time.NewTicker(time.Second * time.Duration(c.cfg.HashCalcThreshold))
+	iterations := new(big.Rat).SetFloat64(c.cfg.NonceIterations)
+	hashCalcThresholdSecs := float64(c.cfg.HashCalcThreshold / time.Second)
+
+	ticker := time.NewTicker(c.cfg.HashCalcThreshold)
 	defer ticker.Stop()
 	for {
 		select {
@@ -1069,13 +1072,23 @@ func (c *Client) hashMonitor() {
 			}
 
 			c.mtx.RLock()
+			if c.diffInfo == nil {
+				c.mtx.RUnlock()
+				continue
+			}
+
 			diff := c.diffInfo.difficulty
 			c.mtx.RUnlock()
 
 			delta := submissions - subs
-			average := float64(c.cfg.HashCalcThreshold) / float64(delta)
-			num := new(big.Rat).Mul(diff,
-				new(big.Rat).SetFloat64(c.cfg.NonceIterations))
+
+			// Clamp delta to a minimum value of 1.
+			if delta == 0 {
+				delta = 1
+			}
+
+			average := hashCalcThresholdSecs / float64(delta)
+			num := new(big.Rat).Mul(diff, iterations)
 			denom := new(big.Rat).SetFloat64(average)
 			hash := new(big.Rat).Quo(num, denom)
 			c.setHashRate(hash)
