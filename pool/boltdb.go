@@ -424,7 +424,7 @@ func (db *BoltDB) Close() error {
 	return db.DB.Close()
 }
 
-// purge wipes all persisted data. This is intended for use with tesnet and
+// purge wipes all persisted data. This is intended for use with testnet and
 // simnet testing purposes only.
 func (db *BoltDB) purge() error {
 	funcName := "purge"

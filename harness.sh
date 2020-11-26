@@ -30,7 +30,7 @@ PAYMENT_METHOD="pplns"
 LAST_N_PERIOD=5m
 GUI_DIR="${HARNESS_ROOT}/gui"
 
-# Using postgres requires the DB specified below to exist and contain no data.
+# Using postgres requires the DB specified below to already exist.
 USE_POSTGRES=1
 POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=5432
