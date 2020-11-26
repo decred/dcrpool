@@ -25,7 +25,6 @@ func makeConn(listener *net.TCPListener, serverCh chan net.Conn) (net.Conn, net.
 }
 
 func testEndpoint(t *testing.T) {
-	miner := CPU
 	powLimit := chaincfg.SimNetParams().PowLimit
 	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
 	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
@@ -33,11 +32,6 @@ func testEndpoint(t *testing.T) {
 	blake256Pad := generateBlake256Pad()
 	poolDiffs := NewDifficultySet(chaincfg.SimNetParams(),
 		new(big.Rat).SetInt(powLimit), maxGenTime)
-	diffInfo, err := poolDiffs.fetchMinerDifficulty(CPU)
-	if err != nil {
-		t.Fatalf("[fetchMinerDifficulty] unexpected error: %v", err)
-	}
-
 	connections := make(map[string]uint32)
 	var connectionsMtx sync.RWMutex
 	eCfg := &EndpointConfig{
@@ -48,6 +42,9 @@ func testEndpoint(t *testing.T) {
 		NonceIterations:       iterations,
 		MaxConnectionsPerHost: 3,
 		HubWg:                 new(sync.WaitGroup),
+		FetchMinerDifficulty: func(miner string) (*DifficultyInfo, error) {
+			return poolDiffs.fetchMinerDifficulty(miner)
+		},
 		SubmitWork: func(_ context.Context, submission *string) (bool, error) {
 			return false, nil
 		},
@@ -75,9 +72,11 @@ func testEndpoint(t *testing.T) {
 		SignalCache: func(_ CacheUpdateEvent) {
 			// Do nothing.
 		},
+		MonitorCycle:    time.Minute,
+		MaxUpgradeTries: 5,
 	}
 	port := uint32(3030)
-	endpoint, err := NewEndpoint(eCfg, diffInfo, port, miner)
+	endpoint, err := NewEndpoint(eCfg, port)
 	if err != nil {
 		t.Fatalf("[NewEndpoint] unexpected error: %v", err)
 	}
@@ -203,11 +202,9 @@ func testEndpoint(t *testing.T) {
 
 	// Remove all clients.
 	endpoint.clientsMtx.Lock()
-	clients := make([]*Client, len(endpoint.clients))
-	i := 0
+	clients := make([]*Client, 0, len(endpoint.clients))
 	for _, cl := range endpoint.clients {
-		clients[i] = cl
-		i++
+		clients = append(clients, cl)
 	}
 	endpoint.clientsMtx.Unlock()
 	for _, cl := range clients {
