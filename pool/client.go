@@ -301,7 +301,7 @@ func (c *Client) monitor(idx int, pair *minerIDPair, monitorCycle time.Duration,
 				return
 			}
 
-			// Stop montiring for possible upgrades when maxTries is reached.
+			// Stop monitoring for possible upgrades when maxTries is reached.
 			if tries == maxTries {
 				return
 			}
@@ -312,6 +312,7 @@ func (c *Client) monitor(idx int, pair *minerIDPair, monitorCycle time.Duration,
 			// Upgrade the miner only if there are 30 percent more
 			// submissions than expected.
 			if delta < 0.0 || delta < expected*0.3 {
+				// Increment the number of tries on a failed upgrade attempt.
 				tries++
 
 				continue
@@ -341,8 +342,6 @@ func (c *Client) monitor(idx int, pair *minerIDPair, monitorCycle time.Duration,
 				c.diffInfo.difficulty.FloatString(3), c.id)
 			time.Sleep(time.Millisecond * 500)
 			c.updateWork()
-
-			tries++
 
 		case <-c.ctx.Done():
 			return
