@@ -1460,4 +1460,64 @@ func testClient(t *testing.T) {
 
 	// Trigger a client timeout by waiting.
 	time.Sleep(clientTimeout + (clientTimeout / 4))
+
+	client.cancel()
+
+	cCfg.MaxUpgradeTries = 2
+	cCfg.MonitorCycle = time.Millisecond * 100
+
+	minerIdx := 0
+	idPair := minerIDs[DR3ID]
+
+	fetchMiner := func() string {
+		client.mtx.RLock()
+		defer client.mtx.RUnlock()
+		return client.miner
+	}
+
+	// Trigger a client upgrade.
+	ctx = context.Background()
+	client, err = NewClient(ctx, c, tcpAddr, cCfg)
+	if err != nil {
+		t.Fatalf("[NewClient] unexpected error: %v", err)
+	}
+
+	err = setMiner(client, AntminerDR3)
+	if err != nil {
+		t.Fatalf("unexpected set miner error: %v", err)
+	}
+
+	atomic.StoreInt64(&client.submissions, 50)
+
+	go client.monitor(minerIdx, idPair, cCfg.MonitorCycle, cCfg.MaxUpgradeTries)
+	time.Sleep(cCfg.MonitorCycle + (cCfg.MonitorCycle / 2))
+
+	if fetchMiner() != AntminerDR5 {
+		t.Fatalf("expected a miner id of %s, got %s", AntminerDR5, client.miner)
+	}
+
+	client.cancel()
+
+	// Ensure the client upgrade fails after max tries.
+	ctx = context.Background()
+	client, err = NewClient(ctx, c, tcpAddr, cCfg)
+	if err != nil {
+		t.Fatalf("[NewClient] unexpected error: %v", err)
+	}
+
+	err = setMiner(client, AntminerDR3)
+	if err != nil {
+		t.Fatalf("unexpected set miner error: %v", err)
+	}
+
+	atomic.StoreInt64(&client.submissions, 2)
+
+	go client.monitor(minerIdx, idPair, cCfg.MonitorCycle, cCfg.MaxUpgradeTries)
+	time.Sleep((cCfg.MonitorCycle * 2) + (cCfg.MonitorCycle / 2))
+
+	if fetchMiner() == AntminerDR3 {
+		t.Fatalf("expecteda  a miner of %s, got %s", AntminerDR3, client.miner)
+	}
+
+	client.cancel()
 }
