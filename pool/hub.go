@@ -154,11 +154,11 @@ type HubConfig struct {
 	// when generating a payout transaction.
 	CoinbaseConfTimeout time.Duration
 	// MonitorCycle represents the time monitoring a mining client to access
-	// possible upgrades if needed
+	// possible upgrades if needed.
 	MonitorCycle time.Duration
-	// MaxUpgradeTries represents the maximum number of miner monitoring and
-	// upgrade tries before the process is terminated.
-	MaxUpgradeTries int
+	// MaxUpgradeTries represents the maximum number of consecutive miner
+	// monitoring and upgrade tries.
+	MaxUpgradeTries uint32
 }
 
 // Hub maintains the set of active clients and facilitates message broadcasting

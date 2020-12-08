@@ -95,11 +95,11 @@ type ClientConfig struct {
 	// SignalCache sends the provided cache update event to the gui cache.
 	SignalCache func(event CacheUpdateEvent)
 	// MonitorCycle represents the time monitoring a mining client to access
-	// possible upgrades if needed
+	// possible upgrades if needed.
 	MonitorCycle time.Duration
-	// MaxUpgradeTries represents the maximum number of miner monitoring and
-	// upgrade tries before the process is terminated.
-	MaxUpgradeTries int
+	// MaxUpgradeTries represents the maximum number of consecutive miner
+	// monitoring and upgrade tries.
+	MaxUpgradeTries uint32
 }
 
 // Client represents a client connection.
@@ -107,6 +107,8 @@ type Client struct {
 	submissions  int64 // update atomically.
 	lastWorkTime int64 // update atomically.
 
+	// These fields track the miner identification and associated
+	// difficulty info.
 	miner    string
 	id       string
 	diffInfo *DifficultyInfo
@@ -124,9 +126,13 @@ type Client struct {
 	ch          chan Message
 	readCh      chan readPayload
 	account     string
-	authorized  bool
-	subscribed  bool
-	statusMtx   sync.RWMutex
+
+	// These fields track the authorization and subscription status of
+	// the miner.
+	authorized bool
+	subscribed bool
+	statusMtx  sync.RWMutex
+
 	hashRate    *big.Rat
 	hashRateMtx sync.RWMutex
 	wg          sync.WaitGroup
@@ -278,9 +284,8 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 // monitor periodically checks the miner details set against expected
 // incoming submission tally and upgrades the miner if possible when the
 // submission tallies exceed the expected number by 30 percent.
-func (c *Client) monitor(idx int, pair *minerIDPair, monitorCycle time.Duration, maxTries int) {
-	subs := float64(0)
-	tries := int(0)
+func (c *Client) monitor(idx int, pair *minerIDPair, monitorCycle time.Duration, maxTries uint32) {
+	var subs, tries uint32
 	if len(pair.miners) <= 1 {
 		// Nothing to do if there are no more miner ids to upgrade to.
 		return
@@ -295,9 +300,6 @@ func (c *Client) monitor(idx int, pair *minerIDPair, monitorCycle time.Duration,
 		case <-ticker.C:
 			if idx == len(pair.miners)-1 {
 				// No more miner upgrades possible.
-				c.mtx.RLock()
-				defer c.mtx.RUnlock()
-
 				return
 			}
 
@@ -306,8 +308,8 @@ func (c *Client) monitor(idx int, pair *minerIDPair, monitorCycle time.Duration,
 				return
 			}
 
-			subs = float64(atomic.LoadInt64(&c.submissions)) - subs
-			delta := subs - expected
+			subs = uint32(atomic.LoadInt64(&c.submissions)) - subs
+			delta := float64(subs) - expected
 
 			// Upgrade the miner only if there are 30 percent more
 			// submissions than expected.
@@ -326,22 +328,25 @@ func (c *Client) monitor(idx int, pair *minerIDPair, monitorCycle time.Duration,
 			miner := pair.miners[idx]
 			newID := fmt.Sprintf("%v/%v", c.extraNonce1, miner)
 			log.Infof("upgrading %s to %s", c.id, newID)
-			c.miner = miner
-			c.id = newID
 			info, err := c.cfg.FetchMinerDifficulty(miner)
 			if err != nil {
 				tries++
 				log.Error(err)
+				c.mtx.Unlock()
 				continue
 			}
+			c.miner = miner
+			c.id = newID
 			c.diffInfo = info
 			c.mtx.Unlock()
 
 			c.setDifficulty()
 			log.Infof("updated difficulty (%s) for %s sent",
 				c.diffInfo.difficulty.FloatString(3), c.id)
-			time.Sleep(time.Millisecond * 500)
 			c.updateWork()
+
+			// Reset tries after a successful upgrade.
+			tries = 0
 
 		case <-c.ctx.Done():
 			return
@@ -380,13 +385,13 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 	c.mtx.Lock()
 	minerIdx := 0
 	miner := idPair.miners[minerIdx]
-	c.miner = miner
-	c.id = fmt.Sprintf("%v/%v", c.extraNonce1, miner)
 	info, err := c.cfg.FetchMinerDifficulty(miner)
 	if err != nil {
 		c.mtx.Unlock()
 		return err
 	}
+	c.miner = miner
+	c.id = fmt.Sprintf("%v/%v", c.extraNonce1, miner)
 	c.diffInfo = info
 	c.mtx.Unlock()
 
@@ -682,8 +687,7 @@ func (c *Client) read() {
 		}
 		msg, reqType, err := IdentifyMessage(data)
 		if err != nil {
-			log.Errorf("unable to identify message %s: %v",
-				string(data), err)
+			log.Errorf("unable to identify message %q: %v", data, err)
 			c.cancel()
 			return
 		}

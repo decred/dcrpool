@@ -134,7 +134,7 @@ type config struct {
 	PGDBName              string        `long:"postgresdbname" ini-name:"postgresdbname" description:"Postgres database name."`
 	PurgeDB               bool          `long:"purgedb" ini-name:"purgedb" description:"Wipes all existing data on startup for a postgres backend. This intended for simnet testing purposes only."`
 	MonitorCycle          time.Duration `long:"monitorcycle" ini-name:"monitorcycle" description:"Time spent monitoring a mining client for possible upgrades."`
-	MaxUpgradeTries       int           `long:"maxupgradetries" ini-name:"maxupgradetries" description:"Maximum monitor cycles before the process is terminated."`
+	MaxUpgradeTries       uint32        `long:"maxupgradetries" ini-name:"maxupgradetries" description:"Maximum consecuctive miner monitoring and upgrade tries."`
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
 	net                   *params
