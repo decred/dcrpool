@@ -12,7 +12,7 @@ dcrpool is a stratum decred mining pool. It currently supports:
 * Innosilicon D9 (supported firmware: [d9_20190521_071217.swu](http://www.innosilicon.com.cn/download/d9_20190521_071217.swu))
 * Antminer DR3 (supported firmware: [Antminer-DR3-201907161805-410M.tar.gz](https://file12.bitmain.com/shop-product/firmware/Antminer%20DR3/Firmware/007201907271437364778LxDsS1k06AF/Antminer-DR3-201907161805-410M.tar.gz))
 * Antminer DR5 (supported firmware: [Antminer-DR5-201907161801-600M.tar.gz](https://file12.bitmain.com/shop-product/firmware/Antminer%20DR5/Firmware/00720190727142534231Ato7d2300650/Antminer-DR5-201907161801-600M.tar.gz))
-* Whatsminer D1 (supported firmware: []())
+* Whatsminer D1 (supported firmware: [upgrade-whatsminer-h6-20190404.18.zip](https://github.com/decred/dcrpool/files/5651882/upgrade-whatsminer-h6-20190404.18.zip))
 
 The default port all supported miners connect to the pool via is `:5550`. 
 The pool can be configured to mine in solo pool mode or as a publicly available 

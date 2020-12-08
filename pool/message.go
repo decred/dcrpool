@@ -133,7 +133,7 @@ type Response struct {
 func (req *Response) String() string {
 	b, err := json.Marshal(req)
 	if err != nil {
-		log.Errorf("unable to marshal request: %v", err)
+		log.Errorf("unable to marshal response: %v", err)
 		return ""
 	}
 
