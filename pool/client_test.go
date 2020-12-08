@@ -22,87 +22,21 @@ import (
 	errs "github.com/decred/dcrpool/errors"
 )
 
-func testClient(t *testing.T) {
-	port := uint32(3030)
-	laddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", "127.0.0.1", port))
-	if err != nil {
-		t.Fatalf("[ResolveTCPAddr] unexpected error: %v", err)
-	}
+var (
+	currentWork    string
+	currentWorkMtx sync.RWMutex
 
-	ln, err := net.ListenTCP("tcp", laddr)
-	if err != nil {
-		t.Fatalf("[ListenTCP] unexpected error: %v", err)
-	}
-	defer ln.Close()
-
-	serverCh := make(chan net.Conn)
-	go func() {
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
-				var opErr *net.OpError
-				if errors.As(err, &opErr) {
-					if opErr.Op == "accept" {
-						if strings.Contains(opErr.Err.Error(),
-							"use of closed network connection") {
-							return
-						}
-					}
-				}
-
-				log.Errorf("unable to accept connection %v", err)
-				return
-			}
-			serverCh <- conn
-		}
-	}()
-
-	// Create a new client connection.
-	c, s, err := makeConn(ln, serverCh)
-	if err != nil {
-		t.Fatalf("[makeConn] unexpected error: %v", err)
-	}
-
-	addr := c.RemoteAddr()
-	tcpAddr, err := net.ResolveTCPAddr(addr.Network(), addr.String())
-	if err != nil {
-		t.Fatalf("unable to parse tcp addresss: %v", err)
-	}
-
-	setMiner := func(c *Client, m string) error {
-		info, err := c.cfg.FetchMinerDifficulty(m)
-		if err != nil {
-			return err
-		}
-
-		c.mtx.Lock()
-		c.miner = m
-		c.id = fmt.Sprintf("%v/%v", c.extraNonce1, c.miner)
-		c.diffInfo = info
-		c.mtx.Unlock()
-
-		return nil
-	}
-	powLimit := chaincfg.SimNetParams().PowLimit
-	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
-	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
-	blake256Pad := generateBlake256Pad()
-	maxGenTime := time.Millisecond * 500
-	clientTimeout := time.Millisecond * 2000
-	hashCalcThreshold := time.Millisecond * 1500
-	poolDiffs := NewDifficultySet(chaincfg.SimNetParams(),
+	powLimit     = chaincfg.SimNetParams().PowLimit
+	powLimitF, _ = new(big.Float).SetInt(powLimit).Float64()
+	iterations   = math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
+	blake256Pad  = generateBlake256Pad()
+	maxGenTime   = time.Millisecond * 500
+	cTimeout     = time.Millisecond * 2000
+	hashCalcMax  = time.Millisecond * 1500
+	poolDiffs    = NewDifficultySet(chaincfg.SimNetParams(),
 		new(big.Rat).SetInt(powLimit), maxGenTime)
-
-	var currentWork string
-	var currentWorkMtx sync.RWMutex
-	setCurrentWork := func(work string) {
-		currentWorkMtx.Lock()
-		currentWork = work
-		currentWorkMtx.Unlock()
-	}
-	cCfg := &ClientConfig{
+	config = &ClientConfig{
 		ActiveNet:       chaincfg.SimNetParams(),
-		db:              db,
 		Blake256Pad:     blake256Pad,
 		NonceIterations: iterations,
 		MaxGenTime:      maxGenTime,
@@ -125,65 +59,159 @@ func testClient(t *testing.T) {
 		WithinLimit: func(ip string, clientType int) bool {
 			return true
 		},
-		HashCalcThreshold: hashCalcThreshold,
-		ClientTimeout:     clientTimeout,
+		HashCalcThreshold: hashCalcMax,
+		ClientTimeout:     cTimeout,
 		SignalCache: func(_ CacheUpdateEvent) {
 			// Do nothing.
 		},
 		MonitorCycle:    time.Minute,
 		MaxUpgradeTries: 5,
+		RollWorkCycle:   rollWorkCycle,
 	}
-	ctx := context.Background()
-	client, err := NewClient(ctx, c, tcpAddr, cCfg)
+)
+
+func setCurrentWork(work string) {
+	currentWorkMtx.Lock()
+	currentWork = work
+	currentWorkMtx.Unlock()
+}
+
+func setMiner(c *Client, m string) error {
+	info, err := c.cfg.FetchMinerDifficulty(m)
 	if err != nil {
-		t.Fatalf("[NewClient] unexpected error: %v", err)
+		return err
+	}
+
+	c.mtx.Lock()
+	c.miner = m
+	c.id = fmt.Sprintf("%v/%v", c.extraNonce1, c.miner)
+	c.diffInfo = info
+	c.mtx.Unlock()
+
+	return nil
+}
+
+func fetchMiner(c *Client) string {
+	c.mtx.RLock()
+	defer c.mtx.RUnlock()
+	return c.miner
+}
+
+func readMsg(c *Client, r *bufio.Reader, recvCh chan []byte) {
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		default:
+			// Non-blocking receive fallthrough.
+		}
+
+		data, err := r.ReadBytes('\n')
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				c.cancel()
+				return
+			}
+			var nErr *net.OpError
+			if !errors.As(err, &nErr) {
+				log.Errorf("failed to read bytes: %v", err)
+				c.cancel()
+				return
+			}
+			if nErr.Op == "read" && nErr.Net == "tcp" {
+				switch {
+				case nErr.Timeout():
+					log.Errorf("read timeout: %v", err)
+				case !nErr.Timeout():
+					log.Errorf("read error: %v", err)
+				}
+				c.cancel()
+				return
+			}
+
+			log.Errorf("failed to read bytes: %v %T", err, err)
+			c.cancel()
+			return
+		}
+		recvCh <- data
+	}
+}
+
+func acceptConn(ln *net.TCPListener, serverCh chan net.Conn) {
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			var opErr *net.OpError
+			if errors.As(err, &opErr) {
+				if opErr.Op == "accept" {
+					if strings.Contains(opErr.Err.Error(),
+						"use of closed network connection") {
+						return
+					}
+				}
+			}
+
+			log.Errorf("unable to accept connection %v", err)
+			return
+		}
+		serverCh <- conn
+	}
+}
+
+func setup(ctx context.Context, cfg *ClientConfig) (*json.Encoder, *net.TCPListener, *Client, chan net.Conn, chan []byte, error) {
+	port := uint32(3030)
+	laddr, err := net.ResolveTCPAddr("tcp",
+		fmt.Sprintf("%s:%d", "127.0.0.1", port))
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+
+	ln, err := net.ListenTCP("tcp", laddr)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+
+	serverCh := make(chan net.Conn)
+	go acceptConn(ln, serverCh)
+
+	// Create a new client connection.
+	c, s, err := makeConn(ln, serverCh)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+
+	addr := c.RemoteAddr()
+	tcpAddr, err := net.ResolveTCPAddr(addr.Network(), addr.String())
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+
+	cfg.db = db
+	client, err := NewClient(ctx, c, tcpAddr, cfg)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
 	}
 	go client.run()
 	time.Sleep(time.Millisecond * 50)
 	sE := json.NewEncoder(s)
 	sR := bufio.NewReaderSize(s, maxMessageSize)
 
-	recvCh := make(chan []byte)
-	readMsg := func(c *Client, r *bufio.Reader) {
-		for {
-			select {
-			case <-c.ctx.Done():
-				return
-			default:
-			}
+	recvCh := make(chan []byte, 5)
+	go readMsg(client, sR, recvCh)
 
-			data, err := r.ReadBytes('\n')
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					c.cancel()
-					return
-				}
-				var nErr *net.OpError
-				if !errors.As(err, &nErr) {
-					log.Errorf("failed to read bytes: %v", err)
-					c.cancel()
-					return
-				}
-				if nErr.Op == "read" && nErr.Net == "tcp" {
-					switch {
-					case nErr.Timeout():
-						log.Errorf("read timeout: %v", err)
-					case !nErr.Timeout():
-						log.Errorf("read error: %v", err)
-					}
-					c.cancel()
-					return
-				}
+	return sE, ln, client, serverCh, recvCh, nil
+}
 
-				log.Errorf("failed to read bytes: %v %T", err, err)
-				c.cancel()
-				return
-			}
-			recvCh <- data
-		}
+func testClientMessageHandling(t *testing.T) {
+	ctx := context.Background()
+	cfg := *config
+	cfg.RollWorkCycle = time.Minute * 5 // Avoiding rolled work for this test.
+	sE, ln, client, _, recvCh, err := setup(ctx, &cfg)
+	if err != nil {
+		t.Fatalf("[setup] unexpected error: %v", err)
 	}
 
-	go readMsg(client, sR)
+	defer ln.Close()
 
 	err = setMiner(client, CPU)
 	if err != nil {
@@ -385,8 +413,10 @@ func testClient(t *testing.T) {
 		return false
 	}
 	id++
-	d1 := "whatsminer"
-	d1Version := "d1-v1.0"
+	sep := "/"
+	d1ID := strings.Split(D1ID, sep)
+	d1 := d1ID[0]
+	d1Version := d1ID[1]
 	r = SubscribeRequest(&id, d1, d1Version, "mn001")
 	err = sE.Encode(r)
 	if err != nil {
@@ -431,12 +461,22 @@ func testClient(t *testing.T) {
 		t.Fatalf("client context done: %v", err)
 	case data = <-recvCh:
 	}
-	_, mType, err = IdentifyMessage(data)
+	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
 	if mType != ResponseMessage {
 		t.Fatalf("expected a subscribe response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.ID != *r.ID {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.Error != nil {
+		t.Fatalf("expected a non-error response, got %s", resp.Error.Message)
 	}
 
 	// Ensure an Antminer DR3 client receives a valid non-error
@@ -447,8 +487,9 @@ func testClient(t *testing.T) {
 	}
 
 	id++
-	dr3 := "cgminer"
-	dr3Version := "4.9.0"
+	dr3ID := strings.Split(DR3ID, sep)
+	dr3 := dr3ID[0]
+	dr3Version := dr3ID[1]
 	r = SubscribeRequest(&id, dr3, dr3Version, "")
 	err = sE.Encode(r)
 	if err != nil {
@@ -459,12 +500,22 @@ func testClient(t *testing.T) {
 		t.Fatalf("client context done: %v", err)
 	case data = <-recvCh:
 	}
-	_, mType, err = IdentifyMessage(data)
+	msg, mType, err = IdentifyMessage(data)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
 	if mType != ResponseMessage {
 		t.Fatalf("expected a subscribe response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.ID != *r.ID {
+		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.Error != nil {
+		t.Fatalf("expected a non-error response, got %s", resp.Error.Message)
 	}
 
 	// Ensure an Obelisk DCR1 client receives a valid non-error
@@ -475,8 +526,9 @@ func testClient(t *testing.T) {
 	}
 
 	id++
-	dcr1 := "dcr1"
-	dcr1Version := "1.0.0"
+	dcr1ID := strings.Split(DCR1ID, sep)
+	dcr1 := dcr1ID[0]
+	dcr1Version := dcr1ID[1]
 	r = SubscribeRequest(&id, dcr1, dcr1Version, "")
 	err = sE.Encode(r)
 	if err != nil {
@@ -499,20 +551,24 @@ func testClient(t *testing.T) {
 		t.Fatalf("expected subsribe response with id %d, got %d", *r.ID, resp.ID)
 	}
 	if resp.ID != *r.ID {
-		t.Fatalf("expected suscribe response with id %d, got %d", *r.ID, resp.ID)
+		t.Fatalf("expected subscribe response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.Error != nil {
+		t.Fatalf("expected a non-error response, got %s", resp.Error.Message)
 	}
 
-	// Ensure a CPU client receives a valid non-error response when a
-	// valid subscribe request is sent.
-	err = setMiner(client, CPU)
+	// Ensure an Innosilicon D9 client receives a valid non-error
+	// response when a valid subscribe request is sent.
+	err = setMiner(client, InnosiliconD9)
 	if err != nil {
 		t.Fatalf("unexpected set miner error: %v", err)
 	}
 
 	id++
-	cpu := "cpuminer"
-	cpuVersion := "1.0.0"
-	r = SubscribeRequest(&id, cpu, cpuVersion, "")
+	d9ID := strings.Split(D9ID, sep)
+	d9 := d9ID[0]
+	d9Version := d9ID[1]
+	r = SubscribeRequest(&id, d9, d9Version, "")
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
@@ -534,10 +590,49 @@ func testClient(t *testing.T) {
 		t.Fatalf("expected subsribe response with id %d, got %d", *r.ID, resp.ID)
 	}
 	if resp.ID != *r.ID {
-		t.Fatalf("expected subcribe response with id %d, got %d", *r.ID, resp.ID)
+		t.Fatalf("expected subscribe response with id %d, got %d", *r.ID, resp.ID)
 	}
 	if resp.Error != nil {
-		t.Fatalf("expected non-error subscribe response, got %v", resp.Error)
+		t.Fatalf("expected a non-error response, got %s", resp.Error.Message)
+	}
+
+	// Ensure a CPU client receives a valid non-error response when a
+	// valid subscribe request is sent.
+	err = setMiner(client, CPU)
+	if err != nil {
+		t.Fatalf("unexpected set miner error: %v", err)
+	}
+
+	id++
+	cpuID := strings.Split(CPUID, sep)
+	cpu := cpuID[0]
+	cpuVersion := cpuID[1]
+	r = SubscribeRequest(&id, cpu, cpuVersion, "")
+	err = sE.Encode(r)
+	if err != nil {
+		t.Fatalf("[Encode] unexpected error: %v", err)
+	}
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case data = <-recvCh:
+	}
+	msg, mType, err = IdentifyMessage(data)
+	if err != nil {
+		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
+	}
+	if mType != ResponseMessage {
+		t.Fatalf("expected a subscribe response message, got %v", mType)
+	}
+	resp, ok = msg.(*Response)
+	if !ok {
+		t.Fatalf("expected subscribe response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.ID != *r.ID {
+		t.Fatalf("expected subscribe response with id %d, got %d", *r.ID, resp.ID)
+	}
+	if resp.Error != nil {
+		t.Fatalf("expected a non-error subscribe response, got %v", resp.Error)
 	}
 
 	// Ensure the CPU client is now authorized and subscribed
@@ -909,7 +1004,7 @@ func testClient(t *testing.T) {
 
 	// Ensure a non-supported miner id cannot be set for a client.
 	err = setMiner(client, "notaminer")
-	if err == nil {
+	if !errors.Is(err, errs.ValueNotFound) {
 		t.Fatalf("expected a set miner error: %v", err)
 	}
 
@@ -954,6 +1049,8 @@ func testClient(t *testing.T) {
 		return true, nil
 	}
 
+	setCurrentWork(workE)
+
 	// Ensure a CPU client receives a non-error response when
 	// submitting valid work.
 	id++
@@ -985,6 +1082,13 @@ func testClient(t *testing.T) {
 		t.Fatalf("expected a non-error work submission response, got %v", resp.Error)
 	}
 
+	// Discard the updated work sent after a successful submission.
+	select {
+	case <-client.ctx.Done():
+		t.Fatalf("client context done: %v", err)
+	case <-recvCh:
+	}
+
 	// Ensure a CPU client receives an error response when
 	// submitting duplicate work.
 	id++
@@ -1003,7 +1107,7 @@ func testClient(t *testing.T) {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
 	if mType != ResponseMessage {
-		t.Fatalf("expected a response message, got %v", mType)
+		t.Fatalf("expected a response message, got %v, %v", mType, msg.String())
 	}
 	resp, ok = msg.(*Response)
 	if !ok {
@@ -1253,19 +1357,6 @@ func testClient(t *testing.T) {
 		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
 	}
 
-	// Fake a bunch of submissions and calculate the hash rate.
-	err = setMiner(client, CPU)
-	if err != nil {
-		t.Fatalf("unexpected set miner error: %v", err)
-	}
-
-	atomic.StoreInt64(&client.submissions, 50)
-	time.Sleep(hashCalcThreshold + (hashCalcThreshold / 4))
-	hash := client.FetchHashRate()
-	if hash == ZeroRat {
-		t.Fatal("expected a non-nil client hash rate")
-	}
-
 	// Ensure the client gets terminated if it sends an unknown message type.
 	id++
 	r = &Request{
@@ -1277,41 +1368,60 @@ func testClient(t *testing.T) {
 		t.Fatalf("[Encode] unexpected error: %v", err)
 	}
 
-	// Create a new client connection.
-	c, s, err = makeConn(ln, serverCh)
+	client.cancel()
+}
+
+func testClientHashCalc(t *testing.T) {
+	ctx := context.Background()
+	cfg := *config
+	cfg.RollWorkCycle = time.Minute * 5 // Avoiding rolled work for this test.
+	_, ln, client, _, _, err := setup(ctx, &cfg)
 	if err != nil {
-		t.Fatalf("[makeConn] unexpected error: %v", err)
+		t.Fatalf("[setup] unexpected error: %v", err)
 	}
-
-	addr = c.RemoteAddr()
-	tcpAddr, err = net.ResolveTCPAddr(addr.Network(), addr.String())
-	if err != nil {
-		t.Fatalf("unable to parse tcp addresss: %v", err)
-	}
-
-	cCfg.SoloPool = true
-	client, err = NewClient(ctx, c, tcpAddr, cCfg)
-	if err != nil {
-		t.Fatalf("[NewClient] unexpected error: %v", err)
-	}
-
-	go client.run()
-	time.Sleep(time.Millisecond * 50)
-
-	sE = json.NewEncoder(s)
-	sR = bufio.NewReaderSize(s, maxMessageSize)
-
-	go readMsg(client, sR)
 
 	err = setMiner(client, CPU)
 	if err != nil {
 		t.Fatalf("unexpected set miner error: %v", err)
 	}
 
+	defer ln.Close()
+
+	// Fake a bunch of submissions and calculate the hash rate.
+	atomic.StoreInt64(&client.submissions, 50)
+	time.Sleep(hashCalcMax + (hashCalcMax / 4))
+	hash := client.FetchHashRate()
+	if hash == ZeroRat {
+		t.Fatal("expected a non-nil client hash rate")
+	}
+
+	client.cancel()
+}
+
+func testClientTimeRolledWork(t *testing.T) {
+	ctx := context.Background()
+	cfg := *config
+	cfg.RollWorkCycle = time.Millisecond * 200
+	sE, ln, client, _, recvCh, err := setup(ctx, &cfg)
+	if err != nil {
+		t.Fatalf("[setup] unexpected error: %v", err)
+	}
+
+	err = setMiner(client, CPU)
+	if err != nil {
+		t.Fatalf("unexpected set miner error: %v", err)
+	}
+
+	defer ln.Close()
+
+	var msg Message
+	var mType int
+	var data []byte
+
 	// Ensure a CPU client receives a valid non-error response when
 	// a valid authorize request is sent.
-	id++
-	r = AuthorizeRequest(&id, "mn", "SsiuwSRYvH7pqWmRxFJWR8Vmqc3AWsjmK2Y")
+	id := uint64(1)
+	r := AuthorizeRequest(&id, "mn", "SsiuwSRYvH7pqWmRxFJWR8Vmqc3AWsjmK2Y")
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
@@ -1328,7 +1438,7 @@ func testClient(t *testing.T) {
 	if mType != ResponseMessage {
 		t.Fatalf("expected an auth response message (%d), got %d", mType, msg.MessageType())
 	}
-	resp, ok = msg.(*Response)
+	resp, ok := msg.(*Response)
 	if !ok {
 		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
 	}
@@ -1350,7 +1460,7 @@ func testClient(t *testing.T) {
 	if mType != NotificationMessage {
 		t.Fatalf("expected a notification message, got %v", mType)
 	}
-	req, ok = msg.(*Request)
+	req, ok := msg.(*Request)
 	if !ok {
 		t.Fatalf("unable to cast message as request")
 	}
@@ -1361,6 +1471,10 @@ func testClient(t *testing.T) {
 	// Ensure a CPU client receives a valid non-error response when
 	// a valid subscribe request is sent.
 	id++
+	sep := "/"
+	cpuID := strings.Split(CPUID, sep)
+	cpu := cpuID[0]
+	cpuVersion := cpuID[1]
 	r = SubscribeRequest(&id, cpu, cpuVersion, "")
 	err = sE.Encode(r)
 	if err != nil {
@@ -1380,10 +1494,10 @@ func testClient(t *testing.T) {
 	}
 	resp, ok = msg.(*Response)
 	if !ok {
-		t.Fatalf("expected subsribe response with id %d, got %d", *r.ID, resp.ID)
+		t.Fatalf("expected subscribe response with id %d, got %d", *r.ID, resp.ID)
 	}
 	if resp.ID != *r.ID {
-		t.Fatalf("expected suscribe response with id %d, got %d", *r.ID, resp.ID)
+		t.Fatalf("expected subscribe response with id %d, got %d", *r.ID, resp.ID)
 	}
 	if resp.Error != nil {
 		t.Fatalf("expected non-error subscribe response, got %v", resp.Error)
@@ -1392,8 +1506,8 @@ func testClient(t *testing.T) {
 	// Ensure the CPU client is now authorized and subscribed
 	// for work updates.
 	client.statusMtx.RLock()
-	authorized = client.authorized
-	subscribed = client.subscribed
+	authorized := client.authorized
+	subscribed := client.subscribed
 	client.statusMtx.RUnlock()
 
 	if !authorized {
@@ -1404,37 +1518,20 @@ func testClient(t *testing.T) {
 		t.Fatalf("expected a subscribed mining client")
 	}
 
+	workE := "07000000022b580ca96146e9c85fa1ee2ec02e0e2579a" +
+		"f4e3881fc619ec52d64d83e0000bd646e312ff574bc90e08ed91f1" +
+		"d99a85b318cb4464f2a24f9ad2bf3b9881c2bc9c344adde75e89b1" +
+		"4b627acce606e6d652915bdb71dcf5351e8ad6128faab9e0100000" +
+		"00000000000000000000000003e133920204e00000000000029000" +
+		"000a6030000954cee5d00000000000000000000000000000000000" +
+		"000000000000000000000000000000000000000000000800000010" +
+		"0000000000005a0"
+
 	// Trigger time-rolled work updates to the CPU client.
 	setCurrentWork(workE)
 
-	// Send a work notification to the CPU client.
-	r = WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
-		blockVersion, nBits, nTime, true)
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case client.ch <- r:
-	}
-
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case cpuWork = <-recvCh:
-	}
-	msg, mType, err = IdentifyMessage(cpuWork)
-	if err != nil {
-		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
-	}
-	if mType != NotificationMessage {
-		t.Fatalf("expected a notification message, got %v", mType)
-	}
-	req, ok = msg.(*Request)
-	if !ok {
-		t.Fatalf("unable to cast message as request")
-	}
-	if req.Method != Notify {
-		t.Fatalf("expected %s message method, got %s", Notify, req.Method)
-	}
+	minutesAgo := time.Now().Add(-time.Minute * 5)
+	atomic.StoreInt64(&client.lastWorkTime, minutesAgo.Unix())
 
 	// Ensure the client receives time-rolled work.
 	var timeRolledWork []byte
@@ -1458,52 +1555,54 @@ func testClient(t *testing.T) {
 		t.Fatalf("expected %s message method, got %s", Notify, req.Method)
 	}
 
-	// Trigger a client timeout by waiting.
-	time.Sleep(clientTimeout + (clientTimeout / 4))
-
 	client.cancel()
+}
 
-	cCfg.MaxUpgradeTries = 2
-	cCfg.MonitorCycle = time.Millisecond * 100
-
-	minerIdx := 0
-	idPair := minerIDs[DR3ID]
-
-	fetchMiner := func() string {
-		client.mtx.RLock()
-		defer client.mtx.RUnlock()
-		return client.miner
-	}
-
-	// Trigger a client upgrade.
-	ctx = context.Background()
-	client, err = NewClient(ctx, c, tcpAddr, cCfg)
+func testClientUpgrades(t *testing.T) {
+	ctx := context.Background()
+	cfg := *config
+	cfg.RollWorkCycle = time.Minute * 5 // Avoiding rolled work for this test.
+	cfg.MaxUpgradeTries = 2
+	cfg.MonitorCycle = time.Millisecond * 100
+	cfg.ClientTimeout = time.Millisecond * 300
+	_, ln, client, _, _, err := setup(ctx, &cfg)
 	if err != nil {
-		t.Fatalf("[NewClient] unexpected error: %v", err)
+		ln.Close()
+		t.Fatalf("[setup] unexpected error: %v", err)
 	}
 
 	err = setMiner(client, AntminerDR3)
 	if err != nil {
+		ln.Close()
 		t.Fatalf("unexpected set miner error: %v", err)
 	}
 
+	minerIdx := 0
+	idPair := minerIDs[DR3ID]
+
+	// Trigger a client upgrade.
 	atomic.StoreInt64(&client.submissions, 50)
 
-	go client.monitor(minerIdx, idPair, cCfg.MonitorCycle, cCfg.MaxUpgradeTries)
-	time.Sleep(cCfg.MonitorCycle + (cCfg.MonitorCycle / 2))
+	go client.monitor(minerIdx, idPair, cfg.MonitorCycle, cfg.MaxUpgradeTries)
+	time.Sleep(cfg.MonitorCycle + (cfg.MonitorCycle / 2))
 
-	if fetchMiner() != AntminerDR5 {
+	if fetchMiner(client) != AntminerDR5 {
+		ln.Close()
 		t.Fatalf("expected a miner id of %s, got %s", AntminerDR5, client.miner)
 	}
 
 	client.cancel()
 
+	ln.Close()
+
 	// Ensure the client upgrade fails after max tries.
-	ctx = context.Background()
-	client, err = NewClient(ctx, c, tcpAddr, cCfg)
+	_, ln, client, _, _, err = setup(ctx, &cfg)
 	if err != nil {
-		t.Fatalf("[NewClient] unexpected error: %v", err)
+		ln.Close()
+		t.Fatalf("[setup] unexpected error: %v", err)
 	}
+
+	defer ln.Close()
 
 	err = setMiner(client, AntminerDR3)
 	if err != nil {
@@ -1512,12 +1611,15 @@ func testClient(t *testing.T) {
 
 	atomic.StoreInt64(&client.submissions, 2)
 
-	go client.monitor(minerIdx, idPair, cCfg.MonitorCycle, cCfg.MaxUpgradeTries)
-	time.Sleep((cCfg.MonitorCycle * 2) + (cCfg.MonitorCycle / 2))
+	go client.monitor(minerIdx, idPair, cfg.MonitorCycle, cfg.MaxUpgradeTries)
+	time.Sleep(cfg.MonitorCycle + (cfg.MonitorCycle / 2))
 
-	if fetchMiner() == AntminerDR3 {
-		t.Fatalf("expecteda  a miner of %s, got %s", AntminerDR3, client.miner)
+	if fetchMiner(client) == AntminerDR3 {
+		t.Fatalf("expected a miner of %s, got %s", AntminerDR3, client.miner)
 	}
+
+	// Trigger a client timeout by waiting.
+	time.Sleep(cTimeout + (cTimeout / 4))
 
 	client.cancel()
 }
