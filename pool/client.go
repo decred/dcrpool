@@ -41,6 +41,10 @@ const (
 
 	// clientTimeout represents the read/write timeout for the client.
 	clientTimeout = time.Minute * 4
+
+	// rollWorkCycle represents the tick interval for asserting the need for
+	// timestamp-rolled work.
+	rollWorkCycle = time.Second
 )
 
 var (
@@ -100,6 +104,9 @@ type ClientConfig struct {
 	// MaxUpgradeTries represents the maximum number of consecutive miner
 	// monitoring and upgrade tries.
 	MaxUpgradeTries uint32
+	// RollWorkCycle represents the tick interval for asserting the need for
+	// timestamp-rolled work.
+	RollWorkCycle time.Duration
 }
 
 // Client represents a client connection.
@@ -618,16 +625,16 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 
 // rollWork provides the client with timestamp-rolled work to avoid stalling.
 func (c *Client) rollWork() {
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(c.cfg.RollWorkCycle)
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-c.ctx.Done():
-			ticker.Stop()
 			c.wg.Done()
 			return
-
 		case <-ticker.C:
+
 			// Send a timetamp-rolled work to the client if it fails to
 			// generate a work submission in twice the time it is estimated
 			// to according to its pool target.

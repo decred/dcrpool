@@ -88,7 +88,10 @@ func TestPool(t *testing.T) {
 		"testPayment":                testPayment,
 		"testPaymentAccessors":       testPaymentAccessors,
 		"testEndpoint":               testEndpoint,
-		"testClient":                 testClient,
+		"testClientHashCalc":         testClientHashCalc,
+		"testClientRolledWork":       testClientTimeRolledWork,
+		"testClientMessageHandling":  testClientMessageHandling,
+		"testClientUpgrades":         testClientUpgrades,
 		"testPaymentMgrPPS":          testPaymentMgrPPS,
 		"testPaymentMgrPPLNS":        testPaymentMgrPPLNS,
 		"testPaymentMgrMaturity":     testPaymentMgrMaturity,
@@ -135,5 +138,4 @@ func TestPool(t *testing.T) {
 
 		postgresDB.Close()
 	}
-
 }
