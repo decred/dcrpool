@@ -94,6 +94,11 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string, purgeDB
 		return nil, makeErr("accepted work", err)
 	}
 
+	_, err = db.Exec(createTableHashData)
+	if err != nil {
+		return nil, makeErr("hashrate", err)
+	}
+
 	return &PostgresDB{db}, nil
 }
 
@@ -215,6 +220,36 @@ func decodeShareRows(rows *sql.Rows) ([]*Share, error) {
 	err := rows.Err()
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to decode shares: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.Decode, desc)
+	}
+
+	return toReturn, nil
+}
+
+// decodeHashDataRows deserializes the provided SQL rows into a slice of
+// HashData structs.
+func decodeHashDataRows(rows *sql.Rows) ([]*HashData, error) {
+	const funcName = "decodeHashDataRows"
+	var toReturn []*HashData
+	for rows.Next() {
+		var uuid, accountID, miner, ip, hashRate string
+		var updatedOn int64
+		err := rows.Scan(&uuid, &accountID, &miner, &ip,
+			&hashRate, &updatedOn)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to scan hash data entry: %v",
+				funcName, err)
+			return nil, errs.DBError(errs.Decode, desc)
+		}
+
+		hashData := &HashData{uuid, accountID, miner, ip, hashRate, updatedOn}
+		toReturn = append(toReturn, hashData)
+	}
+
+	err := rows.Err()
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to decode hash data: %v",
 			funcName, err)
 		return nil, errs.DBError(errs.Decode, desc)
 	}
@@ -950,4 +985,125 @@ func (db *PostgresDB) deleteJobsBeforeHeight(height uint32) error {
 		return errs.DBError(errs.DeleteEntry, desc)
 	}
 	return err
+}
+
+// persistHashData saves the provided hash data to the database.
+func (db *PostgresDB) persistHashData(hashData *HashData) error {
+	const funcName = "persistHashData"
+
+	_, err := db.DB.Exec(insertHashData, hashData.UUID, hashData.AccountID,
+		hashData.Miner, hashData.IP, hashData.HashRate, hashData.UpdatedOn)
+	if err != nil {
+
+		var pqError *pq.Error
+		if errors.As(err, &pqError) {
+			if pqError.Code.Name() == "unique_violation" {
+				desc := fmt.Sprintf("%s: hash rate %s already exists", funcName,
+					hashData.UUID)
+				return errs.DBError(errs.ValueFound, desc)
+			}
+		}
+
+		desc := fmt.Sprintf("%s: unable to persist hash rate: %v", funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
+	}
+	return nil
+}
+
+// updateHashData persists the updated payment to the database.
+func (db *PostgresDB) updateHashData(hashData *HashData) error {
+	const funcName = "updateHashData"
+
+	result, err := db.DB.Exec(updateHashData,
+		hashData.UUID, hashData.AccountID, hashData.Miner,
+		hashData.IP, hashData.HashRate, hashData.UpdatedOn)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to update accepted hash data with id "+
+			"(%s): %v", funcName, hashData.UUID, err)
+		return errs.DBError(errs.PersistEntry, desc)
+	}
+
+	if rowsAffected == 0 {
+		desc := fmt.Sprintf("%s: hash data %s not found", funcName, hashData.UUID)
+		return errs.DBError(errs.ValueNotFound, desc)
+	}
+
+	return nil
+}
+
+// fetchHashData fetches the hash data associated with the provided id.
+func (db *PostgresDB) fetchHashData(id string) (*HashData, error) {
+	const funcName = "fetchHashData"
+	var uuid, accountID, miner, ip, hashRate string
+	var updatedOn int64
+	err := db.DB.QueryRow(selectHashData, id).Scan(&uuid, &accountID, &miner,
+		&ip, &hashRate, &updatedOn)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			desc := fmt.Sprintf("%s: no hash data found for id %s", funcName, id)
+			return nil, errs.DBError(errs.ValueNotFound, desc)
+		}
+
+		desc := fmt.Sprintf("%s: unable to fetch hash data with id (%s): %v",
+			funcName, id, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
+	}
+	return &HashData{uuid, accountID, miner, ip, hashRate, updatedOn}, nil
+}
+
+// fetchAccountHashData fetches all hash data associated with the provided
+// account id.
+func (db *PostgresDB) fetchAccountHashData(id string, minNano int64) ([]*HashData, error) {
+	const funcName = "fetchAccountHashData"
+	rows, err := db.DB.Query(selectAccountHashData, id, minNano)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to fetch account hash data: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
+	}
+
+	return decodeHashDataRows(rows)
+}
+
+// listHashData fetches all hash data updated before the provided minimum time
+// provided.
+func (db *PostgresDB) listHashData(minNano int64) (map[string][]*HashData, error) {
+	const funcName = "listHashData"
+	rows, err := db.DB.Query(listHashData, minNano)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to list hash data: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.FetchEntry, desc)
+	}
+
+	data, err := decodeHashDataRows(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	hashData := make(map[string][]*HashData)
+	for _, entry := range data {
+		hashData[entry.AccountID] = append(hashData[entry.AccountID], entry)
+	}
+
+	return hashData, nil
+}
+
+// pruneHashData prunes all hash data that have not been since the provided
+// minimum time.
+func (db *PostgresDB) pruneHashData(minNano int64) error {
+	const funcName = "pruneHashData"
+
+	_, err := db.DB.Exec(pruneHashData, minNano)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to prune hash data: %v", funcName, err)
+		return errs.DBError(errs.DeleteEntry, desc)
+	}
+
+	return nil
 }

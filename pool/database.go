@@ -63,6 +63,14 @@ type Database interface {
 	persistJob(job *Job) error
 	deleteJob(id string) error
 	deleteJobsBeforeHeight(height uint32) error
+
+	// Hash Data
+	persistHashData(hashData *HashData) error
+	updateHashData(hashData *HashData) error
+	fetchHashData(id string) (*HashData, error)
+	fetchAccountHashData(id string, minNano int64) ([]*HashData, error)
+	listHashData(minNano int64) (map[string][]*HashData, error)
+	pruneHashData(minNano int64) error
 }
 
 // BoltDB is a wrapper around bolt.DB which implements the Database interface.

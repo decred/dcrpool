@@ -73,6 +73,16 @@ const (
 		confirmed BOOLEAN NOT NULL
 	);`
 
+	createTableHashData = `
+	CREATE TABLE IF NOT EXISTS hashdata (
+		uuid      TEXT    PRIMARY KEY,
+		accountid TEXT    NOT NULL,
+		miner     TEXT    NOT NULL,
+		ip        TEXT    NOT NULL,
+		hashrate  TEXT    NOT NULL,
+		updatedon INT8    NOT NULL
+	);`
+
 	purgeDB = `DROP TABLE IF EXISTS 
 		acceptedwork, 
 		accounts, 
@@ -80,7 +90,8 @@ const (
 		jobs, 
 		metadata, 
 		payments, 
-		shares;`
+		shares,
+		hashdata;`
 
 	selectPoolMode = `
 	SELECT value
@@ -378,4 +389,55 @@ const (
 	deleteJob = `DELETE FROM jobs WHERE uuid=$1;`
 
 	deleteJobBeforeHeight = `DELETE FROM jobs WHERE height < $1;`
+
+	selectHashData = `SELECT 
+		uuid, 
+		accountid, 
+		miner, 
+		ip, 
+		hashrate, 
+		updatedon 
+		FROM hashdata 
+		WHERE uuid=$1;`
+
+	selectAccountHashData = `SELECT 
+		uuid, 
+		accountid, 
+		miner, 
+		ip, 
+		hashrate, 
+		updatedon 
+		FROM hashdata 
+		WHERE accountid=$1
+		AND updatedon > $2;`
+
+	listHashData = `SELECT 
+		uuid, 
+		accountid, 
+		miner, 
+		ip, 
+		hashrate, 
+		updatedon 
+		FROM hashdata 
+		WHERE updatedon > $1;`
+
+	pruneHashData = `DELETE FROM hashdata WHERE updatedon < $1;`
+
+	insertHashData = `INSERT INTO hashdata(
+		uuid, 
+		accountid, 
+		miner, 
+		ip, 
+		hashrate, 
+		updatedon) VALUES ($1,$2,$3, $4, $5, $6);`
+
+	updateHashData = `
+		UPDATE hashdata
+		SET
+			accountid=$2,
+			miner=$3,
+			ip=$4,
+			hashrate=$5,
+			updatedon=$6
+			WHERE uuid=$1;`
 )
