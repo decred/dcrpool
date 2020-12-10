@@ -192,9 +192,6 @@ func (e *Endpoint) connect(ctx context.Context) {
 			e.wg.Add(1)
 			go client.run()
 
-			// Signal the gui cache of the connected client.
-			e.cfg.SignalCache(ConnectedClient)
-
 			log.Debugf("Mining client connected. extranonce1=%s, addr=%s",
 				client.extraNonce1, client.addr)
 

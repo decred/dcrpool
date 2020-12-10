@@ -24,7 +24,6 @@ import (
 )
 
 var (
-	zeroHash   = chainhash.Hash{0}
 	zeroSource = &PaymentSource{
 		BlockHash: zeroHash.String(),
 		Coinbase:  zeroHash.String(),

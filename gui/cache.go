@@ -91,14 +91,14 @@ type Cache struct {
 
 // InitCache initialises and returns a cache for use in the GUI.
 func InitCache(work []*pool.AcceptedWork, quotas []*pool.Quota,
-	clients []*pool.Client, pendingPmts []*pool.Payment,
+	hashData map[string][]*pool.HashData, pendingPmts []*pool.Payment,
 	archivedPmts []*pool.Payment, blockExplorerURL string,
 	lastPmtHeight uint32, lastPmtPaidOn, lastPmtCreatedOn int64) *Cache {
 
 	cache := Cache{blockExplorerURL: blockExplorerURL}
 	cache.updateMinedWork(work)
 	cache.updateRewardQuotas(quotas)
-	cache.updateClients(clients)
+	cache.updateHashData(hashData)
 	cache.updatePayments(pendingPmts, archivedPmts)
 	cache.updateLastPaymentInfo(lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn)
 	return &cache
@@ -229,20 +229,21 @@ func (c *Cache) getPoolHash() string {
 	return c.poolHash
 }
 
-// updateClients will refresh the cached list of connected clients, as well as
-// recalculating the total hashrate for all connected clients.
-func (c *Cache) updateClients(clients []*pool.Client) {
+// updateHashData refreshes the cached list of  hash data from connected
+// clients, as well as recalculating the total hashrate.
+func (c *Cache) updateHashData(hashData map[string][]*pool.HashData) {
 	clientInfo := make(map[string][]*client)
 	poolHashRate := new(big.Rat).SetInt64(0)
-	for _, c := range clients {
-		clientHashRate := c.FetchHashRate()
-		accountID := c.FetchAccountID()
-		clientInfo[accountID] = append(clientInfo[accountID], &client{
-			Miner:    c.FetchMinerType(),
-			IP:       c.FetchIPAddr(),
-			HashRate: hashString(clientHashRate),
-		})
-		poolHashRate = poolHashRate.Add(poolHashRate, clientHashRate)
+	for _, data := range hashData {
+		for _, entry := range data {
+			hash, _ := new(big.Rat).SetString(entry.HashRate)
+			poolHashRate = poolHashRate.Add(poolHashRate, hash)
+			clientInfo[entry.AccountID] = append(clientInfo[entry.AccountID], &client{
+				Miner:    entry.Miner,
+				IP:       entry.IP,
+				HashRate: hashString(hash),
+			})
+		}
 	}
 
 	c.poolHashMtx.Lock()

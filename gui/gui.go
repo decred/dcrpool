@@ -75,8 +75,8 @@ type Config struct {
 	FetchWorkQuotas func() ([]*pool.Quota, error)
 	// HTTPBackupDB streams a backup of the database over an http response.
 	HTTPBackupDB func(w http.ResponseWriter) error
-	// FetchClients returns all connected pool clients.
-	FetchClients func() []*pool.Client
+	// FetchHashData returns all hash data from connected pool clients.
+	FetchHashData func() (map[string][]*pool.HashData, error)
 	// AccountExists checks if the provided account id references a pool account.
 	AccountExists func(accountID string) bool
 	// FetchArchivedPayments fetches all paid payments.
@@ -333,7 +333,11 @@ func (ui *GUI) Run(ctx context.Context) {
 		return
 	}
 
-	clients := ui.cfg.FetchClients()
+	hashData, err := ui.cfg.FetchHashData()
+	if err != nil {
+		log.Error(err)
+		return
+	}
 
 	pendingPayments, err := ui.cfg.FetchPendingPayments()
 	if err != nil {
@@ -353,7 +357,7 @@ func (ui *GUI) Run(ctx context.Context) {
 		return
 	}
 
-	ui.cache = InitCache(work, quotas, clients, pendingPayments, archivedPayments,
+	ui.cache = InitCache(work, quotas, hashData, pendingPayments, archivedPayments,
 		ui.cfg.BlockExplorerURL, lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn)
 
 	// Use a ticker to periodically update cached data and push updates through
@@ -366,8 +370,13 @@ func (ui *GUI) Run(ctx context.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				clients := ui.cfg.FetchClients()
-				ui.cache.updateClients(clients)
+				hashData, err := ui.cfg.FetchHashData()
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+
+				ui.cache.updateHashData(hashData)
 				ui.websocketServer.send(payload{
 					PoolHashRate: ui.cache.getPoolHash(),
 				})
@@ -385,12 +394,6 @@ func (ui *GUI) Run(ctx context.Context) {
 					ui.websocketServer.send(payload{
 						LastWorkHeight: ui.cfg.FetchLastWorkHeight(),
 					})
-
-				case pool.ConnectedClient, pool.DisconnectedClient:
-					// Opting to keep connection updates pushed by the ticker
-					// to avoid pushing too much too frequently.
-					clients := ui.cfg.FetchClients()
-					ui.cache.updateClients(clients)
 
 				case pool.ClaimedShare:
 					quotas, err := ui.cfg.FetchWorkQuotas()
