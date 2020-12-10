@@ -42,6 +42,8 @@ var (
 	// Confirmed processed payments are sourced from the payment bucket and
 	// archived.
 	paymentArchiveBkt = []byte("paymentarchivebkt")
+	// hashDataBkt stores client identification and hashrate information.
+	hashDataBkt = []byte("hashdatabkt")
 	// versionK is the key of the current version of the database.
 	versionK = []byte("version")
 	// lastPaymentCreatedOn is the key of the last time a payment was
@@ -130,7 +132,11 @@ func createBuckets(db *BoltDB) error {
 		if err != nil {
 			return err
 		}
-		return createNestedBucket(pbkt, paymentArchiveBkt)
+		err = createNestedBucket(pbkt, paymentArchiveBkt)
+		if err != nil {
+			return err
+		}
+		return createNestedBucket(pbkt, hashDataBkt)
 	})
 	return err
 }
@@ -1322,6 +1328,215 @@ func (db *BoltDB) pruneShares(minNano int64) error {
 				return errs.DBError(errs.Decode, desc)
 			}
 			if bytes.Compare(minB, createdOnB) > 0 {
+				toDelete = append(toDelete, k)
+			}
+		}
+		for _, entry := range toDelete {
+			err := bkt.Delete(entry)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// persistHashData saves the provided hash data to the database.
+func (db *BoltDB) persistHashData(hashData *HashData) error {
+	const funcName = "persistHashData"
+	return db.DB.Update(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, hashDataBkt)
+		if err != nil {
+			return err
+		}
+
+		// Do not persist already existing hash rate.
+		if bkt.Get([]byte(hashData.UUID)) != nil {
+			desc := fmt.Sprintf("%s: hash data %s already exists", funcName,
+				hashData.UUID)
+			return errs.DBError(errs.ValueFound, desc)
+		}
+
+		hBytes, err := json.Marshal(hashData)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to marshal hash data bytes: %v",
+				funcName, err)
+			return errs.DBError(errs.Parse, desc)
+		}
+		err = bkt.Put([]byte(hashData.UUID), hBytes)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist hash data entry: %v",
+				funcName, err)
+			return errs.DBError(errs.PersistEntry, desc)
+		}
+		return nil
+	})
+}
+
+// updateHashData persists the updated payment to the database.
+func (db *BoltDB) updateHashData(hashData *HashData) error {
+	const funcName = "updateHashData"
+	return db.DB.Update(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, hashDataBkt)
+		if err != nil {
+			return err
+		}
+
+		// Assert the work provided exists before updating.
+		id := []byte(hashData.UUID)
+		v := bkt.Get(id)
+		if v == nil {
+			desc := fmt.Sprintf("%s: hash data %s not found",
+				funcName, hashData.UUID)
+			return errs.DBError(errs.ValueNotFound, desc)
+		}
+		hBytes, err := json.Marshal(hashData)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to marshal hash data bytes: %v",
+				funcName, err)
+			return errs.DBError(errs.PersistEntry, desc)
+		}
+		err = bkt.Put(id, hBytes)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to persist hash data: %v",
+				funcName, err)
+			return errs.DBError(errs.PersistEntry, desc)
+		}
+		return nil
+	})
+}
+
+// fetchHashData fetches the hash data associated with the provided id.
+func (db *BoltDB) fetchHashData(id string) (*HashData, error) {
+	const funcName = "fetchHashData"
+	var data HashData
+
+	err := db.DB.View(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, hashDataBkt)
+		if err != nil {
+			return err
+		}
+
+		v := bkt.Get([]byte(id))
+		if v == nil {
+			desc := fmt.Sprintf("%s: no hash data found for id %s",
+				funcName, id)
+			return errs.DBError(errs.ValueNotFound, desc)
+		}
+		err = json.Unmarshal(v, &data)
+		if err != nil {
+			desc := fmt.Sprintf("%s: unable to unmarshal hash data: %v",
+				funcName, err)
+			return errs.DBError(errs.Parse, desc)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &data, err
+}
+
+// fetchAccountHashData fetches all hash data associated with the provided
+// account id.
+func (db *BoltDB) fetchAccountHashData(id string, minNano int64) ([]*HashData, error) {
+	const funcName = "fetchAccountHashData"
+	idB := []byte(id)
+	data := []*HashData{}
+
+	err := db.DB.View(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, hashDataBkt)
+		if err != nil {
+			return err
+		}
+
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			accID := k[8:]
+			if !bytes.Equal(idB, accID) {
+				continue
+			}
+
+			var hashData HashData
+			err = json.Unmarshal(v, &hashData)
+			if err != nil {
+				desc := fmt.Sprintf("%s: unable to unmarshal hash data: %v",
+					funcName, err)
+				return errs.DBError(errs.Parse, desc)
+			}
+
+			if hashData.UpdatedOn > minNano {
+				data = append(data, &hashData)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return data, err
+}
+
+// listHashData fetches all hash data updated before the provided minimum time
+// provided.
+func (db *BoltDB) listHashData(minNano int64) (map[string][]*HashData, error) {
+	const funcName = "listHashData"
+	data := make(map[string][]*HashData)
+
+	err := db.DB.View(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, hashDataBkt)
+		if err != nil {
+			return err
+		}
+
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			var hashData HashData
+			err = json.Unmarshal(v, &hashData)
+			if err != nil {
+				desc := fmt.Sprintf("%s: unable to unmarshal hash data: %v",
+					funcName, err)
+				return errs.DBError(errs.Parse, desc)
+			}
+
+			// Only select hash data updated after the provided minimum time.
+			if hashData.UpdatedOn > minNano {
+				data[hashData.AccountID] =
+					append(data[hashData.AccountID], &hashData)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return data, err
+}
+
+// pruneHashData prunes all hash data that have not been since the provided
+// minimum time.
+func (db *BoltDB) pruneHashData(minNano int64) error {
+	funcName := "pruneHashData"
+
+	return db.DB.Update(func(tx *bolt.Tx) error {
+		bkt, err := fetchBucket(tx, hashDataBkt)
+		if err != nil {
+			return err
+		}
+		toDelete := [][]byte{}
+		cursor := bkt.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			var hashData HashData
+			err = json.Unmarshal(v, &hashData)
+			if err != nil {
+				desc := fmt.Sprintf("%s: unable to unmarshal hash data: %v",
+					funcName, err)
+				return errs.DBError(errs.Parse, desc)
+			}
+
+			// Prune hash data that have not been updated since the
+			// provided minimum time.
+			if minNano > hashData.UpdatedOn {
 				toDelete = append(toDelete, k)
 			}
 		}
