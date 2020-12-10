@@ -384,10 +384,6 @@ func testHub(t *testing.T) {
 		t.Fatal("expected hub to have connected clients")
 	}
 
-	if len(hub.FetchClients()) != 1 {
-		t.Fatal("expected a connected cpu client")
-	}
-
 	// Force subscribe and authorize connected clients to allow
 	// receiving work notifications.
 	hub.endpoint.clientsMtx.Lock()

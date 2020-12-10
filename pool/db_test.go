@@ -178,6 +178,10 @@ func Test_BoltDB_InitDB(t *testing.T) {
 		if err == nil {
 			return fmt.Errorf("expected paymentArchiveBkt to exist already")
 		}
+		_, err = pbkt.CreateBucket(hashDataBkt)
+		if err == nil {
+			return fmt.Errorf("expected hashDataBkt to exist already")
+		}
 		return nil
 	})
 	if err != nil {
