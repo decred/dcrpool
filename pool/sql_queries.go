@@ -400,17 +400,6 @@ const (
 		FROM hashdata 
 		WHERE uuid=$1;`
 
-	selectAccountHashData = `SELECT 
-		uuid, 
-		accountid, 
-		miner, 
-		ip, 
-		hashrate, 
-		updatedon 
-		FROM hashdata 
-		WHERE accountid=$1
-		AND updatedon > $2;`
-
 	listHashData = `SELECT 
 		uuid, 
 		accountid, 

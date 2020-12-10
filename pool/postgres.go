@@ -1056,20 +1056,6 @@ func (db *PostgresDB) fetchHashData(id string) (*HashData, error) {
 	return &HashData{uuid, accountID, miner, ip, hashRate, updatedOn}, nil
 }
 
-// fetchAccountHashData fetches all hash data associated with the provided
-// account id.
-func (db *PostgresDB) fetchAccountHashData(id string, minNano int64) ([]*HashData, error) {
-	const funcName = "fetchAccountHashData"
-	rows, err := db.DB.Query(selectAccountHashData, id, minNano)
-	if err != nil {
-		desc := fmt.Sprintf("%s: unable to fetch account hash data: %v",
-			funcName, err)
-		return nil, errs.DBError(errs.FetchEntry, desc)
-	}
-
-	return decodeHashDataRows(rows)
-}
-
 // listHashData fetches all hash data updated before the provided minimum time
 // provided.
 func (db *PostgresDB) listHashData(minNano int64) (map[string][]*HashData, error) {

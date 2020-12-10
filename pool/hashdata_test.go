@@ -65,38 +65,8 @@ func testHashData(t *testing.T) {
 			"non-existent hash data, got %v", err)
 	}
 
-	// Ensure fetching account hash data adheres to the minimum update
-	// time constraint.
 	fiveMinutesAfter := now.Add(time.Minute * 5).UnixNano()
-	data, err := db.fetchAccountHashData(xID, fiveMinutesAfter)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(data) > 0 {
-		t.Fatalf("expected no hash data, got %d", len(data))
-	}
-
 	fiveMinutesBefore := now.Add(-time.Minute * 5).UnixNano()
-	data, err = db.fetchAccountHashData(xID, fiveMinutesBefore)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(data) != 1 {
-		t.Fatalf("expected one hash data, got %d", len(data))
-	}
-
-	// Ensure fetching account hash data returns an empty result
-	// set for a non-existent account.
-	data, err = db.fetchAccountHashData(yID, fiveMinutesBefore)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(data) > 0 {
-		t.Fatalf("expected no hash data, got %d", len(data))
-	}
 
 	// Ensure listing account hash data adheres to the minimum update
 	// time constraint.
@@ -106,7 +76,7 @@ func testHashData(t *testing.T) {
 	}
 
 	if len(dataset) > 0 {
-		t.Fatalf("expected no hash data, got %d", len(data))
+		t.Fatalf("expected no hash data, got %d", len(dataset))
 	}
 
 	dataset, err = db.listHashData(fiveMinutesBefore)
@@ -115,7 +85,7 @@ func testHashData(t *testing.T) {
 	}
 
 	if len(dataset) != 1 {
-		t.Fatalf("expected one hash data, got %d", len(data))
+		t.Fatalf("expected one hash data, got %d", len(dataset))
 	}
 
 	newUpdatedOn := hashData.UpdatedOn + 100

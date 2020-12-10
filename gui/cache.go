@@ -238,11 +238,12 @@ func (c *Cache) updateHashData(hashData map[string][]*pool.HashData) {
 		for _, entry := range data {
 			hash, _ := new(big.Rat).SetString(entry.HashRate)
 			poolHashRate = poolHashRate.Add(poolHashRate, hash)
-			clientInfo[entry.AccountID] = append(clientInfo[entry.AccountID], &client{
-				Miner:    entry.Miner,
-				IP:       entry.IP,
-				HashRate: hashString(hash),
-			})
+			clientInfo[entry.AccountID] = append(clientInfo[entry.AccountID],
+				&client{
+					Miner:    entry.Miner,
+					IP:       entry.IP,
+					HashRate: hashString(hash),
+				})
 		}
 	}
 
