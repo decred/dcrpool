@@ -68,7 +68,6 @@ type Database interface {
 	persistHashData(hashData *HashData) error
 	updateHashData(hashData *HashData) error
 	fetchHashData(id string) (*HashData, error)
-	fetchAccountHashData(id string, minNano int64) ([]*HashData, error)
 	listHashData(minNano int64) (map[string][]*HashData, error)
 	pruneHashData(minNano int64) error
 }
