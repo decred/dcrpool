@@ -92,6 +92,7 @@ func TestPool(t *testing.T) {
 		"testClientRolledWork":       testClientTimeRolledWork,
 		"testClientMessageHandling":  testClientMessageHandling,
 		"testClientUpgrades":         testClientUpgrades,
+		"testHashData":               testHashData,
 		"testPaymentMgrPPS":          testPaymentMgrPPS,
 		"testPaymentMgrPPLNS":        testPaymentMgrPPLNS,
 		"testPaymentMgrMaturity":     testPaymentMgrMaturity,
