@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/decred/dcrd/blockchain/standalone/v2"
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -216,6 +217,20 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					// process will be terminated as a result.
 					log.Errorf("unable to prune jobs to height %d: %v",
 						pruneLimit, err)
+					close(msg.Done)
+					cs.cfg.Cancel()
+					continue
+				}
+
+				// Prune all hash data not updated in the past minute.
+				nowNano := time.Now().Add(-time.Minute).UnixNano()
+				err = cs.cfg.db.pruneHashData(nowNano)
+				if err != nil {
+					// Errors generated pruning invalidated hash rate
+					// indicate an underlying issue accessing the
+					// database. The chainstate process will be
+					// terminated as a result.
+					log.Errorf("unable to prune hash rate: %v", err)
 					close(msg.Done)
 					cs.cfg.Cancel()
 					continue

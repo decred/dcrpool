@@ -10,6 +10,12 @@ import (
 	"github.com/decred/dcrd/crypto/blake256"
 )
 
+var (
+	// defaultAccountID is the default account id value.
+	// It is defived from a a zero hash.
+	defaultAccountID = AccountID(zeroHash.String())
+)
+
 // Account represents a mining pool account.
 type Account struct {
 	UUID      string `json:"uuid"`

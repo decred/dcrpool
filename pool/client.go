@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Decred developers
+// Copyright (c) 2019-2020 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/blockchain/standalone/v2"
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
 	"github.com/decred/dcrd/wire"
@@ -53,6 +54,9 @@ var (
 
 	// ZeroRat is the default value for a big.Rat.
 	ZeroRat = new(big.Rat).SetInt64(0)
+
+	// zeroHash is the default value for a chainhash.Hash.
+	zeroHash = chainhash.Hash{0}
 )
 
 // readPayload is a convenience type that wraps a message and its
@@ -276,6 +280,9 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 		c.name = name
 
 	case true:
+		// Set a default account id.
+		c.account = defaultAccountID
+
 		c.name = username
 	}
 
@@ -1103,6 +1110,41 @@ func (c *Client) hashMonitor() {
 			hash := new(big.Rat).Quo(num, denom)
 			c.setHashRate(hash)
 			subs = submissions
+
+			c.mtx.RLock()
+			miner := c.miner
+			c.mtx.RUnlock()
+
+			hashID := hashDataID(c.account, c.extraNonce1)
+			hashData, err := c.cfg.db.fetchHashData(hashID)
+			if err != nil {
+				if errors.Is(err, errs.ValueNotFound) {
+					hashData = newHashData(miner, c.account, c.addr.String(),
+						c.extraNonce1, hash)
+					err = c.cfg.db.persistHashData(hashData)
+					if err != nil {
+						log.Errorf("unable to persist hash data with "+
+							"id %s: %v", hashData.UUID, err)
+					}
+
+					continue
+				}
+
+				log.Errorf("unable to fetch hash data with id %s: %v",
+					hashID, err)
+
+				c.cancel()
+				continue
+			}
+
+			hashData.HashRate = hash.RatString()
+			hashData.UpdatedOn = time.Now().UnixNano()
+
+			err = c.cfg.db.updateHashData(hashData)
+			if err != nil {
+				log.Errorf("unable to update hash data with "+
+					"id %s: %v", hashData.UUID, err)
+			}
 		}
 	}
 }
