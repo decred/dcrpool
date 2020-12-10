@@ -74,12 +74,6 @@ const (
 	// updated to unconfirmed due to a reorg.
 	Unconfirmed
 
-	// ConnectedClient indicates a new client has connected to the pool.
-	ConnectedClient
-
-	// DisconnectedClient indicates a client has disconnected from the pool.
-	DisconnectedClient
-
 	// ClaimedShare indicates work quotas for participating clients have
 	// been updated.
 	ClaimedShare
@@ -577,16 +571,15 @@ func (h *Hub) Run(ctx context.Context) {
 	h.shutdown()
 }
 
-// FetchClients returns all connected pool clients.
-func (h *Hub) FetchClients() []*Client {
-	clients := make([]*Client, 0)
-	h.endpoint.clientsMtx.Lock()
-	for _, c := range h.endpoint.clients {
-		clients = append(clients, c)
+// FetchClients returns all hash data from connected pool clients.
+func (h *Hub) FetchHashData() (map[string][]*HashData, error) {
+	aMinuteAgo := time.Now().Add(-time.Minute).UnixNano()
+	hashData, err := h.cfg.DB.listHashData(aMinuteAgo)
+	if err != nil {
+		return nil, err
 	}
-	h.endpoint.clientsMtx.Unlock()
 
-	return clients
+	return hashData, err
 }
 
 // FetchPendingPayments fetches all unpaid payments.
