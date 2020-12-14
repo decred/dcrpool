@@ -14,24 +14,26 @@ import (
 
 // Supported mining clients.
 const (
-	CPU           = "cpu"
-	InnosiliconD9 = "innosilicond9"
-	AntminerDR3   = "antminerdr3"
-	AntminerDR5   = "antminerdr5"
-	WhatsminerD1  = "whatsminerd1"
-	ObeliskDCR1   = "obeliskdcr1"
+	CPU               = "cpu"
+	InnosiliconD9     = "innosilicond9"
+	AntminerDR3       = "antminerdr3"
+	AntminerDR5       = "antminerdr5"
+	WhatsminerD1      = "whatsminerd1"
+	ObeliskDCR1       = "obeliskdcr1"
+	NiceHashValidator = "nicehash"
 )
 
 var (
 	// minerHashes is a map of all supported decred miners and their
 	// corresponding hash rates.
 	minerHashes = map[string]*big.Int{
-		CPU:           new(big.Int).SetInt64(5e3),
-		ObeliskDCR1:   new(big.Int).SetInt64(1.2e12),
-		InnosiliconD9: new(big.Int).SetInt64(2.4e12),
-		AntminerDR3:   new(big.Int).SetInt64(7.8e12),
-		AntminerDR5:   new(big.Int).SetInt64(35e12),
-		WhatsminerD1:  new(big.Int).SetInt64(48e12),
+		CPU:               new(big.Int).SetInt64(5e3),
+		ObeliskDCR1:       new(big.Int).SetInt64(1.2e12),
+		InnosiliconD9:     new(big.Int).SetInt64(2.4e12),
+		AntminerDR3:       new(big.Int).SetInt64(7.8e12),
+		AntminerDR5:       new(big.Int).SetInt64(35e12),
+		WhatsminerD1:      new(big.Int).SetInt64(48e12),
+		NiceHashValidator: new(big.Int).SetInt64(20e10),
 	}
 )
 

@@ -19,6 +19,7 @@ var (
 	D9ID   = "sgminer/4.4.2"
 	DR3ID  = "cgminer/4.9.0"
 	D1ID   = "whatsminer/d1-v1.0"
+	NHID   = "NiceHash/1.0.0"
 )
 
 // minerIDPair represents miner subscription identification pairing
@@ -49,12 +50,14 @@ func generateMinerIDs() map[string]*minerIDPair {
 	innosilicon := newMinerIDPair(D9ID, InnosiliconD9)
 	antminer := newMinerIDPair(DR3ID, AntminerDR3, AntminerDR5)
 	whatsminer := newMinerIDPair(D1ID, WhatsminerD1)
+	nicehash := newMinerIDPair(NHID, NiceHashValidator)
 
 	ids[cpu.id] = cpu
 	ids[obelisk.id] = obelisk
 	ids[innosilicon.id] = innosilicon
 	ids[antminer.id] = antminer
 	ids[whatsminer.id] = whatsminer
+	ids[nicehash.id] = nicehash
 	return ids
 }
 
