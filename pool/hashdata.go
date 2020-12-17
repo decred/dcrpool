@@ -13,12 +13,12 @@ import (
 // HashData represents client identification and hashrate information
 // for a mining client.
 type HashData struct {
-	UUID      string `json:"uuid"`
-	AccountID string `json:"accountid"`
-	Miner     string `json:"miner"`
-	IP        string `json:"ip"`
-	HashRate  string `json:"hashrate"`
-	UpdatedOn int64  `json:"updatedon"`
+	UUID      string   `json:"uuid"`
+	AccountID string   `json:"accountid"`
+	Miner     string   `json:"miner"`
+	IP        string   `json:"ip"`
+	HashRate  *big.Rat `json:"hashrate"`
+	UpdatedOn int64    `json:"updatedon"`
 }
 
 // hashDataID generates a unique hash data id.
@@ -35,7 +35,7 @@ func newHashData(miner string, accountID string, ip string, extraNonce1 string, 
 	return &HashData{
 		UUID:      hashDataID(accountID, extraNonce1),
 		AccountID: accountID,
-		HashRate:  hashRate.RatString(),
+		HashRate:  hashRate,
 		IP:        ip,
 		Miner:     miner,
 		UpdatedOn: nowNano,

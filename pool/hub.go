@@ -571,7 +571,8 @@ func (h *Hub) Run(ctx context.Context) {
 	h.shutdown()
 }
 
-// FetchClients returns all hash data from connected pool clients.
+// FetchHashData returns all hash data from connected pool clients
+// which have been updated in the last minute.
 func (h *Hub) FetchHashData() (map[string][]*HashData, error) {
 	aMinuteAgo := time.Now().Add(-time.Minute).UnixNano()
 	hashData, err := h.cfg.DB.listHashData(aMinuteAgo)

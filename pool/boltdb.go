@@ -1373,7 +1373,7 @@ func (db *BoltDB) persistHashData(hashData *HashData) error {
 	})
 }
 
-// updateHashData persists the updated payment to the database.
+// updateHashData persists the updated hash data to the database.
 func (db *BoltDB) updateHashData(hashData *HashData) error {
 	const funcName = "updateHashData"
 	return db.DB.Update(func(tx *bolt.Tx) error {
@@ -1382,7 +1382,7 @@ func (db *BoltDB) updateHashData(hashData *HashData) error {
 			return err
 		}
 
-		// Assert the work provided exists before updating.
+		// Assert the hash data provided exists before updating.
 		id := []byte(hashData.UUID)
 		v := bkt.Get(id)
 		if v == nil {
@@ -1437,48 +1437,7 @@ func (db *BoltDB) fetchHashData(id string) (*HashData, error) {
 	return &data, err
 }
 
-// fetchAccountHashData fetches all hash data associated with the provided
-// account id.
-func (db *BoltDB) fetchAccountHashData(id string, minNano int64) ([]*HashData, error) {
-	const funcName = "fetchAccountHashData"
-	idB := []byte(id)
-	data := []*HashData{}
-
-	err := db.DB.View(func(tx *bolt.Tx) error {
-		bkt, err := fetchBucket(tx, hashDataBkt)
-		if err != nil {
-			return err
-		}
-
-		cursor := bkt.Cursor()
-		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			accID := k[8:]
-			if !bytes.Equal(idB, accID) {
-				continue
-			}
-
-			var hashData HashData
-			err = json.Unmarshal(v, &hashData)
-			if err != nil {
-				desc := fmt.Sprintf("%s: unable to unmarshal hash data: %v",
-					funcName, err)
-				return errs.DBError(errs.Parse, desc)
-			}
-
-			if hashData.UpdatedOn > minNano {
-				data = append(data, &hashData)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return data, err
-}
-
-// listHashData fetches all hash data updated before the provided minimum time
-// provided.
+// listHashData fetches all hash data updated after the provided minimum time.
 func (db *BoltDB) listHashData(minNano int64) (map[string][]*HashData, error) {
 	const funcName = "listHashData"
 	data := make(map[string][]*HashData)
@@ -1513,8 +1472,8 @@ func (db *BoltDB) listHashData(minNano int64) (map[string][]*HashData, error) {
 	return data, err
 }
 
-// pruneHashData prunes all hash data that have not been since the provided
-// minimum time.
+// pruneHashData prunes all hash data that have not been updated since
+// the provided minimum time.
 func (db *BoltDB) pruneHashData(minNano int64) error {
 	funcName := "pruneHashData"
 

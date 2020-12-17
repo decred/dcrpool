@@ -25,7 +25,7 @@ func testHashData(t *testing.T) {
 	}
 
 	// Ensure hash data can be fetched.
-	hashID := hashDataID(xID, extraNonce1)
+	hashID := hashData.UUID
 	fetchedHashData, err := db.fetchHashData(hashID)
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +37,7 @@ func testHashData(t *testing.T) {
 			hashData.UpdatedOn, fetchedHashData.UpdatedOn)
 	}
 
-	if fetchedHashData.HashRate != hashData.HashRate {
+	if fetchedHashData.HashRate.RatString() != hashData.HashRate.RatString() {
 		t.Fatalf("expected hash rate value of %v, got %v",
 			hashData.HashRate, fetchedHashData.HashRate)
 	}
@@ -86,6 +86,12 @@ func testHashData(t *testing.T) {
 
 	if len(dataset) != 1 {
 		t.Fatalf("expected one hash data, got %d", len(dataset))
+	}
+
+	// Ensure the account id is a key of the hash data set returned.
+	_, ok := dataset[xID]
+	if !ok {
+		t.Fatalf("expected dataset to have %s as an account id key", xID)
 	}
 
 	newUpdatedOn := hashData.UpdatedOn + 100

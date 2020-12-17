@@ -1137,7 +1137,7 @@ func (c *Client) hashMonitor() {
 				continue
 			}
 
-			hashData.HashRate = hash.RatString()
+			hashData.HashRate = hash
 			hashData.UpdatedOn = time.Now().UnixNano()
 
 			err = c.cfg.db.updateHashData(hashData)

@@ -223,6 +223,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				}
 
 				// Prune all hash data not updated in the past minute.
+				// A connected client should have updated multiple times
+				// in a minute. Only disconnected miners would not have
+				// updated within the timeframe.
 				nowNano := time.Now().Add(-time.Minute).UnixNano()
 				err = cs.cfg.db.pruneHashData(nowNano)
 				if err != nil {
