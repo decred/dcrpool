@@ -229,9 +229,10 @@ func decodeShareRows(rows *sql.Rows) ([]*Share, error) {
 
 // decodeHashDataRows deserializes the provided SQL rows into a slice of
 // HashData structs.
-func decodeHashDataRows(rows *sql.Rows) ([]*HashData, error) {
+func decodeHashDataRows(rows *sql.Rows) (map[string][]*HashData, error) {
 	const funcName = "decodeHashDataRows"
-	var toReturn []*HashData
+
+	toReturn := make(map[string][]*HashData)
 	for rows.Next() {
 		var uuid, accountID, miner, ip, hashRate string
 		var updatedOn int64
@@ -243,8 +244,15 @@ func decodeHashDataRows(rows *sql.Rows) ([]*HashData, error) {
 			return nil, errs.DBError(errs.Decode, desc)
 		}
 
-		hashData := &HashData{uuid, accountID, miner, ip, hashRate, updatedOn}
-		toReturn = append(toReturn, hashData)
+		hashRat, ok := new(big.Rat).SetString(hashRate)
+		if !ok {
+			desc := fmt.Sprintf("%s: unable to decode big.Rat string: %v",
+				funcName, err)
+			return nil, errs.DBError(errs.Parse, desc)
+		}
+
+		hashData := &HashData{uuid, accountID, miner, ip, hashRat, updatedOn}
+		toReturn[accountID] = append(toReturn[accountID], hashData)
 	}
 
 	err := rows.Err()
@@ -992,7 +1000,8 @@ func (db *PostgresDB) persistHashData(hashData *HashData) error {
 	const funcName = "persistHashData"
 
 	_, err := db.DB.Exec(insertHashData, hashData.UUID, hashData.AccountID,
-		hashData.Miner, hashData.IP, hashData.HashRate, hashData.UpdatedOn)
+		hashData.Miner, hashData.IP, hashData.HashRate.RatString(),
+		hashData.UpdatedOn)
 	if err != nil {
 
 		var pqError *pq.Error
@@ -1010,13 +1019,13 @@ func (db *PostgresDB) persistHashData(hashData *HashData) error {
 	return nil
 }
 
-// updateHashData persists the updated payment to the database.
+// updateHashData persists the updated hash data to the database.
 func (db *PostgresDB) updateHashData(hashData *HashData) error {
 	const funcName = "updateHashData"
 
 	result, err := db.DB.Exec(updateHashData,
 		hashData.UUID, hashData.AccountID, hashData.Miner,
-		hashData.IP, hashData.HashRate, hashData.UpdatedOn)
+		hashData.IP, hashData.HashRate.RatString(), hashData.UpdatedOn)
 	if err != nil {
 		return err
 	}
@@ -1053,11 +1062,18 @@ func (db *PostgresDB) fetchHashData(id string) (*HashData, error) {
 			funcName, id, err)
 		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
-	return &HashData{uuid, accountID, miner, ip, hashRate, updatedOn}, nil
+
+	hashRat, ok := new(big.Rat).SetString(hashRate)
+	if !ok {
+		desc := fmt.Sprintf("%s: unable to decode big.Rat string: %v",
+			funcName, err)
+		return nil, errs.DBError(errs.Parse, desc)
+	}
+
+	return &HashData{uuid, accountID, miner, ip, hashRat, updatedOn}, nil
 }
 
-// listHashData fetches all hash data updated before the provided minimum time
-// provided.
+// listHashData fetches all hash data updated after the provided minimum time.
 func (db *PostgresDB) listHashData(minNano int64) (map[string][]*HashData, error) {
 	const funcName = "listHashData"
 	rows, err := db.DB.Query(listHashData, minNano)
@@ -1067,21 +1083,16 @@ func (db *PostgresDB) listHashData(minNano int64) (map[string][]*HashData, error
 		return nil, errs.DBError(errs.FetchEntry, desc)
 	}
 
-	data, err := decodeHashDataRows(rows)
+	hashData, err := decodeHashDataRows(rows)
 	if err != nil {
 		return nil, err
-	}
-
-	hashData := make(map[string][]*HashData)
-	for _, entry := range data {
-		hashData[entry.AccountID] = append(hashData[entry.AccountID], entry)
 	}
 
 	return hashData, nil
 }
 
-// pruneHashData prunes all hash data that have not been since the provided
-// minimum time.
+// pruneHashData prunes all hash data that have not been updated since
+// the provided minimum time.
 func (db *PostgresDB) pruneHashData(minNano int64) error {
 	const funcName = "pruneHashData"
 

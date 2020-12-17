@@ -404,7 +404,7 @@ func removeTxFeeReserveUpgrade(tx *bolt.Tx) error {
 	}
 
 	if dbVersion != oldVersion {
-		desc := fmt.Sprintf("%s: inappropriately called", err)
+		desc := fmt.Sprintf("%s: inappropriately called", funcName)
 		return errs.DBError(errs.DBUpgrade, desc)
 	}
 
@@ -437,7 +437,7 @@ func shareCreatedOnUpgrade(tx *bolt.Tx) error {
 	}
 
 	if dbVersion != oldVersion {
-		desc := fmt.Sprintf("%s: inappropriately called", err)
+		desc := fmt.Sprintf("%s: inappropriately called", funcName)
 		return errs.DBError(errs.DBUpgrade, desc)
 	}
 
@@ -506,7 +506,7 @@ func paymentUUIDUpgrade(tx *bolt.Tx) error {
 	}
 
 	if dbVersion != oldVersion {
-		desc := fmt.Sprintf("%s: inappropriately called", err)
+		desc := fmt.Sprintf("%s: inappropriately called", funcName)
 		return errs.DBError(errs.DBUpgrade, desc)
 	}
 
@@ -601,7 +601,7 @@ func hashDataUpgrade(tx *bolt.Tx) error {
 	}
 
 	if dbVersion != oldVersion {
-		desc := fmt.Sprintf("%s: inappropriately called", err)
+		desc := fmt.Sprintf("%s: inappropriately called", funcName)
 		return errs.DBError(errs.DBUpgrade, desc)
 	}
 
