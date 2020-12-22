@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -118,17 +120,53 @@ func Test_BoltDB_HttpBackup(t *testing.T) {
 		}
 	}()
 
+	// Capture the HTTP response written by the backup func.
 	rr := httptest.NewRecorder()
 	err = db.httpBackup(rr)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Check the HTTP status is OK.
+	if status := rr.Code; status != http.StatusOK {
+		t.Fatalf("wrong HTTP status code: expected %v, got %v",
+			http.StatusOK, status)
+	}
+
+	// Check HTTP headers.
+	header := "Content-Type"
+	expected := "application/octet-stream"
+	if actual := rr.Header().Get(header); actual != expected {
+		t.Errorf("wrong %s header: expected %s, got %s",
+			header, expected, actual)
+	}
+
+	header = "Content-Disposition"
+	expected = `attachment; filename="backup.db"`
+	if actual := rr.Header().Get(header); actual != expected {
+		t.Errorf("wrong %s header: expected %s, got %s",
+			header, expected, actual)
+	}
+
+	header = "Content-Length"
+	cLength, err := strconv.Atoi(rr.Header().Get(header))
+	if err != nil {
+		t.Fatalf("could not convert %s to integer: %v", header, err)
+	}
+
+	if cLength <= 0 {
+		t.Fatalf("expected a %s greater than zero, got %d", header, cLength)
+	}
+
+	// Check reported length matches actual.
 	body, err := ioutil.ReadAll(rr.Result().Body)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("could not read http response body: %v", err)
 	}
-	if len(body) == 0 {
-		t.Fatal("expected a response body with data")
+
+	if len(body) != cLength {
+		t.Fatalf("expected reported content-length to match actual body length. %v != %v",
+			cLength, len(body))
 	}
 }
 
