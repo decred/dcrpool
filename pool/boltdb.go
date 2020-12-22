@@ -575,6 +575,16 @@ func (db *BoltDB) fetchAcceptedWork(id string) (*AcceptedWork, error) {
 // persistAcceptedWork saves the accepted work to the database.
 func (db *BoltDB) persistAcceptedWork(work *AcceptedWork) error {
 	const funcName = "persistAcceptedWork"
+
+	// Marshal work first. This could prevent a DB transaction being started
+	// and rolled back unnecessarily.
+	workBytes, err := json.Marshal(work)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to marshal accepted "+
+			"work bytes: %v", funcName, err)
+		return errs.DBError(errs.Parse, desc)
+	}
+
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, workBkt)
 		if err != nil {
@@ -588,12 +598,6 @@ func (db *BoltDB) persistAcceptedWork(work *AcceptedWork) error {
 			desc := fmt.Sprintf("%s: work %s already exists", funcName,
 				work.UUID)
 			return errs.DBError(errs.ValueFound, desc)
-		}
-		workBytes, err := json.Marshal(work)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal accepted "+
-				"work bytes: %v", funcName, err)
-			return errs.DBError(errs.Parse, desc)
 		}
 
 		err = bkt.Put(id, workBytes)
@@ -610,6 +614,16 @@ func (db *BoltDB) persistAcceptedWork(work *AcceptedWork) error {
 // error if the work is not found.
 func (db *BoltDB) updateAcceptedWork(work *AcceptedWork) error {
 	const funcName = "updateAcceptedWork"
+
+	// Marshal work first. This could prevent a DB transaction being started
+	// and rolled back unnecessarily.
+	workBytes, err := json.Marshal(work)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to marshal accepted "+
+			"work bytes: %v", funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
+	}
+
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, workBkt)
 		if err != nil {
@@ -623,12 +637,7 @@ func (db *BoltDB) updateAcceptedWork(work *AcceptedWork) error {
 			desc := fmt.Sprintf("%s: work %s not found", funcName, work.UUID)
 			return errs.DBError(errs.ValueNotFound, desc)
 		}
-		workBytes, err := json.Marshal(work)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal accepted "+
-				"work bytes: %v", funcName, err)
-			return errs.DBError(errs.PersistEntry, desc)
-		}
+
 		err = bkt.Put(id, workBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist accepted work: %v",
@@ -750,6 +759,18 @@ func (db *BoltDB) fetchAccount(id string) (*Account, error) {
 // already exists with the same ID.
 func (db *BoltDB) persistAccount(acc *Account) error {
 	const funcName = "persistAccount"
+
+	acc.CreatedOn = uint64(time.Now().Unix())
+
+	// Marshal account first. This could prevent a DB transaction being started
+	// and rolled back unnecessarily.
+	accBytes, err := json.Marshal(acc)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to marshal account bytes: %v",
+			funcName, err)
+		return errs.DBError(errs.Parse, desc)
+	}
+
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, accountBkt)
 		if err != nil {
@@ -763,14 +784,6 @@ func (db *BoltDB) persistAccount(acc *Account) error {
 			return errs.DBError(errs.ValueFound, desc)
 		}
 
-		acc.CreatedOn = uint64(time.Now().Unix())
-
-		accBytes, err := json.Marshal(acc)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal account bytes: %v",
-				funcName, err)
-			return errs.DBError(errs.Parse, desc)
-		}
 		err = bkt.Put([]byte(acc.UUID), accBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist account entry: %v",
@@ -820,6 +833,16 @@ func (db *BoltDB) fetchJob(id string) (*Job, error) {
 // already exists with the same ID.
 func (db *BoltDB) persistJob(job *Job) error {
 	const funcName = "persistJob"
+
+	// Marshal job first. This could prevent a DB transaction being started
+	// and rolled back unnecessarily.
+	jobBytes, err := json.Marshal(job)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to marshal job bytes: %v",
+			funcName, err)
+		return errs.DBError(errs.Parse, desc)
+	}
+
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, jobBkt)
 		if err != nil {
@@ -833,12 +856,6 @@ func (db *BoltDB) persistJob(job *Job) error {
 			return errs.DBError(errs.ValueFound, desc)
 		}
 
-		jobBytes, err := json.Marshal(job)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal job bytes: %v",
-				funcName, err)
-			return errs.DBError(errs.Parse, desc)
-		}
 		err = bkt.Put([]byte(job.UUID), jobBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist job entry: %v",
@@ -920,17 +937,22 @@ func (db *BoltDB) fetchPayment(id string) (*Payment, error) {
 // PersistPayment saves a payment to the database.
 func (db *BoltDB) PersistPayment(pmt *Payment) error {
 	const funcName = "PersistPayment"
+
+	// Marshal payment first. This could prevent a DB transaction being started
+	// and rolled back unnecessarily.
+	b, err := json.Marshal(pmt)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
+			funcName, err)
+		return errs.DBError(errs.Parse, desc)
+	}
+
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
 			return err
 		}
-		b, err := json.Marshal(pmt)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
-				funcName, err)
-			return errs.DBError(errs.Parse, desc)
-		}
+
 		err = bkt.Put([]byte(pmt.UUID), b)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist payment bytes: %v",
@@ -955,6 +977,20 @@ func (db *BoltDB) deletePayment(id string) error {
 // ArchivePayment removes the associated payment from active payments and archives it.
 func (db *BoltDB) ArchivePayment(pmt *Payment) error {
 	const funcName = "ArchivePayment"
+
+	// Create a new payment to add to the archive.
+	aPmt := NewPayment(pmt.Account, pmt.Source, pmt.Amount, pmt.Height,
+		pmt.EstimatedMaturity)
+
+	// Marshal payment first. This could prevent a DB transaction being started
+	// and rolled back unnecessarily.
+	aPmtB, err := json.Marshal(aPmt)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
+			funcName, err)
+		return errs.DBError(errs.Parse, desc)
+	}
+
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt, err := fetchBucket(tx, paymentBkt)
 		if err != nil {
@@ -969,16 +1005,6 @@ func (db *BoltDB) ArchivePayment(pmt *Payment) error {
 		err = pbkt.Delete([]byte(pmt.UUID))
 		if err != nil {
 			return err
-		}
-
-		// Create a new payment to add to the archive.
-		aPmt := NewPayment(pmt.Account, pmt.Source, pmt.Amount, pmt.Height,
-			pmt.EstimatedMaturity)
-		aPmtB, err := json.Marshal(aPmt)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
-				funcName, err)
-			return errs.DBError(errs.Parse, desc)
 		}
 
 		err = abkt.Put([]byte(aPmt.UUID), aPmtB)
@@ -1199,6 +1225,16 @@ func (db *BoltDB) fetchShare(id string) (*Share, error) {
 // already exists with the same ID.
 func (db *BoltDB) PersistShare(s *Share) error {
 	const funcName = "PersistShare"
+
+	// Marshal share first. This could prevent a DB transaction being started
+	// and rolled back unnecessarily.
+	sBytes, err := json.Marshal(s)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
+			funcName, err)
+		return errs.DBError(errs.Parse, desc)
+	}
+
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, shareBkt)
 		if err != nil {
@@ -1212,12 +1248,6 @@ func (db *BoltDB) PersistShare(s *Share) error {
 			return errs.DBError(errs.ValueFound, desc)
 		}
 
-		sBytes, err := json.Marshal(s)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
-				funcName, err)
-			return errs.DBError(errs.Parse, desc)
-		}
 		err = bkt.Put([]byte(s.UUID), sBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist share entry: %v",
@@ -1344,6 +1374,16 @@ func (db *BoltDB) pruneShares(minNano int64) error {
 // persistHashData saves the provided hash data to the database.
 func (db *BoltDB) persistHashData(hashData *HashData) error {
 	const funcName = "persistHashData"
+
+	// Marshal hashdata first. This could prevent a DB transaction being started
+	// and rolled back unnecessarily.
+	hBytes, err := json.Marshal(hashData)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to marshal hash data bytes: %v",
+			funcName, err)
+		return errs.DBError(errs.Parse, desc)
+	}
+
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, hashDataBkt)
 		if err != nil {
@@ -1357,12 +1397,6 @@ func (db *BoltDB) persistHashData(hashData *HashData) error {
 			return errs.DBError(errs.ValueFound, desc)
 		}
 
-		hBytes, err := json.Marshal(hashData)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal hash data bytes: %v",
-				funcName, err)
-			return errs.DBError(errs.Parse, desc)
-		}
 		err = bkt.Put([]byte(hashData.UUID), hBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist hash data entry: %v",
@@ -1376,6 +1410,16 @@ func (db *BoltDB) persistHashData(hashData *HashData) error {
 // updateHashData persists the updated hash data to the database.
 func (db *BoltDB) updateHashData(hashData *HashData) error {
 	const funcName = "updateHashData"
+
+	// Marshal hashdata first. This could prevent a DB transaction being started
+	// and rolled back unnecessarily.
+	hBytes, err := json.Marshal(hashData)
+	if err != nil {
+		desc := fmt.Sprintf("%s: unable to marshal hash data bytes: %v",
+			funcName, err)
+		return errs.DBError(errs.PersistEntry, desc)
+	}
+
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, hashDataBkt)
 		if err != nil {
@@ -1390,12 +1434,7 @@ func (db *BoltDB) updateHashData(hashData *HashData) error {
 				funcName, hashData.UUID)
 			return errs.DBError(errs.ValueNotFound, desc)
 		}
-		hBytes, err := json.Marshal(hashData)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal hash data bytes: %v",
-				funcName, err)
-			return errs.DBError(errs.PersistEntry, desc)
-		}
+
 		err = bkt.Put(id, hBytes)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to persist hash data: %v",
