@@ -113,6 +113,25 @@ adminpass=adminpass
 guidir=/home/gui
 ```
 
+The configuration above uses a [Bolt database](https://github.com/etcd-io/bbolt). 
+To switch to a [Postgres database](https://www.postgresql.org/) additional config 
+options will be needed, refer to [postgres.md](./docs/postgres.md). 
+
+### Example output of a solo pool startup
+
+```no-highlight
+dcrpool --configfile=pool.conf --homedir=/tmp/dcrpool-harness/pool
+2020-12-22 20:10:31.120 [INF] POOL: Maximum work submission generation time at pool difficulty is 28s.
+2020-12-22 20:10:31.129 [INF] POOL: Solo pool mode active.
+2020-12-22 20:10:31.149 [INF] MP: Version: 1.1.0+dev
+2020-12-22 20:10:31.149 [INF] MP: Runtime: Go version go1.15.6
+2020-12-22 20:10:31.149 [INF] MP: Home dir: /tmp/dcrpool-harness/pool
+2020-12-22 20:10:31.149 [INF] MP: Started dcrpool.
+2020-12-22 20:10:31.149 [INF] GUI: Starting GUI server on port 8080 (https)
+2020-12-22 20:10:31.149 [INF] MP: Creating profiling server listening on 127.0.0.1:6060
+2020-12-22 20:10:31.150 [INF] POOL: listening on :5550
+```
+
 ### Example of a mining pool configuration
 
 ```no-highlight
@@ -133,7 +152,27 @@ adminpass=adminpass
 guidir=/home/gui
 ```
 
-Refer to [config descriptions](config.go) for more detail.
+The configuration above uses a [Bolt database](https://github.com/etcd-io/bbolt). 
+To switch to a [Postgres database](https://www.postgresql.org/) additional config 
+options will be needed, refer to [postgres.md](./docs/postgres.md).
+
+### Example output of a mining pool startup
+
+```no-highlight
+dcrpool --configfile=pool.conf --homedir=/tmp/dcrpool-harness/pool
+2020-12-22 19:57:45.795 [INF] POOL: Maximum work submission generation time at pool difficulty is 20s.
+2020-12-22 19:57:45.816 [INF] POOL: Payment method is PPLNS.
+2020-12-22 19:57:45.916 [INF] MP: Version: 1.1.0+dev
+2020-12-22 19:57:45.916 [INF] MP: Runtime: Go version go1.15.6
+2020-12-22 19:57:45.916 [INF] MP: Creating profiling server listening on 127.0.0.1:6060
+2020-12-22 19:57:45.916 [INF] MP: Home dir: /tmp/dcrpool-harness/pool
+2020-12-22 19:57:45.917 [INF] MP: Started dcrpool.
+2020-12-22 19:57:45.917 [INF] GUI: Starting GUI server on port 8080 (https)
+2020-12-22 19:57:45.932 [INF] POOL: listening on :5550
+```
+
+Refer to [config descriptions](config.go) for more detail. 
+
 
 ## Wallet accounts
 
