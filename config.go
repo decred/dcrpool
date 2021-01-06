@@ -31,7 +31,7 @@ import (
 const (
 	defaultConfigFilename        = "dcrpool.conf"
 	defaultDataDirname           = "data"
-	defaultLogLevel              = "debug"
+	defaultLogLevel              = "info"
 	defaultLogDirname            = "log"
 	defaultLogFilename           = "dcrpool.log"
 	defaultDBFilename            = "dcrpool.kv"
@@ -507,8 +507,9 @@ func loadConfig() (*config, []string, error) {
 		err = preIni.WriteFile(preCfg.ConfigFile,
 			flags.IniIncludeComments|flags.IniIncludeDefaults)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error creating a default "+
-				"config file: %v", err)
+			err = fmt.Errorf("error creating a default config file: %v", err)
+			fmt.Fprintln(os.Stderr, err)
+			return nil, nil, err
 		}
 	}
 
@@ -550,8 +551,10 @@ func loadConfig() (*config, []string, error) {
 	case chaincfg.SimNetParams().Name:
 		cfg.net = &simNetParams
 	default:
-		return nil, nil, fmt.Errorf("unknown network provided %v",
-			cfg.ActiveNet)
+		err := fmt.Errorf("unknown network provided: %v", cfg.ActiveNet)
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
 	}
 
 	// Use separate data and log directories for each Decred network.
@@ -566,31 +569,59 @@ func loadConfig() (*config, []string, error) {
 
 	// Ensure the admin password is set.
 	if cfg.AdminPass == "" {
-		str := "%s: the adminpass option is not set"
-		err := fmt.Errorf(str, funcName)
+		err := fmt.Errorf("the adminpass option is not set")
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
 		return nil, nil, err
 	}
 
 	// Ensure the dcrd rpc username is set.
 	if cfg.RPCUser == "" {
-		str := "%s: the rpcuser option is not set"
-		err := fmt.Errorf(str, funcName)
+		err := fmt.Errorf("the rpcuser option is not set")
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
 		return nil, nil, err
 	}
 
 	// Ensure the dcrd rpc password is set.
 	if cfg.RPCPass == "" {
-		str := "%s: the rpcpass option is not set"
-		err := fmt.Errorf(str, funcName)
+		err := fmt.Errorf("the rpcpass option is not set")
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
 		return nil, nil, err
 	}
 
 	// Create the data directory.
 	err = os.MkdirAll(cfg.DataDir, 0700)
 	if err != nil {
-		str := "%s: failed to create data directory: %v"
-		err := fmt.Errorf(str, funcName, err)
+		str := "%s: unable to create data directory (%s): %v"
+		err := fmt.Errorf(str, funcName, cfg.DataDir, err)
+		fmt.Fprintln(os.Stderr, err)
 		return nil, nil, err
+	}
+
+	// Assert postgres config details are valid if being used.
+	if cfg.UsePostgres {
+		if cfg.PGHost == "" {
+			err := fmt.Errorf("the postgreshost option is not set")
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
+			return nil, nil, err
+		}
+
+		if cfg.PGUser == "" {
+			err := fmt.Errorf("the postgresuser option is not set")
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
+			return nil, nil, err
+		}
+
+		if cfg.PGDBName == "" {
+			err := fmt.Errorf("the postgresdbname option is not set")
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
+			return nil, nil, err
+		}
 	}
 
 	// Special show command to list supported subsystems and exit.
@@ -601,7 +632,6 @@ func loadConfig() (*config, []string, error) {
 
 	// Parse, validate, and set debug log level(s).
 	if err := parseAndSetDebugLevels(cfg.DebugLevel); err != nil {
-		err := fmt.Errorf("%s: %v", funcName, err.Error())
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)
 		return nil, nil, err
@@ -614,23 +644,28 @@ func loadConfig() (*config, []string, error) {
 	if !cfg.SoloPool {
 		// Ensure a valid payment method is set.
 		if cfg.PaymentMethod != pool.PPS && cfg.PaymentMethod != pool.PPLNS {
-			str := "%s: paymentmethod must be either %s or %s"
-			err := fmt.Errorf(str, funcName, pool.PPS, pool.PPLNS)
+			err := fmt.Errorf("paymentmethod must be either %s or %s",
+				pool.PPS, pool.PPLNS)
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
 			return nil, nil, err
 		}
 
 		// Ensure pool fee is valid.
 		if cfg.PoolFee < 0.002 || cfg.PoolFee > 0.05 {
-			str := "%s: poolfee should be between 0.002 (0.2%%) and 0.05 (5%%)"
-			err := fmt.Errorf(str, funcName)
+			err := fmt.Errorf("poolfee should be between 0.002 (0.2%%) " +
+				"and 0.05 (5%%)")
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
 			return nil, nil, err
 		}
 
 		// Ensure the passphrase to unlock the wallet is provided.
 		// Wallet passphrase is required to pay dividends to pool contributors.
 		if cfg.WalletPass == "" {
-			str := "%s: the walletpass option is not set"
-			err := fmt.Errorf(str, funcName)
+			err := fmt.Errorf("the walletpass option is not set")
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
 			return nil, nil, err
 		}
 
@@ -639,8 +674,9 @@ func loadConfig() (*config, []string, error) {
 		// point either the array is empty, or the first item of the array
 		// contains the full string.
 		if len(cfg.PoolFeeAddrs) == 0 || len(cfg.PoolFeeAddrs[0]) == 0 {
-			str := "%s: the poolfeeaddrs option is not set"
-			err := fmt.Errorf(str, funcName)
+			err := fmt.Errorf("the poolfeeaddrs option is not set")
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
 			return nil, nil, err
 		}
 
@@ -649,8 +685,8 @@ func loadConfig() (*config, []string, error) {
 		for _, pAddr := range cfg.PoolFeeAddrs {
 			addr, err := dcrutil.DecodeAddress(pAddr, cfg.net)
 			if err != nil {
-				str := "%s: pool fee address '%v' failed to decode: %v"
-				err := fmt.Errorf(str, funcName, pAddr, err)
+				err := fmt.Errorf("unable to decode pool fee address '%v': "+
+					"%v", pAddr, err)
 				fmt.Fprintln(os.Stderr, err)
 				fmt.Fprintln(os.Stderr, usageMessage)
 				return nil, nil, err
@@ -662,9 +698,9 @@ func loadConfig() (*config, []string, error) {
 
 	// Do not allow maxgentime durations that are too short.
 	if cfg.MaxGenTime < time.Second*2 {
-		str := "%s: the maxgentime option may not be less " +
+		str := "the maxgentime option may not be less " +
 			"than 2s -- parsed [%v]"
-		err := fmt.Errorf(str, funcName, cfg.MaxGenTime)
+		err := fmt.Errorf(str, cfg.MaxGenTime)
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)
 		return nil, nil, err
@@ -672,9 +708,9 @@ func loadConfig() (*config, []string, error) {
 
 	// Do not allow lastnperiod durations that are too short.
 	if cfg.LastNPeriod < time.Second*60 {
-		str := "%s: the lastnperiod option may not be less " +
+		str := "the lastnperiod option may not be less " +
 			"than 60s -- parsed [%v]"
-		err := fmt.Errorf(str, funcName, cfg.LastNPeriod)
+		err := fmt.Errorf(str, cfg.LastNPeriod)
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)
 		return nil, nil, err
@@ -689,8 +725,11 @@ func loadConfig() (*config, []string, error) {
 
 	// Ensure a domain is set if HTTPS via letsencrypt is preferred.
 	if cfg.UseLEHTTPS && cfg.Domain == "" {
-		return nil, nil, fmt.Errorf("a valid domain is required for HTTPS " +
+		err := fmt.Errorf("a valid domain is required for HTTPS " +
 			"via letsencrypt")
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
 	}
 
 	// Generate self-signed TLS cert and key if they do not already exist. This
@@ -699,15 +738,20 @@ func loadConfig() (*config, []string, error) {
 	if !cfg.UseLEHTTPS && (!fileExists(cfg.TLSCert) || !fileExists(cfg.TLSKey)) {
 		err := genCertPair(cfg.TLSCert, cfg.TLSKey)
 		if err != nil {
-			return nil, nil,
-				fmt.Errorf("failed to generate dcrpool's TLS cert/key: %v", err)
+			str := "%s: unable to generate dcrpool's TLS cert/key: %v"
+			err := fmt.Errorf(str, funcName, err)
+			fmt.Fprintln(os.Stderr, err)
+			return nil, nil, err
+
 		}
 	}
 
 	// Load dcrd RPC certificate.
 	if !fileExists(cfg.DcrdRPCCert) {
-		return nil, nil,
-			fmt.Errorf("dcrd RPC certificate (%v) not found", cfg.DcrdRPCCert)
+		str := "%s: dcrd RPC certificate (%v) not found"
+		err := fmt.Errorf(str, funcName, cfg.DcrdRPCCert)
+		fmt.Fprintln(os.Stderr, err)
+		return nil, nil, err
 	}
 
 	cfg.dcrdRPCCerts, err = ioutil.ReadFile(cfg.DcrdRPCCert)
@@ -726,8 +770,7 @@ func loadConfig() (*config, []string, error) {
 		// Ensure the profiling address is a valid tcp address.
 		_, portStr, err := net.SplitHostPort(cfg.Profile)
 		if err != nil {
-			str := "%s: profile: %s"
-			err := fmt.Errorf(str, funcName, err)
+			err := fmt.Errorf("invalid profile address: %s", err)
 			fmt.Fprintln(os.Stderr, err)
 			fmt.Fprintln(os.Stderr, usageMessage)
 			return nil, nil, err
@@ -735,8 +778,8 @@ func loadConfig() (*config, []string, error) {
 
 		// Finally, check the port is in range.
 		if port, _ := strconv.Atoi(portStr); port < 1024 || port > 65535 {
-			str := "%s: profile: address %s: port must be between 1024 and 65535"
-			err := fmt.Errorf(str, funcName, cfg.Profile)
+			err := fmt.Errorf("profile address (%s) port must be "+
+				"between 1024 and 65535", cfg.Profile)
 			fmt.Fprintln(os.Stderr, err)
 			fmt.Fprintln(os.Stderr, usageMessage)
 			return nil, nil, err
@@ -746,9 +789,12 @@ func loadConfig() (*config, []string, error) {
 	if !cfg.SoloPool {
 		// Load the wallet RPC certificate.
 		if !cfg.GenCertsOnly && !fileExists(cfg.WalletRPCCert) {
-			return nil, nil,
-				fmt.Errorf("wallet RPC certificate (%v) not found",
-					cfg.WalletRPCCert)
+			err := fmt.Errorf("wallet RPC certificate (%v) not found",
+				cfg.WalletRPCCert)
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, usageMessage)
+			return nil, nil, err
+
 		}
 
 		// Generate self-signed wallet TLS cert and key if they do not
@@ -757,35 +803,44 @@ func loadConfig() (*config, []string, error) {
 		if !fileExists(cfg.WalletTLSCert) || !fileExists(cfg.WalletTLSKey) {
 			err := genCertPair(cfg.WalletTLSCert, cfg.WalletTLSKey)
 			if err != nil {
-				return nil, nil,
-					fmt.Errorf("failed to generate dcrpool's wallet TLS "+
-						"cert/key: %v", err)
+				err := fmt.Errorf("failed to generate dcrpool's wallet TLS "+
+					"cert/key: %v", err)
+				fmt.Fprintln(os.Stderr, err)
+				fmt.Fprintln(os.Stderr, usageMessage)
+				return nil, nil, err
+
 			}
 		}
 	}
 
 	if cfg.ActiveNet != chaincfg.SimNetParams().Name && cfg.PurgeDB {
-		return nil, nil, fmt.Errorf("database purging at startup is " +
+		err := fmt.Errorf("database purging at startup is " +
 			"reserved for simnet testing only")
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
 	}
 
 	// Warn about deprecated config options if they have been set.
 	if cfg.MaxTxFeeReserve > 0 {
-		str := "%s: MaxTxFeeReserve has been deprecated, " +
+		str := "maxtxfeereserve has been deprecated, " +
 			"please remove from your config file."
 		mpLog.Warnf(str, funcName)
 	}
 
 	if cfg.MinPayment > 0 {
-		str := "%s: MinPayment has been deprecated, " +
+		str := "minpayment has been deprecated, " +
 			"please remove from your config file."
 		mpLog.Warnf(str, funcName)
 	}
 
 	// Only generate needed key pairs and terminate if GenCertsOnly is active.
 	if cfg.GenCertsOnly {
-		return nil, nil, errors.New("generated needed certificates, " +
+		err := errors.New("generated needed certificates, " +
 			"terminating.")
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
 	}
 
 	return &cfg, remainingArgs, nil

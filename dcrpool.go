@@ -199,7 +199,6 @@ func main() {
 	// and configures it accordingly.
 	cfg, _, err := loadConfig()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	defer func() {
