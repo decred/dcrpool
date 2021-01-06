@@ -79,9 +79,14 @@ func NewStratumError(code uint32, err error) *StratumError {
 
 	return &StratumError{
 		Code:      code,
-		Message:   fmt.Sprintf("%s: %s", msg, err.Error()),
+		Message:   fmt.Sprintf("%s: %v", msg, err),
 		Traceback: "",
 	}
+}
+
+// String returns a stringified representation of the stratum error.
+func (s *StratumError) String() string {
+	return s.Message
 }
 
 // Message defines a message interface.
