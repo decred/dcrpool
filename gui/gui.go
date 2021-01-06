@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -266,32 +265,11 @@ func (ui *GUI) Run(ctx context.Context) {
 		}
 
 		if ui.cfg.UseLEHTTPS {
-			certCache := autocert.DirCache("certs")
 			certMgr := &autocert.Manager{
 				Prompt:     autocert.AcceptTOS,
-				Cache:      certCache,
+				Cache:      autocert.DirCache("certs"),
 				HostPolicy: autocert.HostWhitelist(ui.cfg.Domain),
 			}
-
-			// Ensure port 80 is not already in use.
-			port80 := ":80"
-			listener, err := net.Listen("tcp", port80)
-			if err != nil {
-				log.Error("port 80 is already in use")
-				return
-			}
-
-			listener.Close()
-
-			// Redirect all regular http requests to their https endpoints.
-			go func() {
-				log.Info("Starting GUI server on port 80 (http, will forward to https)")
-				if err := http.ListenAndServe(port80,
-					certMgr.HTTPHandler(nil)); err != nil &&
-					!errors.Is(err, http.ErrServerClosed) {
-					log.Error(err)
-				}
-			}()
 
 			log.Info("Starting GUI server on port 443 (https)")
 			ui.server = &http.Server{
