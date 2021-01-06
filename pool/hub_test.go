@@ -245,7 +245,7 @@ func testHub(t *testing.T) {
 		t.Fatalf("[NewHub] unexpected error: %v", err)
 	}
 
-	notifHandlers := hub.CreateNotificationHandlers()
+	notifHandlers := hub.createNotificationHandlers()
 	if notifHandlers == nil {
 		t.Fatalf("[CreatNotificationHandlers] expected an "+
 			"initialized notifications handler: %v", err)
@@ -253,12 +253,15 @@ func testHub(t *testing.T) {
 
 	// Create dummy wallet and node connections.
 	nodeConn := &tNodeConnection{}
-	hub.SetNodeConnection(nodeConn)
+	hub.nodeConn = nodeConn
 	walletConn := &tWalletConnection{}
 	walletClose := func() error {
 		return nil
 	}
-	hub.SetWalletConnection(walletConn, walletClose)
+
+	hub.walletConn = walletConn
+	hub.walletClose = walletClose
+
 	err = hub.FetchWork(ctx)
 	if err != nil {
 		t.Fatalf("[FetchWork] unexpected error: %v", err)

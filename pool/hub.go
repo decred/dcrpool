@@ -7,10 +7,13 @@ package pool
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"net/http"
 	"strings"
@@ -26,6 +29,7 @@ import (
 	"github.com/decred/dcrd/rpcclient/v6"
 	"github.com/decred/dcrd/wire"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	errs "github.com/decred/dcrpool/errors"
 )
@@ -118,6 +122,17 @@ type HubConfig struct {
 	ActiveNet *chaincfg.Params
 	// DB represents the pool database.
 	DB Database
+	// NodeRPCConfig represents the mining node's RPC configuration details.
+	NodeRPCConfig *rpcclient.ConnConfig
+	// WalletRPPCCert represents the wallet's RPC certificate.
+	WalletRPCCert string
+	// WalletTLSCert represents the wallet client's TLS certificate.
+	WalletTLSCert string
+	// WalletTLSKey represents the wallet client's TLS key file.
+	WalletTLSKey string
+	// WalletGRPCHost represents the ip:port establish a GRPC connection for
+	// the wallet.
+	WalletGRPCHost string
 	// PoolFee represents the fee charged to participating accounts of the pool.
 	PoolFee float64
 	// MaxGenTime represents the share creation target time for the pool.
@@ -190,23 +205,6 @@ func (h *Hub) SignalCache(event CacheUpdateEvent) {
 // FetchCacheChannel returns the gui cache signal chanel.
 func (h *Hub) FetchCacheChannel() chan CacheUpdateEvent {
 	return h.cacheCh
-}
-
-// SetNodeConnection sets the mining node connection.
-func (h *Hub) SetNodeConnection(conn NodeConnection) {
-	h.nodeConn = conn
-}
-
-// SetWalletConnection sets the wallet connection and it's associated close.
-func (h *Hub) SetWalletConnection(conn WalletConnection, close func() error) {
-	h.walletConn = conn
-	h.walletClose = close
-}
-
-// SetTxConfNotifClient sets the wallet transaction confirmation notification
-// client.
-func (h *Hub) SetTxConfNotifClient(conn walletrpc.WalletService_ConfirmationNotificationsClient) {
-	h.notifClient = conn
 }
 
 // generateBlake256Pad creates the extra padding needed for work
@@ -337,6 +335,84 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	}
 
 	return h, nil
+}
+
+// Connect establishes a connection to the mining node and a wallet connection
+// if the pool is a publicly avialable one.
+func (h *Hub) Connect(ctx context.Context) error {
+	// Establish a connection to the mining node.
+	nodeConn, err := rpcclient.New(h.cfg.NodeRPCConfig,
+		h.createNotificationHandlers())
+	if err != nil {
+		return err
+	}
+
+	if err := nodeConn.NotifyWork(ctx); err != nil {
+		nodeConn.Shutdown()
+		return fmt.Errorf("unable to subscribe for work "+
+			"notifications: %v", err)
+	}
+	if err := nodeConn.NotifyBlocks(ctx); err != nil {
+		nodeConn.Shutdown()
+		return fmt.Errorf("unable to subscribe for block "+
+			"notifications: %v", err)
+	}
+
+	h.nodeConn = nodeConn
+
+	// Establish a connection to the wallet if the pool is
+	// mining as a publicly available mining pool.
+	if !h.cfg.SoloPool {
+		serverCAs := x509.NewCertPool()
+		serverCert, err := ioutil.ReadFile(h.cfg.WalletRPCCert)
+		if err != nil {
+			return err
+		}
+		if !serverCAs.AppendCertsFromPEM(serverCert) {
+			return fmt.Errorf("no certificates found in %s",
+				h.cfg.WalletRPCCert)
+		}
+		keypair, err := tls.LoadX509KeyPair(h.cfg.WalletTLSCert,
+			h.cfg.WalletTLSKey)
+		if err != nil {
+			return fmt.Errorf("unable to read keypair: %v", err)
+		}
+		creds := credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{keypair},
+			RootCAs:      serverCAs,
+		})
+		grpc, err := grpc.Dial(h.cfg.WalletGRPCHost,
+			grpc.WithTransportCredentials(creds))
+		if err != nil {
+			return fmt.Errorf("unable to establish wallet "+
+				"grpc connection: %v", err)
+		}
+
+		// Perform a Balance request to check connectivity and account
+		// existence.
+		walletConn := walletrpc.NewWalletServiceClient(grpc)
+		req := &walletrpc.BalanceRequest{
+			AccountNumber:         h.cfg.WalletAccount,
+			RequiredConfirmations: 1,
+		}
+		_, err = walletConn.Balance(ctx, req)
+		if err != nil {
+			return err
+		}
+
+		h.walletConn = walletConn
+		h.walletClose = grpc.Close
+
+		confNotifs, err := walletConn.ConfirmationNotifications(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to create confirmation "+
+				"notification client: %v", err)
+		}
+
+		h.notifClient = confNotifs
+	}
+
+	return nil
 }
 
 // submitWork sends solved block data to the consensus daemon for evaluation.
@@ -497,8 +573,8 @@ func (h *Hub) processWork(headerE string) {
 	h.endpoint.clientsMtx.Unlock()
 }
 
-// CreateNotificationHandlers returns handlers for block and work notifications.
-func (h *Hub) CreateNotificationHandlers() *rpcclient.NotificationHandlers {
+// createNotificationHandlers returns handlers for block and work notifications.
+func (h *Hub) createNotificationHandlers() *rpcclient.NotificationHandlers {
 	return &rpcclient.NotificationHandlers{
 		OnBlockConnected: func(headerB []byte, transactions [][]byte) {
 			h.chainState.connCh <- &blockNotification{
