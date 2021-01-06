@@ -328,6 +328,25 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				continue
 			}
 
+			// Update accepted work as confirmed mined.
+			work.Confirmed = true
+			err = cs.cfg.db.updateAcceptedWork(work)
+			if err != nil {
+				// Errors generated updating work state indicate an underlying
+				// issue accessing the database. The chainstate process will
+				// be terminated as a result.
+				log.Errorf("unable to confirm accepted work for block "+
+					"%s: %v", header.PrevBlock.String(), err)
+				close(msg.Done)
+				cs.cfg.Cancel()
+				continue
+			}
+			log.Infof("Mined work %s confirmed by connected block #%d",
+				header.PrevBlock.String(), header.Height)
+
+			// Signal the gui cache of the confirmed mined work.
+			cs.cfg.SignalCache(Confirmed)
+
 			if !cs.cfg.SoloPool {
 				count, err := cs.cfg.db.pendingPaymentsForBlockHash(parentHash)
 				if err != nil {
@@ -369,30 +388,11 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					// Errors generated creating payments are fatal since it is
 					// required to distribute payments to participating miners.
 					// The chainstate process will be terminated as a result.
-					log.Errorf("unable to generate payments: %v", err)
+					log.Error(err)
 					close(msg.Done)
 					cs.cfg.Cancel()
 					continue
 				}
-
-				// Update accepted work as confirmed mined.
-				work.Confirmed = true
-				err = cs.cfg.db.updateAcceptedWork(work)
-				if err != nil {
-					// Errors generated updating work state indicate an underlying
-					// issue accessing the database. The chainstate process will
-					// be terminated as a result.
-					log.Errorf("unable to confirm accepted work for block "+
-						"%s: %v", header.PrevBlock.String(), err)
-					close(msg.Done)
-					cs.cfg.Cancel()
-					continue
-				}
-				log.Infof("Mined work %s confirmed by connected block #%d",
-					header.PrevBlock.String(), header.Height)
-
-				// Signal the gui cache of the confirmed mined work.
-				cs.cfg.SignalCache(Confirmed)
 			}
 
 			close(msg.Done)
