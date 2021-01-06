@@ -431,6 +431,33 @@ func loadConfig() (*config, []string, error) {
 		}
 	}
 
+	if cfg.Pool == "" {
+		str := "%s: the pool address cannot be an empty string"
+		err := fmt.Errorf(str, funcName)
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
+	}
+
+	// Check the pool addres is a valid address.
+	_, poolPort, err := net.SplitHostPort(cfg.Pool)
+	if err != nil {
+		str := "%s: invalid pool address, %s"
+		err := fmt.Errorf(str, funcName, err)
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
+	}
+
+	// Finally, check the pool port is in range.
+	if port, _ := strconv.Atoi(poolPort); port < 1024 || port > 65535 {
+		str := "%s: profile: address %s: port must be between 1024 and 65535"
+		err := fmt.Errorf(str, funcName, cfg.Profile)
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
+	}
+
 	availableCPUs := runtime.NumCPU()
 	if cfg.MaxProcs < 1 || cfg.MaxProcs > availableCPUs {
 		log.Warnf("%d is not a valid value for MaxProcs. Defaulting to %d.", cfg.MaxProcs, availableCPUs)

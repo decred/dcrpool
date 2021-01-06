@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,8 +21,7 @@ func main() {
 	// and configures it accordingly.
 	cfg, _, err := loadConfig()
 	if err != nil {
-		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	runtime.GOMAXPROCS(cfg.MaxProcs)
@@ -34,14 +32,14 @@ func main() {
 		}
 	}()
 
+	// Initialize and run the client.
+	ctx, cancel := context.WithCancel(context.Background())
+	miner := NewMiner(cfg, cancel)
+
 	log.Infof("Version: %s", version())
 	log.Infof("Runtime: Go version %s", runtime.Version())
 	log.Infof("Home dir: %s", cfg.HomeDir)
 	log.Infof("Started miner.")
-
-	// Initialize and run the client.
-	ctx, cancel := context.WithCancel(context.Background())
-	miner := NewMiner(cfg, cancel)
 
 	if cfg.Profile != "" {
 		// Start the profiler.

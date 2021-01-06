@@ -125,6 +125,7 @@ func (m *Miner) keepAlive(ctx context.Context) {
 			poolAddr := strings.Replace(m.config.Pool, "stratum+tcp", "", 1)
 			conn, err := net.Dial("tcp", poolAddr)
 			if err != nil {
+				log.Errorf("unable to connect to %s: %v", m.config.Pool, err)
 				continue
 			}
 
@@ -147,7 +148,7 @@ func (m *Miner) keepAlive(ctx context.Context) {
 			m.connected = true
 			m.connectedMtx.Unlock()
 
-			log.Debugf("miner reconnected to %s", poolAddr)
+			log.Debugf("miner connected to %s", poolAddr)
 		}
 	}
 }
@@ -214,7 +215,10 @@ func (m *Miner) process(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			m.conn.Close()
+			if m.conn != nil {
+				m.conn.Close()
+			}
+
 			m.wg.Done()
 			return
 
@@ -246,15 +250,15 @@ func (m *Miner) process(ctx context.Context) {
 
 				switch method {
 				case pool.Authorize:
-					status, errStr, err := pool.ParseAuthorizeResponse(resp)
+					status, sErr, err := pool.ParseAuthorizeResponse(resp)
 					if err != nil {
 						log.Errorf("parse authorize response error: %v", err)
 						m.cancel()
 						continue
 					}
 
-					if errStr != nil {
-						log.Errorf("authorize error: %s", errStr)
+					if sErr != nil {
+						log.Errorf("authorize error: %v", sErr)
 						m.cancel()
 						continue
 					}
@@ -301,8 +305,7 @@ func (m *Miner) process(ctx context.Context) {
 					}
 
 					if sErr != nil {
-						log.Errorf("stratum mining.submit error: [%d, %s, %s]",
-							sErr.Code, sErr.Message, sErr.Traceback)
+						log.Errorf("mining.submit error: %v", sErr)
 						continue
 					}
 
