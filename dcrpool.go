@@ -6,10 +6,7 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/big"
 	"net/http"
@@ -18,17 +15,13 @@ import (
 	"os/signal"
 	"runtime"
 
-	"decred.org/dcrwallet/rpc/walletrpc"
 	"github.com/decred/dcrd/rpcclient/v6"
 	"github.com/decred/dcrpool/gui"
 	"github.com/decred/dcrpool/pool"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
-// miningPool represents a decred Proof-of-Work mining pool.
+// miningPool represents a decred proof-of-Work mining pool.
 type miningPool struct {
-	cfg    *config
 	ctx    context.Context
 	cancel context.CancelFunc
 	hub    *pool.Hub
@@ -38,7 +31,6 @@ type miningPool struct {
 // newPool initializes the mining pool.
 func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 	p := new(miningPool)
-	p.cfg = cfg
 	dcrdRPCCfg := &rpcclient.ConnConfig{
 		Host:         cfg.DcrdRPCHost,
 		Endpoint:     "ws",
@@ -53,6 +45,11 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 
 	hcfg := &pool.HubConfig{
 		DB:                    db,
+		NodeRPCConfig:         dcrdRPCCfg,
+		WalletRPCCert:         cfg.WalletRPCCert,
+		WalletTLSCert:         cfg.WalletTLSCert,
+		WalletTLSKey:          cfg.WalletTLSKey,
+		WalletGRPCHost:        cfg.WalletGRPCHost,
 		ActiveNet:             cfg.net.Params,
 		PoolFee:               cfg.PoolFee,
 		MaxGenTime:            cfg.MaxGenTime,
@@ -73,73 +70,12 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 	var err error
 	p.hub, err = pool.NewHub(p.cancel, hcfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize hub: %v", err)
+		return nil, fmt.Errorf("unable to initialize hub: %v", err)
 	}
 
-	// Establish a connection to the mining node.
-	ntfnHandlers := p.hub.CreateNotificationHandlers()
-	nodeConn, err := rpcclient.New(dcrdRPCCfg, ntfnHandlers)
+	err = p.hub.Connect(p.ctx)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := nodeConn.NotifyWork(p.ctx); err != nil {
-		nodeConn.Shutdown()
-		return nil, err
-	}
-	if err := nodeConn.NotifyBlocks(p.ctx); err != nil {
-		nodeConn.Shutdown()
-		return nil, err
-	}
-
-	p.hub.SetNodeConnection(nodeConn)
-
-	// Establish a connection to the wallet if the pool is mining as a
-	// publicly available mining pool.
-	if !cfg.SoloPool {
-		serverCAs := x509.NewCertPool()
-		serverCert, err := ioutil.ReadFile(cfg.WalletRPCCert)
-		if err != nil {
-			return nil, err
-		}
-		if !serverCAs.AppendCertsFromPEM(serverCert) {
-			return nil, fmt.Errorf("no certificates found in %s",
-				cfg.WalletRPCCert)
-		}
-		keypair, err := tls.LoadX509KeyPair(cfg.WalletTLSCert, cfg.WalletTLSKey)
-		if err != nil {
-			return nil, fmt.Errorf("unable to read keypair: %v", err)
-		}
-		creds := credentials.NewTLS(&tls.Config{
-			Certificates: []tls.Certificate{keypair},
-			RootCAs:      serverCAs,
-		})
-		grpc, err := grpc.Dial(cfg.WalletGRPCHost,
-			grpc.WithTransportCredentials(creds))
-		if err != nil {
-			return nil, err
-		}
-
-		// Perform a Balance request to check connectivity and account
-		// existence.
-		walletConn := walletrpc.NewWalletServiceClient(grpc)
-		req := &walletrpc.BalanceRequest{
-			AccountNumber:         cfg.WalletAccount,
-			RequiredConfirmations: 1,
-		}
-		_, err = walletConn.Balance(p.ctx, req)
-		if err != nil {
-			return nil, err
-		}
-
-		p.hub.SetWalletConnection(walletConn, grpc.Close)
-
-		confNotifs, err := walletConn.ConfirmationNotifications(p.ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		p.hub.SetTxConfNotifClient(confNotifs)
+		return nil, fmt.Errorf("unable to establish node connections: %v", err)
 	}
 
 	err = p.hub.FetchWork(p.ctx)
