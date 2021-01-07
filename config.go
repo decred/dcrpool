@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 The Decred developers
+// Copyright (c) 2019-2021 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -88,6 +88,7 @@ var runServiceCommand func(string) error
 
 // config defines the configuration options for the pool.
 type config struct {
+	ShowVersion           bool          `long:"version" description:"Display version information and exit."`
 	HomeDir               string        `long:"homedir" ini-name:"homedir" description:"Path to application home directory."`
 	ConfigFile            string        `long:"configfile" ini-name:"configfile" description:"Path to configuration file."`
 	DataDir               string        `long:"datadir" ini-name:"datadir" description:"The data directory."`
@@ -403,6 +404,14 @@ func loadConfig() (*config, []string, error) {
 	}
 
 	appName := filepath.Base(os.Args[0])
+
+	// Show the version and exit if the version flag was specified.
+	if preCfg.ShowVersion {
+		fmt.Printf("%s version %s (Go version %s %s/%s)\n", appName,
+			version(), runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		os.Exit(0)
+	}
+
 	appName = strings.TrimSuffix(appName, filepath.Ext(appName))
 	usageMessage := fmt.Sprintf("Use %s -h to show usage", appName)
 
