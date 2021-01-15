@@ -233,7 +233,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					// indicate an underlying issue accessing the
 					// database. The chainstate process will be
 					// terminated as a result.
-					log.Errorf("unable to prune hash rate: %v", err)
+					log.Errorf("unable to prune hash data: %v", err)
 					close(msg.Done)
 					cs.cfg.Cancel()
 					continue
@@ -291,7 +291,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				continue
 			}
 
-			// Signal the gui cache of the paid dividends.
+			// Signal the gui cache of paid dividends.
 			cs.cfg.SignalCache(DividendsPaid)
 
 			// Check if the parent of the connected block is an accepted work

@@ -132,23 +132,18 @@ func (m *Miner) keepAlive(ctx context.Context) {
 			m.conn = conn
 			m.encoder = json.NewEncoder(m.conn)
 			m.reader = bufio.NewReader(m.conn)
-			err = m.subscribe()
-			if err != nil {
-				log.Errorf("unable to subscribe miner: %v", err)
-				continue
-			}
 
-			err = m.authenticate()
-			if err != nil {
-				log.Errorf("unable to authenticate miner: %v", err)
-				continue
-			}
+			log.Debugf("miner connected to %s", poolAddr)
 
 			m.connectedMtx.Lock()
 			m.connected = true
 			m.connectedMtx.Unlock()
 
-			log.Debugf("miner connected to %s", poolAddr)
+			err = m.subscribe()
+			if err != nil {
+				log.Errorf("unable to subscribe miner: %v", err)
+				continue
+			}
 		}
 	}
 }
@@ -264,12 +259,13 @@ func (m *Miner) process(ctx context.Context) {
 					}
 
 					if !status {
-						log.Error("unable to authorize request for miner")
+						log.Error("authorization request failed for miner")
 						m.cancel()
 						continue
 					}
 
 					m.authorized = true
+
 					log.Trace("Miner successfully authorized.")
 
 				case pool.Subscribe:
@@ -288,6 +284,14 @@ func (m *Miner) process(ctx context.Context) {
 					m.extraNonce2Size = extraNonce2Size
 					m.notifyID = notifyID
 					m.subscribed = true
+
+					err = m.authenticate()
+					if err != nil {
+						log.Errorf("unable to authenticate miner: %v", err)
+						m.cancel()
+						continue
+					}
+
 					log.Trace("Miner successfully subscribed.")
 
 				case pool.Submit:
