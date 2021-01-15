@@ -131,8 +131,8 @@ func main() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	// Load configuration and parse command line. This also initializes logging
-	// and configures it accordingly.
+	// Load configuration and parse command line. This also initializes
+	// logging and configures it accordingly.
 	cfg, _, err := loadConfig()
 	if err != nil {
 		os.Exit(1)

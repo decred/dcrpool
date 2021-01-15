@@ -124,7 +124,7 @@ type HubConfig struct {
 	DB Database
 	// NodeRPCConfig represents the mining node's RPC configuration details.
 	NodeRPCConfig *rpcclient.ConnConfig
-	// WalletRPPCCert represents the wallet's RPC certificate.
+	// WalletRPCCert represents the wallet's RPC certificate.
 	WalletRPCCert string
 	// WalletTLSCert represents the wallet client's TLS certificate.
 	WalletTLSCert string
@@ -716,7 +716,7 @@ func (h *Hub) FetchWorkQuotas() ([]*Quota, error) {
 func (h *Hub) AccountExists(accountID string) bool {
 	_, err := h.cfg.DB.fetchAccount(accountID)
 	if err != nil {
-		log.Tracef("Unable to fetch account for id: %s", accountID)
+		log.Tracef("unable to fetch account for id: %s", accountID)
 		return false
 	}
 	return true
