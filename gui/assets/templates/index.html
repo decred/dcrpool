@@ -47,9 +47,7 @@
 </div>
 
 <div class="container">
-
     <div class="row">
-
         <div class="col-12">
             <div class="main-carousel">
                 <div class="carousel-cell">
@@ -60,24 +58,26 @@
                         </div>
                         <div class="carousel-text col-lg-8 col-12 px-4">
                             <h2>Identify the Miner</h2>
-                            <p>{{.HeaderData.Designation}} pool currently supports the miners and firmwares listed
-                                below:</p>
+                            <p> The pool currently supports the miners and their associated linked firmwares listed
+                                below:
+                            </p>
                             <div class="d-flex flex-row">
                                 <ul>
-                                    <li>Innosilicon&nbsp;D9: <a
-                                            href="http://www.innosilicon.com.cn/download/d9_20190521_071217.swu">d9_20190521_071217.swu</a>
+                                    <li>
+                                        <a
+                                            href="http://www.innosilicon.com.cn/download/d9_20190521_071217.swu">Innosilicon&nbsp;D9</a>
                                     </li>
-                                    <li>Antminer&nbsp;DR3: <a
-                                            href="https://file12.bitmain.com/shop-product/firmware/Antminer%20DR3/Firmware/007201907271437364778LxDsS1k06AF/Antminer-DR3-201907161805-410M.tar.gz">Antminer-DR3-201907161805-410M.tar.gz</a>
+                                    <li><a
+                                            href="https://file12.bitmain.com/shop-product/firmware/Antminer%20DR3/Firmware/007201907271437364778LxDsS1k06AF/Antminer-DR3-201907161805-410M.tar.gz">Antminer&nbsp;DR3</a>
                                     </li>
-                                    <li>Obelisk&nbsp;DCR1: <a
-                                            href="https://mining.obelisk.tech/downloads/firmware/obelisk-sc1-v1.3.2.img">obelisk-sc1-v1.3.2.img</a>
+                                    <li><a
+                                            href="https://mining.obelisk.tech/downloads/firmware/obelisk-sc1-v1.3.2.img">Obelisk&nbsp;DCR1</a>
                                     </li>
-                                    <li>Antminer&nbsp;DR5: <a
-                                            href="https://file12.bitmain.com/shop-product/firmware/Antminer%20DR5/Firmware/00720190727142534231Ato7d2300650/Antminer-DR5-201907161801-600M.tar.gz">Antminer-DR5-201907161801-600M.tar.gz</a>
+                                    <li><a
+                                            href="https://file12.bitmain.com/shop-product/firmware/Antminer%20DR5/Firmware/00720190727142534231Ato7d2300650/Antminer-DR5-201907161801-600M.tar.gz">Antminer&nbsp;DR5</a>
                                     </li>
-                                    <li>Whatsminer&nbsp;D1: <a
-                                            href="https://github.com/decred/dcrpool/files/5651882/upgrade-whatsminer-h6-20190404.18.zip">upgrade-whatsminer-h6-20190404.18.zip</a>
+                                    <li><a
+                                            href="https://github.com/decred/dcrpool/files/5651882/upgrade-whatsminer-h6-20190404.18.zip">Whatsminer&nbsp;D1</a>
                                     </li>
                                 </ul>
                             </div>
@@ -92,7 +92,7 @@
                         </div>
                         <div class="carousel-text col-lg-8 col-12 px-4">
                             <h2>Connect the Miner</h2>
-                            <p>To connect, set the pool URL to <span class="config">'localhost'</span>, and the miner
+                            <p>To connect, set the pool URL to <span class="config">'{{.Address}}'</span>, and the miner
                                 port to <span class="config">{{.MinerPort}}</span></p>
                             <p>The username of the miner should be the payment address for receiving rewards and a
                                 unique name identifying the client, formatted as <span
