@@ -264,11 +264,11 @@ func (c *Cache) getClientsForAccount(first, last int, accountID string) (int, []
 	clients := c.clients[accountID]
 	count := len(clients)
 	if count == 0 {
-		return count, clients[0:0], nil
+		return count, []*client{}, nil
 	}
 
 	if first >= count {
-		return 0, clients[0:0], fmt.Errorf("requested clients for account "+
+		return 0, []*client{}, fmt.Errorf("requested clients for account "+
 			"is out of range. maximum %d, requested %d", count, first)
 	}
 
@@ -390,11 +390,11 @@ func (c *Cache) getArchivedPayments(first, last int, accountID string) (int, []*
 	archivedPmts := c.archivedPayments[accountID]
 	count := len(archivedPmts)
 	if count == 0 {
-		return count, archivedPmts[0:0], nil
+		return count, []*archivedPayment{}, nil
 	}
 
 	if first >= count {
-		return 0, archivedPmts[0:0], fmt.Errorf("requested archived "+
+		return 0, []*archivedPayment{}, fmt.Errorf("requested archived "+
 			"payments by account is out of range. maximum %d, "+
 			"requested %d", count, first)
 	}

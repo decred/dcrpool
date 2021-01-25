@@ -38,6 +38,11 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 	// time, but the GUI doesn't use them yet.
 	lastPaymentHeight, _, _ := ui.cache.getLastPaymentInfo()
 
+	address := `127.0.0.1`
+	if ui.cfg.Domain != "" {
+		address = ui.cfg.Domain
+	}
+
 	data := indexPageData{
 		HeaderData: headerData{
 			CSRF:        csrf.TemplateField(r),
@@ -57,6 +62,7 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 		MinedWork:    confirmedWork,
 		MinerPort:    ui.cfg.MinerPort,
 		ModalError:   modalError,
+		Address:      address,
 	}
 
 	ui.renderTemplate(w, "index", data)
