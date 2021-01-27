@@ -234,7 +234,7 @@ func testHub(t *testing.T) {
 		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
 		MaxConnectionsPerHost: 10,
 		NonceIterations:       iterations,
-		MinerPort:             5050,
+		MinerListen:           "127.0.0.1:5050",
 		WalletAccount:         69,
 		MonitorCycle:          time.Minute,
 		MaxUpgradeTries:       5,

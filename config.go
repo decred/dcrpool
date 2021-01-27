@@ -45,10 +45,12 @@ const (
 	defaultPoolFee               = 0.01
 	defaultLastNPeriod           = time.Hour * 24
 	defaultSoloPool              = false
-	defaultGUIPort               = 8080
+	defaultGUIPort               = "8080"
+	defaultGUIListen             = "0.0.0.0"
 	defaultGUIDir                = "gui"
 	defaultUseLEHTTPS            = false
-	defaultMinerPort             = 5550
+	defaultMinerPort             = "5550"
+	defaultMinerListen           = "0.0.0.0"
 	defaultDesignation           = "YourPoolNameHere"
 	defaultMaxConnectionsPerHost = 100 // 100 connected clients per host
 	defaultWalletAccount         = 0
@@ -94,7 +96,7 @@ type config struct {
 	ConfigFile            string        `long:"configfile" ini-name:"configfile" description:"Path to configuration file."`
 	DataDir               string        `long:"datadir" ini-name:"datadir" description:"The data directory."`
 	ActiveNet             string        `long:"activenet" ini-name:"activenet" description:"The active network being mined on. {testnet3, mainnet, simnet}"`
-	GUIPort               uint32        `long:"guiport" ini-name:"guiport" description:"The pool GUI port."`
+	GUIListen             string        `long:"guilisten" ini-name:"guilisten" description:"The address:port for pool GUI listening."`
 	DebugLevel            string        `long:"debuglevel" ini-name:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir                string        `long:"logdir" ini-name:"logdir" description:"Directory to log output."`
 	DBFile                string        `long:"dbfile" ini-name:"dbfile" description:"Path to the database file."`
@@ -125,7 +127,7 @@ type config struct {
 	Designation           string        `long:"designation" ini-name:"designation" description:"The designated codename for this pool. Customises the logo in the top toolbar."`
 	MaxConnectionsPerHost uint32        `long:"maxconnperhost" ini-name:"maxconnperhost" description:"The maximum number of connections allowed per host."`
 	Profile               string        `long:"profile" ini-name:"profile" description:"Enable HTTP profiling on given [addr:]port -- NOTE port must be between 1024 and 65536"`
-	MinerPort             uint32        `long:"minerport" ini-name:"minerport" description:"Miner connection port."`
+	MinerListen           string        `long:"minerlisten" ini-name:"minerlisten" description:"The address:port for miner connections."`
 	CoinbaseConfTimeout   time.Duration `long:"conftimeout" ini-name:"conftimeout" description:"The duration to wait for coinbase confirmations."`
 	GenCertsOnly          bool          `long:"gencertsonly" ini-name:"gencertsonly" description:"Only generate needed TLS key pairs and terminate."`
 	UsePostgres           bool          `long:"postgres" ini-name:"postgres" description:"Use postgres database instead of bolt."`
@@ -355,7 +357,7 @@ func loadConfig() (*config, []string, error) {
 		PaymentMethod:         defaultPaymentMethod,
 		LastNPeriod:           defaultLastNPeriod,
 		SoloPool:              defaultSoloPool,
-		GUIPort:               defaultGUIPort,
+		GUIListen:             defaultGUIListen,
 		GUIDir:                defaultGUIDir,
 		UseLEHTTPS:            defaultUseLEHTTPS,
 		TLSCert:               defaultTLSCertFile,
@@ -364,7 +366,7 @@ func loadConfig() (*config, []string, error) {
 		WalletTLSKey:          defaultWalletTLSKeyFile,
 		Designation:           defaultDesignation,
 		MaxConnectionsPerHost: defaultMaxConnectionsPerHost,
-		MinerPort:             defaultMinerPort,
+		MinerListen:           defaultMinerListen,
 		WalletAccount:         defaultWalletAccount,
 		CoinbaseConfTimeout:   defaultCoinbaseConfTimeout,
 		UsePostgres:           defaultUsePostgres,
@@ -643,6 +645,9 @@ func loadConfig() (*config, []string, error) {
 	// Add default ports for the active network if there are no ports specified.
 	cfg.DcrdRPCHost = normalizeAddress(cfg.DcrdRPCHost, cfg.net.DcrdRPCServerPort)
 	cfg.WalletGRPCHost = normalizeAddress(cfg.WalletGRPCHost, cfg.net.WalletGRPCServerPort)
+
+	cfg.MinerListen = normalizeAddress(cfg.MinerListen, defaultMinerPort)
+	cfg.GUIListen = normalizeAddress(cfg.GUIListen, defaultGUIPort)
 
 	if !cfg.SoloPool {
 		// Ensure a valid payment method is set.

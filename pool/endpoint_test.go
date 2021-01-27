@@ -3,7 +3,6 @@ package pool
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"net"
@@ -75,8 +74,7 @@ func testEndpoint(t *testing.T) {
 		MonitorCycle:    time.Minute,
 		MaxUpgradeTries: 5,
 	}
-	port := uint32(3030)
-	endpoint, err := NewEndpoint(eCfg, port)
+	endpoint, err := NewEndpoint(eCfg, "0.0.0.0:3030")
 	if err != nil {
 		t.Fatalf("[NewEndpoint] unexpected error: %v", err)
 	}
@@ -86,8 +84,7 @@ func testEndpoint(t *testing.T) {
 	go endpoint.run(ctx)
 	time.Sleep(time.Millisecond * 100)
 
-	laddr, err := net.ResolveTCPAddr("tcp",
-		fmt.Sprintf("%s:%d", "127.0.0.1", port+1))
+	laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:3031")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -219,8 +216,7 @@ func testEndpoint(t *testing.T) {
 	}
 
 	// Ensure the endpoint listener can create connections.
-	ep, err := net.ResolveTCPAddr("tcp",
-		fmt.Sprintf("%s:%d", "127.0.0.1", port))
+	ep, err := net.ResolveTCPAddr("tcp", "127.0.0.1:3030")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

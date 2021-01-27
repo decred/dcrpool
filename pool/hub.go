@@ -152,8 +152,8 @@ type HubConfig struct {
 	AdminPass string
 	// NonceIterations returns the possible header nonce iterations.
 	NonceIterations float64
-	// MinerPort represents the miner connection port for the pool.
-	MinerPort uint32
+	// MinerListen represents the listening address for miner connections.
+	MinerListen string
 	// MaxConnectionsPerHost represents the maximum number of connections
 	// allowed per host.
 	MaxConnectionsPerHost uint32
@@ -329,7 +329,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		MaxUpgradeTries:       h.cfg.MaxUpgradeTries,
 	}
 
-	h.endpoint, err = NewEndpoint(eCfg, h.cfg.MinerPort)
+	h.endpoint, err = NewEndpoint(eCfg, h.cfg.MinerListen)
 	if err != nil {
 		return nil, err
 	}

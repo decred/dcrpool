@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"html/template"
 	"net/http"
 	"os"
@@ -40,8 +39,8 @@ type Config struct {
 	CSRFSecret []byte
 	// AdminPass represents the admin password.
 	AdminPass string
-	// GUIPort represents the port the frontend is served on.
-	GUIPort uint32
+	// GUIListen represents the listening address the frontend is served on.
+	GUIListen string
 	// TLSCertFile represents the TLS certificate file path.
 	TLSCertFile string
 	// TLSKeyFile represents the TLS key file path.
@@ -60,8 +59,8 @@ type Config struct {
 	Designation string
 	// PoolFee represents the fee charged to participating accounts of the pool.
 	PoolFee float64
-	// MinerPort represents the miner connection port for the pool.
-	MinerPort uint32
+	// MinerListen represents the listening address for miner connections.
+	MinerListen string
 	// WithinLimit returns if a client is within its request limits.
 	WithinLimit func(string, int) bool
 	// FetchLastWorkHeight returns the last work height of the pool.
@@ -282,12 +281,12 @@ func (ui *GUI) Run(ctx context.Context) {
 				log.Error(err)
 			}
 		case ui.cfg.NoGuiTLS:
-			log.Infof("Starting GUI server on port %d (http)", ui.cfg.GUIPort)
+			log.Infof("Starting GUI server on %s (http)", ui.cfg.GUIListen)
 			ui.server = &http.Server{
 				WriteTimeout: time.Second * 30,
 				ReadTimeout:  time.Second * 30,
 				IdleTimeout:  time.Second * 30,
-				Addr:         fmt.Sprintf("0.0.0.0:%v", ui.cfg.GUIPort),
+				Addr:         ui.cfg.GUIListen,
 				Handler:      ui.router,
 			}
 
@@ -296,12 +295,12 @@ func (ui *GUI) Run(ctx context.Context) {
 				log.Error(err)
 			}
 		default:
-			log.Infof("Starting GUI server on port %d (https)", ui.cfg.GUIPort)
+			log.Infof("Starting GUI server on %s (https)", ui.cfg.GUIListen)
 			ui.server = &http.Server{
 				WriteTimeout: time.Second * 30,
 				ReadTimeout:  time.Second * 30,
 				IdleTimeout:  time.Second * 30,
-				Addr:         fmt.Sprintf("0.0.0.0:%v", ui.cfg.GUIPort),
+				Addr:         ui.cfg.GUIListen,
 				Handler:      ui.router,
 			}
 
