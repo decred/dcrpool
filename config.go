@@ -35,8 +35,8 @@ const (
 	defaultLogDirname            = "log"
 	defaultLogFilename           = "dcrpool.log"
 	defaultDBFilename            = "dcrpool.kv"
-	defaultTLSCertFilename       = "dcrpool.cert"
-	defaultTLSKeyFilename        = "dcrpool.key"
+	defaultGuiTLSCertFilename    = "dcrpool.cert"
+	defaultGuiTLSKeyFilename     = "dcrpool.key"
 	defaultWalletTLSCertFilename = "wallet.cert"
 	defaultWalletTLSKeyFilename  = "wallet.key"
 	defaultDcrdRPCHost           = "127.0.0.1"
@@ -77,8 +77,8 @@ var (
 
 	// This keypair is solely for enabling HTTPS connections to the pool's
 	// web interface.
-	defaultTLSCertFile = filepath.Join(dcrpoolHomeDir, defaultTLSCertFilename)
-	defaultTLSKeyFile  = filepath.Join(dcrpoolHomeDir, defaultTLSKeyFilename)
+	defaultGuiTLSCertFile = filepath.Join(dcrpoolHomeDir, defaultGuiTLSCertFilename)
+	defaultGuiTLSKeyFile  = filepath.Join(dcrpoolHomeDir, defaultGuiTLSKeyFilename)
 
 	// This keypair is solely for client authentication to the wallet.
 	defaultWalletTLSCertFile = filepath.Join(dcrpoolHomeDir, defaultWalletTLSCertFilename)
@@ -120,8 +120,8 @@ type config struct {
 	GUIDir                string        `long:"guidir" ini-name:"guidir" description:"The path to the directory containing the pool's user interface assets (templates, css etc.)"`
 	Domain                string        `long:"domain" ini-name:"domain" description:"The domain of the mining pool, required for TLS."`
 	UseLEHTTPS            bool          `long:"uselehttps" ini-name:"uselehttps" description:"This enables HTTPS using a Letsencrypt certificate. By default the pool uses a self-signed certificate for HTTPS."`
-	TLSCert               string        `long:"tlscert" ini-name:"tlscert" description:"Path to the TLS cert file."`
-	TLSKey                string        `long:"tlskey" ini-name:"tlskey" description:"Path to the TLS key file."`
+	GuiTLSCert            string        `long:"tlscert" ini-name:"tlscert" description:"Path to the TLS cert file (for running GUI on https)."`
+	GuiTLSKey             string        `long:"tlskey" ini-name:"tlskey" description:"Path to the TLS key file (for running GUI on https)."`
 	WalletTLSCert         string        `long:"wallettlscert" ini-name:"wallettlscert" description:"Path to the wallet client TLS cert file."`
 	WalletTLSKey          string        `long:"wallettlskey" ini-name:"wallettlskey" description:"Path to the wallet client TLS key file."`
 	Designation           string        `long:"designation" ini-name:"designation" description:"The designated codename for this pool. Customises the logo in the top toolbar."`
@@ -360,8 +360,8 @@ func loadConfig() (*config, []string, error) {
 		GUIListen:             defaultGUIListen,
 		GUIDir:                defaultGUIDir,
 		UseLEHTTPS:            defaultUseLEHTTPS,
-		TLSCert:               defaultTLSCertFile,
-		TLSKey:                defaultTLSKeyFile,
+		GuiTLSCert:            defaultGuiTLSCertFile,
+		GuiTLSKey:             defaultGuiTLSKeyFile,
 		WalletTLSCert:         defaultWalletTLSCertFile,
 		WalletTLSKey:          defaultWalletTLSKeyFile,
 		Designation:           defaultDesignation,
@@ -460,15 +460,15 @@ func loadConfig() (*config, []string, error) {
 		} else {
 			cfg.DBFile = preCfg.DBFile
 		}
-		if preCfg.TLSCert == defaultTLSCertFile {
-			cfg.TLSCert = filepath.Join(cfg.HomeDir, defaultTLSCertFilename)
+		if preCfg.GuiTLSCert == defaultGuiTLSCertFile {
+			cfg.GuiTLSCert = filepath.Join(cfg.HomeDir, defaultGuiTLSCertFilename)
 		} else {
-			cfg.TLSCert = preCfg.TLSCert
+			cfg.GuiTLSCert = preCfg.GuiTLSCert
 		}
-		if preCfg.TLSKey == defaultTLSKeyFile {
-			cfg.TLSKey = filepath.Join(cfg.HomeDir, defaultTLSKeyFilename)
+		if preCfg.GuiTLSKey == defaultGuiTLSKeyFile {
+			cfg.GuiTLSKey = filepath.Join(cfg.HomeDir, defaultGuiTLSKeyFilename)
 		} else {
-			cfg.TLSKey = preCfg.TLSKey
+			cfg.GuiTLSKey = preCfg.GuiTLSKey
 		}
 		if preCfg.WalletTLSCert == defaultWalletTLSCertFile {
 			cfg.WalletTLSCert = filepath.Join(cfg.HomeDir,
@@ -750,8 +750,8 @@ func loadConfig() (*config, []string, error) {
 	// Generate self-signed TLS cert and key if they do not already exist. This
 	// keypair is solely for enabling HTTPS connections to the pool's
 	// web interface.
-	if !cfg.UseLEHTTPS && (!fileExists(cfg.TLSCert) || !fileExists(cfg.TLSKey)) {
-		err := genCertPair(cfg.TLSCert, cfg.TLSKey)
+	if !cfg.UseLEHTTPS && (!fileExists(cfg.GuiTLSCert) || !fileExists(cfg.GuiTLSKey)) {
+		err := genCertPair(cfg.GuiTLSCert, cfg.GuiTLSKey)
 		if err != nil {
 			str := "%s: unable to generate dcrpool's TLS cert/key: %v"
 			err := fmt.Errorf(str, funcName, err)
