@@ -61,6 +61,7 @@ const (
 	defaultPGDBName              = "dcrpooldb"
 	defaultMonitorCycle          = time.Minute * 2
 	defaultMaxUpgradeTries       = 10
+	defaultNoGuiTLS              = false
 )
 
 var (
@@ -136,6 +137,7 @@ type config struct {
 	PurgeDB               bool          `long:"purgedb" ini-name:"purgedb" description:"Wipes all existing data on startup for a postgres backend. This intended for simnet testing purposes only."`
 	MonitorCycle          time.Duration `long:"monitorcycle" ini-name:"monitorcycle" description:"Time spent monitoring a mining client for possible upgrades."`
 	MaxUpgradeTries       uint32        `long:"maxupgradetries" ini-name:"maxupgradetries" description:"Maximum consecuctive miner monitoring and upgrade tries."`
+	NoGuiTLS              bool          `long:"noguitls" ini-name:"noguitls" description:"Disable TLS on GUI endpoint (eg. for reverse proxy with a dedicated webserver)."`
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
 	net                   *params
@@ -373,6 +375,7 @@ func loadConfig() (*config, []string, error) {
 		PGDBName:              defaultPGDBName,
 		MonitorCycle:          defaultMonitorCycle,
 		MaxUpgradeTries:       defaultMaxUpgradeTries,
+		NoGuiTLS:              defaultNoGuiTLS,
 	}
 
 	// Service options which are only added on Windows.
@@ -721,6 +724,13 @@ func loadConfig() (*config, []string, error) {
 	// options. Note this should go directly before the return.
 	if configFileError != nil {
 		mpLog.Warnf("%v", configFileError)
+	}
+
+	if cfg.NoGuiTLS && cfg.UseLEHTTPS {
+		err := fmt.Errorf("only one of uselehttps and noguitls can be specified")
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
 	}
 
 	// Ensure a domain is set if HTTPS via letsencrypt is preferred.

@@ -94,6 +94,7 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 		AdminPass:             cfg.AdminPass,
 		GUIPort:               cfg.GUIPort,
 		UseLEHTTPS:            cfg.UseLEHTTPS,
+		NoGuiTLS:              cfg.NoGuiTLS,
 		Domain:                cfg.Domain,
 		TLSCertFile:           cfg.TLSCert,
 		TLSKeyFile:            cfg.TLSKey,

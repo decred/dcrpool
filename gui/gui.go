@@ -48,6 +48,8 @@ type Config struct {
 	TLSKeyFile string
 	// UseLEHTTPS represents Letsencrypt HTTPS mode.
 	UseLEHTTPS bool
+	// NoGuiTLS starts the webserver listening for plain HTTP.
+	NoGuiTLS bool
 	// Domain represents the domain name of the pool.
 	Domain string
 	// ActiveNet represents the active network being mined on.
@@ -247,24 +249,8 @@ func (ui *GUI) loadTemplates() error {
 // Run starts the user interface.
 func (ui *GUI) Run(ctx context.Context) {
 	go func() {
-		if !ui.cfg.UseLEHTTPS {
-			log.Infof("Starting GUI server on port %d (https)", ui.cfg.GUIPort)
-			ui.server = &http.Server{
-				WriteTimeout: time.Second * 30,
-				ReadTimeout:  time.Second * 30,
-				IdleTimeout:  time.Second * 30,
-				Addr:         fmt.Sprintf("0.0.0.0:%v", ui.cfg.GUIPort),
-				Handler:      ui.router,
-			}
-
-			if err := ui.server.ListenAndServeTLS(ui.cfg.TLSCertFile,
-				ui.cfg.TLSKeyFile); err != nil &&
-				!errors.Is(err, http.ErrServerClosed) {
-				log.Error(err)
-			}
-		}
-
-		if ui.cfg.UseLEHTTPS {
+		switch {
+		case ui.cfg.UseLEHTTPS:
 			certMgr := &autocert.Manager{
 				Prompt:     autocert.AcceptTOS,
 				Cache:      autocert.DirCache("certs"),
@@ -293,6 +279,35 @@ func (ui *GUI) Run(ctx context.Context) {
 			}
 
 			if err := ui.server.ListenAndServeTLS("", ""); err != nil {
+				log.Error(err)
+			}
+		case ui.cfg.NoGuiTLS:
+			log.Infof("Starting GUI server on port %d (http)", ui.cfg.GUIPort)
+			ui.server = &http.Server{
+				WriteTimeout: time.Second * 30,
+				ReadTimeout:  time.Second * 30,
+				IdleTimeout:  time.Second * 30,
+				Addr:         fmt.Sprintf("0.0.0.0:%v", ui.cfg.GUIPort),
+				Handler:      ui.router,
+			}
+
+			if err := ui.server.ListenAndServe(); err != nil &&
+				!errors.Is(err, http.ErrServerClosed) {
+				log.Error(err)
+			}
+		default:
+			log.Infof("Starting GUI server on port %d (https)", ui.cfg.GUIPort)
+			ui.server = &http.Server{
+				WriteTimeout: time.Second * 30,
+				ReadTimeout:  time.Second * 30,
+				IdleTimeout:  time.Second * 30,
+				Addr:         fmt.Sprintf("0.0.0.0:%v", ui.cfg.GUIPort),
+				Handler:      ui.router,
+			}
+
+			if err := ui.server.ListenAndServeTLS(ui.cfg.TLSCertFile,
+				ui.cfg.TLSKeyFile); err != nil &&
+				!errors.Is(err, http.ErrServerClosed) {
 				log.Error(err)
 			}
 		}
