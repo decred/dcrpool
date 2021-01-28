@@ -269,7 +269,7 @@ func (m *Miner) process(ctx context.Context) {
 					log.Trace("Miner successfully authorized.")
 
 				case pool.Subscribe:
-					diffID, notifyID, extraNonce1E, extraNonce2Size, err :=
+					notifyID, extraNonce1E, extraNonce2Size, err :=
 						pool.ParseSubscribeResponse(resp)
 					if err != nil {
 						log.Errorf("parse subscribe response error: %v", err)
@@ -278,7 +278,7 @@ func (m *Miner) process(ctx context.Context) {
 					}
 
 					log.Tracef("subscription details: %s, %s, %s, %d",
-						diffID, notifyID, extraNonce1E, extraNonce2Size)
+						notifyID, extraNonce1E, extraNonce2Size)
 
 					m.extraNonce1E = extraNonce1E
 					m.extraNonce2Size = extraNonce2Size
