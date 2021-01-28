@@ -52,9 +52,9 @@ const (
 
 // StratumError represents a stratum error message.
 type StratumError struct {
-	Code      uint32 `json:"code"`
-	Message   string `json:"message"`
-	Traceback string `json:"traceback"`
+	Code      uint32  `json:"code"`
+	Message   string  `json:"message"`
+	Traceback *string `json:"traceback"`
 }
 
 // NewStratumError creates a stratum error instance.
@@ -78,11 +78,35 @@ func NewStratumError(code uint32, err error) *StratumError {
 		msg = "Other/Unknown"
 	}
 
-	return &StratumError{
-		Code:      code,
-		Message:   fmt.Sprintf("%s: %v", msg, err),
-		Traceback: "",
+	if err != nil {
+		msg = fmt.Sprintf("%s: %v", msg, err)
 	}
+
+	return &StratumError{
+		Code:    code,
+		Message: msg,
+	}
+}
+
+// MashalJSON marshals the stratum error into valid JSON.
+func (s *StratumError) MarshalJSON() ([]byte, error) {
+	return json.Marshal([]interface{}{s.Code, s.Message, s.Traceback})
+}
+
+// MashalJSON unmarshals the provided JSON bytes into a stratum error.
+func (s *StratumError) UnmarshalJSON(p []byte) error {
+	var tmp []interface{}
+	if err := json.Unmarshal(p, &tmp); err != nil {
+		return err
+	}
+	s.Code = uint32(tmp[0].(float64))
+	s.Message = tmp[1].(string)
+	if tmp[2] != nil {
+		trace := tmp[2].(string)
+		s.Traceback = &trace
+	}
+
+	return nil
 }
 
 // String returns a stringified representation of the stratum error.
