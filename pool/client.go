@@ -40,8 +40,9 @@ const (
 	// client's hash rate is calculated.
 	hashCalcThreshold = time.Second * 20
 
-	// clientTimeout represents the read/write timeout for the client.
-	clientTimeout = time.Minute * 4
+	// clientTimeout represents the read/write timeout for the client. This is
+	// currently set to approximately four block times.
+	clientTimeout = time.Minute * 20
 
 	// rollWorkCycle represents the tick interval for asserting the need for
 	// timestamp-rolled work.
@@ -357,7 +358,7 @@ func (c *Client) monitor(idx int, pair *minerIDPair, monitorCycle time.Duration,
 			c.setDifficulty()
 			log.Infof("updated difficulty (%s) for %s sent",
 				c.diffInfo.difficulty.FloatString(3), c.id)
-			c.updateWork()
+			c.updateWork(true)
 
 			// Reset tries after a successful upgrade.
 			tries = 0
@@ -625,8 +626,19 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 
 	if !accepted {
 		c.ch <- SubmitWorkResponse(*req.ID, false, nil)
+
 		desc := fmt.Sprintf("%s: work %s rejected by the network",
 			id, hash.String())
+		if err != nil {
+			// send the current work if the error is a block difficulty mismatch.
+			if strings.Contains(err.Error(), "block difficulty of") {
+				c.updateWork(true)
+			}
+
+			desc = fmt.Sprintf("%s: work %s rejected by the network (%v)",
+				id, hash.String(), err)
+		}
+
 		return errs.PoolError(errs.WorkRejected, desc)
 	}
 
@@ -677,7 +689,7 @@ func (c *Client) rollWork() {
 
 			now := time.Now()
 			if now.Sub(time.Unix(lastWorkTime, 0)) >= c.cfg.MaxGenTime*2 {
-				c.updateWork()
+				c.updateWork(false)
 			}
 		}
 	}
@@ -734,11 +746,11 @@ func (c *Client) read() {
 	}
 }
 
-// updateWork updates a client with a timestamp-rolled current work.
-// This should be called after a client completes a work submission,
-// after client authentication and when the client is stalling on
-// current work.
-func (c *Client) updateWork() {
+// updateWork updates a client with a timestamp-rolled current work with the
+// provided work prioritization. This should be called after a client
+// completes a work submission,after client authentication and when the
+// client is stalling on current work.
+func (c *Client) updateWork(prioritize bool) {
 	const funcName = "updateWork"
 	// Only timestamp-roll current work for authorized and subscribed clients.
 	c.statusMtx.RLock()
@@ -787,7 +799,7 @@ func (c *Client) updateWork() {
 		return
 	}
 	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
-		blockVersion, nBits, nTime, true)
+		blockVersion, nBits, nTime, prioritize)
 	select {
 	case c.ch <- workNotif:
 		c.mtx.RLock()
@@ -833,7 +845,7 @@ func (c *Client) process() {
 					if allowed {
 						c.setDifficulty()
 						time.Sleep(time.Second)
-						c.updateWork()
+						c.updateWork(true)
 					}
 
 				case Subscribe:
@@ -857,7 +869,7 @@ func (c *Client) process() {
 						continue
 					}
 					if allowed {
-						c.updateWork()
+						c.updateWork(true)
 					}
 
 				default:
