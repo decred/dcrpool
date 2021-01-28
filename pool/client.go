@@ -465,6 +465,31 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 	return nil
 }
 
+// handleExtraNonceSubscribeRequest processes extranonce subscribe requests.
+func (c *Client) handleExtraNonceSubscribeRequest(req *Request, allowed bool) error {
+	if !allowed {
+		err := fmt.Errorf("unable to process extranonce subscribe request," +
+			"client request limit reached")
+		sErr := NewStratumError(Unknown, err)
+		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
+		c.ch <- resp
+		return errs.PoolError(errs.LimitExceeded, err.Error())
+	}
+
+	err := ParseExtraNonceSubscribeRequest(req)
+	if err != nil {
+		sErr := NewStratumError(Unknown, err)
+		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
+		c.ch <- resp
+		return err
+	}
+
+	resp := ExtraNonceSubscribeResponse(*req.ID)
+	c.ch <- resp
+
+	return nil
+}
+
 // setDifficulty sends the pool client's difficulty ratio.
 func (c *Client) setDifficulty() {
 	c.mtx.RLock()
@@ -813,6 +838,13 @@ func (c *Client) process() {
 
 				case Subscribe:
 					err := c.handleSubscribeRequest(req, allowed)
+					if err != nil {
+						log.Error(err)
+						continue
+					}
+
+				case ExtraNonceSubscribe:
+					err := c.handleExtraNonceSubscribeRequest(req, allowed)
 					if err != nil {
 						log.Error(err)
 						continue

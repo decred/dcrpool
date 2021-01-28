@@ -27,11 +27,12 @@ const (
 
 // Handler types.
 const (
-	Authorize     = "mining.authorize"
-	Subscribe     = "mining.subscribe"
-	SetDifficulty = "mining.set_difficulty"
-	Notify        = "mining.notify"
-	Submit        = "mining.submit"
+	Authorize           = "mining.authorize"
+	Subscribe           = "mining.subscribe"
+	ExtraNonceSubscribe = "mining.extranonce.subscribe"
+	SetDifficulty       = "mining.set_difficulty"
+	Notify              = "mining.notify"
+	Submit              = "mining.submit"
 )
 
 // Error codes.
@@ -323,6 +324,27 @@ func SubscribeResponse(id uint64, notifyID string, extraNonce1 string, extraNonc
 		Result: []interface{}{[][]string{
 			{"mining.set_difficulty", notifyID}, {"mining.notify", notifyID}},
 			extraNonce1, extraNonce2Size},
+	}
+}
+
+// ParseExtraNonceSubscribeRequest ensures the provided extranonce subscribe
+// request is valid.
+func ParseExtraNonceSubscribeRequest(req *Request) error {
+	const funcName = "ParseExtraNonceSubscribeRequest"
+	if req.Method != ExtraNonceSubscribe {
+		desc := fmt.Sprintf("%s: request method is not extra nonce subscribe",
+			funcName)
+		return errs.MsgError(errs.Parse, desc)
+	}
+	return nil
+}
+
+// ExtraNonceSubscribeResponse creates a mining.extranonce.subscribe response.
+func ExtraNonceSubscribeResponse(id uint64) *Response {
+	return &Response{
+		ID:     id,
+		Error:  nil,
+		Result: false, // The pool does not support changes to extranonce1.
 	}
 }
 
