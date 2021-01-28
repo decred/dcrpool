@@ -191,7 +191,11 @@ func IdentifyMessage(data []byte) (Message, int, error) {
 
 // AuthorizeRequest creates an authorize request message.
 func AuthorizeRequest(id *uint64, name string, address string) *Request {
-	user := fmt.Sprintf("%s.%s", address, name)
+	format := "%s.%s"
+	if name == "" || address == "" {
+		format = "%s%s"
+	}
+	user := fmt.Sprintf(format, address, name)
 	return &Request{
 		ID:     id,
 		Method: Authorize,
@@ -349,73 +353,71 @@ func ExtraNonceSubscribeResponse(id uint64) *Response {
 }
 
 // ParseSubscribeResponse resolves a subscribe response into its components.
-func ParseSubscribeResponse(resp *Response) (string, string, string, uint64, error) {
+func ParseSubscribeResponse(resp *Response) (string, string, uint64, error) {
 	const funcName = "ParseSubscribeResponse"
 	if resp.Error != nil {
-		desc := fmt.Sprintf("%s: %d, %s, %s", funcName, resp.Error.Code,
-			resp.Error.Message, resp.Error.Traceback)
-		return "", "", "", 0, errs.MsgError(errs.Parse, desc)
+		desc := fmt.Sprintf("%s: %d, %s", funcName, resp.Error.Code,
+			resp.Error.Message)
+		return "", "", 0, errs.MsgError(errs.Parse, desc)
 	}
 
 	res, ok := resp.Result.([]interface{})
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse subscribe response "+
 			"result parameter", funcName)
-		return "", "", "", 0, errs.MsgError(errs.Parse, desc)
+		return "", "", 0, errs.MsgError(errs.Parse, desc)
 	}
 
-	subs, ok := res[0].([]interface{})
+	ids, ok := res[0].([]interface{})
 	if !ok {
-		desc := fmt.Sprintf("%s: unable to parse subscription details",
-			funcName)
-		return "", "", "", 0, errs.MsgError(errs.Parse, desc)
+		desc := fmt.Sprintf("%s: unable to parse id details", funcName)
+		return "", "", 0, errs.MsgError(errs.Parse, desc)
 	}
 
-	diff, ok := subs[0].([]interface{})
-	if !ok {
-		desc := fmt.Sprintf("%s: unable to parse subscription difficulty "+
-			"id details", funcName)
-		return "", "", "", 0, errs.MsgError(errs.Parse, desc)
-	}
+	var nID string
+	for _, entry := range ids {
+		id, ok := ids[0].(string)
+		if ok {
+			if id == Notify {
+				nID = ids[1].(string)
+				break
+			}
+		}
 
-	diffID, ok := diff[1].(string)
-	if !ok {
-		desc := fmt.Sprintf("%s: unable to parse subscription difficulty id",
-			funcName)
-		return "", "", "", 0, errs.MsgError(errs.Parse, desc)
-	}
+		idSet, ok := entry.([]interface{})
+		if ok {
+			id, ok = idSet[0].(string)
+			if !ok {
+				desc := fmt.Sprintf("%s: unable to parse id", funcName)
+				return "", "", 0, errs.MsgError(errs.Parse, desc)
+			}
 
-	notify, ok := subs[1].([]interface{})
-	if !ok {
-		desc := fmt.Sprintf("%s: unable to parse subscription notify "+
-			"id details", funcName)
-		return "", "", "", 0, errs.MsgError(errs.Parse, desc)
-	}
+			if id != Notify {
+				continue
+			}
 
-	notifyID, ok := notify[1].(string)
-	if !ok {
-		desc := fmt.Sprintf("%s: unable to parse subscription notify id",
-			funcName)
-		return "", "", "", 0, errs.MsgError(errs.Parse, desc)
+			nID = idSet[1].(string)
+			break
+		}
 	}
 
 	extraNonce1, ok := res[1].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse subscription ExtraNonce1 "+
 			"parameter", funcName)
-		return "", "", "", 0, errs.MsgError(errs.Parse, desc)
+		return "", "", 0, errs.MsgError(errs.Parse, desc)
 	}
 
 	nonce2Size, ok := res[2].(float64)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse subscription "+
 			"ExtraNonce2Size parameter", funcName)
-		return "", "", "", 0, errs.MsgError(errs.Parse, desc)
+		return "", "", 0, errs.MsgError(errs.Parse, desc)
 	}
 
 	extraNonce2Size := uint64(nonce2Size)
 
-	return diffID, notifyID, extraNonce1, extraNonce2Size, nil
+	return nID, extraNonce1, extraNonce2Size, nil
 }
 
 // SetDifficultyNotification creates a set difficulty notification message.
