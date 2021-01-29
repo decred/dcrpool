@@ -88,7 +88,7 @@ var runServiceCommand func(string) error
 
 // config defines the configuration options for the pool.
 type config struct {
-	ShowVersion           bool          `long:"version" description:"Display version information and exit."`
+	ShowVersion           bool          `long:"version" no-ini:"true" description:"Display version information and exit."`
 	HomeDir               string        `long:"homedir" ini-name:"homedir" description:"Path to application home directory."`
 	ConfigFile            string        `long:"configfile" ini-name:"configfile" description:"Path to configuration file."`
 	DataDir               string        `long:"datadir" ini-name:"datadir" description:"The data directory."`
