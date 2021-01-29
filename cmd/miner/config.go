@@ -45,7 +45,7 @@ var runServiceCommand func(string) error
 type config struct {
 	HomeDir    string `long:"homedir" ini-name:"homedir" description:"Path to application home directory"`
 	ConfigFile string `long:"configfile" ini-name:"configfile" description:"Path to configuration file"`
-	ActiveNet  string `long:"activenet" ini-name:"activenet" description:"The active network being mined on. {simnet, testnet, mainnet}"`
+	ActiveNet  string `long:"activenet" ini-name:"activenet" description:"The active network being mined on. {simnet, testnet3, mainnet}"`
 	User       string `long:"user" ini-name:"user" description:"The username of the mining account"`
 	Address    string `long:"address" ini-name:"address" description:"The address of the mining account"`
 	Pool       string `long:"pool" ini-name:"pool" description:"The stratum domain and port of the mining pool to connect to. eg. dcrpool.com:4445"`
