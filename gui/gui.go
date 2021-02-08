@@ -47,8 +47,8 @@ type Config struct {
 	TLSKeyFile string
 	// UseLEHTTPS represents Letsencrypt HTTPS mode.
 	UseLEHTTPS bool
-	// NoGuiTLS starts the webserver listening for plain HTTP.
-	NoGuiTLS bool
+	// NoGUITLS starts the webserver listening for plain HTTP.
+	NoGUITLS bool
 	// Domain represents the domain name of the pool.
 	Domain string
 	// ActiveNet represents the active network being mined on.
@@ -280,7 +280,7 @@ func (ui *GUI) Run(ctx context.Context) {
 			if err := ui.server.ListenAndServeTLS("", ""); err != nil {
 				log.Error(err)
 			}
-		case ui.cfg.NoGuiTLS:
+		case ui.cfg.NoGUITLS:
 			log.Infof("Starting GUI server on %s (http)", ui.cfg.GUIListen)
 			ui.server = &http.Server{
 				WriteTimeout: time.Second * 30,

@@ -46,8 +46,8 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 
 	_, minerPort, err := net.SplitHostPort(ui.cfg.MinerListen)
 	if err != nil {
-		log.Errorf("Failed to parse port from miner listening address %q",
-			ui.cfg.MinerListen)
+		log.Errorf("failed to parse port from miner listening address %q: %v",
+			ui.cfg.MinerListen, err)
 	}
 
 	data := indexPageData{
