@@ -12,7 +12,6 @@ import (
 	"io"
 	"math/big"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -92,7 +91,7 @@ func (m *Miner) authenticate() error {
 // subscribe sends a stratum miner subscribe message.
 func (m *Miner) subscribe() error {
 	id := m.nextID()
-	req := pool.SubscribeRequest(&id, "cpuminer", minerVersion(), m.notifyID)
+	req := pool.SubscribeRequest(&id, m.config.UserAgent, m.notifyID)
 	err := m.encoder.Encode(req)
 	if err != nil {
 		return err
@@ -122,8 +121,7 @@ func (m *Miner) keepAlive(ctx context.Context) {
 
 			time.Sleep(time.Second * 2)
 
-			poolAddr := strings.Replace(m.config.Pool, "stratum+tcp", "", 1)
-			conn, err := net.Dial("tcp", poolAddr)
+			conn, err := net.Dial("tcp", m.config.Pool)
 			if err != nil {
 				log.Errorf("unable to connect to %s: %v", m.config.Pool, err)
 				continue
@@ -133,7 +131,7 @@ func (m *Miner) keepAlive(ctx context.Context) {
 			m.encoder = json.NewEncoder(m.conn)
 			m.reader = bufio.NewReader(m.conn)
 
-			log.Debugf("miner connected to %s", poolAddr)
+			log.Debugf("miner connected to %s", m.config.Pool)
 
 			m.connectedMtx.Lock()
 			m.connected = true

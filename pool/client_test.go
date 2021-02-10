@@ -68,6 +68,9 @@ var (
 		MaxUpgradeTries: 5,
 		RollWorkCycle:   rollWorkCycle,
 	}
+	userAgent = func(miner, version string) string {
+		return fmt.Sprintf("%s/%s", miner, version)
+	}
 )
 
 func setCurrentWork(work string) {
@@ -417,7 +420,8 @@ func testClientMessageHandling(t *testing.T) {
 	d1ID := strings.Split(D1ID, sep)
 	d1 := d1ID[0]
 	d1Version := d1ID[1]
-	r = SubscribeRequest(&id, d1, d1Version, "mn001")
+
+	r = SubscribeRequest(&id, userAgent(d1, d1Version), "mn001")
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
@@ -451,7 +455,7 @@ func testClientMessageHandling(t *testing.T) {
 	// Ensure a Whatsminer D1 client receives a valid non-error
 	// response when a valid subscribe request is sent.
 	id++
-	r = SubscribeRequest(&id, d1, d1Version, "")
+	r = SubscribeRequest(&id, userAgent(d1, d1Version), "")
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
@@ -490,7 +494,7 @@ func testClientMessageHandling(t *testing.T) {
 	dr3ID := strings.Split(DR3ID, sep)
 	dr3 := dr3ID[0]
 	dr3Version := dr3ID[1]
-	r = SubscribeRequest(&id, dr3, dr3Version, "")
+	r = SubscribeRequest(&id, userAgent(dr3, dr3Version), "")
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
@@ -529,7 +533,7 @@ func testClientMessageHandling(t *testing.T) {
 	dcr1ID := strings.Split(DCR1ID, sep)
 	dcr1 := dcr1ID[0]
 	dcr1Version := dcr1ID[1]
-	r = SubscribeRequest(&id, dcr1, dcr1Version, "")
+	r = SubscribeRequest(&id, userAgent(dcr1, dcr1Version), "")
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
@@ -568,7 +572,7 @@ func testClientMessageHandling(t *testing.T) {
 	d9ID := strings.Split(D9ID, sep)
 	d9 := d9ID[0]
 	d9Version := d9ID[1]
-	r = SubscribeRequest(&id, d9, d9Version, "")
+	r = SubscribeRequest(&id, userAgent(d9, d9Version), "")
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
@@ -607,7 +611,7 @@ func testClientMessageHandling(t *testing.T) {
 	cpuID := strings.Split(CPUID, sep)
 	cpu := cpuID[0]
 	cpuVersion := cpuID[1]
-	r = SubscribeRequest(&id, cpu, cpuVersion, "")
+	r = SubscribeRequest(&id, userAgent(cpu, cpuVersion), "")
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
@@ -1475,7 +1479,7 @@ func testClientTimeRolledWork(t *testing.T) {
 	cpuID := strings.Split(CPUID, sep)
 	cpu := cpuID[0]
 	cpuVersion := cpuID[1]
-	r = SubscribeRequest(&id, cpu, cpuVersion, "")
+	r = SubscribeRequest(&id, userAgent(cpu, cpuVersion), "")
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)

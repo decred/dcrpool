@@ -35,6 +35,7 @@ var (
 	defaultHomeDir    = dcrutil.AppDataDir("miner", false)
 	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFilename)
 	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogDirname)
+	defaultUserAgent  = fmt.Sprintf("%s/%s", "cpuminer", minerVersion())
 )
 
 // runServiceCommand is only set to a real function on Windows.  It is used
@@ -43,17 +44,18 @@ var runServiceCommand func(string) error
 
 // config describes the connection parameters for the client.
 type config struct {
-	HomeDir    string `long:"homedir" ini-name:"homedir" description:"Path to application home directory"`
-	ConfigFile string `long:"configfile" ini-name:"configfile" description:"Path to configuration file"`
+	HomeDir    string `long:"homedir" ini-name:"homedir" description:"Path to application home directory."`
+	ConfigFile string `long:"configfile" ini-name:"configfile" description:"Path to configuration file."`
 	ActiveNet  string `long:"activenet" ini-name:"activenet" description:"The active network being mined on. {simnet, testnet3, mainnet}"`
-	User       string `long:"user" ini-name:"user" description:"The username of the mining account"`
-	Address    string `long:"address" ini-name:"address" description:"The address of the mining account"`
-	Pool       string `long:"pool" ini-name:"pool" description:"The stratum domain and port of the mining pool to connect to. eg. dcrpool.com:4445"`
-	DebugLevel string `long:"debuglevel" ini-name:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
+	User       string `long:"user" ini-name:"user" description:"The username of the mining account."`
+	Address    string `long:"address" ini-name:"address" description:"The address of the mining account."`
+	Pool       string `long:"pool" ini-name:"pool" description:"The stratum domain and port of the mining pool to connect to. eg. dcrpool.com:4445."`
+	DebugLevel string `long:"debuglevel" ini-name:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems."`
 	LogDir     string `long:"logdir" ini-name:"logdir" description:"The log output directory."`
 	MaxProcs   int    `long:"maxprocs" ini-name:"maxprocs" description:"Number of CPU cores to use. Default is all cores."`
-	Profile    string `long:"profile" ini-name:"profile" description:"Enable HTTP profiling on given [addr:]port -- NOTE port must be between 1024 and 65536"`
-	Stall      bool   `long:"stall" ini-name:"stall" description:"Do not generate work submissions"`
+	Profile    string `long:"profile" ini-name:"profile" description:"Enable HTTP profiling on given [addr:]port -- NOTE port must be between 1024 and 65536."`
+	Stall      bool   `long:"stall" ini-name:"stall" description:"Do not generate work submissions."`
+	UserAgent  string `long:"useragent" ini-name:"useragent" description:"The user agent to identify as in a subscription message."`
 
 	net *chaincfg.Params
 }
@@ -229,6 +231,7 @@ func loadConfig() (*config, []string, error) {
 		ConfigFile: defaultConfigFile,
 		DebugLevel: defaultLogLevel,
 		LogDir:     defaultLogDir,
+		UserAgent:  defaultUserAgent,
 		User:       "",
 		Address:    "",
 	}
@@ -438,6 +441,9 @@ func loadConfig() (*config, []string, error) {
 		fmt.Fprintln(os.Stderr, usageMessage)
 		return nil, nil, err
 	}
+
+	// Sanitize the pool address if it has the stratum prefix.
+	cfg.Pool = strings.Replace(cfg.Pool, "stratum+tcp://", "", 1)
 
 	// Check the pool addres is a valid address.
 	_, poolPort, err := net.SplitHostPort(cfg.Pool)

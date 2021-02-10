@@ -40,7 +40,7 @@ func main() {
 	log.Infof("Runtime: Go version %s", runtime.Version())
 	log.Infof("Home dir: %s", cfg.HomeDir)
 	log.Infof("Started miner.")
-
+	log.Infof("UserAgent: %s", cfg.UserAgent)
 	if cfg.Profile != "" {
 		// Start the profiler.
 		go func() {
