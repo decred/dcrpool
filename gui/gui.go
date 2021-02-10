@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"html/template"
 	"net/http"
 	"os"
@@ -40,14 +39,16 @@ type Config struct {
 	CSRFSecret []byte
 	// AdminPass represents the admin password.
 	AdminPass string
-	// GUIPort represents the port the frontend is served on.
-	GUIPort uint32
+	// GUIListen represents the listening address the frontend is served on.
+	GUIListen string
 	// TLSCertFile represents the TLS certificate file path.
 	TLSCertFile string
 	// TLSKeyFile represents the TLS key file path.
 	TLSKeyFile string
 	// UseLEHTTPS represents Letsencrypt HTTPS mode.
 	UseLEHTTPS bool
+	// NoGUITLS starts the webserver listening for plain HTTP.
+	NoGUITLS bool
 	// Domain represents the domain name of the pool.
 	Domain string
 	// ActiveNet represents the active network being mined on.
@@ -58,8 +59,8 @@ type Config struct {
 	Designation string
 	// PoolFee represents the fee charged to participating accounts of the pool.
 	PoolFee float64
-	// MinerPort represents the miner connection port for the pool.
-	MinerPort uint32
+	// MinerListen represents the listening address for miner connections.
+	MinerListen string
 	// WithinLimit returns if a client is within its request limits.
 	WithinLimit func(string, int) bool
 	// FetchLastWorkHeight returns the last work height of the pool.
@@ -247,24 +248,8 @@ func (ui *GUI) loadTemplates() error {
 // Run starts the user interface.
 func (ui *GUI) Run(ctx context.Context) {
 	go func() {
-		if !ui.cfg.UseLEHTTPS {
-			log.Infof("Starting GUI server on port %d (https)", ui.cfg.GUIPort)
-			ui.server = &http.Server{
-				WriteTimeout: time.Second * 30,
-				ReadTimeout:  time.Second * 30,
-				IdleTimeout:  time.Second * 30,
-				Addr:         fmt.Sprintf("0.0.0.0:%v", ui.cfg.GUIPort),
-				Handler:      ui.router,
-			}
-
-			if err := ui.server.ListenAndServeTLS(ui.cfg.TLSCertFile,
-				ui.cfg.TLSKeyFile); err != nil &&
-				!errors.Is(err, http.ErrServerClosed) {
-				log.Error(err)
-			}
-		}
-
-		if ui.cfg.UseLEHTTPS {
+		switch {
+		case ui.cfg.UseLEHTTPS:
 			certMgr := &autocert.Manager{
 				Prompt:     autocert.AcceptTOS,
 				Cache:      autocert.DirCache("certs"),
@@ -293,6 +278,35 @@ func (ui *GUI) Run(ctx context.Context) {
 			}
 
 			if err := ui.server.ListenAndServeTLS("", ""); err != nil {
+				log.Error(err)
+			}
+		case ui.cfg.NoGUITLS:
+			log.Infof("Starting GUI server on %s (http)", ui.cfg.GUIListen)
+			ui.server = &http.Server{
+				WriteTimeout: time.Second * 30,
+				ReadTimeout:  time.Second * 30,
+				IdleTimeout:  time.Second * 30,
+				Addr:         ui.cfg.GUIListen,
+				Handler:      ui.router,
+			}
+
+			if err := ui.server.ListenAndServe(); err != nil &&
+				!errors.Is(err, http.ErrServerClosed) {
+				log.Error(err)
+			}
+		default:
+			log.Infof("Starting GUI server on %s (https)", ui.cfg.GUIListen)
+			ui.server = &http.Server{
+				WriteTimeout: time.Second * 30,
+				ReadTimeout:  time.Second * 30,
+				IdleTimeout:  time.Second * 30,
+				Addr:         ui.cfg.GUIListen,
+				Handler:      ui.router,
+			}
+
+			if err := ui.server.ListenAndServeTLS(ui.cfg.TLSCertFile,
+				ui.cfg.TLSKeyFile); err != nil &&
+				!errors.Is(err, http.ErrServerClosed) {
 				log.Error(err)
 			}
 		}

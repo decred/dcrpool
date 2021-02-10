@@ -5,6 +5,7 @@
 package gui
 
 import (
+	"net"
 	"net/http"
 
 	"github.com/gorilla/csrf"
@@ -15,7 +16,7 @@ import (
 type indexPageData struct {
 	HeaderData    headerData
 	PoolStatsData poolStatsData
-	MinerPort     uint32
+	MinerPort     string
 	MinedWork     []*minedWork
 	RewardQuotas  []*rewardQuota
 	Address       string
@@ -43,6 +44,12 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 		address = ui.cfg.Domain
 	}
 
+	_, minerPort, err := net.SplitHostPort(ui.cfg.MinerListen)
+	if err != nil {
+		log.Errorf("failed to parse port from miner listening address %q: %v",
+			ui.cfg.MinerListen, err)
+	}
+
 	data := indexPageData{
 		HeaderData: headerData{
 			CSRF:        csrf.TemplateField(r),
@@ -60,7 +67,7 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 		},
 		RewardQuotas: rewardQuotas,
 		MinedWork:    confirmedWork,
-		MinerPort:    ui.cfg.MinerPort,
+		MinerPort:    minerPort,
 		ModalError:   modalError,
 		Address:      address,
 	}

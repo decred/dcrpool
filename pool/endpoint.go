@@ -71,7 +71,7 @@ type connection struct {
 
 // Endpoint represents a stratum endpoint.
 type Endpoint struct {
-	port       uint32
+	listenAddr string
 	connCh     chan *connection
 	discCh     chan struct{}
 	listener   net.Listener
@@ -82,17 +82,17 @@ type Endpoint struct {
 }
 
 // NewEndpoint creates an new miner endpoint.
-func NewEndpoint(eCfg *EndpointConfig, port uint32) (*Endpoint, error) {
+func NewEndpoint(eCfg *EndpointConfig, listenAddr string) (*Endpoint, error) {
 	endpoint := &Endpoint{
-		port:    port,
-		cfg:     eCfg,
-		clients: make(map[string]*Client),
-		connCh:  make(chan *connection, bufferSize),
-		discCh:  make(chan struct{}, bufferSize),
+		listenAddr: listenAddr,
+		cfg:        eCfg,
+		clients:    make(map[string]*Client),
+		connCh:     make(chan *connection, bufferSize),
+		discCh:     make(chan struct{}, bufferSize),
 	}
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "0.0.0.0", endpoint.port))
+	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		desc := fmt.Sprintf("unable to create endpoint on port %d", port)
+		desc := fmt.Sprintf("unable to create endpoint on %s", listenAddr)
 		return nil, errs.PoolError(errs.Listener, desc)
 	}
 	endpoint.listener = listener
@@ -110,7 +110,7 @@ func (e *Endpoint) removeClient(c *Client) {
 // listen accepts incoming client connections on the endpoint.
 // It must be run as a goroutine.
 func (e *Endpoint) listen() {
-	log.Infof("listening on :%d", e.port)
+	log.Infof("listening on %s", e.listenAddr)
 	for {
 		conn, err := e.listener.Accept()
 		if err != nil {

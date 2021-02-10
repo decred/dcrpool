@@ -35,8 +35,8 @@ const (
 	defaultLogDirname            = "log"
 	defaultLogFilename           = "dcrpool.log"
 	defaultDBFilename            = "dcrpool.kv"
-	defaultTLSCertFilename       = "dcrpool.cert"
-	defaultTLSKeyFilename        = "dcrpool.key"
+	defaultGUITLSCertFilename    = "dcrpool.cert"
+	defaultGUITLSKeyFilename     = "dcrpool.key"
 	defaultWalletTLSCertFilename = "wallet.cert"
 	defaultWalletTLSKeyFilename  = "wallet.key"
 	defaultDcrdRPCHost           = "127.0.0.1"
@@ -45,10 +45,12 @@ const (
 	defaultPoolFee               = 0.01
 	defaultLastNPeriod           = time.Hour * 24
 	defaultSoloPool              = false
-	defaultGUIPort               = 8080
+	defaultGUIPort               = "8080"
+	defaultGUIListen             = "0.0.0.0"
 	defaultGUIDir                = "gui"
 	defaultUseLEHTTPS            = false
-	defaultMinerPort             = 5550
+	defaultMinerPort             = "5550"
+	defaultMinerListen           = "0.0.0.0"
 	defaultDesignation           = "YourPoolNameHere"
 	defaultMaxConnectionsPerHost = 100 // 100 connected clients per host
 	defaultWalletAccount         = 0
@@ -61,6 +63,7 @@ const (
 	defaultPGDBName              = "dcrpooldb"
 	defaultMonitorCycle          = time.Minute * 2
 	defaultMaxUpgradeTries       = 10
+	defaultNoGUITLS              = false
 )
 
 var (
@@ -74,8 +77,8 @@ var (
 
 	// This keypair is solely for enabling HTTPS connections to the pool's
 	// web interface.
-	defaultTLSCertFile = filepath.Join(dcrpoolHomeDir, defaultTLSCertFilename)
-	defaultTLSKeyFile  = filepath.Join(dcrpoolHomeDir, defaultTLSKeyFilename)
+	defaultGUITLSCertFile = filepath.Join(dcrpoolHomeDir, defaultGUITLSCertFilename)
+	defaultGUITLSKeyFile  = filepath.Join(dcrpoolHomeDir, defaultGUITLSKeyFilename)
 
 	// This keypair is solely for client authentication to the wallet.
 	defaultWalletTLSCertFile = filepath.Join(dcrpoolHomeDir, defaultWalletTLSCertFilename)
@@ -93,7 +96,7 @@ type config struct {
 	ConfigFile            string        `long:"configfile" ini-name:"configfile" description:"Path to configuration file."`
 	DataDir               string        `long:"datadir" ini-name:"datadir" description:"The data directory."`
 	ActiveNet             string        `long:"activenet" ini-name:"activenet" description:"The active network being mined on. {testnet3, mainnet, simnet}"`
-	GUIPort               uint32        `long:"guiport" ini-name:"guiport" description:"The pool GUI port."`
+	GUIListen             string        `long:"guilisten" ini-name:"guilisten" description:"The address:port for pool GUI listening."`
 	DebugLevel            string        `long:"debuglevel" ini-name:"debuglevel" description:"Logging level for all subsystems. {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 	LogDir                string        `long:"logdir" ini-name:"logdir" description:"Directory to log output."`
 	DBFile                string        `long:"dbfile" ini-name:"dbfile" description:"Path to the database file."`
@@ -117,14 +120,14 @@ type config struct {
 	GUIDir                string        `long:"guidir" ini-name:"guidir" description:"The path to the directory containing the pool's user interface assets (templates, css etc.)"`
 	Domain                string        `long:"domain" ini-name:"domain" description:"The domain of the mining pool, required for TLS."`
 	UseLEHTTPS            bool          `long:"uselehttps" ini-name:"uselehttps" description:"This enables HTTPS using a Letsencrypt certificate. By default the pool uses a self-signed certificate for HTTPS."`
-	TLSCert               string        `long:"tlscert" ini-name:"tlscert" description:"Path to the TLS cert file."`
-	TLSKey                string        `long:"tlskey" ini-name:"tlskey" description:"Path to the TLS key file."`
+	GUITLSCert            string        `long:"tlscert" ini-name:"tlscert" description:"Path to the TLS cert file (for running GUI on https)."`
+	GUITLSKey             string        `long:"tlskey" ini-name:"tlskey" description:"Path to the TLS key file (for running GUI on https)."`
 	WalletTLSCert         string        `long:"wallettlscert" ini-name:"wallettlscert" description:"Path to the wallet client TLS cert file."`
 	WalletTLSKey          string        `long:"wallettlskey" ini-name:"wallettlskey" description:"Path to the wallet client TLS key file."`
 	Designation           string        `long:"designation" ini-name:"designation" description:"The designated codename for this pool. Customises the logo in the top toolbar."`
 	MaxConnectionsPerHost uint32        `long:"maxconnperhost" ini-name:"maxconnperhost" description:"The maximum number of connections allowed per host."`
 	Profile               string        `long:"profile" ini-name:"profile" description:"Enable HTTP profiling on given [addr:]port -- NOTE port must be between 1024 and 65536"`
-	MinerPort             uint32        `long:"minerport" ini-name:"minerport" description:"Miner connection port."`
+	MinerListen           string        `long:"minerlisten" ini-name:"minerlisten" description:"The address:port for miner connections."`
 	CoinbaseConfTimeout   time.Duration `long:"conftimeout" ini-name:"conftimeout" description:"The duration to wait for coinbase confirmations."`
 	GenCertsOnly          bool          `long:"gencertsonly" ini-name:"gencertsonly" description:"Only generate needed TLS key pairs and terminate."`
 	UsePostgres           bool          `long:"postgres" ini-name:"postgres" description:"Use postgres database instead of bolt."`
@@ -136,6 +139,7 @@ type config struct {
 	PurgeDB               bool          `long:"purgedb" ini-name:"purgedb" description:"Wipes all existing data on startup for a postgres backend. This intended for simnet testing purposes only."`
 	MonitorCycle          time.Duration `long:"monitorcycle" ini-name:"monitorcycle" description:"Time spent monitoring a mining client for possible upgrades."`
 	MaxUpgradeTries       uint32        `long:"maxupgradetries" ini-name:"maxupgradetries" description:"Maximum consecuctive miner monitoring and upgrade tries."`
+	NoGUITLS              bool          `long:"noguitls" ini-name:"noguitls" description:"Disable TLS on GUI endpoint (eg. for reverse proxy with a dedicated webserver)."`
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
 	net                   *params
@@ -353,16 +357,16 @@ func loadConfig() (*config, []string, error) {
 		PaymentMethod:         defaultPaymentMethod,
 		LastNPeriod:           defaultLastNPeriod,
 		SoloPool:              defaultSoloPool,
-		GUIPort:               defaultGUIPort,
+		GUIListen:             defaultGUIListen,
 		GUIDir:                defaultGUIDir,
 		UseLEHTTPS:            defaultUseLEHTTPS,
-		TLSCert:               defaultTLSCertFile,
-		TLSKey:                defaultTLSKeyFile,
+		GUITLSCert:            defaultGUITLSCertFile,
+		GUITLSKey:             defaultGUITLSKeyFile,
 		WalletTLSCert:         defaultWalletTLSCertFile,
 		WalletTLSKey:          defaultWalletTLSKeyFile,
 		Designation:           defaultDesignation,
 		MaxConnectionsPerHost: defaultMaxConnectionsPerHost,
-		MinerPort:             defaultMinerPort,
+		MinerListen:           defaultMinerListen,
 		WalletAccount:         defaultWalletAccount,
 		CoinbaseConfTimeout:   defaultCoinbaseConfTimeout,
 		UsePostgres:           defaultUsePostgres,
@@ -373,6 +377,7 @@ func loadConfig() (*config, []string, error) {
 		PGDBName:              defaultPGDBName,
 		MonitorCycle:          defaultMonitorCycle,
 		MaxUpgradeTries:       defaultMaxUpgradeTries,
+		NoGUITLS:              defaultNoGUITLS,
 	}
 
 	// Service options which are only added on Windows.
@@ -455,15 +460,15 @@ func loadConfig() (*config, []string, error) {
 		} else {
 			cfg.DBFile = preCfg.DBFile
 		}
-		if preCfg.TLSCert == defaultTLSCertFile {
-			cfg.TLSCert = filepath.Join(cfg.HomeDir, defaultTLSCertFilename)
+		if preCfg.GUITLSCert == defaultGUITLSCertFile {
+			cfg.GUITLSCert = filepath.Join(cfg.HomeDir, defaultGUITLSCertFilename)
 		} else {
-			cfg.TLSCert = preCfg.TLSCert
+			cfg.GUITLSCert = preCfg.GUITLSCert
 		}
-		if preCfg.TLSKey == defaultTLSKeyFile {
-			cfg.TLSKey = filepath.Join(cfg.HomeDir, defaultTLSKeyFilename)
+		if preCfg.GUITLSKey == defaultGUITLSKeyFile {
+			cfg.GUITLSKey = filepath.Join(cfg.HomeDir, defaultGUITLSKeyFilename)
 		} else {
-			cfg.TLSKey = preCfg.TLSKey
+			cfg.GUITLSKey = preCfg.GUITLSKey
 		}
 		if preCfg.WalletTLSCert == defaultWalletTLSCertFile {
 			cfg.WalletTLSCert = filepath.Join(cfg.HomeDir,
@@ -641,6 +646,9 @@ func loadConfig() (*config, []string, error) {
 	cfg.DcrdRPCHost = normalizeAddress(cfg.DcrdRPCHost, cfg.net.DcrdRPCServerPort)
 	cfg.WalletGRPCHost = normalizeAddress(cfg.WalletGRPCHost, cfg.net.WalletGRPCServerPort)
 
+	cfg.MinerListen = normalizeAddress(cfg.MinerListen, defaultMinerPort)
+	cfg.GUIListen = normalizeAddress(cfg.GUIListen, defaultGUIPort)
+
 	if !cfg.SoloPool {
 		// Ensure a valid payment method is set.
 		if cfg.PaymentMethod != pool.PPS && cfg.PaymentMethod != pool.PPLNS {
@@ -723,6 +731,13 @@ func loadConfig() (*config, []string, error) {
 		mpLog.Warnf("%v", configFileError)
 	}
 
+	if cfg.NoGUITLS && cfg.UseLEHTTPS {
+		err := fmt.Errorf("only one of uselehttps and noguitls can be specified")
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
+	}
+
 	// Ensure a domain is set if HTTPS via letsencrypt is preferred.
 	if cfg.UseLEHTTPS && cfg.Domain == "" {
 		err := fmt.Errorf("a valid domain is required for HTTPS " +
@@ -735,8 +750,8 @@ func loadConfig() (*config, []string, error) {
 	// Generate self-signed TLS cert and key if they do not already exist. This
 	// keypair is solely for enabling HTTPS connections to the pool's
 	// web interface.
-	if !cfg.UseLEHTTPS && (!fileExists(cfg.TLSCert) || !fileExists(cfg.TLSKey)) {
-		err := genCertPair(cfg.TLSCert, cfg.TLSKey)
+	if !cfg.UseLEHTTPS && (!fileExists(cfg.GUITLSCert) || !fileExists(cfg.GUITLSKey)) {
+		err := genCertPair(cfg.GUITLSCert, cfg.GUITLSKey)
 		if err != nil {
 			str := "%s: unable to generate dcrpool's TLS cert/key: %v"
 			err := fmt.Errorf(str, funcName, err)
