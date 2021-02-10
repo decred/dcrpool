@@ -281,9 +281,8 @@ func ParseAuthorizeResponse(resp *Response) (bool, *StratumError, error) {
 }
 
 // SubscribeRequest creates a subscribe request message.
-func SubscribeRequest(id *uint64, userAgent string, version string, notifyID string) *Request {
-	agent := fmt.Sprintf("%s/%s", userAgent, version)
-	params := []string{agent}
+func SubscribeRequest(id *uint64, userAgent string, notifyID string) *Request {
+	params := []string{userAgent}
 	if notifyID != "" {
 		params = append(params, notifyID)
 	}
