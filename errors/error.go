@@ -94,10 +94,18 @@ const (
 	// LimitExceeded indicates a rate limit exhaustion error.
 	LimitExceeded = ErrorKind("LimitExceeded")
 
-	// Difficulty indicates a difficulty related error.
-	Difficulty = ErrorKind("Difficulty")
+	// Difficulty indicates a low difficulty error.
+	LowDifficulty = ErrorKind("LowDifficulty")
 
-	// WorkRejected indicates the rejected submitted work.
+	// PoolDifficulty indicates a difficulty is lower than the
+	// pool difficulty.
+	PoolDifficulty = ErrorKind("PoolDifficulty")
+
+	// PoolDifficulty indicates a difficulty is lower than the
+	// network difficulty.
+	NetworkDifficulty = ErrorKind("NetworkDifficulty")
+
+	// WorkRejected indicates a rejected submitted work.
 	WorkRejected = ErrorKind("WorkRejected")
 
 	// PaymentSource indicates a payment source error.
