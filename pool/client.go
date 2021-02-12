@@ -40,10 +40,6 @@ const (
 	// client's hash rate is calculated.
 	hashCalcThreshold = time.Second * 20
 
-	// clientTimeout represents the read/write timeout for the client. This is
-	// currently set to approximately four block times.
-	clientTimeout = time.Minute * 20
-
 	// rollWorkCycle represents the tick interval for asserting the need for
 	// timestamp-rolled work.
 	rollWorkCycle = time.Second
@@ -552,7 +548,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return errs.PoolError(errs.Difficulty, err.Error())
+		return errs.PoolError(errs.LowDifficulty, err.Error())
 	}
 	hash := header.BlockHash()
 	hashTarget := new(big.Rat).SetInt(standalone.HashToBig(&hash))
@@ -565,12 +561,12 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	// Only submit work to the network if the submitted blockhash is
 	// less than the pool target for the client.
 	if hashTarget.Cmp(tgt) > 0 {
-		err := fmt.Errorf("submitted work from %s is not less than its "+
-			"corresponding pool target", id)
+		err := fmt.Errorf("submitted work %s from %s is not less than its "+
+			"corresponding pool target", hash.String(), id)
 		sErr := NewStratumError(LowDifficultyShare, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.ch <- resp
-		return errs.PoolError(errs.Difficulty, err.Error())
+		return errs.PoolError(errs.PoolDifficulty, err.Error())
 	}
 	atomic.AddInt64(&c.submissions, 1)
 
@@ -598,9 +594,9 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		resp := SubmitWorkResponse(*req.ID, true, nil)
 		c.ch <- resp
 
-		desc := fmt.Sprintf("submitted work from %s is not "+
-			"less than the network target difficulty", id)
-		return errs.PoolError(errs.Difficulty, desc)
+		desc := fmt.Sprintf("submitted work %s from %s is not "+
+			"less than the network target difficulty", hash.String(), id)
+		return errs.PoolError(errs.NetworkDifficulty, desc)
 	}
 
 	// Generate and send the work submission.
@@ -747,10 +743,10 @@ func (c *Client) read() {
 }
 
 // updateWork updates a client with a timestamp-rolled current work with the
-// provided work prioritization. This should be called after a client
+// provided clean job status. This should be called after a client
 // completes a work submission,after client authentication and when the
 // client is stalling on current work.
-func (c *Client) updateWork(prioritize bool) {
+func (c *Client) updateWork(cleanJob bool) {
 	const funcName = "updateWork"
 	// Only timestamp-roll current work for authorized and subscribed clients.
 	c.statusMtx.RLock()
@@ -799,7 +795,7 @@ func (c *Client) updateWork(prioritize bool) {
 		return
 	}
 	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
-		blockVersion, nBits, nTime, prioritize)
+		blockVersion, nBits, nTime, cleanJob)
 	select {
 	case c.ch <- workNotif:
 		c.mtx.RLock()
@@ -864,10 +860,18 @@ func (c *Client) process() {
 
 				case Submit:
 					err := c.handleSubmitWorkRequest(c.ctx, req, allowed)
+					if errors.Is(err, errs.NetworkDifficulty) {
+						// Submissions less than the network difficulty should
+						// not be treated as errors.
+						log.Trace(err)
+						continue
+					}
+
 					if err != nil {
 						log.Error(err)
 						continue
 					}
+
 					if allowed {
 						c.updateWork(true)
 					}

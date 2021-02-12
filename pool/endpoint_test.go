@@ -74,6 +74,7 @@ func testEndpoint(t *testing.T) {
 		},
 		MonitorCycle:    time.Minute,
 		MaxUpgradeTries: 5,
+		ClientTimeout:   time.Second * 30,
 	}
 	port := uint32(3030)
 	endpoint, err := NewEndpoint(eCfg, port)

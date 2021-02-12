@@ -341,8 +341,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				cs.cfg.Cancel()
 				continue
 			}
-			log.Infof("Mined work %s confirmed by connected block #%d",
-				header.PrevBlock.String(), header.Height)
+			log.Infof("Mined work %s confirmed by connected block #%d (%s)",
+				header.PrevBlock.String(), header.Height,
+				header.BlockHash().String())
 
 			// Signal the gui cache of the confirmed mined work.
 			cs.cfg.SignalCache(Confirmed)

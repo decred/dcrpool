@@ -168,6 +168,8 @@ type HubConfig struct {
 	// MaxUpgradeTries represents the maximum number of consecutive miner
 	// monitoring and upgrade tries.
 	MaxUpgradeTries uint32
+	// ClientTimeout represents the read/write timeout for the client.
+	ClientTimeout time.Duration
 }
 
 // Hub maintains the set of active clients and facilitates message broadcasting
@@ -327,6 +329,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		SignalCache:           h.SignalCache,
 		MonitorCycle:          h.cfg.MonitorCycle,
 		MaxUpgradeTries:       h.cfg.MaxUpgradeTries,
+		ClientTimeout:         h.cfg.ClientTimeout,
 	}
 
 	h.endpoint, err = NewEndpoint(eCfg, h.cfg.MinerPort)
