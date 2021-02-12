@@ -143,6 +143,7 @@ type config struct {
 	poolFeeAddrs          []dcrutil.Address
 	dcrdRPCCerts          []byte
 	net                   *params
+	clientTimeout         time.Duration
 }
 
 // serviceOptions defines the configuration options for the daemon as a service on
@@ -856,6 +857,15 @@ func loadConfig() (*config, []string, error) {
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)
 		return nil, nil, err
+	}
+
+	// Define the client timeout to be approximately four block times
+	// per the active network, except for simnet.
+	switch cfg.ActiveNet {
+	case chaincfg.TestNet3Params().Name, chaincfg.MainNetParams().Name:
+		cfg.clientTimeout = cfg.net.TargetTimePerBlock * 4
+	default:
+		cfg.clientTimeout = time.Second * 30
 	}
 
 	return &cfg, remainingArgs, nil

@@ -73,6 +73,7 @@ func testEndpoint(t *testing.T) {
 		},
 		MonitorCycle:    time.Minute,
 		MaxUpgradeTries: 5,
+		ClientTimeout:   time.Second * 30,
 	}
 	endpoint, err := NewEndpoint(eCfg, "0.0.0.0:3030")
 	if err != nil {

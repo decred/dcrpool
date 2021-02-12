@@ -61,6 +61,8 @@ type EndpointConfig struct {
 	// MaxUpgradeTries represents the maximum number of consecutive miner
 	// monitoring and upgrade tries.
 	MaxUpgradeTries uint32
+	// ClientTimeout represents the read/write timeout for the client.
+	ClientTimeout time.Duration
 }
 
 // connection wraps a client connection and a done channel.
@@ -172,7 +174,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 				WithinLimit:          e.cfg.WithinLimit,
 				HashCalcThreshold:    hashCalcThreshold,
 				MaxGenTime:           e.cfg.MaxGenTime,
-				ClientTimeout:        clientTimeout,
+				ClientTimeout:        e.cfg.ClientTimeout,
 				SignalCache:          e.cfg.SignalCache,
 				MonitorCycle:         e.cfg.MonitorCycle,
 				MaxUpgradeTries:      e.cfg.MaxUpgradeTries,
@@ -192,7 +194,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 			e.wg.Add(1)
 			go client.run()
 
-			log.Debugf("Mining client connected. extranonce1=%s, addr=%s",
+			log.Tracef("Mining client connected. extranonce1=%s, addr=%s",
 				client.extraNonce1, client.addr)
 
 			close(msg.Done)
