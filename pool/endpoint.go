@@ -194,7 +194,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 			e.wg.Add(1)
 			go client.run()
 
-			log.Tracef("Mining client connected. extranonce1=%s, addr=%s",
+			log.Infof("Mining client connected. extranonce1=%s, addr=%s",
 				client.extraNonce1, client.addr)
 
 			close(msg.Done)

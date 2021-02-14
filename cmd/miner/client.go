@@ -131,7 +131,7 @@ func (m *Miner) keepAlive(ctx context.Context) {
 			m.encoder = json.NewEncoder(m.conn)
 			m.reader = bufio.NewReader(m.conn)
 
-			log.Tracef("miner connected to %s", m.config.Pool)
+			log.Infof("miner connected to %s", m.config.Pool)
 
 			m.connectedMtx.Lock()
 			m.connected = true
