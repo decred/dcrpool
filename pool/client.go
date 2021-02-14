@@ -863,7 +863,7 @@ func (c *Client) process() {
 					if errors.Is(err, errs.NetworkDifficulty) {
 						// Submissions less than the network difficulty should
 						// not be treated as errors.
-						log.Trace(err)
+						log.Debug(err)
 						continue
 					}
 
