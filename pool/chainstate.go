@@ -222,12 +222,12 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					continue
 				}
 
-				// Prune all hash data not updated in the past minute.
+				// Prune all hash data not updated in the past ten minutes.
 				// A connected client should have updated multiple times
-				// in a minute. Only disconnected miners would not have
+				// by then. Only disconnected miners would not have
 				// updated within the timeframe.
-				nowNano := time.Now().Add(-time.Minute).UnixNano()
-				err = cs.cfg.db.pruneHashData(nowNano)
+				tenMinutesAgo := time.Now().Add(-time.Minute * 10).UnixNano()
+				err = cs.cfg.db.pruneHashData(tenMinutesAgo)
 				if err != nil {
 					// Errors generated pruning invalidated hash rate
 					// indicate an underlying issue accessing the
