@@ -224,6 +224,20 @@ func (e *Endpoint) disconnect(ctx context.Context) {
 	}
 }
 
+// generateHashIDs generates hash ids of all client connections to the pool.
+func (e *Endpoint) generateHashIDs() map[string]struct{} {
+	e.clientsMtx.Lock()
+	defer e.clientsMtx.Unlock()
+
+	ids := make(map[string]struct{}, len(e.clients))
+	for _, c := range e.clients {
+		hashID := hashDataID(c.account, c.extraNonce1)
+		ids[hashID] = struct{}{}
+	}
+
+	return ids
+}
+
 // run handles the lifecycle of all endpoint related processes.
 // This should be run as a goroutine.
 func (e *Endpoint) run(ctx context.Context) {

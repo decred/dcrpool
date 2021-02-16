@@ -229,10 +229,10 @@ func decodeShareRows(rows *sql.Rows) ([]*Share, error) {
 
 // decodeHashDataRows deserializes the provided SQL rows into a slice of
 // HashData structs.
-func decodeHashDataRows(rows *sql.Rows) (map[string][]*HashData, error) {
+func decodeHashDataRows(rows *sql.Rows) (map[string]*HashData, error) {
 	const funcName = "decodeHashDataRows"
 
-	toReturn := make(map[string][]*HashData)
+	toReturn := make(map[string]*HashData)
 	for rows.Next() {
 		var uuid, accountID, miner, ip, hashRate string
 		var updatedOn int64
@@ -252,7 +252,7 @@ func decodeHashDataRows(rows *sql.Rows) (map[string][]*HashData, error) {
 		}
 
 		hashData := &HashData{uuid, accountID, miner, ip, hashRat, updatedOn}
-		toReturn[accountID] = append(toReturn[accountID], hashData)
+		toReturn[hashData.UUID] = hashData
 	}
 
 	err := rows.Err()
@@ -1074,7 +1074,7 @@ func (db *PostgresDB) fetchHashData(id string) (*HashData, error) {
 }
 
 // listHashData fetches all hash data updated after the provided minimum time.
-func (db *PostgresDB) listHashData(minNano int64) (map[string][]*HashData, error) {
+func (db *PostgresDB) listHashData(minNano int64) (map[string]*HashData, error) {
 	const funcName = "listHashData"
 	rows, err := db.DB.Query(listHashData, minNano)
 	if err != nil {

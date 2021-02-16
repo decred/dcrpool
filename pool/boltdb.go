@@ -1438,9 +1438,9 @@ func (db *BoltDB) fetchHashData(id string) (*HashData, error) {
 }
 
 // listHashData fetches all hash data updated after the provided minimum time.
-func (db *BoltDB) listHashData(minNano int64) (map[string][]*HashData, error) {
+func (db *BoltDB) listHashData(minNano int64) (map[string]*HashData, error) {
 	const funcName = "listHashData"
-	data := make(map[string][]*HashData)
+	data := make(map[string]*HashData)
 
 	err := db.DB.View(func(tx *bolt.Tx) error {
 		bkt, err := fetchBucket(tx, hashDataBkt)
@@ -1460,8 +1460,7 @@ func (db *BoltDB) listHashData(minNano int64) (map[string][]*HashData, error) {
 
 			// Only select hash data updated after the provided minimum time.
 			if hashData.UpdatedOn > minNano {
-				data[hashData.AccountID] =
-					append(data[hashData.AccountID], &hashData)
+				data[hashData.UUID] = &hashData
 			}
 		}
 		return nil
