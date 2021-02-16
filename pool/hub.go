@@ -656,7 +656,27 @@ func (h *Hub) FetchHashData() (map[string][]*HashData, error) {
 		return nil, err
 	}
 
-	return hashData, err
+	toRemove := []string{}
+	ids := h.endpoint.generateHashIDs()
+	for _, data := range hashData {
+		_, ok := ids[data.UUID]
+		if !ok {
+			toRemove = append(toRemove, data.UUID)
+		}
+	}
+
+	// Remove all hash data not associated with clients currently
+	// connected to the pool.
+	for _, id := range toRemove {
+		delete(hashData, id)
+	}
+
+	toReturn := make(map[string][]*HashData)
+	for _, data := range hashData {
+		toReturn[data.AccountID] = append(toReturn[data.AccountID], data)
+	}
+
+	return toReturn, err
 }
 
 // FetchPendingPayments fetches all unpaid payments.

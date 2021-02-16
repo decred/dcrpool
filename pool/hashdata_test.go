@@ -88,10 +88,10 @@ func testHashData(t *testing.T) {
 		t.Fatalf("expected one hash data, got %d", len(dataset))
 	}
 
-	// Ensure the account id is a key of the hash data set returned.
-	_, ok := dataset[xID]
+	// Ensure the hash id is a key of the hash data set returned.
+	_, ok := dataset[hashID]
 	if !ok {
-		t.Fatalf("expected dataset to have %s as an account id key", xID)
+		t.Fatalf("expected dataset to have %s as a hash data key", hashID)
 	}
 
 	newUpdatedOn := hashData.UpdatedOn + 100
