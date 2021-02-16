@@ -1070,7 +1070,7 @@ func (c *Client) FetchAccountID() string {
 // hashMonitor calculates the total number of hashes being solved by the
 // client periodically.
 func (c *Client) hashMonitor() {
-	subs := int64(0)
+	var subs, cycle int64
 	iterations := new(big.Rat).SetFloat64(c.cfg.NonceIterations)
 	hashCalcThresholdSecs := float64(c.cfg.HashCalcThreshold / time.Second)
 
@@ -1083,6 +1083,8 @@ func (c *Client) hashMonitor() {
 			return
 
 		case <-ticker.C:
+			cycle++
+
 			submissions := atomic.LoadInt64(&c.submissions)
 			if submissions == 0 {
 				continue
@@ -1099,17 +1101,17 @@ func (c *Client) hashMonitor() {
 
 			delta := submissions - subs
 
-			// Clamp delta to a minimum value of 1.
 			if delta == 0 {
-				delta = 1
+				continue
 			}
 
-			average := hashCalcThresholdSecs / float64(delta)
+			average := hashCalcThresholdSecs * float64(cycle) / float64(delta)
 			num := new(big.Rat).Mul(diff, iterations)
 			denom := new(big.Rat).SetFloat64(average)
 			hash := new(big.Rat).Quo(num, denom)
 			c.setHashRate(hash)
 			subs = submissions
+			cycle = 0
 
 			c.mtx.RLock()
 			miner := c.miner
