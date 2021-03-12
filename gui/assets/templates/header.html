@@ -86,14 +86,14 @@
                             <p>To know your mining account details, enter your mining address.</p>
                             <form class="modal-form" id="account-form" action="/account" method="head">
                                 <div class="modal-input">
-                                    <input type="text" name="address" required placeholder="Mining Address" spellcheck="false">
+                                    <input type="text" name="address" required {{ if .SoloPool }}disabled{{end}} placeholder="Mining Address" spellcheck="false">
                                     <div class="icon-warning"></div>
                                 </div>
-                                <div class="err-message"></div>
+                                <div class="err-message">{{ if .SoloPool }} Account lookup disabled in solo pool mode {{end}}</div>
                             </form>
                             <div class="d-flex flex-row pt-4 align-items-center">
                                 <a data-toggle="modal" href="#admin-modal">I'm an Admin</a>
-                                <button form="account-form" type="submit" class="btn btn-primary ml-auto">Enter</button>
+                                <button form="account-form" type="submit" {{ if .SoloPool }}disabled{{end}} class="btn btn-primary ml-auto">Enter</button>
                             </div>
                         </div>
                     </div>

@@ -55,6 +55,7 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 			CSRF:        csrf.TemplateField(r),
 			Designation: ui.cfg.Designation,
 			ShowMenu:    true,
+			SoloPool:    ui.cfg.SoloPool,
 		},
 		PoolStatsData: poolStatsData{
 			LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),

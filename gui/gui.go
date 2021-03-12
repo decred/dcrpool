@@ -117,6 +117,7 @@ type headerData struct {
 	CSRF        template.HTML
 	Designation string
 	ShowMenu    bool
+	SoloPool    bool
 }
 
 // route configures the http router of the user interface.
