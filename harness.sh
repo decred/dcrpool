@@ -23,7 +23,7 @@ MASTER_WALLET_SEED="b280922d2cffda44648346412c5ec97f429938105003730414f10b01e140
 VOTING_WALLET_SEED="aabbcaabbcaabbcaabbcaabbcaabbcaabbcaabbcaabbcaabbcaabbcaabbcaabbc"
 WALLET_PASS=123
 ADMIN_PASS=admin
-SOLO_POOL=1
+SOLO_POOL=0
 MAX_GEN_TIME=20s
 MINER_MAX_PROCS=1
 PAYMENT_METHOD="pplns"
@@ -77,6 +77,7 @@ CLIENT_ADDRS=(
 NUMBER_OF_CLIENTS=1
 
 if [ -d "${HARNESS_ROOT}" ]; then
+  echo "Deleting ${HARNESS_ROOT}"
   rm -R "${HARNESS_ROOT}"
 fi
 

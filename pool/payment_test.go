@@ -17,10 +17,6 @@ import (
 func testPayment(t *testing.T) {
 	height := uint32(10)
 	estMaturity := uint32(26)
-	zeroSource := &PaymentSource{
-		BlockHash: chainhash.Hash{0}.String(),
-		Coinbase:  chainhash.Hash{0}.String(),
-	}
 
 	// Create some valid payments.
 	amt, _ := dcrutil.NewAmount(5)
@@ -50,47 +46,47 @@ func testPayment(t *testing.T) {
 
 	// Ensure fetched values match persisted values.
 	if fetchedPayment.Account != pmtA.Account {
-		t.Fatalf("expected %v as fetched payment account, got %v",
+		t.Fatalf("expected %q as fetched payment account, got %q",
 			pmtA.Account, fetchedPayment.Account)
 	}
 
 	if fetchedPayment.EstimatedMaturity != pmtA.EstimatedMaturity {
-		t.Fatalf("expected %v as fetched payment est maturity, got %v",
+		t.Fatalf("expected %d as fetched payment est maturity, got %d",
 			pmtA.EstimatedMaturity, fetchedPayment.EstimatedMaturity)
 	}
 
 	if fetchedPayment.Height != pmtA.Height {
-		t.Fatalf("expected %v as fetched payment height, got %v",
+		t.Fatalf("expected %d as fetched payment height, got %d",
 			pmtA.Height, fetchedPayment.Height)
 	}
 
 	if fetchedPayment.Amount != pmtA.Amount {
-		t.Fatalf("expected %v as fetched payment amount, got %v",
+		t.Fatalf("expected %q as fetched payment amount, got %q",
 			pmtA.Amount, fetchedPayment.Amount)
 	}
 
 	if fetchedPayment.CreatedOn != pmtA.CreatedOn {
-		t.Fatalf("expected %v as fetched payment createdon, got %v",
+		t.Fatalf("expected %d as fetched payment createdon, got %d",
 			pmtA.CreatedOn, fetchedPayment.CreatedOn)
 	}
 
 	if fetchedPayment.PaidOnHeight != pmtA.PaidOnHeight {
-		t.Fatalf("expected %v as fetched payment paidonheight, got %v",
+		t.Fatalf("expected %d as fetched payment paidonheight, got %d",
 			pmtA.PaidOnHeight, fetchedPayment.PaidOnHeight)
 	}
 
 	if fetchedPayment.TransactionID != pmtA.TransactionID {
-		t.Fatalf("expected %v as fetched payment transactionid, got %v",
+		t.Fatalf("expected %q as fetched payment transactionid, got %q",
 			pmtA.TransactionID, fetchedPayment.TransactionID)
 	}
 
 	if fetchedPayment.Source.Coinbase != pmtA.Source.Coinbase {
-		t.Fatalf("expected %v as fetched payment source coinbase, got %v",
+		t.Fatalf("expected %q as fetched payment source coinbase, got %q",
 			pmtA.Source.Coinbase, fetchedPayment.Source.Coinbase)
 	}
 
 	if fetchedPayment.Source.BlockHash != pmtA.Source.BlockHash {
-		t.Fatalf("expected %v as fetched payment source blockhash, got %v",
+		t.Fatalf("expected %q as fetched payment source blockhash, got %q",
 			pmtA.Source.BlockHash, fetchedPayment.Source.BlockHash)
 	}
 
@@ -108,21 +104,8 @@ func testPayment(t *testing.T) {
 	}
 
 	if fetchedPayment.TransactionID != txid {
-		t.Fatalf("expected payment with tx id %s, got %s",
+		t.Fatalf("expected payment with tx id %q, got %q",
 			txid, fetchedPayment.TransactionID)
-	}
-
-	// Persist payment B as an archived payment.
-	pmtB.PaidOnHeight = estMaturity + 1
-	err = db.ArchivePayment(pmtB)
-	if err != nil {
-		t.Fatalf("payment delete error: %v", err)
-	}
-
-	// Ensure the payment B was archived.
-	_, err = db.fetchPayment(pmtB.UUID)
-	if !errors.Is(err, errs.ValueNotFound) {
-		t.Fatalf("expected value not found error, got %v", err)
 	}
 
 	// Delete payment C.
@@ -134,7 +117,7 @@ func testPayment(t *testing.T) {
 	// Ensure the payment C was deleted.
 	fetchedPayment, err = db.fetchPayment(pmtC.UUID)
 	if !errors.Is(err, errs.ValueNotFound) {
-		t.Fatalf("expected value not found error, got %v", err)
+		t.Fatalf("expected value not found error, got %q", err)
 	}
 
 	if fetchedPayment != nil {
@@ -154,16 +137,58 @@ func testPayment(t *testing.T) {
 	}
 }
 
+func testArchivePayment(t *testing.T) {
+	height := uint32(10)
+	estMaturity := uint32(26)
+	amt, _ := dcrutil.NewAmount(5)
+
+	// Create a valid payment.
+	pmt := NewPayment(xID, zeroSource, amt, height, estMaturity)
+	err := db.PersistPayment(pmt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Archive payment.
+	pmt.TransactionID = "fake-transaction-ID"
+	pmt.PaidOnHeight = estMaturity + 1
+	err = db.ArchivePayment(pmt)
+	if err != nil {
+		t.Fatalf("ArchivePayment error: %v", err)
+	}
+
+	// Ensure original payment was removed and archived payment was created.
+	_, err = db.fetchPayment(pmt.UUID)
+	if !errors.Is(err, errs.ValueNotFound) {
+		t.Fatalf("expected value not found error, got %q", err)
+	}
+
+	aPmts, err := db.archivedPayments()
+	if err != nil {
+		t.Fatalf("archivedPayments error: %v", err)
+	}
+
+	if len(aPmts) != 1 {
+		t.Fatalf("expected 1 archived payment, got %d", len(aPmts))
+	}
+
+	// Ensure archived payment values are set correctly.
+	if aPmts[0].PaidOnHeight != pmt.PaidOnHeight {
+		t.Fatalf("expected %d as fetched payment PaidOnHeight, got %d",
+			pmt.PaidOnHeight, aPmts[0].PaidOnHeight)
+	}
+
+	if aPmts[0].TransactionID != pmt.TransactionID {
+		t.Fatalf("expected %q as fetched payment TransactionID, got %q",
+			pmt.TransactionID, aPmts[0].TransactionID)
+	}
+}
+
 // testPaymentAccessors tests fetchPendingPayments, maturePendingPayments,
 // archivedPayments and pendingPaymentsForBlockHash.
 func testPaymentAccessors(t *testing.T) {
 	height := uint32(10)
 	estMaturity := uint32(26)
-	zeroHash := chainhash.Hash{0}
-	zeroSource := &PaymentSource{
-		BlockHash: zeroHash.String(),
-		Coinbase:  zeroHash.String(),
-	}
 	amt, _ := dcrutil.NewAmount(5)
 	pmtA := NewPayment(xID, zeroSource, amt, height+1, estMaturity+1)
 	err := db.PersistPayment(pmtA)
@@ -262,6 +287,6 @@ func testPaymentAccessors(t *testing.T) {
 
 	if count != 2 {
 		t.Fatalf("expected 2 mature pending payments with "+
-			"block hash %s, got %d", zeroSource.BlockHash, count)
+			"block hash %q, got %d", zeroSource.BlockHash, count)
 	}
 }
