@@ -974,6 +974,8 @@ func (db *BoltDB) ArchivePayment(pmt *Payment) error {
 		// Create a new payment to add to the archive.
 		aPmt := NewPayment(pmt.Account, pmt.Source, pmt.Amount, pmt.Height,
 			pmt.EstimatedMaturity)
+		aPmt.TransactionID = pmt.TransactionID
+		aPmt.PaidOnHeight = pmt.PaidOnHeight
 		aPmtB, err := json.Marshal(aPmt)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",

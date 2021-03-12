@@ -610,6 +610,8 @@ func (db *PostgresDB) ArchivePayment(p *Payment) error {
 
 	aPmt := NewPayment(p.Account, p.Source, p.Amount, p.Height,
 		p.EstimatedMaturity)
+	aPmt.TransactionID = p.TransactionID
+	aPmt.PaidOnHeight = p.PaidOnHeight
 
 	_, err = tx.Exec(insertArchivedPayment,
 		aPmt.UUID, aPmt.Account, aPmt.EstimatedMaturity, aPmt.Height, aPmt.Amount,
