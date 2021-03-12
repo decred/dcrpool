@@ -59,6 +59,7 @@ func (ui *GUI) adminPage(w http.ResponseWriter, r *http.Request) {
 			CSRF:        csrf.TemplateField(r),
 			Designation: ui.cfg.Designation,
 			ShowMenu:    false,
+			SoloPool:    ui.cfg.SoloPool,
 		},
 		PoolStatsData: poolStatsData{
 			LastWorkHeight:    ui.cfg.FetchLastWorkHeight(),

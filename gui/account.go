@@ -68,6 +68,7 @@ func (ui *GUI) account(w http.ResponseWriter, r *http.Request) {
 			CSRF:        csrf.TemplateField(r),
 			Designation: ui.cfg.Designation,
 			ShowMenu:    true,
+			SoloPool:    ui.cfg.SoloPool,
 		},
 		MinedWork:             recentWork,
 		PendingPaymentsTotal:  totalPending,
