@@ -250,7 +250,7 @@ tmux new-window -t $TMUX_SESSION -n 'mwallet'
 # generate the needed dcrpool key pairs before starting the wallet.
 tmux send-keys "cd ${HARNESS_ROOT}/pool" C-m
 tmux send-keys "dcrpool --configfile=pool.conf --gencertsonly \
---homedir=${HARNESS_ROOT}/pool" C-m
+--appdata=${HARNESS_ROOT}/pool" C-m
 
 tmux send-keys "cd ${HARNESS_ROOT}/mwallet" C-m
 echo "Creating simnet master wallet"
@@ -378,7 +378,7 @@ echo "Starting dcrpool"
 sleep 5
 tmux new-window -t $TMUX_SESSION -n 'pool'
 tmux send-keys "cd ${HARNESS_ROOT}/pool" C-m
-tmux send-keys "dcrpool --configfile=pool.conf --homedir=${HARNESS_ROOT}/pool \
+tmux send-keys "dcrpool --configfile=pool.conf --appdata=${HARNESS_ROOT}/pool \
 --purgedb" C-m
 
 ################################################################################
@@ -389,7 +389,7 @@ for ((i = 0; i < $NUMBER_OF_CLIENTS; i++)); do
   sleep 1
   tmux new-window -t $TMUX_SESSION -n c$i
   tmux send-keys "cd ${HARNESS_ROOT}/c$i" C-m
-  tmux send-keys "miner --configfile=client.conf --homedir=${HARNESS_ROOT}/c$i" C-m
+  tmux send-keys "miner --configfile=client.conf --appdata=${HARNESS_ROOT}/c$i" C-m
 done
 
 tmux attach-session -t $TMUX_SESSION
