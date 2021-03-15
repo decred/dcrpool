@@ -44,7 +44,7 @@ var runServiceCommand func(string) error
 
 // config describes the connection parameters for the client.
 type config struct {
-	HomeDir    string `long:"homedir" ini-name:"homedir" description:"Path to application home directory."`
+	HomeDir    string `long:"appdata" ini-name:"appdata" description:"Path to application home directory."`
 	ConfigFile string `long:"configfile" ini-name:"configfile" description:"Path to configuration file."`
 	ActiveNet  string `long:"activenet" ini-name:"activenet" description:"The active network being mined on. {simnet, testnet3, mainnet}"`
 	User       string `long:"user" ini-name:"user" description:"The username of the mining account."`

@@ -120,7 +120,7 @@ options will be needed, refer to [postgres.md](./docs/postgres.md).
 ### Example output of a solo pool startup
 
 ```no-highlight
-dcrpool --configfile=pool.conf --homedir=/tmp/dcrpool-harness/pool
+dcrpool --configfile=pool.conf --appdata=/tmp/dcrpool-harness/pool
 2020-12-22 20:10:31.120 [INF] POOL: Maximum work submission generation time at pool difficulty is 28s.
 2020-12-22 20:10:31.129 [INF] POOL: Solo pool mode active.
 2020-12-22 20:10:31.149 [INF] MP: Version: 1.1.0+dev
@@ -159,7 +159,7 @@ options will be needed, refer to [postgres.md](./docs/postgres.md).
 ### Example output of a mining pool startup
 
 ```no-highlight
-dcrpool --configfile=pool.conf --homedir=/tmp/dcrpool-harness/pool
+dcrpool --configfile=pool.conf --appdata=/tmp/dcrpool-harness/pool
 2020-12-22 19:57:45.795 [INF] POOL: Maximum work submission generation time at pool difficulty is 20s.
 2020-12-22 19:57:45.816 [INF] POOL: Payment method is PPLNS.
 2020-12-22 19:57:45.916 [INF] MP: Version: 1.1.0+dev
