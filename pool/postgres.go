@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Decred developers
+// Copyright (c) 2020-2021 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -63,37 +63,30 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string, purgeDB
 	if err != nil {
 		return nil, makeErr("metadata", err)
 	}
-
 	_, err = db.Exec(createTableAccounts)
 	if err != nil {
 		return nil, makeErr("accounts", err)
 	}
-
 	_, err = db.Exec(createTablePayments)
 	if err != nil {
 		return nil, makeErr("payments", err)
 	}
-
 	_, err = db.Exec(createTableArchivedPayments)
 	if err != nil {
 		return nil, makeErr("archived payments", err)
 	}
-
 	_, err = db.Exec(createTableJobs)
 	if err != nil {
 		return nil, makeErr("jobs", err)
 	}
-
 	_, err = db.Exec(createTableShares)
 	if err != nil {
 		return nil, makeErr("shares", err)
 	}
-
 	_, err = db.Exec(createTableAcceptedWork)
 	if err != nil {
 		return nil, makeErr("accepted work", err)
 	}
-
 	_, err = db.Exec(createTableHashData)
 	if err != nil {
 		return nil, makeErr("hashrate", err)
@@ -267,12 +260,14 @@ func decodeHashDataRows(rows *sql.Rows) (map[string]*HashData, error) {
 
 // httpBackup is not implemented for postgres database.
 func (db *PostgresDB) httpBackup(w http.ResponseWriter) error {
-	return errors.New("httpBackup is not implemented for postgres database")
+	return errs.DBError(errs.Unsupported, "httpBackup is not supported "+
+		"for postgres database")
 }
 
 // Backup is not implemented for postgres database.
 func (db *PostgresDB) Backup(fileName string) error {
-	return errors.New("Backup is not implemented for postgres database")
+	return errs.DBError(errs.Unsupported, "backup is not supported "+
+		"for postgres database")
 }
 
 // fetchPoolMode retrives the pool mode from the database. PoolMode is stored as

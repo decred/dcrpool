@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Decred developers
+// Copyright (c) 2019-2021 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -185,8 +185,8 @@ func deleteEntry(db *BoltDB, bucket []byte, key string) error {
 				string(poolBkt))
 			return errs.DBError(errs.StorageNotFound, desc)
 		}
-		b := pbkt.Bucket(bucket)
 
+		b := pbkt.Bucket(bucket)
 		err := b.Delete([]byte(key))
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to delete entry with "+
@@ -265,7 +265,6 @@ func (db *BoltDB) fetchPoolMode() (uint32, error) {
 // persistPoolMode stores the pool mode in the database. PoolMode is stored as a
 // uint32 for historical reasons. 0 indicates Public, 1 indicates Solo.
 func (db *BoltDB) persistPoolMode(mode uint32) error {
-
 	return db.DB.Update(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		b := make([]byte, 4)
@@ -277,7 +276,6 @@ func (db *BoltDB) persistPoolMode(mode uint32) error {
 // fetchCSRFSecret retrieves the bytes used for the CSRF secret from the database.
 func (db *BoltDB) fetchCSRFSecret() ([]byte, error) {
 	var secret []byte
-
 	err := db.DB.View(func(tx *bolt.Tx) error {
 		pbkt := tx.Bucket(poolBkt)
 		if pbkt == nil {
@@ -289,13 +287,12 @@ func (db *BoltDB) fetchCSRFSecret() ([]byte, error) {
 			return errs.DBError(errs.ValueNotFound, "No csrf secret found")
 		}
 
-		// Byte slices returned from Bolt are only valid during a transaction.
-		// Need to make a copy.
+		// Make a copy of the secret to return after the db transaction is
+		// completed.
 		secret = make([]byte, len(v))
 		copy(secret, v)
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -360,7 +357,6 @@ func (db *BoltDB) loadLastPaymentInfo() (uint32, int64, error) {
 
 		lastPaymentHeightB := pbkt.Get(lastPaymentHeight)
 		lastPaymentPaidOnB := pbkt.Get(lastPaymentPaidOn)
-
 		if lastPaymentHeightB == nil || lastPaymentPaidOnB == nil {
 			desc := fmt.Sprintf("%s: last payment info not initialized", funcName)
 			return errs.DBError(errs.ValueNotFound, desc)
@@ -371,7 +367,6 @@ func (db *BoltDB) loadLastPaymentInfo() (uint32, int64, error) {
 
 		return nil
 	})
-
 	if err != nil {
 		return 0, 0, err
 	}
@@ -417,7 +412,6 @@ func (db *BoltDB) loadLastPaymentCreatedOn() (int64, error) {
 		createdOn = int64(bigEndianBytesToNano(lastPaymentCreatedOnB))
 		return nil
 	})
-
 	if err != nil {
 		return 0, err
 	}
@@ -544,7 +538,6 @@ func (db *BoltDB) httpBackup(w http.ResponseWriter) error {
 }
 
 // fetchAcceptedWork fetches the accepted work referenced by the provided id.
-// Returns an error if the work is not found.
 func (db *BoltDB) fetchAcceptedWork(id string) (*AcceptedWork, error) {
 	const funcName = "fetchAcceptedWork"
 	var work AcceptedWork
@@ -606,8 +599,7 @@ func (db *BoltDB) persistAcceptedWork(work *AcceptedWork) error {
 	})
 }
 
-// updateAcceptedWork persists modifications to an existing work. Returns an
-// error if the work is not found.
+// updateAcceptedWork persists modifications to an existing work.
 func (db *BoltDB) updateAcceptedWork(work *AcceptedWork) error {
 	const funcName = "updateAcceptedWork"
 	return db.DB.Update(func(tx *bolt.Tx) error {
@@ -715,8 +707,7 @@ func (db *BoltDB) fetchUnconfirmedWork(height uint32) ([]*AcceptedWork, error) {
 	return toReturn, nil
 }
 
-// fetchAccount fetches the account referenced by the provided id. Returns
-// an error if the account is not found.
+// fetchAccount fetches the account referenced by the provided id.
 func (db *BoltDB) fetchAccount(id string) (*Account, error) {
 	const funcName = "fetchAccount"
 	var account Account
@@ -746,8 +737,7 @@ func (db *BoltDB) fetchAccount(id string) (*Account, error) {
 }
 
 // persistAccount saves the account to the database. Before persisting the
-// account, it sets the createdOn timestamp. Returns an error if an account
-// already exists with the same ID.
+// account, it sets the createdOn timestamp.
 func (db *BoltDB) persistAccount(acc *Account) error {
 	const funcName = "persistAccount"
 	return db.DB.Update(func(tx *bolt.Tx) error {
@@ -786,8 +776,7 @@ func (db *BoltDB) deleteAccount(id string) error {
 	return deleteEntry(db, accountBkt, id)
 }
 
-// fetchJob fetches the job referenced by the provided id. Returns an error if
-// the job is not found.
+// fetchJob fetches the job referenced by the provided id.
 func (db *BoltDB) fetchJob(id string) (*Job, error) {
 	const funcName = "fetchJob"
 	var job Job
@@ -816,8 +805,7 @@ func (db *BoltDB) fetchJob(id string) (*Job, error) {
 	return &job, err
 }
 
-// persistJob saves the job to the database. Returns an error if an account
-// already exists with the same ID.
+// persistJob saves the job to the database.
 func (db *BoltDB) persistJob(job *Job) error {
 	const funcName = "persistJob"
 	return db.DB.Update(func(tx *bolt.Tx) error {
@@ -888,8 +876,7 @@ func (db *BoltDB) deleteJobsBeforeHeight(height uint32) error {
 	})
 }
 
-// fetchPayment fetches the payment referenced by the provided id. Returns an
-// error if the payment is not found.
+// fetchPayment fetches the payment referenced by the provided id.
 func (db *BoltDB) fetchPayment(id string) (*Payment, error) {
 	const funcName = "fetchPayment"
 	var payment Payment
@@ -946,13 +933,14 @@ func (db *BoltDB) updatePayment(pmt *Payment) error {
 	return db.PersistPayment(pmt)
 }
 
-// deletePayment purges the referenced payment from the database. Note that
-// archived payments cannot be deleted.
+// deletePayment purges the referenced active payment from the database.
+// Note that archived payments cannot be deleted.
 func (db *BoltDB) deletePayment(id string) error {
 	return deleteEntry(db, paymentBkt, id)
 }
 
-// ArchivePayment removes the associated payment from active payments and archives it.
+// ArchivePayment removes the associated payment from active payments
+// and archives it.
 func (db *BoltDB) ArchivePayment(pmt *Payment) error {
 	const funcName = "ArchivePayment"
 	return db.DB.Update(func(tx *bolt.Tx) error {
@@ -1010,10 +998,10 @@ func (db *BoltDB) fetchPaymentsAtHeight(height uint32) ([]*Payment, error) {
 			if err != nil {
 				return err
 			}
-
 			if payment.PaidOnHeight == 0 {
 				// If a payment is spendable but does not get processed it
-				// becomes eligible for pruning.
+				// is most likely sourcing from an orphaned block and should
+				// be eligible for pruning.
 				spendableHeight := payment.EstimatedMaturity + 1
 				if height > spendableHeight {
 					toReturn = append(toReturn, &payment)
@@ -1167,8 +1155,7 @@ func (db *BoltDB) maturePendingPayments(height uint32) (map[string][]*Payment, e
 	return pmts, nil
 }
 
-// fetchShare fetches the share referenced by the provided id. Returns an error
-// if the share is not found.
+// fetchShare fetches the share referenced by the provided id.
 func (db *BoltDB) fetchShare(id string) (*Share, error) {
 	const funcName = "fetchShare"
 	var share Share
@@ -1197,8 +1184,7 @@ func (db *BoltDB) fetchShare(id string) (*Share, error) {
 	return &share, err
 }
 
-// PersistShare saves a share to the database. Returns an error if a share
-// already exists with the same ID.
+// PersistShare saves a share to the database.
 func (db *BoltDB) PersistShare(s *Share) error {
 	const funcName = "PersistShare"
 	return db.DB.Update(func(tx *bolt.Tx) error {

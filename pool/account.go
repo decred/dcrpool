@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Decred developers
+// Copyright (c) 2019-2021 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -12,7 +12,7 @@ import (
 
 var (
 	// defaultAccountID is the default account id value.
-	// It is defived from a a zero hash.
+	// It is derived from a zero hash.
 	defaultAccountID = AccountID(zeroHash.String())
 )
 
@@ -23,7 +23,7 @@ type Account struct {
 	CreatedOn uint64 `json:"createdon"`
 }
 
-// AccountID generates a unique id using provided address of the account.
+// AccountID generates a unique id using the provided address of the account.
 func AccountID(address string) string {
 	hasher := blake256.New()
 	_, _ = hasher.Write([]byte(address))
@@ -32,8 +32,6 @@ func AccountID(address string) string {
 
 // NewAccount creates a new account.
 func NewAccount(address string) *Account {
-	// Since an account's id is derived from the address an account
-	// can be shared by multiple pool clients.
 	return &Account{
 		UUID:    AccountID(address),
 		Address: address,

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 The Decred developers
+// Copyright (c) 2019-2021 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -51,8 +51,11 @@ const (
 	// Decode indicates a decoding error.
 	Decode = ErrorKind("Decode")
 
-	// ValueFound indicates a an unexpected value found.
+	// ValueFound indicates an unexpected value found.
 	ValueFound = ErrorKind("ValueFound")
+
+	// Unsupported indicates unsupported functionality.
+	Unsupported = ErrorKind("Unsupported")
 
 	// ------------------------------------------
 	// Errors related to pool operations.
