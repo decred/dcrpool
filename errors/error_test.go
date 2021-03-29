@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Decred developers
+// Copyright (c) 2020-2021 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 package errors
@@ -29,6 +29,7 @@ func TestErrorKindStringer(t *testing.T) {
 		{Parse, "Parse"},
 		{Decode, "Decode"},
 		{ValueFound, "ValueFound"},
+		{Unsupported, "Unsupported"},
 
 		{GetWork, "GetWork"},
 		{GetBlock, "GetBlock"},
