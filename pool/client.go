@@ -872,10 +872,6 @@ func (c *Client) process() {
 						continue
 					}
 
-					if allowed {
-						c.updateWork(true)
-					}
-
 				default:
 					log.Errorf("unknown request method for message %s: %s",
 						req.String(), req.Method)
