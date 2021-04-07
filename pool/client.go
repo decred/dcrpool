@@ -814,12 +814,12 @@ func (c *Client) process() {
 	for {
 		select {
 		case <-c.ctx.Done():
-			_, err := c.conn.Write([]byte{})
+			err := c.conn.Close()
 			if err != nil {
 				c.mtx.RLock()
 				id := c.id
 				c.mtx.RUnlock()
-				log.Errorf("%s: unable to send close message: %v", id, err)
+				log.Errorf("%s: unable to close connection: %v", id, err)
 			}
 			c.wg.Done()
 			return
