@@ -342,8 +342,8 @@ func (m *Miner) process(ctx context.Context) {
 						continue
 					}
 
-					jobID, prevBlockE, genTx1E, genTx2E, blockVersionE, _, _, _, err :=
-						pool.ParseWorkNotification(notif)
+					jobID, prevBlockE, genTx1E, genTx2E, blockVersionE, _, _,
+						cleanJob, err := pool.ParseWorkNotification(notif)
 					if err != nil {
 						log.Errorf("parse job notification error: %v", err)
 						m.cancel()
@@ -370,16 +370,20 @@ func (m *Miner) process(ctx context.Context) {
 					m.work.header = headerB
 					m.workMtx.Unlock()
 
-					if m.config.Stall {
-						log.Tracef("purposefully stalling on work")
-						continue
-					}
+					if cleanJob {
+						log.Tracef("received work for block #%d", blockHeader.Height)
 
-					// Notify the miner of received work.
-					select {
-					case m.chainCh <- struct{}{}:
-					default:
-						// Non-blocking send fallthrough.
+						if m.config.Stall {
+							log.Tracef("purposefully stalling on work")
+							continue
+						}
+
+						// Notify the miner of received work.
+						select {
+						case m.chainCh <- struct{}{}:
+						default:
+							// Non-blocking send fallthrough.
+						}
 					}
 
 				default:
