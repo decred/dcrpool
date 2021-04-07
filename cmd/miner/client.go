@@ -128,6 +128,8 @@ func (m *Miner) keepAlive(ctx context.Context) {
 
 			time.Sleep(time.Second * 2)
 
+			log.Infof("dialing %s...", m.config.Pool)
+
 			conn, err := net.Dial("tcp", m.config.Pool)
 			if err != nil {
 				log.Errorf("unable to connect to %s: %v", m.config.Pool, err)
@@ -175,13 +177,20 @@ func (m *Miner) read(ctx context.Context) {
 
 		data, err := m.reader.ReadBytes('\n')
 		if err != nil {
+			m.connectedMtx.Lock()
+			m.connected = false
+			m.connectedMtx.Unlock()
+
 			m.workMtx.Lock()
 			m.work = new(Work)
 			m.workMtx.Unlock()
 
-			m.connectedMtx.Lock()
-			m.connected = false
-			m.connectedMtx.Unlock()
+			// Signal the solver to abort hashing.
+			select {
+			case m.chainCh <- struct{}{}:
+			default:
+				// Non-blocking send fallthrough.
+			}
 
 			select {
 			case <-ctx.Done():

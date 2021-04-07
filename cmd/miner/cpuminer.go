@@ -213,6 +213,15 @@ func (m *CPUMiner) solve(ctx context.Context) {
 
 		switch m.solveBlock(ctx, headerB, target) {
 		case true:
+			m.miner.connectedMtx.RLock()
+			connected := m.miner.connected
+			m.miner.connectedMtx.RUnlock()
+
+			if !connected {
+				log.Tracef("miner disconnected, skipping work submission")
+				continue
+			}
+
 			// Send a submit work request.
 			worker := fmt.Sprintf("%s.%s", m.miner.config.Address,
 				m.miner.config.User)
