@@ -69,6 +69,13 @@ func (m *Miner) fetchRequest(id uint64) string {
 	return method
 }
 
+// deleteRequest removes the provided request id from the id cache.
+func (m *Miner) deleteRequest(id uint64) {
+	m.reqMtx.Lock()
+	delete(m.req, id)
+	m.reqMtx.Unlock()
+}
+
 // nextID returns the next message id for the client.
 func (m *Miner) nextID() uint64 {
 	return atomic.AddUint64(&m.id, 1)
@@ -240,6 +247,9 @@ func (m *Miner) process(ctx context.Context) {
 					m.cancel()
 					continue
 				}
+
+				// Remove the request ID since it is no longer needed.
+				m.deleteRequest(resp.ID)
 
 				switch method {
 				case pool.Authorize:
