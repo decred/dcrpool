@@ -1090,13 +1090,6 @@ func testClientMessageHandling(t *testing.T) {
 		t.Fatalf("expected a non-error work submission response, got %v", resp.Error)
 	}
 
-	// Discard the updated work sent after a successful submission.
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case <-recvCh:
-	}
-
 	// Ensure a CPU client receives an error response when
 	// submitting duplicate work.
 	id++
