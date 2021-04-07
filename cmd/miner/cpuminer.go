@@ -92,6 +92,9 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 	ticker := time.NewTicker(333 * time.Millisecond)
 	defer ticker.Stop()
 
+	var header wire.BlockHeader
+	var hashNum big.Rat
+
 	for {
 		hashesCompleted := uint64(0)
 
@@ -122,7 +125,7 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 					}
 
 				case <-m.miner.chainCh:
-					// Stop current work if the chain updates or a new work
+					// Stop current work if the chain updates or new work
 					// is received.
 					return false
 
@@ -136,7 +139,6 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 				// Set the generated extraNonce2.
 				binary.LittleEndian.PutUint32(headerB[148:152], extraNonce2)
 
-				var header wire.BlockHeader
 				err := header.FromBytes(headerB)
 				if err != nil {
 					log.Errorf("failed to create solved block header "+
@@ -147,16 +149,27 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 				// A valid submission is generated when the block hash is less
 				// than the pool target of the client.
 				hash := header.BlockHash()
-				hashNum := new(big.Rat).SetInt(standalone.HashToBig(&hash))
+				hashNum.SetInt(standalone.HashToBig(&hash))
 				hashesCompleted++
 
 				if hashNum.Cmp(target) < 0 {
 					secs := uint32(header.Timestamp.Unix())
 					nTimeB := make([]byte, 4)
 					binary.LittleEndian.PutUint32(nTimeB, secs)
+					nonce := hex.EncodeToString(headerB[140:144])
+					extraNonce2 := hex.EncodeToString(headerB[148:152])
+
+					// If the valid submission has already been found, skip it.
+					if nonce == m.workData.nonce &&
+						extraNonce2 == m.workData.extraNonce2 {
+						log.Tracef("skipping known submission with "+
+							"nonce %s and extraNonce2 %s", nonce, extraNonce2)
+						continue
+					}
+
+					m.workData.nonce = nonce
 					m.workData.nTime = hex.EncodeToString(nTimeB)
-					m.workData.nonce = hex.EncodeToString(headerB[140:144])
-					m.workData.extraNonce2 = hex.EncodeToString(headerB[148:152])
+					m.workData.extraNonce2 = extraNonce2
 
 					m.updateHashes <- hashesCompleted
 					log.Infof("Solved block hash at height (%v) is (%v)",
