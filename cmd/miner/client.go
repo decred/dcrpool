@@ -207,6 +207,15 @@ func (m *Miner) read(ctx context.Context) {
 			log.Errorf("unable to read bytes: %v", err)
 			continue
 		}
+
+		select {
+		case <-ctx.Done():
+			m.wg.Done()
+			return
+		default:
+			// Non-blocking receive fallthrough.
+		}
+
 		m.readCh <- data
 	}
 }
