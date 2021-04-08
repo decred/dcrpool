@@ -754,11 +754,18 @@ func (c *Client) updateWork(cleanJob bool) {
 	subscribed := c.subscribed
 	c.statusMtx.RUnlock()
 
+	c.mtx.RLock()
+	id := c.id
+	c.mtx.RUnlock()
+
 	if !subscribed || !authorized {
+		log.Debugf("can only timestamp-roll work for subscribed " +
+			"and authorized clients")
 		return
 	}
 	currWorkE := c.cfg.FetchCurrentWork()
 	if currWorkE == "" {
+		log.Tracef("no work available to send %s", id)
 		return
 	}
 
@@ -798,9 +805,6 @@ func (c *Client) updateWork(cleanJob bool) {
 		blockVersion, nBits, nTime, cleanJob)
 	select {
 	case c.ch <- workNotif:
-		c.mtx.RLock()
-		id := c.id
-		c.mtx.RUnlock()
 		log.Tracef("Sent a timestamp-rolled current work at "+
 			"height #%v to %v", height, id)
 	default:
