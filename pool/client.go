@@ -489,6 +489,12 @@ func (c *Client) handleExtraNonceSubscribeRequest(req *Request, allowed bool) er
 
 // setDifficulty sends the pool client's difficulty ratio.
 func (c *Client) setDifficulty() {
+	// Do not send a difficulty notification if the diff info
+	// for the miner is not set.
+	if c.diffInfo == nil {
+		return
+	}
+
 	c.mtx.RLock()
 	diffRat := c.diffInfo.difficulty
 	c.mtx.RUnlock()
