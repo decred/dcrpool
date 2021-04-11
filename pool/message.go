@@ -597,8 +597,14 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string,
 	extraNonce2E string, nTimeE string, nonceE string, miner string) (*wire.BlockHeader, error) {
 	headerEB := []byte(headerE)
 
+	log.Debugf("header is %s\n", headerE)
+	log.Debugf("extraNonce1 is %s\n", extraNonce1E)
+	log.Debugf("extranonce2 is %s\n", extraNonce2E)
+	log.Debugf("nTime is %s\n", nTimeE)
+	log.Debugf("nonceE is %s\n", nonceE)
+
 	switch miner {
-	case CPU:
+	case CPU, Gominer:
 		copy(headerEB[272:280], []byte(nTimeE))
 		copy(headerEB[280:288], []byte(nonceE))
 		copy(headerEB[288:296], []byte(extraNonce1E))

@@ -1245,7 +1245,7 @@ func (c *Client) send() {
 					c.mtx.RUnlock()
 
 					switch miner {
-					case CPU, NiceHashValidator:
+					case CPU, Gominer, NiceHashValidator:
 						c.handleCPUWork(req)
 						log.Tracef("%s notified of new work", id)
 

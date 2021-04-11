@@ -15,6 +15,7 @@ var (
 	// supported miners in their mining.subscribe requests.
 
 	CPUID  = "cpuminer/1.0.0"
+	GMID   = "decred-gominer/1.0.0-beta+release"
 	DCR1ID = "cgminer/4.10.0"
 	D9ID   = "sgminer/4.4.2"
 	DR3ID  = "cgminer/4.9.0"
@@ -46,6 +47,7 @@ func newMinerIDPair(id string, miners ...string) *minerIDPair {
 func generateMinerIDs() map[string]*minerIDPair {
 	ids := make(map[string]*minerIDPair)
 	cpu := newMinerIDPair(CPUID, CPU)
+	gominer := newMinerIDPair(GMID, Gominer)
 	obelisk := newMinerIDPair(DCR1ID, ObeliskDCR1)
 	innosilicon := newMinerIDPair(D9ID, InnosiliconD9)
 	antminer := newMinerIDPair(DR3ID, AntminerDR3, AntminerDR5)
@@ -53,6 +55,7 @@ func generateMinerIDs() map[string]*minerIDPair {
 	nicehash := newMinerIDPair(NHID, NiceHashValidator)
 
 	ids[cpu.id] = cpu
+	ids[gominer.id] = gominer
 	ids[obelisk.id] = obelisk
 	ids[innosilicon.id] = innosilicon
 	ids[antminer.id] = antminer

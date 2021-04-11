@@ -25,6 +25,7 @@ const (
 	WhatsminerD1      = "whatsminerd1"
 	ObeliskDCR1       = "obeliskdcr1"
 	NiceHashValidator = "nicehash"
+	Gominer           = "decred-gominer"
 )
 
 var (
@@ -32,6 +33,7 @@ var (
 	// corresponding hash rates.
 	minerHashes = map[string]*big.Int{
 		CPU:               new(big.Int).SetInt64(5e3),
+		Gominer:           new(big.Int).SetInt64(2e9),
 		ObeliskDCR1:       new(big.Int).SetInt64(1.2e12),
 		InnosiliconD9:     new(big.Int).SetInt64(2.4e12),
 		AntminerDR3:       new(big.Int).SetInt64(7.8e12),
