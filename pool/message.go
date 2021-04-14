@@ -604,11 +604,30 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string,
 	log.Debugf("nonceE is %s\n", nonceE)
 
 	switch miner {
-	case CPU, Gominer:
+	case CPU:
 		copy(headerEB[272:280], []byte(nTimeE))
 		copy(headerEB[280:288], []byte(nonceE))
 		copy(headerEB[288:296], []byte(extraNonce1E))
 		copy(headerEB[296:304], []byte(extraNonce2E))
+
+	// Gominer returns a 12-byte entraNonce comprised of the extraNonce1
+	// and extraNonce2 regardless of the extraNonce2Size specified in
+	// the mining.subscribe message. The nTime and nonce values submitted
+	// are big endian, they have to be reversed before block header
+	// reconstruction.
+	case Gominer:
+		nTimeERev, err := hexReversed(nTimeE)
+		if err != nil {
+			return nil, err
+		}
+		copy(headerEB[272:280], []byte(nTimeERev))
+
+		nonceERev, err := hexReversed(nonceE)
+		if err != nil {
+			return nil, err
+		}
+		copy(headerEB[280:288], []byte(nonceERev))
+		copy(headerEB[288:312], []byte(extraNonce2E))
 
 	// The Obelisk DCR1 does not respect the extraNonce2Size specified in the
 	// mining.subscribe response sent to it. It returns a 4-byte extraNonce2
@@ -633,7 +652,7 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string,
 		copy(headerEB[296:304], []byte(extraNonce2E))
 
 	// The Antiminer DR3 and DR5 return a 12-byte entraNonce comprised of the
-	// the extraNonce1 and extraNonce2 regardless of the extraNonce2Size
+	// extraNonce1 and extraNonce2 regardless of the extraNonce2Size
 	// specified in the mining.subscribe message. The nTime and nonce values
 	// submitted are big endian, they have to be reversed before block header
 	// reconstruction.

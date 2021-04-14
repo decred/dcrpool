@@ -1245,7 +1245,7 @@ func (c *Client) send() {
 					c.mtx.RUnlock()
 
 					switch miner {
-					case CPU, Gominer, NiceHashValidator:
+					case CPU, NiceHashValidator:
 						c.handleCPUWork(req)
 						log.Tracef("%s notified of new work", id)
 
@@ -1257,7 +1257,7 @@ func (c *Client) send() {
 						c.handleInnosiliconD9Work(req)
 						log.Tracef("%s notified of new work", id)
 
-					case WhatsminerD1:
+					case WhatsminerD1, Gominer:
 						c.handleWhatsminerD1Work(req)
 						log.Tracef("%s notified of new work", id)
 
