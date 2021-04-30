@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -59,6 +60,7 @@ func (txC *txCreatorImpl) CreateRawTransaction(ctx context.Context, inputs []cha
 type txBroadcasterImpl struct {
 	signTransaction    func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
 	publishTransaction func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
+	rescan             func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error)
 }
 
 // SignTransaction signs transaction inputs, unlocking them for use.
@@ -69,6 +71,11 @@ func (txB *txBroadcasterImpl) SignTransaction(ctx context.Context, req *walletrp
 // PublishTransaction broadcasts the transaction unto the network.
 func (txB *txBroadcasterImpl) PublishTransaction(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
 	return txB.publishTransaction(ctx, req, options...)
+}
+
+// Rescan begins a rescan of all transactions related to the wallet.
+func (txB *txBroadcasterImpl) Rescan(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+	return txB.rescan(ctx, req, options...)
 }
 
 func TestSharePercentages(t *testing.T) {
@@ -931,6 +938,13 @@ func testPaymentMgrPayment(t *testing.T) {
 	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
 		return 16, nil
 	}
+	mgr.cfg.FetchTxBroadcaster = func() TxBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to sign transaction")
+			},
+		}
+	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if !errors.Is(err, errs.TxOut) {
@@ -1128,6 +1142,109 @@ func testPaymentMgrPayment(t *testing.T) {
 		t.Fatalf("expected a publish error, got %v", err)
 	}
 
+	// Ensure dividend payment returns an error if fetching the wallet client
+	// fails.
+	mgr.cfg.FetchTxBroadcaster = func() TxBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return &walletrpc.SignTransactionResponse{
+					Transaction: txBytes,
+				}, nil
+			},
+			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to publish transaction")
+			},
+			rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+				return nil, fmt.Errorf("unable to create rescan client")
+			},
+		}
+	}
+
+	atomic.StoreUint32(&mgr.failedTxConfs, maxTxConfThreshold)
+
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
+	if !errors.Is(err, errs.Rescan) {
+		cancel()
+		t.Fatalf("expected a rescan error, got %v", err)
+	}
+
+	// Ensure dividend payment returns an error if fetching rescan responses fail.
+	mgr.cfg.FetchTxBroadcaster = func() TxBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return &walletrpc.SignTransactionResponse{
+					Transaction: txBytes,
+				}, nil
+			},
+			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to publish transaction")
+			},
+			rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+				return &tRescanClient{
+					err: fmt.Errorf("internal error"),
+				}, nil
+			},
+		}
+	}
+
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
+	if !errors.Is(err, errs.Rescan) {
+		cancel()
+		t.Fatalf("expected a rescan error, got %v", err)
+	}
+
+	// Ensure dividend payment returns an error if fetching rescan responses fail.
+	mgr.cfg.FetchTxBroadcaster = func() TxBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return &walletrpc.SignTransactionResponse{
+					Transaction: txBytes,
+				}, nil
+			},
+			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to publish transaction")
+			},
+			rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+				return &tRescanClient{
+					err: fmt.Errorf("internal error"),
+				}, nil
+			},
+		}
+	}
+
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
+	if !errors.Is(err, errs.Rescan) {
+		cancel()
+		t.Fatalf("expected a rescan error, got %v", err)
+	}
+
+	// Ensure wallet rescan succeeds when it scans through the current height.
+	mgr.cfg.FetchTxBroadcaster = func() TxBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return &walletrpc.SignTransactionResponse{
+					Transaction: txBytes,
+				}, nil
+			},
+			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to publish transaction")
+			},
+			rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+				return &tRescanClient{
+					resp: &walletrpc.RescanResponse{
+						RescannedThrough: 30,
+					},
+				}, nil
+			},
+		}
+	}
+
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
+	if !errors.Is(err, errs.PublishTx) {
+		cancel()
+		t.Fatalf("expected a publish error, got %v", err)
+	}
+
 	// Ensure paying dividend payment succeeds with valid inputs.
 	txHash, _ := hex.DecodeString("013264da8cc53f70022dc2b5654ebefc9ecfed24ea18dfcfc9adca5642d4fe66")
 	mgr.cfg.FetchTxBroadcaster = func() TxBroadcaster {
@@ -1142,6 +1259,13 @@ func testPaymentMgrPayment(t *testing.T) {
 					TransactionHash: txHash,
 				}, nil
 			},
+			rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+				return &tRescanClient{
+					resp: &walletrpc.RescanResponse{
+						RescannedThrough: 30,
+					},
+				}, nil
+			},
 		}
 	}
 
@@ -1149,6 +1273,13 @@ func testPaymentMgrPayment(t *testing.T) {
 	if err != nil {
 		cancel()
 		t.Fatalf("unexpected dividend payment error, got %v", err)
+	}
+
+	// Ensure the tx confirmation failure count reset to zero on a sucessful
+	// dividend payment.
+	txConfCount := atomic.LoadUint32(&mgr.failedTxConfs)
+	if txConfCount != 0 {
+		t.Fatalf("expected tx conf failure count to be %d, got %d", 0, txConfCount)
 	}
 
 	cancel()

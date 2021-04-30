@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"decred.org/dcrwallet/rpc/walletrpc"
@@ -36,6 +38,10 @@ const (
 	// output value of a transaction is allowed to be short of the
 	// provided input due to rounding errors.
 	maxRoundingDiff = dcrutil.Amount(500)
+
+	// maxTxConfThreshold is the total number of coinbase confirmation
+	// failures before a wallet rescan is requested.
+	maxTxConfThreshold = uint32(3)
 )
 
 // TxCreator defines the functionality needed by a transaction creator for the
@@ -57,11 +63,19 @@ type TxBroadcaster interface {
 	SignTransaction(context.Context, *walletrpc.SignTransactionRequest, ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
 	// PublishTransaction broadcasts the transaction unto the network.
 	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
+	// Rescan requests a wallet utxo rescan.
+	Rescan(ctx context.Context, in *walletrpc.RescanRequest, opts ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error)
 }
 
 // confNotifMsg represents a tx confirmation notification message.
 type confNotifMsg struct {
 	resp *walletrpc.ConfirmationNotificationsResponse
+	err  error
+}
+
+// rescanMsg represents a rescan response.
+type rescanMsg struct {
+	resp *walletrpc.RescanResponse
 	err  error
 }
 
@@ -107,7 +121,11 @@ type PaymentMgrConfig struct {
 // PaymentMgr handles generating shares and paying out dividends to
 // participating accounts.
 type PaymentMgr struct {
-	cfg *PaymentMgrConfig
+	failedTxConfs uint32 // update atomically.
+
+	processing bool
+	cfg        *PaymentMgrConfig
+	mtx        sync.Mutex
 }
 
 // NewPaymentMgr creates a new payment manager.
@@ -146,6 +164,21 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	}
 
 	return pm, nil
+}
+
+// isProcessing returns whether the payment manager is in the process of
+// paying out dividends.
+func (pm *PaymentMgr) isProcessing() bool {
+	pm.mtx.Lock()
+	defer pm.mtx.Unlock()
+	return pm.processing
+}
+
+// setProcessing sets the processing flag to the provided boolean.
+func (pm *PaymentMgr) setProcessing(status bool) {
+	pm.mtx.Lock()
+	pm.processing = status
+	pm.mtx.Unlock()
 }
 
 // sharePercentages calculates the percentages due each participating account
@@ -452,8 +485,8 @@ func fetchTxConfNotifications(ctx context.Context, notifSource func() (*walletrp
 
 	select {
 	case <-ctx.Done():
-		log.Tracef("%s: unable to fetch tx confirmation notifications",
-			funcName)
+		log.Tracef("%s: context cancelled fetching tx confirmation "+
+			"notifications", funcName)
 		return nil, errs.ContextCancelled
 	case notif := <-notifCh:
 		close(notifCh)
@@ -470,7 +503,7 @@ func fetchTxConfNotifications(ctx context.Context, notifSource func() (*walletrp
 // transaction hashes are spendable by the expected maximum spendable height.
 //
 // The context passed to this function must have a corresponding
-// cancellation to allow for a clean shutdown process
+// cancellation to allow for a clean shutdown process.
 func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txHashes map[string]*chainhash.Hash, spendableHeight uint32) error {
 	funcName := "confirmCoinbases"
 	hashes := make([]*chainhash.Hash, 0, len(txHashes))
@@ -515,6 +548,59 @@ func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txHashes map[string]
 		}
 
 		if len(txHashes) == 0 {
+			return nil
+		}
+	}
+}
+
+// fetchRecanReponse is a helper function for fetching rescan response.
+// It will return when either a response or error is received from the
+// provided rescan source, or when the provided context is cancelled.
+func fetchRescanResponse(ctx context.Context, rescanSource func() (*walletrpc.RescanResponse, error)) (*walletrpc.RescanResponse, error) {
+	funcName := "fetchRescanResponse"
+	respCh := make(chan *rescanMsg)
+	go func(ch chan *rescanMsg) {
+		resp, err := rescanSource()
+		ch <- &rescanMsg{
+			resp: resp,
+			err:  err,
+		}
+	}(respCh)
+
+	select {
+	case <-ctx.Done():
+		log.Tracef("%s: context cancelled fetching rescan response", funcName)
+		return nil, errs.ContextCancelled
+	case msg := <-respCh:
+		close(respCh)
+		if msg.err != nil {
+			desc := fmt.Sprintf("%s: unable fetch wallet rescan response, %s",
+				funcName, msg.err)
+			return nil, errs.PoolError(errs.Rescan, desc)
+		}
+		return msg.resp, nil
+	}
+}
+
+// monitorRescan ensures the wallet rescans up to the provided block height.
+//
+// The context passed to this function must have a corresponding
+// cancellation to allow for a clean shutdown process.
+func (pm *PaymentMgr) monitorRescan(ctx context.Context, rescanSource walletrpc.WalletService_RescanClient, height int32) error {
+	funcName := "monitorRescan"
+	for {
+		resp, err := fetchRescanResponse(ctx, rescanSource.Recv)
+		if err != nil {
+			if errors.Is(err, errs.ContextCancelled) {
+				desc := fmt.Sprintf("%s: cancelled wallet rescan", funcName)
+				return errs.PoolError(errs.ContextCancelled, desc)
+			}
+			return err
+		}
+
+		// Stop monitoring once the most recent block height has been rescanned.
+		if resp.RescannedThrough >= height {
+			log.Infof("wallet rescanned through height #%d", height)
 			return nil
 		}
 	}
@@ -644,13 +730,50 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		return nil
 	}
 
+	if pm.isProcessing() {
+		log.Info("payment processing already in progress, terminating")
+		return nil
+	}
+
+	pm.setProcessing(true)
+	defer pm.setProcessing(false)
+
+	txB := pm.cfg.FetchTxBroadcaster()
+	if txB == nil {
+		desc := fmt.Sprintf("%s: tx broadcaster cannot be nil", funcName)
+		return errs.PoolError(errs.Disconnected, desc)
+	}
+
+	// Request a wallet rescan if tx confirmation failures are
+	// at threshold.
+	pCtx, pCancel := context.WithTimeout(ctx, pm.cfg.CoinbaseConfTimeout)
+	defer pCancel()
+
+	txConfCount := atomic.LoadUint32(&pm.failedTxConfs)
+	if txConfCount == maxTxConfThreshold {
+		beginHeight := int32(height) - (int32(pm.cfg.ActiveNet.CoinbaseMaturity) * 2)
+		rescanReq := &walletrpc.RescanRequest{
+			BeginHeight: beginHeight,
+		}
+		rescanSource, err := txB.Rescan(pCtx, rescanReq)
+		if err != nil {
+			desc := fmt.Sprintf("%s: tx creator cannot be nil", funcName)
+			return errs.PoolError(errs.Rescan, desc)
+		}
+
+		err = pm.monitorRescan(pCtx, rescanSource, int32(height))
+		if err != nil {
+			return err
+		}
+	}
+
 	txC := pm.cfg.FetchTxCreator()
 	if txC == nil {
 		desc := fmt.Sprintf("%s: tx creator cannot be nil", funcName)
 		return errs.PoolError(errs.Disconnected, desc)
 	}
 
-	// remove all matured orphaned payments. Since the associated blocks
+	// Remove all matured orphaned payments. Since the associated blocks
 	// to these payments are not part of the main chain they will not be
 	// paid out.
 	pmts, err := pm.pruneOrphanedPayments(ctx, mPmts)
@@ -700,10 +823,10 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		maxSpendableHeight = height
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, pm.cfg.CoinbaseConfTimeout)
-	defer tCancel()
-	err = pm.confirmCoinbases(tCtx, inputTxHashes, maxSpendableHeight)
+	err = pm.confirmCoinbases(pCtx, inputTxHashes, maxSpendableHeight)
 	if err != nil {
+		atomic.AddUint32(&pm.failedTxConfs, 1)
+
 		// Do not error if coinbase spendable confirmation requests are
 		// terminated by the context cancellation.
 		if !errors.Is(err, errs.ContextCancelled) {
@@ -725,11 +848,6 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		return err
 	}
 
-	txB := pm.cfg.FetchTxBroadcaster()
-	if txB == nil {
-		desc := fmt.Sprintf("%s: tx broadcaster cannot be nil", funcName)
-		return errs.PoolError(errs.Disconnected, desc)
-	}
 	signTxReq := &walletrpc.SignTransactionRequest{
 		SerializedTransaction: txBytes,
 		Passphrase:            []byte(pm.cfg.WalletPass),
@@ -787,6 +905,8 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	if err != nil {
 		return err
 	}
+
+	atomic.StoreUint32(&pm.failedTxConfs, 0)
 
 	return nil
 }

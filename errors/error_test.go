@@ -58,6 +58,7 @@ func TestErrorKindStringer(t *testing.T) {
 		{TxIn, "TxIn"},
 		{ContextCancelled, "ContextCancelled"},
 		{CreateAmount, "CreateAmount"},
+		{Rescan, "Rescan"},
 	}
 
 	for i, test := range tests {

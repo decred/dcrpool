@@ -143,6 +143,9 @@ const (
 
 	// CreateAmount indicates an amount creation error.
 	CreateAmount = ErrorKind("CreateAmount")
+
+	// Rescan indicates an wallet rescan error.
+	Rescan = ErrorKind("Rescan")
 )
 
 // Error satisfies the error interface and prints human-readable errors.
