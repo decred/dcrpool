@@ -23,7 +23,42 @@ import (
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
+
+type tRescanClient struct {
+	resp *walletrpc.RescanResponse
+	err  error
+	grpc.ClientStream
+}
+
+func (r *tRescanClient) Recv() (*walletrpc.RescanResponse, error) {
+	return r.resp, r.err
+}
+
+func (r *tRescanClient) Header() (metadata.MD, error) {
+	return nil, nil
+}
+
+func (r *tRescanClient) Trailer() metadata.MD {
+	return nil
+}
+
+func (r *tRescanClient) CloseSend() error {
+	return nil
+}
+
+func (r *tRescanClient) Context() context.Context {
+	return nil
+}
+
+func (r *tRescanClient) SendMsg(m interface{}) error {
+	return nil
+}
+
+func (r *tRescanClient) RecvMsg(m interface{}) error {
+	return nil
+}
 
 type tWalletConnection struct {
 }
@@ -107,6 +142,15 @@ func (t *tWalletConnection) PublishTransaction(context.Context, *walletrpc.Publi
 	return &walletrpc.PublishTransactionResponse{
 		TransactionHash: txHash,
 	}, nil
+}
+
+func (t *tWalletConnection) Rescan(context.Context, *walletrpc.RescanRequest, ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+	client := new(tRescanClient)
+	client.resp = &walletrpc.RescanResponse{
+		RescannedThrough: 10000,
+	}
+
+	return client, nil
 }
 
 type tNodeConnection struct{}
