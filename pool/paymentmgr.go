@@ -42,6 +42,9 @@ const (
 	// maxTxConfThreshold is the total number of coinbase confirmation
 	// failures before a wallet rescan is requested.
 	maxTxConfThreshold = uint32(3)
+
+	// paymentBufferSize repreents the buffering on the payment channel.
+	paymentBufferSize = uint32(30)
 )
 
 // TxCreator defines the functionality needed by a transaction creator for the
@@ -116,6 +119,19 @@ type PaymentMgrConfig struct {
 	// CoinbaseConfTimeout is the duration to wait for coinbase confirmations
 	// when generating a payout transaction.
 	CoinbaseConfTimeout time.Duration
+	// Cancel represents the pool's context cancellation function.
+	Cancel context.CancelFunc
+	// SignalCache sends the provided cache update event to the gui cache.
+	SignalCache func(event CacheUpdateEvent)
+	// HubWg represents the hub's waitgroup.
+	HubWg *sync.WaitGroup
+}
+
+// paymentMsg represents a payment processing signal.
+type paymentMsg struct {
+	CurrentHeight  uint32
+	TreasuryActive bool
+	Done           chan bool
 }
 
 // PaymentMgr handles generating shares and paying out dividends to
@@ -123,6 +139,7 @@ type PaymentMgrConfig struct {
 type PaymentMgr struct {
 	failedTxConfs uint32 // update atomically.
 
+	paymentCh  chan *paymentMsg
 	processing bool
 	cfg        *PaymentMgrConfig
 	mtx        sync.Mutex
@@ -131,7 +148,8 @@ type PaymentMgr struct {
 // NewPaymentMgr creates a new payment manager.
 func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	pm := &PaymentMgr{
-		cfg: pCfg,
+		cfg:       pCfg,
+		paymentCh: make(chan *paymentMsg, paymentBufferSize),
 	}
 	rand.Seed(time.Now().UnixNano())
 
@@ -909,4 +927,36 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	atomic.StoreUint32(&pm.failedTxConfs, 0)
 
 	return nil
+}
+
+// processPayments relays payment signals for processing.
+func (pm *PaymentMgr) processPayments(msg *paymentMsg) {
+	pm.paymentCh <- msg
+}
+
+// handlePayments processes dividend payment signals.
+func (pm *PaymentMgr) handlePayments(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			pm.cfg.HubWg.Done()
+			return
+
+		case msg := <-pm.paymentCh:
+			if !pm.cfg.SoloPool {
+				err := pm.payDividends(ctx, msg.CurrentHeight, msg.TreasuryActive)
+				if err != nil {
+					log.Errorf("unable to process payments: %v", err)
+					close(msg.Done)
+					pm.cfg.Cancel()
+					continue
+				}
+
+				// Signal the gui cache of paid dividends.
+				pm.cfg.SignalCache(DividendsPaid)
+
+				close(msg.Done)
+			}
+		}
+	}
 }

@@ -44,9 +44,7 @@ func testChainState(t *testing.T) {
 		t.Fatalf("unexpected serialization error: %v", err)
 	}
 
-	payDividends := func(context.Context, uint32, bool) error {
-		return nil
-	}
+	processPayments := func(*paymentMsg) {}
 	generatePayments := func(uint32, *PaymentSource, dcrutil.Amount, int64) error {
 		return nil
 	}
@@ -78,7 +76,7 @@ func testChainState(t *testing.T) {
 	cCfg := &ChainStateConfig{
 		db:                    db,
 		SoloPool:              false,
-		PayDividends:          payDividends,
+		ProcessPayments:       processPayments,
 		GeneratePayments:      generatePayments,
 		GetBlock:              getBlock,
 		GetBlockConfirmations: getBlockConfirmations,
@@ -339,7 +337,6 @@ func testChainState(t *testing.T) {
 	}
 	cs.discCh <- discConfMsg
 	<-discConfMsg.Done
-	cs.cfg.PayDividends = payDividends
 
 	// Ensure the last work height can be updated.
 	initialLastWorkHeight := cs.fetchLastWorkHeight()
