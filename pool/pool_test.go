@@ -103,6 +103,7 @@ func TestPool(t *testing.T) {
 		"testPaymentMgrMaturity":     testPaymentMgrMaturity,
 		"testPaymentMgrPayment":      testPaymentMgrPayment,
 		"testPaymentMgrDust":         testPaymentMgrDust,
+		"testPaymentSignals":         testPaymentMgrSignals,
 		"testChainState":             testChainState,
 		"testHub":                    testHub,
 	}

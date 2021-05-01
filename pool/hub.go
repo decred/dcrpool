@@ -258,6 +258,8 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		FetchTxCreator:         func() TxCreator { return h.nodeConn },
 		FetchTxBroadcaster:     func() TxBroadcaster { return h.walletConn },
 		CoinbaseConfTimeout:    h.cfg.CoinbaseConfTimeout,
+		SignalCache:            h.SignalCache,
+		HubWg:                  h.wg,
 	}
 
 	var err error
@@ -269,7 +271,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	sCfg := &ChainStateConfig{
 		db:                    h.cfg.DB,
 		SoloPool:              h.cfg.SoloPool,
-		PayDividends:          h.paymentMgr.payDividends,
+		ProcessPayments:       h.paymentMgr.processPayments,
 		GeneratePayments:      h.paymentMgr.generatePayments,
 		GetBlock:              h.getBlock,
 		GetBlockConfirmations: h.getBlockConfirmations,
@@ -642,9 +644,10 @@ func (h *Hub) shutdown() {
 
 // Run handles the process lifecycles of the pool hub.
 func (h *Hub) Run(ctx context.Context) {
-	h.wg.Add(2)
+	h.wg.Add(3)
 	go h.endpoint.run(ctx)
 	go h.chainState.handleChainUpdates(ctx)
+	go h.paymentMgr.handlePayments(ctx)
 
 	// Wait until all hub processes have terminated, and then shutdown.
 	h.wg.Wait()

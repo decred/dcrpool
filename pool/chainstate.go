@@ -31,8 +31,8 @@ type ChainStateConfig struct {
 	db Database
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
-	// PayDividends pays mature mining rewards to participating accounts.
-	PayDividends func(context.Context, uint32, bool) error
+	// ProcessPayments relays payment signals for Processing.
+	ProcessPayments func(msg *paymentMsg)
 	// GeneratePayments creates payments for participating accounts in pool
 	// mining mode based on the configured payment scheme.
 	GeneratePayments func(uint32, *PaymentSource, dcrutil.Amount, int64) error
@@ -211,6 +211,31 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				continue
 			}
 
+			block, err := cs.cfg.GetBlock(ctx, &header.PrevBlock)
+			if err != nil {
+				// Errors generated fetching blocks of confirmed mined
+				// work are curently fatal because payments are
+				// sourced from coinbases. The chainstate process will be
+				// terminated as a result.
+				log.Errorf("unable to fetch block with hash %x: %v",
+					header.PrevBlock, err)
+				close(msg.Done)
+				cs.cfg.Cancel()
+				continue
+			}
+
+			coinbaseTx := block.Transactions[0]
+			treasuryActive := isTreasuryActive(coinbaseTx)
+
+			soloPool := cs.cfg.SoloPool
+			if !soloPool {
+				go cs.cfg.ProcessPayments(&paymentMsg{
+					CurrentHeight:  header.Height,
+					TreasuryActive: treasuryActive,
+					Done:           make(chan bool),
+				})
+			}
+
 			// Prune invalidated jobs and accepted work.
 			if header.Height > MaxReorgLimit {
 				pruneLimit := header.Height - MaxReorgLimit
@@ -269,34 +294,6 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					continue
 				}
 			}
-
-			block, err := cs.cfg.GetBlock(ctx, &header.PrevBlock)
-			if err != nil {
-				// Errors generated fetching blocks of confirmed mined
-				// work are curently fatal because payments are
-				// sourced from coinbases. The chainstate process will be
-				// terminated as a result.
-				log.Errorf("unable to fetch block with hash %x: %v",
-					header.PrevBlock, err)
-				close(msg.Done)
-				cs.cfg.Cancel()
-				continue
-			}
-
-			coinbaseTx := block.Transactions[0]
-			treasuryActive := isTreasuryActive(coinbaseTx)
-
-			// Process mature payments.
-			err = cs.cfg.PayDividends(ctx, header.Height, treasuryActive)
-			if err != nil {
-				log.Errorf("unable to process payments: %v", err)
-				close(msg.Done)
-				cs.cfg.Cancel()
-				continue
-			}
-
-			// Signal the gui cache of paid dividends.
-			cs.cfg.SignalCache(DividendsPaid)
 
 			// Check if the parent of the connected block is an accepted work
 			// of the pool.

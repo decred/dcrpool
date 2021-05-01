@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -150,7 +151,7 @@ func TestSharePercentages(t *testing.T) {
 	}
 }
 
-func createPaymentMgr(paymentMethod string) (*PaymentMgr, error) {
+func createPaymentMgr(paymentMethod string) (*PaymentMgr, context.Context, context.CancelFunc, error) {
 	activeNet := chaincfg.SimNetParams()
 
 	getBlockConfirmations := func(context.Context, *chainhash.Hash) (int64, error) {
@@ -165,6 +166,11 @@ func createPaymentMgr(paymentMethod string) (*PaymentMgr, error) {
 		return nil
 	}
 
+	signalCache := func(CacheUpdateEvent) {
+		// Do nothing.
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
 	pCfg := &PaymentMgrConfig{
 		db:                    db,
 		ActiveNet:             activeNet,
@@ -176,12 +182,21 @@ func createPaymentMgr(paymentMethod string) (*PaymentMgr, error) {
 		FetchTxCreator:        fetchTxCreator,
 		FetchTxBroadcaster:    fetchTxBroadcaster,
 		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
+		Cancel:                cancel,
+		SignalCache:           signalCache,
+		HubWg:                 new(sync.WaitGroup),
 	}
-	return NewPaymentMgr(pCfg)
+
+	mgr, err := NewPaymentMgr(pCfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return mgr, ctx, cancel, err
 }
 
 func testPaymentMgrPPS(t *testing.T) {
-	mgr, err := createPaymentMgr(PPS)
+	mgr, _, _, err := createPaymentMgr(PPS)
 	if err != nil {
 		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
@@ -278,7 +293,7 @@ func testPaymentMgrPPS(t *testing.T) {
 }
 
 func testPaymentMgrPPLNS(t *testing.T) {
-	mgr, err := createPaymentMgr(PPLNS)
+	mgr, _, _, err := createPaymentMgr(PPLNS)
 	if err != nil {
 		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
@@ -376,7 +391,7 @@ func testPaymentMgrPPLNS(t *testing.T) {
 }
 
 func testPaymentMgrMaturity(t *testing.T) {
-	mgr, err := createPaymentMgr(PPLNS)
+	mgr, _, _, err := createPaymentMgr(PPLNS)
 	if err != nil {
 		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
@@ -472,7 +487,7 @@ func testPaymentMgrPayment(t *testing.T) {
 		t.Fatalf("failed to insert account: %v", err)
 	}
 
-	mgr, err := createPaymentMgr(PPS)
+	mgr, _, _, err := createPaymentMgr(PPS)
 	if err != nil {
 		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
@@ -1296,7 +1311,7 @@ func testPaymentMgrPayment(t *testing.T) {
 }
 
 func testPaymentMgrDust(t *testing.T) {
-	mgr, err := createPaymentMgr(PPLNS)
+	mgr, _, _, err := createPaymentMgr(PPLNS)
 	if err != nil {
 		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
@@ -1374,4 +1389,184 @@ func testPaymentMgrDust(t *testing.T) {
 		t.Fatalf("expected the updated pool fee (%v) to be greater "+
 			"than the initial (%v)", ft, expectedFeeAmt)
 	}
+}
+
+func testPaymentMgrSignals(t *testing.T) {
+	// Insert some test accounts.
+	accountX := NewAccount(xAddr)
+	err := db.persistAccount(accountX)
+	if err != nil {
+		t.Fatalf("failed to insert account: %v", err)
+	}
+
+	accountY := NewAccount(yAddr)
+	err = db.persistAccount(accountY)
+	if err != nil {
+		t.Fatalf("failed to insert account: %v", err)
+	}
+
+	mgr, ctx, cancel, err := createPaymentMgr(PPLNS)
+	if err != nil {
+		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
+	}
+
+	var randBytes [chainhash.HashSize + 1]byte
+	_, err = rand.Read(randBytes[:])
+	if err != nil {
+		t.Fatalf("unable to generate random bytes: %v", err)
+	}
+
+	randHash := chainhash.HashH(randBytes[:])
+	randSource := &PaymentSource{
+		BlockHash: randHash.String(),
+		Coinbase:  randHash.String(),
+	}
+
+	height := uint32(10)
+	estMaturity := uint32(26)
+	amt, _ := dcrutil.NewAmount(5)
+
+	pmtX := NewPayment(xID, zeroSource, amt, height, estMaturity)
+	err = db.PersistPayment(pmtX)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+
+	pmtY := NewPayment(yID, randSource, amt, height, estMaturity)
+	err = db.PersistPayment(pmtY)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+
+	txHashes := make(map[string]*chainhash.Hash)
+	hashA := chainhash.Hash{'a'}
+	txHashes[hashA.String()] = &hashA
+	hashB := chainhash.Hash{'b'}
+	txHashes[hashB.String()] = &hashB
+	hashC := chainhash.Hash{'c'}
+	txHashes[hashC.String()] = &hashC
+
+	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
+		return int64(estMaturity) + 1, nil
+	}
+
+	txConfs := make([]*walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations, 0)
+	confA := walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
+		TxHash:        zeroHash[:],
+		Confirmations: 50,
+		BlockHash:     []byte(zeroSource.BlockHash),
+		BlockHeight:   60,
+	}
+	txConfs = append(txConfs, &confA)
+	confB := walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
+		TxHash:        randHash[:],
+		Confirmations: 50,
+		BlockHash:     []byte(zeroSource.BlockHash),
+		BlockHeight:   60,
+	}
+	txConfs = append(txConfs, &confB)
+
+	mgr.cfg.CoinbaseConfTimeout = time.Millisecond * 500
+	mgr.cfg.GetTxConfNotifications = func([]*chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
+		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
+			return &walletrpc.ConfirmationNotificationsResponse{
+				Confirmations: txConfs,
+			}, nil
+		}, nil
+	}
+
+	txBytes := []byte("01000000018e17619f0d627c2769ee3f957582691aea59c2" +
+		"e79cc45b8ba1f08485dd88d75c0300000001ffffffff017a64e43703000000" +
+		"00001976a914978fa305bd66f63f0de847338bb56ff65fa8e27288ac000000" +
+		"000000000001f46ce43703000000846c0700030000006b483045022100d668" +
+		"5812801db991b72e80863eba7058466dfebb4aba0af75ab47bade177325102" +
+		"205f466fc47435c1a177482e527ff0e76f3c2c613940b358e57f0f0d78d5f2" +
+		"ffcb012102d040a4c34ae65a2b87ea8e9df7413e6504e5f27c6bde019a78ee" +
+		"96145b27c517")
+	txHash, _ := hex.DecodeString("013264da8cc53f70022dc2b5654ebefc9ecfed24ea18dfcfc9adca5642d4fe66")
+	mgr.cfg.FetchTxBroadcaster = func() TxBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return &walletrpc.SignTransactionResponse{
+					Transaction: txBytes,
+				}, nil
+			},
+			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
+				return &walletrpc.PublishTransactionResponse{
+					TransactionHash: txHash,
+				}, nil
+			},
+			rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+				return &tRescanClient{
+					resp: &walletrpc.RescanResponse{
+						RescannedThrough: 30,
+					},
+				}, nil
+			},
+		}
+	}
+
+	mgr.cfg.FetchTxCreator = func() TxCreator {
+		return &txCreatorImpl{
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+				return &chainjson.GetTxOutResult{
+					BestBlock:     chainhash.Hash{0}.String(),
+					Confirmations: int64(estMaturity) + 1,
+					Value:         5,
+					Coinbase:      true,
+				}, nil
+			},
+			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[dcrutil.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+				return &wire.MsgTx{}, nil
+			},
+		}
+	}
+	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
+		return int64(estMaturity) + 1, nil
+	}
+
+	// Ensure the payment lifecycle process recieves the payment signal and
+	// processes mature payments.
+	msgA := paymentMsg{
+		CurrentHeight:  estMaturity + 1,
+		TreasuryActive: false,
+		Done:           make(chan bool),
+	}
+
+	mgr.cfg.HubWg.Add(1)
+	go mgr.handlePayments(ctx)
+
+	mgr.processPayments(&msgA)
+	<-msgA.Done
+
+	// Esure the payment lifecycle process cancels the context when an
+	// error is encountered.
+	mgr.cfg.FetchTxCreator = func() TxCreator {
+		return &txCreatorImpl{
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+				return &chainjson.GetTxOutResult{
+					BestBlock:     chainhash.Hash{0}.String(),
+					Confirmations: int64(estMaturity) + 1,
+					Value:         5,
+					Coinbase:      true,
+				}, nil
+			},
+			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[dcrutil.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+				return nil, fmt.Errorf("unable to create raw transactions")
+			},
+		}
+	}
+
+	msgB := paymentMsg{
+		CurrentHeight:  estMaturity + 1,
+		TreasuryActive: false,
+		Done:           make(chan bool),
+	}
+	mgr.processPayments(&msgB)
+	<-msgB.Done
+
+	cancel()
+	mgr.cfg.HubWg.Wait()
 }
