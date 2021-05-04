@@ -109,7 +109,7 @@ type PaymentMgrConfig struct {
 	GetBlockConfirmations func(context.Context, *chainhash.Hash) (int64, error)
 	// GetTxConfNotifications streams transaction confirmation notifications on
 	// the provided hashes.
-	GetTxConfNotifications func([]*chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error)
+	GetTxConfNotifications func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error)
 	// FetchTxCreator returns a transaction creator that allows coinbase lookups
 	// and payment transaction creation.
 	FetchTxCreator func() TxCreator
@@ -138,9 +138,10 @@ type paymentMsg struct {
 // participating accounts.
 type PaymentMgr struct {
 	failedTxConfs uint32 // update atomically.
+	txConfHashes  map[chainhash.Hash]uint32
 
-	paymentCh  chan *paymentMsg
 	processing bool
+	paymentCh  chan *paymentMsg
 	cfg        *PaymentMgrConfig
 	mtx        sync.Mutex
 }
@@ -148,8 +149,9 @@ type PaymentMgr struct {
 // NewPaymentMgr creates a new payment manager.
 func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	pm := &PaymentMgr{
-		cfg:       pCfg,
-		paymentCh: make(chan *paymentMsg, paymentBufferSize),
+		cfg:          pCfg,
+		txConfHashes: make(map[chainhash.Hash]uint32),
+		paymentCh:    make(chan *paymentMsg, paymentBufferSize),
 	}
 	rand.Seed(time.Now().UnixNano())
 
@@ -522,10 +524,10 @@ func fetchTxConfNotifications(ctx context.Context, notifSource func() (*walletrp
 //
 // The context passed to this function must have a corresponding
 // cancellation to allow for a clean shutdown process.
-func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txHashes map[string]*chainhash.Hash, spendableHeight uint32) error {
+func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txHashes map[chainhash.Hash]uint32, spendableHeight uint32) error {
 	funcName := "confirmCoinbases"
-	hashes := make([]*chainhash.Hash, 0, len(txHashes))
-	for _, hash := range txHashes {
+	hashes := make([]chainhash.Hash, 0, len(txHashes))
+	for hash := range txHashes {
 		hashes = append(hashes, hash)
 	}
 
@@ -561,7 +563,7 @@ func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txHashes map[string]
 
 				// Remove spendable coinbase from the tx hash set. All
 				// coinbases are spendable when the tx hash set is empty.
-				delete(txHashes, hash.String())
+				delete(txHashes, *hash)
 			}
 		}
 
@@ -627,7 +629,7 @@ func (pm *PaymentMgr) monitorRescan(ctx context.Context, rescanSource walletrpc.
 // generatePayoutTxDetails creates the payout transaction inputs and outputs
 // from the provided payments
 func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator, feeAddr dcrutil.Address, payments map[string][]*Payment, treasuryActive bool) ([]chainjson.TransactionInput,
-	map[string]*chainhash.Hash, map[string]dcrutil.Amount, dcrutil.Amount, error) {
+	map[chainhash.Hash]uint32, map[string]dcrutil.Amount, dcrutil.Amount, error) {
 	funcName := "generatePayoutTxDetails"
 
 	// The coinbase output prior to
@@ -641,7 +643,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 
 	var tIn, tOut dcrutil.Amount
 	inputs := make([]chainjson.TransactionInput, 0)
-	inputTxHashes := make(map[string]*chainhash.Hash)
+	inputTxHashes := make(map[chainhash.Hash]uint32)
 	outputs := make(map[string]dcrutil.Amount)
 	for _, pmtSet := range payments {
 		coinbaseTx := pmtSet[0].Source.Coinbase
@@ -675,7 +677,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 			Tree:   wire.TxTreeRegular,
 		}
 		inputs = append(inputs, in)
-		inputTxHashes[txHash.String()] = txHash
+		inputTxHashes[*txHash] = pmtSet[0].Height
 
 		prevOutV, err := dcrutil.NewAmount(in.Amount)
 		if err != nil {
@@ -769,9 +771,35 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 
 	txConfCount := atomic.LoadUint32(&pm.failedTxConfs)
 	if txConfCount == maxTxConfThreshold {
-		beginHeight := int32(height) - (int32(pm.cfg.ActiveNet.CoinbaseMaturity) * 2)
+		beginHeight := uint32(0)
+
+		// Having no tx conf hashes at threshold indicates an
+		// underlining error.
+		pm.mtx.Lock()
+		if len(pm.txConfHashes) == 0 {
+			pm.mtx.Unlock()
+			desc := fmt.Sprintf("%s: no tx conf hashes to rescan for",
+				funcName)
+			return errs.PoolError(errs.TxConf, desc)
+		}
+
+		// Find the lowest height to start the rescan from.
+		for _, height := range pm.txConfHashes {
+			if beginHeight == 0 {
+				beginHeight = height
+			}
+
+			if beginHeight > height {
+				beginHeight = height
+			}
+		}
+		pm.mtx.Unlock()
+
+		// Start the rescan a block height below the lowest reported block
+		// having inaccurate confirmation information.
+		log.Infof("wallet rescanning from height #%d", beginHeight-1)
 		rescanReq := &walletrpc.RescanRequest{
-			BeginHeight: beginHeight,
+			BeginHeight: int32(beginHeight - 1),
 		}
 		rescanSource, err := txB.Rescan(pCtx, rescanReq)
 		if err != nil {
@@ -844,6 +872,13 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	err = pm.confirmCoinbases(pCtx, inputTxHashes, maxSpendableHeight)
 	if err != nil {
 		atomic.AddUint32(&pm.failedTxConfs, 1)
+
+		// Track the transactions with inaccurate confirmation data.
+		pm.mtx.Lock()
+		for k, v := range inputTxHashes {
+			pm.txConfHashes[k] = v
+		}
+		pm.mtx.Unlock()
 
 		// Do not error if coinbase spendable confirmation requests are
 		// terminated by the context cancellation.
@@ -924,7 +959,12 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		return err
 	}
 
+	// Reset the failed tx conf counter and clear the hashes.
 	atomic.StoreUint32(&pm.failedTxConfs, 0)
+
+	pm.mtx.Lock()
+	pm.txConfHashes = make(map[chainhash.Hash]uint32)
+	pm.mtx.Unlock()
 
 	return nil
 }

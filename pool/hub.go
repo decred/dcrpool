@@ -445,7 +445,7 @@ func (h *Hub) getWork(ctx context.Context) (string, string, error) {
 
 // getTxConfNotifications streams transaction confirmation notifications for
 // the provided transaction hashes.
-func (h *Hub) getTxConfNotifications(txHashes []*chainhash.Hash, stopAfter int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
+func (h *Hub) getTxConfNotifications(txHashes []chainhash.Hash, stopAfter int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
 	hashes := make([][]byte, 0, len(txHashes))
 	for _, hash := range txHashes {
 		hashes = append(hashes, hash[:])
