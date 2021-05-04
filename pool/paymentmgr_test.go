@@ -620,16 +620,16 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 
 	// confirmCoinbases tests.
-	txHashes := make(map[string]*chainhash.Hash)
+	txHashes := make(map[chainhash.Hash]uint32)
 	hashA := chainhash.Hash{'a'}
-	txHashes[hashA.String()] = &hashA
+	txHashes[hashA] = height
 	hashB := chainhash.Hash{'b'}
-	txHashes[hashB.String()] = &hashB
+	txHashes[hashB] = height
 	hashC := chainhash.Hash{'c'}
-	txHashes[hashC.String()] = &hashC
+	txHashes[hashC] = height
 	spendableHeight := uint32(10)
 
-	mgr.cfg.GetTxConfNotifications = func([]*chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
+	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
 		return nil, fmt.Errorf("unable to fetch tx conf notification source")
 	}
 
@@ -641,7 +641,7 @@ func testPaymentMgrPayment(t *testing.T) {
 		t.Fatalf("expected tx conf notification source error")
 	}
 
-	mgr.cfg.GetTxConfNotifications = func([]*chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
+	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
 		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
 			return &walletrpc.ConfirmationNotificationsResponse{}, nil
 		}, nil
@@ -661,7 +661,7 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	// The context here needs to be recreated after the previous test.
 	ctx, cancel = context.WithCancel(context.Background())
-	mgr.cfg.GetTxConfNotifications = func([]*chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
+	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
 		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
 			return nil, fmt.Errorf("unable to confirm transactions")
 		}, nil
@@ -698,7 +698,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 	txConfs = append(txConfs, &confC)
 
-	mgr.cfg.GetTxConfNotifications = func([]*chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
+	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
 		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
 			return &walletrpc.ConfirmationNotificationsResponse{
 				Confirmations: txConfs,
@@ -856,7 +856,7 @@ func testPaymentMgrPayment(t *testing.T) {
 		t.Fatalf("expected %d inputs, got %d", expectedInputs, len(inputs))
 	}
 
-	for _, hash := range inputTxHashes {
+	for hash := range inputTxHashes {
 		txHash := hash.String()
 		var match bool
 		for _, in := range inputs {
@@ -997,7 +997,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
 		return int64(estMaturity) + 1, nil
 	}
-	mgr.cfg.GetTxConfNotifications = func([]*chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
+	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
 		return nil, fmt.Errorf("unable to fetch tx conf notification source")
 	}
 
@@ -1029,23 +1029,23 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 
 	txConfs = make([]*walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations, 0)
-	confA = walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
+	confD := walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
 		TxHash:        zeroHash[:],
 		Confirmations: 50,
 		BlockHash:     []byte(zeroSource.BlockHash),
 		BlockHeight:   60,
 	}
-	txConfs = append(txConfs, &confA)
-	confB = walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
+	txConfs = append(txConfs, &confD)
+	confE := walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
 		TxHash:        randHash[:],
 		Confirmations: 50,
 		BlockHash:     []byte(zeroSource.BlockHash),
 		BlockHeight:   60,
 	}
-	txConfs = append(txConfs, &confB)
+	txConfs = append(txConfs, &confE)
 
 	mgr.cfg.CoinbaseConfTimeout = time.Millisecond * 500
-	mgr.cfg.GetTxConfNotifications = func([]*chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
+	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
 		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
 			return &walletrpc.ConfirmationNotificationsResponse{
 				Confirmations: txConfs,
@@ -1083,7 +1083,7 @@ func testPaymentMgrPayment(t *testing.T) {
 		return nil
 	}
 	mgr.cfg.WalletPass = "123"
-	mgr.cfg.GetTxConfNotifications = func([]*chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
+	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
 		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
 			return &walletrpc.ConfirmationNotificationsResponse{
 				Confirmations: txConfs,
@@ -1232,6 +1232,26 @@ func testPaymentMgrPayment(t *testing.T) {
 		cancel()
 		t.Fatalf("expected a rescan error, got %v", err)
 	}
+
+	// Clear out the tx confirmation hashes to be rescanned for.
+	var confHashes map[chainhash.Hash]uint32
+	mgr.mtx.Lock()
+	confHashes = mgr.txConfHashes
+	mgr.txConfHashes = make(map[chainhash.Hash]uint32)
+	mgr.mtx.Unlock()
+
+	// Ensure dividend payment returns an error when there are no tx
+	// confirmation hashes to rescan.
+	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
+	if !errors.Is(err, errs.TxConf) {
+		cancel()
+		t.Fatalf("expected a no tx conf error, got %v", err)
+	}
+
+	// Restore the tx confirmation hashes to be rescanned for.
+	mgr.mtx.Lock()
+	mgr.txConfHashes = confHashes
+	mgr.mtx.Unlock()
 
 	// Ensure wallet rescan succeeds when it scans through the current height.
 	mgr.cfg.FetchTxBroadcaster = func() TxBroadcaster {
@@ -1469,7 +1489,7 @@ func testPaymentMgrSignals(t *testing.T) {
 	txConfs = append(txConfs, &confB)
 
 	mgr.cfg.CoinbaseConfTimeout = time.Millisecond * 500
-	mgr.cfg.GetTxConfNotifications = func([]*chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
+	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
 		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
 			return &walletrpc.ConfirmationNotificationsResponse{
 				Confirmations: txConfs,
