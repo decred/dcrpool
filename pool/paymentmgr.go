@@ -501,6 +501,20 @@ func fetchTxConfNotifications(ctx context.Context, notifSource func() (*walletrp
 			resp: resp,
 			err:  err,
 		}
+
+		if resp != nil {
+			log.Tracef("Got notification with %d confirmation(s)",
+				len(resp.Confirmations))
+			for _, conf := range resp.Confirmations {
+				txHash, err := chainhash.NewHash(conf.TxHash)
+				if err != nil {
+					log.Tracef("Could not decode txhash: %b", conf.TxHash)
+				} else {
+					log.Tracef("    tx=%s, confs=%d, height=%d",
+						txHash, conf.Confirmations, conf.BlockHeight)
+				}
+			}
+		}
 	}(notifCh)
 
 	select {
@@ -565,6 +579,11 @@ func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txHashes map[chainha
 				// coinbases are spendable when the tx hash set is empty.
 				delete(txHashes, *hash)
 			}
+		}
+
+		log.Tracef("%d coinbase(s) are not confirmed:", len(txHashes))
+		for coinbase := range txHashes {
+			log.Tracef("    %v", coinbase)
 		}
 
 		if len(txHashes) == 0 {
