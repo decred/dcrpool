@@ -884,11 +884,16 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 			maxSpendableHeight = spendableHeight
 		}
 	}
-	if maxSpendableHeight < height {
-		maxSpendableHeight = height
+
+	var stopAfter uint32
+	switch {
+	case maxSpendableHeight > height:
+		stopAfter = maxSpendableHeight - height
+	default:
+		stopAfter = 1
 	}
 
-	err = pm.confirmCoinbases(pCtx, inputTxHashes, maxSpendableHeight)
+	err = pm.confirmCoinbases(pCtx, inputTxHashes, stopAfter)
 	if err != nil {
 		atomic.AddUint32(&pm.failedTxConfs, 1)
 
