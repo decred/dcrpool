@@ -450,7 +450,7 @@ func (h *Hub) getTxConfNotifications(txHashes []chainhash.Hash, stopAfter int32)
 	log.Tracef("Requesting tx conf notifications for %d "+
 		"transactions (stop after #%d)", len(txHashes), stopAfter)
 	for _, hash := range txHashes {
-		hashes = append(hashes, hash[:])
+		hashes = append(hashes, hash.CloneBytes())
 		log.Tracef("    %s", hash)
 	}
 
