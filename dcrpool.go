@@ -20,6 +20,10 @@ import (
 	"github.com/decred/dcrpool/pool"
 )
 
+// signals defines the signals that are handled to do a clean shutdown.
+// Conditional compilation is used to also include SIGTERM and SIGHUP on Unix.
+var signals = []os.Signal{os.Interrupt}
+
 // miningPool represents a decred proof-of-Work mining pool.
 type miningPool struct {
 	ctx    context.Context
@@ -131,7 +135,7 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 func main() {
 	// Listen for interrupt signals.
 	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+	signal.Notify(interrupt, signals...)
 
 	// Load configuration and parse command line. This also initializes
 	// logging and configures it accordingly.
