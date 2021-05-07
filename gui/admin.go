@@ -66,7 +66,7 @@ func (ui *GUI) adminPage(w http.ResponseWriter, r *http.Request) {
 			LastPaymentHeight: lastPaymentHeight,
 			PoolHashRate:      ui.cache.getPoolHash(),
 			PaymentMethod:     ui.cfg.PaymentMethod,
-			Network:           ui.cfg.ActiveNet.Name,
+			Network:           ui.cfg.ActiveNetName,
 			PoolFee:           ui.cfg.PoolFee,
 			SoloPool:          ui.cfg.SoloPool,
 		},

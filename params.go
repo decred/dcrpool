@@ -12,22 +12,26 @@ type params struct {
 	*chaincfg.Params
 	DcrdRPCServerPort    string
 	WalletGRPCServerPort string
+	BlockExplorerURL     string
 }
 
 var mainNetParams = params{
 	Params:               chaincfg.MainNetParams(),
 	DcrdRPCServerPort:    "9109",
 	WalletGRPCServerPort: "9111",
+	BlockExplorerURL:     "https://dcrdata.decred.org",
 }
 
 var testNet3Params = params{
 	Params:               chaincfg.TestNet3Params(),
 	DcrdRPCServerPort:    "19109",
 	WalletGRPCServerPort: "19111",
+	BlockExplorerURL:     "https://testnet.dcrdata.org",
 }
 
 var simNetParams = params{
 	Params:               chaincfg.SimNetParams(),
 	DcrdRPCServerPort:    "19556",
 	WalletGRPCServerPort: "19558",
+	BlockExplorerURL:     "...",
 }

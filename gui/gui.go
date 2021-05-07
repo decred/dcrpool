@@ -22,7 +22,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 
-	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrpool/pool"
 )
 
@@ -51,8 +50,8 @@ type Config struct {
 	NoGUITLS bool
 	// Domain represents the domain name of the pool.
 	Domain string
-	// ActiveNet represents the active network being mined on.
-	ActiveNet *chaincfg.Params
+	// ActiveNetName is the name of the active network being mined on.
+	ActiveNetName string
 	// BlockExplorerURL represents the active network block explorer.
 	BlockExplorerURL string
 	// Designation represents the codename of the pool.
@@ -185,15 +184,6 @@ func NewGUI(cfg *Config) (*GUI, error) {
 	ui := &GUI{
 		cfg:     cfg,
 		limiter: pool.NewRateLimiter(),
-	}
-
-	switch cfg.ActiveNet.Name {
-	case chaincfg.TestNet3Params().Name:
-		ui.cfg.BlockExplorerURL = "https://testnet.dcrdata.org"
-	case chaincfg.SimNetParams().Name:
-		ui.cfg.BlockExplorerURL = "..."
-	default:
-		ui.cfg.BlockExplorerURL = "https://dcrdata.decred.org"
 	}
 
 	ui.cookieStore = sessions.NewCookieStore(cfg.CSRFSecret)

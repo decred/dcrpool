@@ -62,7 +62,7 @@ func (ui *GUI) renderIndex(w http.ResponseWriter, r *http.Request, modalError st
 			LastPaymentHeight: lastPaymentHeight,
 			PoolHashRate:      ui.cache.getPoolHash(),
 			PaymentMethod:     ui.cfg.PaymentMethod,
-			Network:           ui.cfg.ActiveNet.Name,
+			Network:           ui.cfg.ActiveNetName,
 			PoolFee:           ui.cfg.PoolFee,
 			SoloPool:          ui.cfg.SoloPool,
 		},
