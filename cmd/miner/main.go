@@ -12,10 +12,14 @@ import (
 	"runtime"
 )
 
+// signals defines the signals that are handled to do a clean shutdown.
+// Conditional compilation is used to also include SIGTERM and SIGHUP on Unix.
+var signals = []os.Signal{os.Interrupt}
+
 func main() {
 	// Listen for interrupt signals.
 	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+	signal.Notify(interrupt, signals...)
 
 	// Load configuration and parse command line. This also initializes logging
 	// and configures it accordingly.
