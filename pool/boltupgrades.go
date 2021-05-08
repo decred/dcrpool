@@ -641,9 +641,14 @@ func upgradeDB(db *BoltDB) error {
 		return err
 	}
 
-	if version >= BoltDBVersion {
+	if version == BoltDBVersion {
 		// No upgrades necessary.
 		return nil
+	}
+
+	if version > BoltDBVersion {
+		// Database is too new.
+		return fmt.Errorf("expected database version <= %d, got %d", BoltDBVersion, version)
 	}
 
 	log.Infof("Upgrading database from version %d to %d", version, BoltDBVersion)
