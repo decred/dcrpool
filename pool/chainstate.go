@@ -31,7 +31,7 @@ type ChainStateConfig struct {
 	db Database
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
-	// ProcessPayments relays payment signals for Processing.
+	// ProcessPayments relays payment signals for processing.
 	ProcessPayments func(msg *paymentMsg)
 	// GeneratePayments creates payments for participating accounts in pool
 	// mining mode based on the configured payment scheme.

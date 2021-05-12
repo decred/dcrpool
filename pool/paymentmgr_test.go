@@ -151,7 +151,7 @@ func TestSharePercentages(t *testing.T) {
 	}
 }
 
-func createPaymentMgr(paymentMethod string) (*PaymentMgr, context.Context, context.CancelFunc, error) {
+func createPaymentMgr(t *testing.T, paymentMethod string) (*PaymentMgr, context.Context, context.CancelFunc) {
 	activeNet := chaincfg.SimNetParams()
 
 	getBlockConfirmations := func(context.Context, *chainhash.Hash) (int64, error) {
@@ -189,17 +189,14 @@ func createPaymentMgr(paymentMethod string) (*PaymentMgr, context.Context, conte
 
 	mgr, err := NewPaymentMgr(pCfg)
 	if err != nil {
-		return nil, nil, nil, err
+		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
 	}
 
-	return mgr, ctx, cancel, err
+	return mgr, ctx, cancel
 }
 
 func testPaymentMgrPPS(t *testing.T) {
-	mgr, _, _, err := createPaymentMgr(PPS)
-	if err != nil {
-		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
-	}
+	mgr, _, _ := createPaymentMgr(t, PPS)
 
 	// Ensure Pay-Per-Share (PPS) works as expected.
 	now := time.Now()
@@ -293,10 +290,7 @@ func testPaymentMgrPPS(t *testing.T) {
 }
 
 func testPaymentMgrPPLNS(t *testing.T) {
-	mgr, _, _, err := createPaymentMgr(PPLNS)
-	if err != nil {
-		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
-	}
+	mgr, _, _ := createPaymentMgr(t, PPLNS)
 
 	// Ensure Pay-Per-Last-N-Shares (PPLNS) works as expected.
 	now := time.Now()
@@ -391,10 +385,7 @@ func testPaymentMgrPPLNS(t *testing.T) {
 }
 
 func testPaymentMgrMaturity(t *testing.T) {
-	mgr, _, _, err := createPaymentMgr(PPLNS)
-	if err != nil {
-		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
-	}
+	mgr, _, _ := createPaymentMgr(t, PPLNS)
 
 	now := time.Now()
 	shareCount := 3
@@ -407,7 +398,7 @@ func testPaymentMgrMaturity(t *testing.T) {
 	// Ensure payment maturity works as expected.
 	for i := 0; i < shareCount; i++ {
 		// Create readily available shares for account X.
-		err = persistShare(db, xID, weight, thirtyBefore+int64(i))
+		err := persistShare(db, xID, weight, thirtyBefore+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -415,7 +406,7 @@ func testPaymentMgrMaturity(t *testing.T) {
 	sixtyAfter := time.Now().Add((time.Second * 60)).UnixNano()
 	for i := 0; i < shareCount; i++ {
 		// Create future shares for account Y.
-		err = persistShare(db, yID, weight, sixtyAfter+int64(i))
+		err := persistShare(db, yID, weight, sixtyAfter+int64(i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -487,11 +478,7 @@ func testPaymentMgrPayment(t *testing.T) {
 		t.Fatalf("failed to insert account: %v", err)
 	}
 
-	mgr, _, _, err := createPaymentMgr(PPS)
-	if err != nil {
-		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
-	}
-
+	mgr, _, _ := createPaymentMgr(t, PPS)
 	height := uint32(20)
 
 	// pruneOrphanedPayments tests.
@@ -1208,31 +1195,6 @@ func testPaymentMgrPayment(t *testing.T) {
 		t.Fatalf("expected a rescan error, got %v", err)
 	}
 
-	// Ensure dividend payment returns an error if fetching rescan responses fail.
-	mgr.cfg.FetchTxBroadcaster = func() TxBroadcaster {
-		return &txBroadcasterImpl{
-			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
-				return &walletrpc.SignTransactionResponse{
-					Transaction: txBytes,
-				}, nil
-			},
-			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
-				return nil, fmt.Errorf("unable to publish transaction")
-			},
-			rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
-				return &tRescanClient{
-					err: fmt.Errorf("internal error"),
-				}, nil
-			},
-		}
-	}
-
-	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
-	if !errors.Is(err, errs.Rescan) {
-		cancel()
-		t.Fatalf("expected a rescan error, got %v", err)
-	}
-
 	// Clear out the tx confirmation hashes to be rescanned for.
 	var confHashes map[chainhash.Hash]uint32
 	mgr.mtx.Lock()
@@ -1331,11 +1293,7 @@ func testPaymentMgrPayment(t *testing.T) {
 }
 
 func testPaymentMgrDust(t *testing.T) {
-	mgr, _, _, err := createPaymentMgr(PPLNS)
-	if err != nil {
-		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
-	}
-
+	mgr, _, _ := createPaymentMgr(t, PPLNS)
 	height := uint32(20)
 
 	// Ensure dust payments are forfeited by their originating accounts and
@@ -1347,7 +1305,7 @@ func testPaymentMgrDust(t *testing.T) {
 	yWeight := new(big.Rat).Mul(weight, new(big.Rat).SetInt64(int64(mul)))
 
 	// Create shares for account x and y.
-	err = persistShare(db, xID, weight, now.UnixNano())
+	err := persistShare(db, xID, weight, now.UnixNano())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1425,11 +1383,7 @@ func testPaymentMgrSignals(t *testing.T) {
 		t.Fatalf("failed to insert account: %v", err)
 	}
 
-	mgr, ctx, cancel, err := createPaymentMgr(PPLNS)
-	if err != nil {
-		t.Fatalf("[createPaymentMgr] unexpected error: %v", err)
-	}
-
+	mgr, ctx, cancel := createPaymentMgr(t, PPLNS)
 	var randBytes [chainhash.HashSize + 1]byte
 	_, err = rand.Read(randBytes[:])
 	if err != nil {
@@ -1547,7 +1501,7 @@ func testPaymentMgrSignals(t *testing.T) {
 		return int64(estMaturity) + 1, nil
 	}
 
-	// Ensure the payment lifecycle process recieves the payment signal and
+	// Ensure the payment lifecycle process receives the payment signal and
 	// processes mature payments.
 	msgA := paymentMsg{
 		CurrentHeight:  estMaturity + 1,
