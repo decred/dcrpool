@@ -43,7 +43,7 @@ const (
 	// failures before a wallet rescan is requested.
 	maxTxConfThreshold = uint32(3)
 
-	// paymentBufferSize repreents the buffering on the payment channel.
+	// paymentBufferSize is the size of the buffer on the payment channel.
 	paymentBufferSize = uint32(30)
 )
 
@@ -783,17 +783,17 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		return errs.PoolError(errs.Disconnected, desc)
 	}
 
-	// Request a wallet rescan if tx confirmation failures are
-	// at threshold.
 	pCtx, pCancel := context.WithTimeout(ctx, pm.cfg.CoinbaseConfTimeout)
 	defer pCancel()
 
+	// Request a wallet rescan if tx confirmation failures are
+	// at threshold.
 	txConfCount := atomic.LoadUint32(&pm.failedTxConfs)
-	if txConfCount == maxTxConfThreshold {
+	if txConfCount >= maxTxConfThreshold {
 		beginHeight := uint32(0)
 
 		// Having no tx conf hashes at threshold indicates an
-		// underlining error.
+		// underlying error.
 		pm.mtx.Lock()
 		if len(pm.txConfHashes) == 0 {
 			pm.mtx.Unlock()
@@ -822,7 +822,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		}
 		rescanSource, err := txB.Rescan(pCtx, rescanReq)
 		if err != nil {
-			desc := fmt.Sprintf("%s: tx creator cannot be nil", funcName)
+			desc := fmt.Sprintf("%s: rescan source cannot be nil", funcName)
 			return errs.PoolError(errs.Rescan, desc)
 		}
 
