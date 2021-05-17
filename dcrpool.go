@@ -206,12 +206,13 @@ func main() {
 	// hub.Run() blocks until the pool is fully shut down. When it returns,
 	// write a backup of the DB (if not using postgres), and then close the DB.
 	if !cfg.UsePostgres {
-		mpLog.Infof("Backing up database.")
+		mpLog.Info("Backing up database.")
 		err = db.Backup(pool.BoltBackupFile)
 		if err != nil {
-			mpLog.Errorf("failed to write database backup file: %v", err)
+			mpLog.Errorf("Failed to write database backup file: %v", err)
 		}
 	}
 
 	db.Close()
+	mpLog.Info("dcrpool shut down.")
 }
