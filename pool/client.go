@@ -1257,7 +1257,7 @@ func (c *Client) send() {
 						c.handleInnosiliconD9Work(req)
 						log.Tracef("%s notified of new work", id)
 
-					case WhatsminerD1:
+					case WhatsminerD1, Gominer:
 						c.handleWhatsminerD1Work(req)
 						log.Tracef("%s notified of new work", id)
 
