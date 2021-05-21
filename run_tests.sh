@@ -43,7 +43,7 @@ fi
 golangci-lint run --disable-all --deadline=10m \
   --out-format=$OUT_FORMAT \
   --enable=gofmt \
-  --enable=golint \
+  --enable=revive \
   --enable=vet \
   --enable=gosimple \
   --enable=unconvert \

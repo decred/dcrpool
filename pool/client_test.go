@@ -77,6 +77,12 @@ var (
 	}
 )
 
+func splitMinerID(id string) (string, string) {
+	const separator = "/"
+	split := strings.Split(id, separator)
+	return split[0], split[1]
+}
+
 func setCurrentWork(work string) {
 	currentWorkMtx.Lock()
 	currentWork = work
@@ -420,10 +426,8 @@ func testClientMessageHandling(t *testing.T) {
 		return false
 	}
 	id++
-	sep := "/"
-	d1ID := strings.Split(D1ID, sep)
-	d1 := d1ID[0]
-	d1Version := d1ID[1]
+
+	d1, d1Version := splitMinerID(d1ID)
 
 	r = SubscribeRequest(&id, userAgent(d1, d1Version), "mn001")
 	err = sE.Encode(r)
@@ -495,9 +499,7 @@ func testClientMessageHandling(t *testing.T) {
 	}
 
 	id++
-	dr3ID := strings.Split(DR3ID, sep)
-	dr3 := dr3ID[0]
-	dr3Version := dr3ID[1]
+	dr3, dr3Version := splitMinerID(dr3ID)
 	r = SubscribeRequest(&id, userAgent(dr3, dr3Version), "")
 	err = sE.Encode(r)
 	if err != nil {
@@ -534,9 +536,7 @@ func testClientMessageHandling(t *testing.T) {
 	}
 
 	id++
-	dcr1ID := strings.Split(DCR1ID, sep)
-	dcr1 := dcr1ID[0]
-	dcr1Version := dcr1ID[1]
+	dcr1, dcr1Version := splitMinerID(dcr1ID)
 	r = SubscribeRequest(&id, userAgent(dcr1, dcr1Version), "")
 	err = sE.Encode(r)
 	if err != nil {
@@ -573,9 +573,7 @@ func testClientMessageHandling(t *testing.T) {
 	}
 
 	id++
-	d9ID := strings.Split(D9ID, sep)
-	d9 := d9ID[0]
-	d9Version := d9ID[1]
+	d9, d9Version := splitMinerID(d9ID)
 	r = SubscribeRequest(&id, userAgent(d9, d9Version), "")
 	err = sE.Encode(r)
 	if err != nil {
@@ -612,9 +610,7 @@ func testClientMessageHandling(t *testing.T) {
 	}
 
 	id++
-	cpuID := strings.Split(CPUID, sep)
-	cpu := cpuID[0]
-	cpuVersion := cpuID[1]
+	cpu, cpuVersion := splitMinerID(cpuID)
 	r = SubscribeRequest(&id, userAgent(cpu, cpuVersion), "")
 	err = sE.Encode(r)
 	if err != nil {
@@ -1472,10 +1468,7 @@ func testClientTimeRolledWork(t *testing.T) {
 	// Ensure a CPU client receives a valid non-error response when
 	// a valid subscribe request is sent.
 	id++
-	sep := "/"
-	cpuID := strings.Split(CPUID, sep)
-	cpu := cpuID[0]
-	cpuVersion := cpuID[1]
+	cpu, cpuVersion := splitMinerID(cpuID)
 	r = SubscribeRequest(&id, userAgent(cpu, cpuVersion), "")
 	err = sE.Encode(r)
 	if err != nil {
@@ -1579,7 +1572,7 @@ func testClientUpgrades(t *testing.T) {
 	}
 
 	minerIdx := 0
-	idPair := minerIDs[DR3ID]
+	idPair := minerIDs[dr3ID]
 
 	// Trigger a client upgrade.
 	atomic.StoreInt64(&client.submissions, 50)
