@@ -88,12 +88,12 @@ func NewStratumError(code uint32, err error) *StratumError {
 	}
 }
 
-// MashalJSON marshals the stratum error into valid JSON.
+// MarshalJSON marshals the stratum error into valid JSON.
 func (s *StratumError) MarshalJSON() ([]byte, error) {
 	return json.Marshal([]interface{}{s.Code, s.Message, s.Traceback})
 }
 
-// MashalJSON unmarshals the provided JSON bytes into a stratum error.
+// UnmarshalJSON unmarshals the provided JSON bytes into a stratum error.
 func (s *StratumError) UnmarshalJSON(p []byte) error {
 	var tmp []interface{}
 	if err := json.Unmarshal(p, &tmp); err != nil {
