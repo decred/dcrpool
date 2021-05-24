@@ -677,6 +677,10 @@ func (c *Client) rollWork() {
 	for {
 		select {
 		case <-c.ctx.Done():
+			c.mtx.RLock()
+			id := c.id
+			c.mtx.RUnlock()
+			log.Tracef("%s: terminating client.rollWork", id)
 			c.wg.Done()
 			return
 		case <-ticker.C:
@@ -824,13 +828,14 @@ func (c *Client) process() {
 	for {
 		select {
 		case <-c.ctx.Done():
+			c.mtx.RLock()
+			id := c.id
+			c.mtx.RUnlock()
 			err := c.conn.Close()
 			if err != nil {
-				c.mtx.RLock()
-				id := c.id
-				c.mtx.RUnlock()
 				log.Errorf("%s: unable to close connection: %v", id, err)
 			}
+			log.Tracef("%s: terminating client.process", id)
 			c.wg.Done()
 			return
 
@@ -1133,6 +1138,10 @@ func (c *Client) hashMonitor() {
 	for {
 		select {
 		case <-c.ctx.Done():
+			c.mtx.RLock()
+			id := c.id
+			c.mtx.RUnlock()
+			log.Tracef("%s: terminating client.hashMonitor", id)
 			c.wg.Done()
 			return
 
@@ -1210,6 +1219,10 @@ func (c *Client) send() {
 	for {
 		select {
 		case <-c.ctx.Done():
+			c.mtx.RLock()
+			id := c.id
+			c.mtx.RUnlock()
+			log.Tracef("%s: terminating client.send", id)
 			c.wg.Done()
 			return
 

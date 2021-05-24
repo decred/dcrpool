@@ -789,6 +789,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	// Request a wallet rescan if tx confirmation failures are
 	// at threshold.
 	txConfCount := atomic.LoadUint32(&pm.failedTxConfs)
+	log.Tracef("failedTxConfs is %d/%d", txConfCount, maxTxConfThreshold)
 	if txConfCount >= maxTxConfThreshold {
 		beginHeight := uint32(0)
 
@@ -896,6 +897,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	err = pm.confirmCoinbases(pCtx, inputTxHashes, stopAfter)
 	if err != nil {
 		atomic.AddUint32(&pm.failedTxConfs, 1)
+		log.Trace("failedTxConfs incremented")
 
 		// Track the transactions with inaccurate confirmation data.
 		pm.mtx.Lock()
@@ -985,6 +987,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 
 	// Reset the failed tx conf counter and clear the hashes.
 	atomic.StoreUint32(&pm.failedTxConfs, 0)
+	log.Trace("failedTxConfs reset to 0")
 
 	pm.mtx.Lock()
 	pm.txConfHashes = make(map[chainhash.Hash]uint32)
