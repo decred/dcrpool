@@ -100,6 +100,7 @@ var (
 type WalletConnection interface {
 	SignTransaction(context.Context, *walletrpc.SignTransactionRequest, ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
 	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
+	GetTransaction(context.Context, *walletrpc.GetTransactionRequest, ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error)
 	Rescan(ctx context.Context, in *walletrpc.RescanRequest, opts ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error)
 }
 
@@ -244,22 +245,21 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	h.poolDiffs = NewDifficultySet(h.cfg.ActiveNet, powLimit, maxGenTime)
 
 	pCfg := &PaymentMgrConfig{
-		db:                     h.cfg.DB,
-		ActiveNet:              h.cfg.ActiveNet,
-		PoolFee:                h.cfg.PoolFee,
-		LastNPeriod:            h.cfg.LastNPeriod,
-		SoloPool:               h.cfg.SoloPool,
-		PaymentMethod:          h.cfg.PaymentMethod,
-		PoolFeeAddrs:           h.cfg.PoolFeeAddrs,
-		WalletAccount:          h.cfg.WalletAccount,
-		WalletPass:             h.cfg.WalletPass,
-		GetBlockConfirmations:  h.getBlockConfirmations,
-		GetTxConfNotifications: h.getTxConfNotifications,
-		FetchTxCreator:         func() TxCreator { return h.nodeConn },
-		FetchTxBroadcaster:     func() TxBroadcaster { return h.walletConn },
-		CoinbaseConfTimeout:    h.cfg.CoinbaseConfTimeout,
-		SignalCache:            h.SignalCache,
-		HubWg:                  h.wg,
+		db:                    h.cfg.DB,
+		ActiveNet:             h.cfg.ActiveNet,
+		PoolFee:               h.cfg.PoolFee,
+		LastNPeriod:           h.cfg.LastNPeriod,
+		SoloPool:              h.cfg.SoloPool,
+		PaymentMethod:         h.cfg.PaymentMethod,
+		PoolFeeAddrs:          h.cfg.PoolFeeAddrs,
+		WalletAccount:         h.cfg.WalletAccount,
+		WalletPass:            h.cfg.WalletPass,
+		GetBlockConfirmations: h.getBlockConfirmations,
+		FetchTxCreator:        func() TxCreator { return h.nodeConn },
+		FetchTxBroadcaster:    func() TxBroadcaster { return h.walletConn },
+		CoinbaseConfTimeout:   h.cfg.CoinbaseConfTimeout,
+		SignalCache:           h.SignalCache,
+		HubWg:                 h.wg,
 	}
 
 	var err error
@@ -441,31 +441,6 @@ func (h *Hub) getWork(ctx context.Context) (string, string, error) {
 		return "", "", errs.PoolError(errs.GetWork, desc)
 	}
 	return work.Data, work.Target, err
-}
-
-// getTxConfNotifications streams transaction confirmation notifications for
-// the provided transaction hashes.
-func (h *Hub) getTxConfNotifications(txHashes []chainhash.Hash, stopAfter int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
-	hashes := make([][]byte, 0, len(txHashes))
-	log.Tracef("Requesting tx conf notifications for %d "+
-		"transactions (stop after #%d)", len(txHashes), stopAfter)
-	for _, hash := range txHashes {
-		hashes = append(hashes, hash.CloneBytes())
-		log.Tracef("    %s", hash)
-	}
-
-	req := &walletrpc.ConfirmationNotificationsRequest{
-		TxHashes:  hashes,
-		StopAfter: stopAfter,
-	}
-
-	err := h.notifClient.Send(req)
-	if err != nil {
-		desc := fmt.Sprintf("unable to fetch tx confirmations: %v", err)
-		return nil, errs.PoolError(errs.TxConf, desc)
-	}
-
-	return h.notifClient.Recv, nil
 }
 
 // getBlockConfirmation returns the number of block confirmations for the

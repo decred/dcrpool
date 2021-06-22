@@ -132,6 +132,9 @@ const (
 	// PublishTx indicates a transaction pubishing error.
 	PublishTx = ErrorKind("PublishTx")
 
+	// FetchTx indicates a fetch transaction error.
+	FetchTx = ErrorKind("FetchTx")
+
 	// TxOut indicates a transaction output related error.
 	TxOut = ErrorKind("TxOut")
 

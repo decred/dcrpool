@@ -23,6 +23,8 @@ import (
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	errs "github.com/decred/dcrpool/errors"
 )
@@ -66,14 +68,10 @@ type TxBroadcaster interface {
 	SignTransaction(context.Context, *walletrpc.SignTransactionRequest, ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
 	// PublishTransaction broadcasts the transaction unto the network.
 	PublishTransaction(context.Context, *walletrpc.PublishTransactionRequest, ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
+	// GetTransaction fetches transaction details for the provided transaction.
+	GetTransaction(context.Context, *walletrpc.GetTransactionRequest, ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error)
 	// Rescan requests a wallet utxo rescan.
 	Rescan(ctx context.Context, in *walletrpc.RescanRequest, opts ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error)
-}
-
-// confNotifMsg represents a tx confirmation notification message.
-type confNotifMsg struct {
-	resp *walletrpc.ConfirmationNotificationsResponse
-	err  error
 }
 
 // rescanMsg represents a rescan response.
@@ -107,9 +105,6 @@ type PaymentMgrConfig struct {
 	// GetBlockConfirmations returns the number of block confirmations for the
 	// provided block hash.
 	GetBlockConfirmations func(context.Context, *chainhash.Hash) (int64, error)
-	// GetTxConfNotifications streams transaction confirmation notifications on
-	// the provided hashes.
-	GetTxConfNotifications func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error)
 	// FetchTxCreator returns a transaction creator that allows coinbase lookups
 	// and payment transaction creation.
 	FetchTxCreator func() TxCreator
@@ -119,8 +114,6 @@ type PaymentMgrConfig struct {
 	// CoinbaseConfTimeout is the duration to wait for coinbase confirmations
 	// when generating a payout transaction.
 	CoinbaseConfTimeout time.Duration
-	// Cancel represents the pool's context cancellation function.
-	Cancel context.CancelFunc
 	// SignalCache sends the provided cache update event to the gui cache.
 	SignalCache func(event CacheUpdateEvent)
 	// HubWg represents the hub's waitgroup.
@@ -488,108 +481,70 @@ func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs m
 	return sansFees, estFee, nil
 }
 
-// fetchTxConfNotifications is a helper function for fetching tx confirmation
-// notifications. It will return when either a notification or error is
-// received from the provided notification source, or when the provided
-// context is cancelled.
-func fetchTxConfNotifications(ctx context.Context, notifSource func() (*walletrpc.ConfirmationNotificationsResponse, error)) (*walletrpc.ConfirmationNotificationsResponse, error) {
-	funcName := "fetchTxConfNotifications"
-	notifCh := make(chan confNotifMsg)
-	go func(ch chan confNotifMsg) {
-		resp, err := notifSource()
-		ch <- confNotifMsg{
-			resp: resp,
-			err:  err,
-		}
-
-		if resp != nil {
-			log.Tracef("Got notification with %d confirmation(s)",
-				len(resp.Confirmations))
-			for _, conf := range resp.Confirmations {
-				txHash, err := chainhash.NewHash(conf.TxHash)
-				if err != nil {
-					log.Tracef("Could not decode txhash: %b", conf.TxHash)
-				} else {
-					log.Tracef("    tx=%s, confs=%d, height=%d",
-						txHash, conf.Confirmations, conf.BlockHeight)
-				}
-			}
-		}
-	}(notifCh)
-
-	select {
-	case <-ctx.Done():
-		log.Tracef("%s: context cancelled fetching tx confirmation "+
-			"notifications", funcName)
-		return nil, errs.ContextCancelled
-	case notif := <-notifCh:
-		close(notifCh)
-		if notif.err != nil {
-			desc := fmt.Sprintf("%s: unable to fetch tx confirmation "+
-				"notifications, %s", funcName, notif.err)
-			return nil, errs.PoolError(errs.TxConf, desc)
-		}
-		return notif.resp, nil
-	}
-}
-
 // confirmCoinbases ensures the coinbases referenced by the provided
-// transaction hashes are spendable by the expected maximum spendable height.
+// transaction hashes are spendable by querying the wallet about each
+// transaction and asserting confirmations are equal to or greater
+// than coinbase maturity.
+//
+// Confirming coinbases before creating, signing and publising
+// transactions spending them mitigates possible errors in the
+// transaction publishing process by ensuring the wallet is
+// aware of the inputs it is expected to know about.
 //
 // The context passed to this function must have a corresponding
 // cancellation to allow for a clean shutdown process.
-func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txHashes map[chainhash.Hash]uint32, spendableHeight uint32) error {
+func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txB TxBroadcaster, txHashes map[chainhash.Hash]uint32) error {
 	funcName := "confirmCoinbases"
-	hashes := make([]chainhash.Hash, 0, len(txHashes))
-	for hash := range txHashes {
-		hashes = append(hashes, hash)
-	}
-
-	notifSource, err := pm.cfg.GetTxConfNotifications(hashes,
-		int32(spendableHeight))
-	if err != nil {
-		return err
-	}
-
-	// Wait for coinbase tx confirmations from the wallet.
 	maxSpendableConfs := int32(pm.cfg.ActiveNet.CoinbaseMaturity) + 1
 
-	for {
-		resp, err := fetchTxConfNotifications(ctx, notifSource)
-		if err != nil {
-			if errors.Is(err, errs.ContextCancelled) {
-				desc := fmt.Sprintf("%s: cancelled confirming %d coinbase "+
-					"transaction(s)", funcName, len(txHashes))
-				return errs.PoolError(errs.ContextCancelled, desc)
-			}
-			return err
-		}
+	keys := make([]chainhash.Hash, 0, len(txHashes))
+	for hash := range txHashes {
+		keys = append(keys, hash)
+	}
 
-		// Ensure all coinbases being spent are spendable.
-		for _, coinbase := range resp.Confirmations {
-			if coinbase.Confirmations >= maxSpendableConfs {
-				hash, err := chainhash.NewHash(coinbase.TxHash)
-				if err != nil {
-					desc := fmt.Sprintf("%s: unable to create tx hash: %v",
+	for idx := range keys {
+		select {
+		case <-ctx.Done():
+			log.Tracef("%s: context cancelled fetching tx "+
+				"confirmations", funcName)
+			return errs.ContextCancelled
+
+		default:
+			req := &walletrpc.GetTransactionRequest{
+				TransactionHash: keys[idx][:],
+			}
+
+			resp, err := txB.GetTransaction(ctx, req)
+			if err != nil {
+				state, ok := status.FromError(err)
+				if ok {
+					if state.Code() != codes.NotFound {
+						return err
+					}
+
+					log.Errorf("%s: transaction %v not found by wallet",
 						funcName, err)
-					return errs.PoolError(errs.CreateHash, desc)
+					continue
 				}
-
-				// Remove spendable coinbase from the tx hash set. All
-				// coinbases are spendable when the tx hash set is empty.
-				delete(txHashes, *hash)
+				return err
 			}
-		}
 
-		log.Tracef("%d coinbase(s) are not confirmed:", len(txHashes))
-		for coinbase := range txHashes {
-			log.Tracef("    %v", coinbase)
-		}
-
-		if len(txHashes) == 0 {
-			return nil
+			// Remove the confirmed transaction.
+			if resp.Confirmations >= maxSpendableConfs {
+				delete(txHashes, keys[idx])
+			}
 		}
 	}
+
+	if len(txHashes) != 0 {
+		log.Tracef("%d coinbase(s) are not confirmed:", len(txHashes))
+		for coinbase := range txHashes {
+			log.Trace(coinbase)
+		}
+		return errs.TxConf
+	}
+
+	return nil
 }
 
 // fetchRecanReponse is a helper function for fetching rescan response.
@@ -814,11 +769,13 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		}
 		pm.mtx.Unlock()
 
-		// Start the rescan a block height below the lowest reported block
+		// Start the rescan a block height one coinbase maturity length of
+		// blocks below the lowest reported block with a transaction
 		// having inaccurate confirmation information.
-		log.Infof("wallet rescanning from height #%d", beginHeight-1)
+		rescanBeginHeight := beginHeight - uint32(pm.cfg.ActiveNet.CoinbaseMaturity)
+		log.Infof("wallet rescanning from height #%d", rescanBeginHeight)
 		rescanReq := &walletrpc.RescanRequest{
-			BeginHeight: int32(beginHeight - 1),
+			BeginHeight: int32(rescanBeginHeight),
 		}
 		rescanSource, err := txB.Rescan(pCtx, rescanReq)
 		if err != nil {
@@ -877,24 +834,9 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 
 	// Ensure the wallet is aware of all the coinbase outputs being
 	// spent by the payout transaction.
-	var maxSpendableHeight uint32
-	for _, pmtSet := range pmts {
-		spendableHeight := pmtSet[0].EstimatedMaturity + 1
-		if maxSpendableHeight < spendableHeight {
-			maxSpendableHeight = spendableHeight
-		}
-	}
-
-	var stopAfter uint32
-	switch {
-	case maxSpendableHeight > height:
-		stopAfter = maxSpendableHeight - height
-	default:
-		stopAfter = 1
-	}
-
-	err = pm.confirmCoinbases(pCtx, inputTxHashes, stopAfter)
+	err = pm.confirmCoinbases(pCtx, txB, inputTxHashes)
 	if err != nil {
+		// Increment the failed tx confirmation counter.
 		atomic.AddUint32(&pm.failedTxConfs, 1)
 
 		// Track the transactions with inaccurate confirmation data.
@@ -904,8 +846,8 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		}
 		pm.mtx.Unlock()
 
-		// Do not error if coinbase spendable confirmation requests are
-		// terminated by the context cancellation.
+		// Do not error if coinbase spendable confirmation requests
+		// are terminated by the context cancellation.
 		if !errors.Is(err, errs.ContextCancelled) {
 			return err
 		}
@@ -1012,7 +954,6 @@ func (pm *PaymentMgr) handlePayments(ctx context.Context) {
 				if err != nil {
 					log.Errorf("unable to process payments: %v", err)
 					close(msg.Done)
-					pm.cfg.Cancel()
 					continue
 				}
 

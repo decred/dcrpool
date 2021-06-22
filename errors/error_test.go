@@ -54,6 +54,7 @@ func TestErrorKindStringer(t *testing.T) {
 		{CreateTx, "CreateTx"},
 		{SignTx, "SignTx"},
 		{PublishTx, "PublishTx"},
+		{FetchTx, "FetchTx"},
 		{TxOut, "TxOut"},
 		{TxIn, "TxIn"},
 		{ContextCancelled, "ContextCancelled"},
