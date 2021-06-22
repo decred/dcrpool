@@ -153,6 +153,14 @@ func (t *tWalletConnection) Rescan(context.Context, *walletrpc.RescanRequest, ..
 	return client, nil
 }
 
+func (t *tWalletConnection) GetTransaction(context.Context, *walletrpc.GetTransactionRequest, ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+	return &walletrpc.GetTransactionResponse{
+		Transaction:   &walletrpc.TransactionDetails{},
+		Confirmations: 25,
+		BlockHash:     zeroHash[:],
+	}, nil
+}
+
 type tNodeConnection struct{}
 
 func (t *tNodeConnection) CreateRawTransaction(context.Context, []chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error) {

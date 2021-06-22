@@ -25,6 +25,8 @@ import (
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	errs "github.com/decred/dcrpool/errors"
 )
@@ -62,6 +64,7 @@ type txBroadcasterImpl struct {
 	signTransaction    func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
 	publishTransaction func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error)
 	rescan             func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error)
+	getTransaction     func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error)
 }
 
 // SignTransaction signs transaction inputs, unlocking them for use.
@@ -72,6 +75,11 @@ func (txB *txBroadcasterImpl) SignTransaction(ctx context.Context, req *walletrp
 // PublishTransaction broadcasts the transaction unto the network.
 func (txB *txBroadcasterImpl) PublishTransaction(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
 	return txB.publishTransaction(ctx, req, options...)
+}
+
+// GetTransaction fetches transaction details for the provided transaction.
+func (txB *txBroadcasterImpl) GetTransaction(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+	return txB.getTransaction(ctx, req, options...)
 }
 
 // Rescan begins a rescan of all transactions related to the wallet.
@@ -182,8 +190,8 @@ func createPaymentMgr(t *testing.T, paymentMethod string) (*PaymentMgr, context.
 		FetchTxCreator:        fetchTxCreator,
 		FetchTxBroadcaster:    fetchTxBroadcaster,
 		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
-		Cancel:                cancel,
 		SignalCache:           signalCache,
+		CoinbaseConfTimeout:   time.Millisecond * 200,
 		HubWg:                 new(sync.WaitGroup),
 	}
 
@@ -614,88 +622,87 @@ func testPaymentMgrPayment(t *testing.T) {
 	txHashes[hashB] = height
 	hashC := chainhash.Hash{'c'}
 	txHashes[hashC] = height
-	spendableHeight := uint32(10)
 
-	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
-		return nil, fmt.Errorf("unable to fetch tx conf notification source")
+	txB := &txBroadcasterImpl{
+		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+			return nil, fmt.Errorf("unable to fetch transaction")
+		},
 	}
 
-	// Ensure confirming coinbases returns an error if transaction
-	// confirmation notifications cannot be fetched.
-	err = mgr.confirmCoinbases(ctx, txHashes, spendableHeight)
+	// Ensure confirming coinbases returns an error if the transaction
+	// broadcaster cannot fetch transactions.
+	err = mgr.confirmCoinbases(ctx, txB, txHashes)
 	if err == nil {
 		cancel()
-		t.Fatalf("expected tx conf notification source error")
+		t.Fatalf("expected a get transaction error")
 	}
 
-	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
-		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
-			return &walletrpc.ConfirmationNotificationsResponse{}, nil
-		}, nil
+	txB = &txBroadcasterImpl{
+		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+			return nil, status.Error(codes.Internal, "grpc: internal error")
+		},
 	}
 
-	go func() {
-		time.Sleep(time.Microsecond * 200)
+	// Ensure confirming coinbases returns an error if the transaction
+	// broadcaster errors fetching a transaction.
+	err = mgr.confirmCoinbases(ctx, txB, txHashes)
+	if err == nil {
 		cancel()
-	}()
+		t.Fatalf("expected a get transaction error")
+	}
+
+	txB = &txBroadcasterImpl{
+		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+			return nil, status.Error(codes.NotFound, "grpc: transaction not found")
+		},
+	}
+
+	// Ensure confirming coinbases does not error immediately if the
+	// transaction broadcaster cannot find the provided transaction.
+	err = mgr.confirmCoinbases(ctx, txB, txHashes)
+	if !errors.Is(errs.TxConf, err) {
+		cancel()
+		t.Fatalf("expected a transaction confirmation error")
+	}
+
+	txB = &txBroadcasterImpl{
+		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+			cancel() // Trigger a context cancellation.
+			return &walletrpc.GetTransactionResponse{
+				Transaction: &walletrpc.TransactionDetails{
+					Hash: req.TransactionHash[:],
+				},
+				Confirmations: 50,
+				BlockHash:     []byte(zeroSource.BlockHash),
+			}, nil
+		},
+	}
 
 	// Ensure confirming coinbases returns an error if the provided context
 	// is cancelled.
-	err = mgr.confirmCoinbases(ctx, txHashes, spendableHeight)
+	err = mgr.confirmCoinbases(ctx, txB, txHashes)
 	if !errors.Is(err, errs.ContextCancelled) {
 		t.Fatalf("expected a context cancellation error")
 	}
 
 	// The context here needs to be recreated after the previous test.
 	ctx, cancel = context.WithCancel(context.Background())
-	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
-		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
-			return nil, fmt.Errorf("unable to confirm transactions")
-		}, nil
-	}
 
-	// Ensure confirming coinbases returns an error if notification source
-	// cannot confirm transactions.
-	err = mgr.confirmCoinbases(ctx, txHashes, spendableHeight)
-	if !errors.Is(err, errs.TxConf) {
-		cancel()
-		t.Fatalf("expected tx confirmation error, got %v", err)
-	}
-
-	txConfs := make([]*walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations, 0)
-	confA := walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
-		TxHash:        hashA[:],
-		Confirmations: 50,
-		BlockHash:     []byte(zeroSource.BlockHash),
-		BlockHeight:   60,
-	}
-	txConfs = append(txConfs, &confA)
-	confB := walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
-		TxHash:        hashB[:],
-		Confirmations: 50,
-		BlockHash:     []byte(zeroSource.BlockHash),
-		BlockHeight:   60,
-	}
-	txConfs = append(txConfs, &confB)
-	confC := walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
-		TxHash:        hashC[:],
-		Confirmations: 50,
-		BlockHash:     []byte(zeroSource.BlockHash),
-		BlockHeight:   60,
-	}
-	txConfs = append(txConfs, &confC)
-
-	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
-		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
-			return &walletrpc.ConfirmationNotificationsResponse{
-				Confirmations: txConfs,
+	txB = &txBroadcasterImpl{
+		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+			return &walletrpc.GetTransactionResponse{
+				Transaction: &walletrpc.TransactionDetails{
+					Hash: req.TransactionHash[:],
+				},
+				Confirmations: 50,
+				BlockHash:     []byte(zeroSource.BlockHash),
 			}, nil
-		}, nil
+		},
 	}
 
 	// Ensure confirming coinbases returns without error if all expected
 	// tx confirmations are returned.
-	err = mgr.confirmCoinbases(ctx, txHashes, spendableHeight)
+	err = mgr.confirmCoinbases(ctx, txB, txHashes)
 	if err != nil {
 		cancel()
 		t.Fatalf("expected no tx confirmation errors, got %v", err)
@@ -945,6 +952,9 @@ func testPaymentMgrPayment(t *testing.T) {
 			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
 				return nil, fmt.Errorf("unable to sign transaction")
 			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to fetch transaction")
+			},
 		}
 	}
 
@@ -984,9 +994,6 @@ func testPaymentMgrPayment(t *testing.T) {
 	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
 		return int64(estMaturity) + 1, nil
 	}
-	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
-		return nil, fmt.Errorf("unable to fetch tx conf notification source")
-	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if err == nil {
@@ -1015,30 +1022,7 @@ func testPaymentMgrPayment(t *testing.T) {
 		return int64(estMaturity) + 1, nil
 	}
 
-	txConfs = make([]*walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations, 0)
-	confD := walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
-		TxHash:        zeroHash[:],
-		Confirmations: 50,
-		BlockHash:     []byte(zeroSource.BlockHash),
-		BlockHeight:   60,
-	}
-	txConfs = append(txConfs, &confD)
-	confE := walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
-		TxHash:        randHash[:],
-		Confirmations: 50,
-		BlockHash:     []byte(zeroSource.BlockHash),
-		BlockHeight:   60,
-	}
-	txConfs = append(txConfs, &confE)
-
 	mgr.cfg.CoinbaseConfTimeout = time.Millisecond * 500
-	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
-		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
-			return &walletrpc.ConfirmationNotificationsResponse{
-				Confirmations: txConfs,
-			}, nil
-		}, nil
-	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if err == nil {
@@ -1070,13 +1054,6 @@ func testPaymentMgrPayment(t *testing.T) {
 		return nil
 	}
 	mgr.cfg.WalletPass = "123"
-	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
-		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
-			return &walletrpc.ConfirmationNotificationsResponse{
-				Confirmations: txConfs,
-			}, nil
-		}, nil
-	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, treasuryActive)
 	if !errors.Is(err, errs.Disconnected) {
@@ -1106,6 +1083,12 @@ func testPaymentMgrPayment(t *testing.T) {
 			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
 				return nil, fmt.Errorf("unable to sign transaction")
 			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
+				}, nil
+			},
 		}
 	}
 
@@ -1132,6 +1115,12 @@ func testPaymentMgrPayment(t *testing.T) {
 					Transaction: txBytes,
 				}, nil
 			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
+				}, nil
+			},
 			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
 				return nil, fmt.Errorf("unable to publish transaction")
 			},
@@ -1151,6 +1140,12 @@ func testPaymentMgrPayment(t *testing.T) {
 			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
 				return &walletrpc.SignTransactionResponse{
 					Transaction: txBytes,
+				}, nil
+			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
 				}, nil
 			},
 			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
@@ -1176,6 +1171,12 @@ func testPaymentMgrPayment(t *testing.T) {
 			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
 				return &walletrpc.SignTransactionResponse{
 					Transaction: txBytes,
+				}, nil
+			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
 				}, nil
 			},
 			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
@@ -1223,6 +1224,12 @@ func testPaymentMgrPayment(t *testing.T) {
 					Transaction: txBytes,
 				}, nil
 			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
+				}, nil
+			},
 			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
 				return nil, fmt.Errorf("unable to publish transaction")
 			},
@@ -1249,6 +1256,12 @@ func testPaymentMgrPayment(t *testing.T) {
 			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
 				return &walletrpc.SignTransactionResponse{
 					Transaction: txBytes,
+				}, nil
+			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
 				}, nil
 			},
 			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
@@ -1426,31 +1439,7 @@ func testPaymentMgrSignals(t *testing.T) {
 		return int64(estMaturity) + 1, nil
 	}
 
-	txConfs := make([]*walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations, 0)
-	confA := walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
-		TxHash:        zeroHash[:],
-		Confirmations: 50,
-		BlockHash:     []byte(zeroSource.BlockHash),
-		BlockHeight:   60,
-	}
-	txConfs = append(txConfs, &confA)
-	confB := walletrpc.ConfirmationNotificationsResponse_TransactionConfirmations{
-		TxHash:        randHash[:],
-		Confirmations: 50,
-		BlockHash:     []byte(zeroSource.BlockHash),
-		BlockHeight:   60,
-	}
-	txConfs = append(txConfs, &confB)
-
 	mgr.cfg.CoinbaseConfTimeout = time.Millisecond * 500
-	mgr.cfg.GetTxConfNotifications = func([]chainhash.Hash, int32) (func() (*walletrpc.ConfirmationNotificationsResponse, error), error) {
-		return func() (*walletrpc.ConfirmationNotificationsResponse, error) {
-			return &walletrpc.ConfirmationNotificationsResponse{
-				Confirmations: txConfs,
-			}, nil
-		}, nil
-	}
-
 	txBytes := []byte("01000000018e17619f0d627c2769ee3f957582691aea59c2" +
 		"e79cc45b8ba1f08485dd88d75c0300000001ffffffff017a64e43703000000" +
 		"00001976a914978fa305bd66f63f0de847338bb56ff65fa8e27288ac000000" +
@@ -1465,6 +1454,12 @@ func testPaymentMgrSignals(t *testing.T) {
 			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
 				return &walletrpc.SignTransactionResponse{
 					Transaction: txBytes,
+				}, nil
+			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
 				}, nil
 			},
 			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
