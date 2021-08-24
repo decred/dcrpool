@@ -9,7 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -163,7 +163,7 @@ func Test_BoltDB_HttpBackup(t *testing.T) {
 	}
 
 	// Check reported length matches actual.
-	body, err := ioutil.ReadAll(rr.Result().Body)
+	body, err := io.ReadAll(rr.Result().Body)
 	if err != nil {
 		t.Fatalf("could not read http response body: %v", err)
 	}

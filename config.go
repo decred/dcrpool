@@ -8,7 +8,6 @@ import (
 	"crypto/elliptic"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/user"
@@ -242,10 +241,10 @@ func genCertPair(certFile, keyFile string) error {
 	}
 
 	// Write cert and key files.
-	if err = ioutil.WriteFile(certFile, cert, 0644); err != nil {
+	if err = os.WriteFile(certFile, cert, 0644); err != nil {
 		return err
 	}
-	if err = ioutil.WriteFile(keyFile, key, 0600); err != nil {
+	if err = os.WriteFile(keyFile, key, 0600); err != nil {
 		os.Remove(certFile)
 		return err
 	}
@@ -770,7 +769,7 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, err
 	}
 
-	cfg.dcrdRPCCerts, err = ioutil.ReadFile(cfg.DcrdRPCCert)
+	cfg.dcrdRPCCerts, err = os.ReadFile(cfg.DcrdRPCCert)
 	if err != nil {
 		return nil, nil, err
 	}
