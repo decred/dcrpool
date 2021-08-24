@@ -54,7 +54,7 @@ mining, a certificate from an authority (`CA`) like
 
 Building or updating from source requires the following build dependencies:
 
-- **Go 1.14 or later**
+- **Go 1.16 or later**
 
   Installation instructions can be found here: <https://golang.org/doc/install>.
   It is recommended to add `$GOPATH/bin` to your `PATH` at this point.
@@ -64,13 +64,10 @@ Building or updating from source requires the following build dependencies:
   Installation instructions can be found at <https://git-scm.com> or
   <https://gitforwindows.org>.
 
-To build and install from a checked-out repo or a copy of the latest release, 
-run `go install . ./cmd/...` in the root directory.  Some notes:
-
-- Set the `GO111MODULE=on` environment variable.
-
-- The `dcrpool` executable will be installed to `$GOPATH/bin`.  `GOPATH`
-  defaults to `$HOME/go` (or `%USERPROFILE%\go` on Windows) if unset.
+To build and install from a checked-out repo or a copy of the latest release,
+run `go install . ./cmd/...` in the root directory.
+The `dcrpool` executable will be installed to `$GOPATH/bin`.  `GOPATH` defaults
+to `$HOME/go` (or `%USERPROFILE%\go` on Windows) if unset.
 
 ## Database
 
