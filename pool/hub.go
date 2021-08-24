@@ -13,9 +13,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -370,7 +370,7 @@ func (h *Hub) Connect(ctx context.Context) error {
 	// mining as a publicly available mining pool.
 	if !h.cfg.SoloPool {
 		serverCAs := x509.NewCertPool()
-		serverCert, err := ioutil.ReadFile(h.cfg.WalletRPCCert)
+		serverCert, err := os.ReadFile(h.cfg.WalletRPCCert)
 		if err != nil {
 			return err
 		}

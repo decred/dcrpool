@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,7 +35,7 @@ var boltDBUpgradeTests = [...]struct {
 func TestBoltDBUpgrades(t *testing.T) {
 	t.Parallel()
 
-	d, err := ioutil.TempDir("", "dcrpool_test_upgrades")
+	d, err := os.MkdirTemp("", "dcrpool_test_upgrades")
 	if err != nil {
 		t.Fatal(err)
 	}
