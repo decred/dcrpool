@@ -107,10 +107,40 @@ func testChainState(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	workC := NewAcceptedWork(
+		zeroHash.String(),
+		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
+		396694, xID, "dr5")
+	err = db.persistAcceptedWork(workC)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Ensure mined work cannot be pruned.
 	err = cs.pruneAcceptedWork(ctx, workB.Height+1)
 	if err != nil {
 		t.Fatalf("pruneAcceptedWork error: %v", err)
+	}
+
+	// Ensure pruning work associated with a reorged or non-existent
+	// block does not error.
+	cCfg.GetBlockConfirmations = func(context.Context, *chainhash.Hash) (int64, error) {
+		blockNotFoundErr := &dcrjson.RPCError{
+			Code:    dcrjson.ErrRPCBlockNotFound,
+			Message: fmt.Sprintf("Block not found: %v", zeroHash),
+		}
+		desc := fmt.Sprintf("unable to fetch block confirmations: %v",
+			blockNotFoundErr)
+		return -1, errs.PoolError(errs.BlockNotFound, desc)
+	}
+
+	err = cs.pruneAcceptedWork(ctx, workC.Height+1)
+	if err != nil {
+		t.Fatalf("unexpected pruneAcceptedWork error: %v", err)
+	}
+
+	cCfg.GetBlockConfirmations = func(context.Context, *chainhash.Hash) (int64, error) {
+		return -1, nil
 	}
 
 	// Ensure work A did not get pruned but work B did.

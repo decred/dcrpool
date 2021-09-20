@@ -41,6 +41,7 @@ func TestErrorKindStringer(t *testing.T) {
 		{HexLength, "HexLength"},
 		{TxConf, "TxConf"},
 		{BlockConf, "BlockConf"},
+		{BlockNotFound, "BlockNotFound"},
 		{ClaimShare, "ClaimShare"},
 		{LimitExceeded, "LimitExceeded"},
 		{LowDifficulty, "LowDifficulty"},

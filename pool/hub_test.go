@@ -19,9 +19,11 @@ import (
 	"decred.org/dcrwallet/rpc/walletrpc"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrjson/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/wire"
+	errs "github.com/decred/dcrpool/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -161,7 +163,10 @@ func (t *tWalletConnection) GetTransaction(context.Context, *walletrpc.GetTransa
 	}, nil
 }
 
-type tNodeConnection struct{}
+type tNodeConnection struct {
+	getBlockVerboseResult *chainjson.GetBlockVerboseResult
+	getBlockVerboseErr    error
+}
 
 func (t *tNodeConnection) CreateRawTransaction(context.Context, []chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error) {
 	return nil, nil
@@ -260,9 +265,7 @@ func (t *tNodeConnection) GetBlock(_ context.Context, blockHash *chainhash.Hash)
 }
 
 func (t *tNodeConnection) GetBlockVerbose(context.Context, *chainhash.Hash, bool) (*chainjson.GetBlockVerboseResult, error) {
-	return &chainjson.GetBlockVerboseResult{
-		Confirmations: -1,
-	}, nil
+	return t.getBlockVerboseResult, t.getBlockVerboseErr
 }
 func (t *tNodeConnection) NotifyWork(context.Context) error {
 	return nil
@@ -308,7 +311,11 @@ func testHub(t *testing.T) {
 	}
 
 	// Create dummy wallet and node connections.
-	nodeConn := &tNodeConnection{}
+	nodeConn := &tNodeConnection{
+		getBlockVerboseResult: &chainjson.GetBlockVerboseResult{
+			Confirmations: -1,
+		},
+	}
 	hub.nodeConn = nodeConn
 	walletConn := &tWalletConnection{}
 	walletClose := func() error {
@@ -322,6 +329,21 @@ func testHub(t *testing.T) {
 	if err != nil {
 		t.Fatalf("[FetchWork] unexpected error: %v", err)
 	}
+
+	// Ensure looking up non existent blocks confirmations returns the
+	// appropriate error.
+	nodeConn.getBlockVerboseErr = &dcrjson.RPCError{
+		Code:    dcrjson.ErrRPCBlockNotFound,
+		Message: fmt.Sprintf("Block not found: %v", zeroHash),
+	}
+
+	_, err = hub.getBlockConfirmations(ctx, &zeroHash)
+	if !errors.Is(err, errs.BlockNotFound) {
+		t.Fatalf("[getBlockConfirmations] error is not of "+
+			"type BlockNotFound: %v", err)
+	}
+
+	nodeConn.getBlockVerboseErr = nil
 
 	// Ensure work quotas are generated as expected.
 	now := time.Now()

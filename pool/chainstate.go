@@ -119,7 +119,11 @@ func (cs *ChainState) pruneAcceptedWork(ctx context.Context, height uint32) erro
 		}
 		confs, err := cs.cfg.GetBlockConfirmations(ctx, hash)
 		if err != nil {
-			return err
+			// Do not error if the block being pruned cannot be found. It
+			// most likely got reorged off the chain.
+			if !errors.Is(err, errs.BlockNotFound) {
+				return err
+			}
 		}
 
 		// If the block has no confirmations at the current height,
