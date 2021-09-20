@@ -24,6 +24,7 @@ import (
 	"decred.org/dcrwallet/rpc/walletrpc"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrjson/v3"
 	"github.com/decred/dcrd/dcrutil/v3"
 	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
 	"github.com/decred/dcrd/rpcclient/v6"
@@ -449,8 +450,17 @@ func (h *Hub) getBlockConfirmations(ctx context.Context, hash *chainhash.Hash) (
 	info, err := h.nodeConn.GetBlockVerbose(ctx, hash, false)
 	if err != nil {
 		desc := fmt.Sprintf("unable to fetch block confirmations: %v", err)
+
+		var rErr *dcrjson.RPCError
+		if errors.As(err, &rErr) {
+			if rErr.Code == dcrjson.ErrRPCBlockNotFound {
+				return 0, errs.PoolError(errs.BlockNotFound, desc)
+			}
+		}
+
 		return 0, errs.PoolError(errs.BlockConf, desc)
 	}
+
 	return info.Confirmations, nil
 }
 

@@ -91,6 +91,9 @@ const (
 	// BlockConf indicates a block confirmation error.
 	BlockConf = ErrorKind("BlockConf")
 
+	// BlockNotFound indicates a block not found error.
+	BlockNotFound = ErrorKind("BlockNotFound")
+
 	// ClaimShare indicates a share claim error.
 	ClaimShare = ErrorKind("ClaimShare")
 
