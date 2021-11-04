@@ -16,13 +16,14 @@ import (
 	"testing"
 	"time"
 
-	"decred.org/dcrwallet/rpc/walletrpc"
-	txrules "decred.org/dcrwallet/wallet/txrules"
-	"decred.org/dcrwallet/wallet/txsizes"
+	"decred.org/dcrwallet/v2/rpc/walletrpc"
+	txrules "decred.org/dcrwallet/v2/wallet/txrules"
+	"decred.org/dcrwallet/v2/wallet/txsizes"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrd/dcrutil/v3"
-	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
+	"github.com/decred/dcrd/dcrutil/v4"
+	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v3"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/wire"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -40,8 +41,8 @@ var (
 
 type txCreatorImpl struct {
 	getBlock             func(ctx context.Context, blockHash *chainhash.Hash) (*wire.MsgBlock, error)
-	getTxOut             func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error)
-	createRawTransaction func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[dcrutil.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error)
+	getTxOut             func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error)
+	createRawTransaction func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error)
 }
 
 // GetBlock fetches the block associated with the provided block hash.
@@ -50,13 +51,13 @@ func (txC *txCreatorImpl) GetBlock(ctx context.Context, blockHash *chainhash.Has
 }
 
 // GetTxOut fetches the output referenced by the provided txHash and index.
-func (txC *txCreatorImpl) GetTxOut(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
-	return txC.getTxOut(ctx, txHash, index, mempool)
+func (txC *txCreatorImpl) GetTxOut(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
+	return txC.getTxOut(ctx, txHash, index, tree, mempool)
 }
 
 // CreateRawTransaction generates a transaction from the provided inputs and payouts.
 func (txC *txCreatorImpl) CreateRawTransaction(ctx context.Context, inputs []chainjson.TransactionInput,
-	amounts map[dcrutil.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+	amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
 	return txC.createRawTransaction(ctx, inputs, amounts, lockTime, expiry)
 }
 
@@ -189,7 +190,7 @@ func createPaymentMgr(t *testing.T, paymentMethod string) (*PaymentMgr, context.
 		GetBlockConfirmations: getBlockConfirmations,
 		FetchTxCreator:        fetchTxCreator,
 		FetchTxBroadcaster:    fetchTxBroadcaster,
-		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
+		PoolFeeAddrs:          []stdaddr.Address{poolFeeAddrs},
 		SignalCache:           signalCache,
 		CoinbaseConfTimeout:   time.Millisecond * 200,
 		HubWg:                 new(sync.WaitGroup),
@@ -720,7 +721,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	// Ensure generating payout tx details returns an error if fetching txOut
 	// information fails.
 	txC := &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 			return nil, fmt.Errorf("unable to fetch txOut")
 		},
 	}
@@ -734,7 +735,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	// Ensure generating payout tx details returns an error if the returned
 	// output is not spendable.
 	txC = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 			return &chainjson.GetTxOutResult{
 				BestBlock:     chainhash.Hash{0}.String(),
 				Confirmations: 0,
@@ -758,7 +759,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	pmtD := NewPayment(unknownID, randSource, amt, height, estMaturity)
 	mPmts[unknownIDCoinbase.String()] = []*Payment{pmtD}
 	txC = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 			return &chainjson.GetTxOutResult{
 				BestBlock:     chainhash.Hash{0}.String(),
 				Confirmations: 50,
@@ -779,7 +780,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	// total input value is less than the total output value.
 	delete(mPmts, unknownIDCoinbase.String())
 	txC = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 			return &chainjson.GetTxOutResult{
 				BestBlock:     chainhash.Hash{0}.String(),
 				Confirmations: 50,
@@ -800,7 +801,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	// the transaction do not exhaust all remaining input value after rounding
 	// errors.
 	txC = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 			return &chainjson.GetTxOutResult{
 				BestBlock:     chainhash.Hash{0}.String(),
 				Confirmations: 50,
@@ -819,7 +820,7 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	// Ensure generating payout tx details does not error with valid parameters.
 	txC = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 			return &chainjson.GetTxOutResult{
 				BestBlock:     chainhash.Hash{0}.String(),
 				Confirmations: 50,
@@ -939,7 +940,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	// fails.
 	mgr.cfg.FetchTxCreator = func() TxCreator {
 		return &txCreatorImpl{
-			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 				return nil, fmt.Errorf("unable to fetch txOut")
 			},
 		}
@@ -981,7 +982,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	// Ensure dividend payment returns an error if confirming a coinbase fails.
 	mgr.cfg.FetchTxCreator = func() TxCreator {
 		return &txCreatorImpl{
-			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 				return &chainjson.GetTxOutResult{
 					BestBlock:     chainhash.Hash{0}.String(),
 					Confirmations: int64(estMaturity) + 1,
@@ -1005,7 +1006,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	// be created.
 	mgr.cfg.FetchTxCreator = func() TxCreator {
 		return &txCreatorImpl{
-			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 				return &chainjson.GetTxOutResult{
 					BestBlock:     chainhash.Hash{0}.String(),
 					Confirmations: int64(estMaturity) + 1,
@@ -1013,7 +1014,7 @@ func testPaymentMgrPayment(t *testing.T) {
 					Coinbase:      true,
 				}, nil
 			},
-			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[dcrutil.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
 				return nil, fmt.Errorf("unable to create raw transactions")
 			},
 		}
@@ -1034,7 +1035,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	// fetched.
 	mgr.cfg.FetchTxCreator = func() TxCreator {
 		return &txCreatorImpl{
-			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 				return &chainjson.GetTxOutResult{
 					BestBlock:     chainhash.Hash{0}.String(),
 					Confirmations: int64(estMaturity) + 1,
@@ -1042,7 +1043,7 @@ func testPaymentMgrPayment(t *testing.T) {
 					Coinbase:      true,
 				}, nil
 			},
-			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[dcrutil.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
 				return &wire.MsgTx{}, nil
 			},
 		}
@@ -1065,7 +1066,7 @@ func testPaymentMgrPayment(t *testing.T) {
 	// be signed.
 	mgr.cfg.FetchTxCreator = func() TxCreator {
 		return &txCreatorImpl{
-			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 				return &chainjson.GetTxOutResult{
 					BestBlock:     chainhash.Hash{0}.String(),
 					Confirmations: int64(estMaturity) + 1,
@@ -1073,7 +1074,7 @@ func testPaymentMgrPayment(t *testing.T) {
 					Coinbase:      true,
 				}, nil
 			},
-			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[dcrutil.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
 				return &wire.MsgTx{}, nil
 			},
 		}
@@ -1479,7 +1480,7 @@ func testPaymentMgrSignals(t *testing.T) {
 
 	mgr.cfg.FetchTxCreator = func() TxCreator {
 		return &txCreatorImpl{
-			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 				return &chainjson.GetTxOutResult{
 					BestBlock:     chainhash.Hash{0}.String(),
 					Confirmations: int64(estMaturity) + 1,
@@ -1487,7 +1488,7 @@ func testPaymentMgrSignals(t *testing.T) {
 					Coinbase:      true,
 				}, nil
 			},
-			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[dcrutil.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
 				return &wire.MsgTx{}, nil
 			},
 		}
@@ -1514,7 +1515,7 @@ func testPaymentMgrSignals(t *testing.T) {
 	// error is encountered.
 	mgr.cfg.FetchTxCreator = func() TxCreator {
 		return &txCreatorImpl{
-			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, mempool bool) (*chainjson.GetTxOutResult, error) {
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
 				return &chainjson.GetTxOutResult{
 					BestBlock:     chainhash.Hash{0}.String(),
 					Confirmations: int64(estMaturity) + 1,
@@ -1522,7 +1523,7 @@ func testPaymentMgrSignals(t *testing.T) {
 					Coinbase:      true,
 				}, nil
 			},
-			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[dcrutil.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
 				return nil, fmt.Errorf("unable to create raw transactions")
 			},
 		}

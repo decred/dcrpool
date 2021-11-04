@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 )
 
 var (
@@ -24,7 +24,7 @@ var (
 	// Account Y id.
 	yID = NewAccount(yAddr).UUID
 	// Pool fee address.
-	poolFeeAddrs, _ = dcrutil.DecodeAddress(
+	poolFeeAddrs, _ = stdaddr.DecodeAddress(
 		"SsnbEmxCVXskgTHXvf3rEa17NA39qQuGHwQ",
 		chaincfg.SimNetParams())
 
