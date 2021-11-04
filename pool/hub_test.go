@@ -16,12 +16,13 @@ import (
 	"testing"
 	"time"
 
-	"decred.org/dcrwallet/rpc/walletrpc"
+	"decred.org/dcrwallet/v2/rpc/walletrpc"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrd/dcrjson/v3"
-	"github.com/decred/dcrd/dcrutil/v3"
-	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
+	"github.com/decred/dcrd/dcrjson/v4"
+	"github.com/decred/dcrd/dcrutil/v4"
+	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v3"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/wire"
 	errs "github.com/decred/dcrpool/errors"
 	"google.golang.org/grpc"
@@ -168,11 +169,11 @@ type tNodeConnection struct {
 	getBlockVerboseErr    error
 }
 
-func (t *tNodeConnection) CreateRawTransaction(context.Context, []chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error) {
+func (t *tNodeConnection) CreateRawTransaction(context.Context, []chainjson.TransactionInput, map[stdaddr.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error) {
 	return nil, nil
 }
 
-func (t *tNodeConnection) GetTxOut(context.Context, *chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error) {
+func (t *tNodeConnection) GetTxOut(context.Context, *chainhash.Hash, uint32, int8, bool) (*chainjson.GetTxOutResult, error) {
 	return nil, nil
 }
 
@@ -290,7 +291,7 @@ func testHub(t *testing.T) {
 		SoloPool:              false,
 		PaymentMethod:         PPS,
 		MaxGenTime:            time.Second * 20,
-		PoolFeeAddrs:          []dcrutil.Address{poolFeeAddrs},
+		PoolFeeAddrs:          []stdaddr.Address{poolFeeAddrs},
 		MaxConnectionsPerHost: 10,
 		NonceIterations:       iterations,
 		MinerListen:           "127.0.0.1:5050",

@@ -21,13 +21,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"decred.org/dcrwallet/rpc/walletrpc"
+	"decred.org/dcrwallet/v2/rpc/walletrpc"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrd/dcrjson/v3"
-	"github.com/decred/dcrd/dcrutil/v3"
-	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
-	"github.com/decred/dcrd/rpcclient/v6"
+	"github.com/decred/dcrd/dcrjson/v4"
+	"github.com/decred/dcrd/dcrutil/v4"
+	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v3"
+	"github.com/decred/dcrd/rpcclient/v7"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/wire"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -108,8 +109,8 @@ type WalletConnection interface {
 // NodeConnection defines the functionality needed by a mining node
 // connection for the pool.
 type NodeConnection interface {
-	GetTxOut(context.Context, *chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error)
-	CreateRawTransaction(context.Context, []chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
+	GetTxOut(context.Context, *chainhash.Hash, uint32, int8, bool) (*chainjson.GetTxOutResult, error)
+	CreateRawTransaction(context.Context, []chainjson.TransactionInput, map[stdaddr.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
 	GetWorkSubmit(context.Context, string) (bool, error)
 	GetWork(context.Context) (*chainjson.GetWorkResult, error)
 	GetBlockVerbose(context.Context, *chainhash.Hash, bool) (*chainjson.GetBlockVerboseResult, error)
@@ -150,7 +151,7 @@ type HubConfig struct {
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
 	// PoolFeeAddrs represents the pool fee addresses of the pool.
-	PoolFeeAddrs []dcrutil.Address
+	PoolFeeAddrs []stdaddr.Address
 	// AdminPass represents the admin password.
 	AdminPass string
 	// NonceIterations returns the possible header nonce iterations.

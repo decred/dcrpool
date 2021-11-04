@@ -25,7 +25,7 @@ import (
 	"github.com/decred/dcrd/blockchain/standalone/v2"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/wire"
 
 	errs "github.com/decred/dcrpool/errors"
@@ -252,7 +252,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 		address := strings.TrimSpace(parts[0])
 
 		// Ensure the address is valid for the current network.
-		_, err = dcrutil.DecodeAddress(address, c.cfg.ActiveNet)
+		_, err = stdaddr.DecodeAddress(address, c.cfg.ActiveNet)
 		if err != nil {
 			sErr := NewStratumError(Unknown, err)
 			resp := AuthorizeResponse(*req.ID, false, sErr)

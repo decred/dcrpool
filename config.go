@@ -22,7 +22,8 @@ import (
 
 	"github.com/decred/dcrd/certgen"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrd/dcrutil/v3"
+	"github.com/decred/dcrd/dcrutil/v4"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrpool/pool"
 	"github.com/decred/slog"
 )
@@ -139,7 +140,7 @@ type config struct {
 	MonitorCycle          time.Duration `long:"monitorcycle" ini-name:"monitorcycle" description:"Time spent monitoring a mining client for possible upgrades."`
 	MaxUpgradeTries       uint32        `long:"maxupgradetries" ini-name:"maxupgradetries" description:"Maximum consecuctive miner monitoring and upgrade tries."`
 	NoGUITLS              bool          `long:"noguitls" ini-name:"noguitls" description:"Disable TLS on GUI endpoint (eg. for reverse proxy with a dedicated webserver)."`
-	poolFeeAddrs          []dcrutil.Address
+	poolFeeAddrs          []stdaddr.Address
 	dcrdRPCCerts          []byte
 	net                   *params
 	clientTimeout         time.Duration
@@ -691,7 +692,7 @@ func loadConfig() (*config, []string, error) {
 		// Split the string into an array, and parse pool fee addresses.
 		cfg.PoolFeeAddrs = strings.Split(cfg.PoolFeeAddrs[0], ",")
 		for _, pAddr := range cfg.PoolFeeAddrs {
-			addr, err := dcrutil.DecodeAddress(pAddr, cfg.net)
+			addr, err := stdaddr.DecodeAddress(pAddr, cfg.net)
 			if err != nil {
 				err := fmt.Errorf("unable to decode pool fee address '%v': "+
 					"%v", pAddr, err)

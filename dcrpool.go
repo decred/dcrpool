@@ -15,7 +15,7 @@ import (
 	"os/signal"
 	"runtime"
 
-	"github.com/decred/dcrd/rpcclient/v6"
+	"github.com/decred/dcrd/rpcclient/v7"
 	"github.com/decred/dcrpool/gui"
 	"github.com/decred/dcrpool/pool"
 )

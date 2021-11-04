@@ -14,13 +14,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"decred.org/dcrwallet/rpc/walletrpc"
-	txrules "decred.org/dcrwallet/wallet/txrules"
-	"decred.org/dcrwallet/wallet/txsizes"
+	"decred.org/dcrwallet/v2/rpc/walletrpc"
+	txrules "decred.org/dcrwallet/v2/wallet/txrules"
+	"decred.org/dcrwallet/v2/wallet/txsizes"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/dcrd/dcrutil/v3"
-	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v2"
+	"github.com/decred/dcrd/dcrutil/v4"
+	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v3"
+	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/wire"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -53,10 +54,10 @@ const (
 // pool.
 type TxCreator interface {
 	// GetTxOut fetches the output referenced by the provided txHash and index.
-	GetTxOut(context.Context, *chainhash.Hash, uint32, bool) (*chainjson.GetTxOutResult, error)
+	GetTxOut(context.Context, *chainhash.Hash, uint32, int8, bool) (*chainjson.GetTxOutResult, error)
 	// CreateRawTransaction generates a transaction from the provided
 	// inputs and payouts.
-	CreateRawTransaction(context.Context, []chainjson.TransactionInput, map[dcrutil.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
+	CreateRawTransaction(context.Context, []chainjson.TransactionInput, map[stdaddr.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
 	// GetBlock fetches the block associated with the provided block hash.
 	GetBlock(ctx context.Context, blockHash *chainhash.Hash) (*wire.MsgBlock, error)
 }
@@ -97,7 +98,7 @@ type PaymentMgrConfig struct {
 	// PaymentMethod represents the payment scheme of the pool.
 	PaymentMethod string
 	// PoolFeeAddrs represents the pool fee addresses of the pool.
-	PoolFeeAddrs []dcrutil.Address
+	PoolFeeAddrs []stdaddr.Address
 	// WalletAccount represents the wallet account to process payments from.
 	WalletAccount uint32
 	// WalletPass represents the passphrase to unlock the wallet with.
@@ -441,7 +442,7 @@ func (pm *PaymentMgr) pruneOrphanedPayments(ctx context.Context, pmts map[string
 // the ratio of the amount being paid to the total transaction output minus
 // pool fees.
 func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs map[string]dcrutil.Amount,
-	tOut dcrutil.Amount, feeAddr dcrutil.Address) (dcrutil.Amount, dcrutil.Amount, error) {
+	tOut dcrutil.Amount, feeAddr stdaddr.Address) (dcrutil.Amount, dcrutil.Amount, error) {
 	funcName := "applyTxFees"
 	if len(inputs) == 0 {
 		desc := fmt.Sprint("%s: cannot create a payout transaction "+
@@ -602,7 +603,7 @@ func (pm *PaymentMgr) monitorRescan(ctx context.Context, rescanSource walletrpc.
 
 // generatePayoutTxDetails creates the payout transaction inputs and outputs
 // from the provided payments
-func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator, feeAddr dcrutil.Address, payments map[string][]*Payment, treasuryActive bool) ([]chainjson.TransactionInput,
+func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator, feeAddr stdaddr.Address, payments map[string][]*Payment, treasuryActive bool) ([]chainjson.TransactionInput,
 	map[chainhash.Hash]uint32, map[string]dcrutil.Amount, dcrutil.Amount, error) {
 	funcName := "generatePayoutTxDetails"
 
@@ -630,7 +631,8 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 
 		// Ensure the referenced prevout to be spent is spendable at
 		// the current height.
-		txOutResult, err := txC.GetTxOut(ctx, txHash, coinbaseIndex, false)
+
+		txOutResult, err := txC.GetTxOut(ctx, txHash, coinbaseIndex, wire.TxTreeRegular, false)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to find tx output: %v",
 				funcName, err)
@@ -821,9 +823,9 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	}
 
 	// Generate the transaction output set.
-	outs := make(map[dcrutil.Address]dcrutil.Amount, len(outputs))
+	outs := make(map[stdaddr.Address]dcrutil.Amount, len(outputs))
 	for sAddr, amt := range outputs {
-		addr, err := dcrutil.DecodeAddress(sAddr, pm.cfg.ActiveNet)
+		addr, err := stdaddr.DecodeAddress(sAddr, pm.cfg.ActiveNet)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to decode payout address: %v",
 				funcName, err)
