@@ -445,12 +445,12 @@ func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs m
 	tOut dcrutil.Amount, feeAddr stdaddr.Address) (dcrutil.Amount, dcrutil.Amount, error) {
 	funcName := "applyTxFees"
 	if len(inputs) == 0 {
-		desc := fmt.Sprint("%s: cannot create a payout transaction "+
+		desc := fmt.Sprintf("%s: cannot create a payout transaction "+
 			"without a tx input", funcName)
 		return 0, 0, errs.PoolError(errs.TxIn, desc)
 	}
 	if len(outputs) == 0 {
-		desc := fmt.Sprint("%s:cannot create a payout transaction "+
+		desc := fmt.Sprintf("%s: cannot create a payout transaction "+
 			"without a tx output", funcName)
 		return 0, 0, errs.PoolError(errs.TxOut, desc)
 	}

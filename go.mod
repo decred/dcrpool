@@ -1,6 +1,6 @@
 module github.com/decred/dcrpool
 
-go 1.13
+go 1.17
 
 require (
 	decred.org/dcrwallet/v2 v2.0.0-20211103180222-0b23f7aca4a1
@@ -27,5 +27,26 @@ require (
 	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
 	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324
 	google.golang.org/grpc v1.34.0
-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+)
+
+require (
+	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412 // indirect
+	github.com/dchest/siphash v1.2.2 // indirect
+	github.com/decred/base58 v1.0.3 // indirect
+	github.com/decred/dcrd/blockchain/stake/v4 v4.0.0-20210914212651-723d86274b0d // indirect
+	github.com/decred/dcrd/crypto/ripemd160 v1.0.2-0.20210914212651-723d86274b0d // indirect
+	github.com/decred/dcrd/database/v3 v3.0.0-20210914212651-723d86274b0d // indirect
+	github.com/decred/dcrd/dcrec v1.0.1-0.20210914212651-723d86274b0d // indirect
+	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.1 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
+	github.com/decred/dcrd/gcs/v3 v3.0.0-20210916172859-ca03de05ecd0 // indirect
+	github.com/decred/go-socks v1.1.0 // indirect
+	github.com/golang/protobuf v1.4.2 // indirect
+	github.com/gorilla/securecookie v1.1.1 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	golang.org/x/net v0.0.0-20200813134508-3edf25e44fcc // indirect
+	golang.org/x/sys v0.0.0-20200814200057-3d37ad5750ed // indirect
+	golang.org/x/text v0.3.3 // indirect
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/protobuf v1.25.0 // indirect
 )

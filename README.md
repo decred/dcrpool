@@ -54,7 +54,7 @@ mining, a certificate from an authority (`CA`) like
 
 Building or updating from source requires the following build dependencies:
 
-- **Go 1.16 or later**
+- **Go 1.17 or later**
 
   Installation instructions can be found here: <https://golang.org/doc/install>.
   It is recommended to add `$GOPATH/bin` to your `PATH` at this point.
