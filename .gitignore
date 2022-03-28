@@ -1,9 +1,19 @@
+*.exe
+dcrpool
 .DS_Store
 tmp
-dcrpool
 /miner/miner
 logs
 *.log
 *.conf
 /pool/testdb
 /certs/*
+
+# Testing, profiling, and benchmarking artifacts
+cov.out
+*cpu.out
+*mem.out
+
+# Go 1.18 workspace
+go.work
+go.work.sum
