@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 The Decred developers
+// Copyright (c) 2019-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -21,13 +21,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"decred.org/dcrwallet/v2/rpc/walletrpc"
+	"decred.org/dcrwallet/v3/rpc/walletrpc"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrjson/v4"
 	"github.com/decred/dcrd/dcrutil/v4"
-	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v3"
-	"github.com/decred/dcrd/rpcclient/v7"
+	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v4"
+	"github.com/decred/dcrd/rpcclient/v8"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/wire"
 	"google.golang.org/grpc"
@@ -346,7 +346,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 }
 
 // Connect establishes a connection to the mining node and a wallet connection
-// if the pool is a publicly avialable one.
+// if the pool is a publicly available one.
 func (h *Hub) Connect(ctx context.Context) error {
 	// Establish a connection to the mining node.
 	nodeConn, err := rpcclient.New(h.cfg.NodeRPCConfig,

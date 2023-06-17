@@ -1,16 +1,19 @@
 name: Build and Test
 on: [push, pull_request]
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Go CI
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [1.17, 1.18]
+        go: ['1.19', '1.20']
 
     services:
       postgres:
-        image: postgres:13.0
+        image: postgres:15.0
         env:
           POSTGRES_USER: dcrpooluser
           POSTGRES_PASSWORD: 12345
@@ -24,13 +27,13 @@ jobs:
           - 5432:5432
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 #v4.0.1
         with:
           go-version: ${{ matrix.go }}
       - name: Check out source
-        uses: actions/checkout@v2
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 #v3.5.3
       - name: Install Linters
-        run: "curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.45.2"
+        run: "curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.53.3"
       - name: Build
         run: go build ./...
       - name: Test

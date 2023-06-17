@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Decred developers
+// Copyright (c) 2021-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -16,13 +16,13 @@ import (
 	"testing"
 	"time"
 
-	"decred.org/dcrwallet/v2/rpc/walletrpc"
-	txrules "decred.org/dcrwallet/v2/wallet/txrules"
-	"decred.org/dcrwallet/v2/wallet/txsizes"
+	"decred.org/dcrwallet/v3/rpc/walletrpc"
+	txrules "decred.org/dcrwallet/v3/wallet/txrules"
+	"decred.org/dcrwallet/v3/wallet/txsizes"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"
-	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v3"
+	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v4"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/wire"
 	"google.golang.org/grpc"
@@ -671,7 +671,7 @@ func testPaymentMgrPayment(t *testing.T) {
 			cancel() // Trigger a context cancellation.
 			return &walletrpc.GetTransactionResponse{
 				Transaction: &walletrpc.TransactionDetails{
-					Hash: req.TransactionHash[:],
+					Hash: req.TransactionHash,
 				},
 				Confirmations: 50,
 				BlockHash:     []byte(zeroSource.BlockHash),
@@ -693,7 +693,7 @@ func testPaymentMgrPayment(t *testing.T) {
 		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
 			return &walletrpc.GetTransactionResponse{
 				Transaction: &walletrpc.TransactionDetails{
-					Hash: req.TransactionHash[:],
+					Hash: req.TransactionHash,
 				},
 				Confirmations: 50,
 				BlockHash:     []byte(zeroSource.BlockHash),
@@ -1286,7 +1286,7 @@ func testPaymentMgrPayment(t *testing.T) {
 		t.Fatalf("unexpected dividend payment error, got %v", err)
 	}
 
-	// Ensure the tx confirmation failure count reset to zero on a sucessful
+	// Ensure the tx confirmation failure count reset to zero on a successful
 	// dividend payment.
 	txConfCount := atomic.LoadUint32(&mgr.failedTxConfs)
 	if txConfCount != 0 {

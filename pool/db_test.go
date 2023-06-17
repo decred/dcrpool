@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Decred developers
+// Copyright (c) 2021-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -163,7 +163,9 @@ func Test_BoltDB_HttpBackup(t *testing.T) {
 	}
 
 	// Check reported length matches actual.
-	body, err := io.ReadAll(rr.Result().Body)
+	res := rr.Result()
+	defer res.Body.Close()
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatalf("could not read http response body: %v", err)
 	}
@@ -313,7 +315,7 @@ func testPoolMode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Ensure retrived value matches persisted value.
+	// Ensure retrieved value matches persisted value.
 	mode, err := db.fetchPoolMode()
 	if err != nil {
 		t.Fatal(err)
@@ -328,7 +330,7 @@ func testPoolMode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Ensure retrived value matches persisted value.
+	// Ensure retrieved value matches persisted value.
 	mode, err = db.fetchPoolMode()
 	if err != nil {
 		t.Fatal(err)

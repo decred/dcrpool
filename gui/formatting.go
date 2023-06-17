@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Decred developers
+// Copyright (c) 2021-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -7,7 +7,6 @@ package gui
 import (
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/decred/dcrd/dcrutil/v4"
 )
@@ -85,11 +84,6 @@ func amount(amt dcrutil.Amount) string {
 	return fmt.Sprintf("%.3f DCR", amt.ToCoin())
 }
 
-// formatUnixTime formats the provided integer as a UTC time string,
-func formatUnixTime(unix int64) string {
-	return time.Unix(0, unix).Format("2-Jan-2006 15:04:05 MST")
-}
-
 // floatToPercent formats the provided float64 as a percentage,
 // rounded to the nearest decimal place. eg. "10.5%"
 func floatToPercent(rat float64) string {
@@ -101,6 +95,6 @@ func floatToPercent(rat float64) string {
 // ratToPercent formats the provided big.Rat as a percentage,
 // rounded to the nearest decimal place. eg. "10.5%"
 func ratToPercent(rat *big.Rat) string {
-	real, _ := rat.Float64()
-	return floatToPercent(real)
+	realF, _ := rat.Float64()
+	return floatToPercent(realF)
 }

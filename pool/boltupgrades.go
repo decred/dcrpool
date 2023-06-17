@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Decred developers
+// Copyright (c) 2021-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -16,8 +16,6 @@ import (
 )
 
 const (
-	initialVersion = 0
-
 	// TransacionIDVersion is the second version of the database. It adds the
 	// transactionId field to the payments struct for payment tracking purposes.
 	transactionIDVersion = 1
