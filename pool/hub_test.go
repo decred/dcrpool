@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Decred developers
+// Copyright (c) 2021-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	"decred.org/dcrwallet/v2/rpc/walletrpc"
+	"decred.org/dcrwallet/v3/rpc/walletrpc"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrjson/v4"
 	"github.com/decred/dcrd/dcrutil/v4"
-	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v3"
+	chainjson "github.com/decred/dcrd/rpc/jsonrpc/types/v4"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrd/wire"
 	errs "github.com/decred/dcrpool/errors"
@@ -55,11 +55,11 @@ func (r *tRescanClient) Context() context.Context {
 	return nil
 }
 
-func (r *tRescanClient) SendMsg(m interface{}) error {
+func (r *tRescanClient) SendMsg(interface{}) error {
 	return nil
 }
 
-func (r *tRescanClient) RecvMsg(m interface{}) error {
+func (r *tRescanClient) RecvMsg(interface{}) error {
 	return nil
 }
 
@@ -177,7 +177,7 @@ func (t *tNodeConnection) GetTxOut(context.Context, *chainhash.Hash, uint32, int
 	return nil, nil
 }
 
-func (t *tNodeConnection) GetWorkSubmit(_ context.Context, sub string) (bool, error) {
+func (t *tNodeConnection) GetWorkSubmit(context.Context, string) (bool, error) {
 	return false, nil
 }
 
@@ -194,7 +194,7 @@ func (t *tNodeConnection) GetWork(context.Context) (*chainjson.GetWorkResult, er
 	}, nil
 }
 
-func (t *tNodeConnection) GetBlock(_ context.Context, blockHash *chainhash.Hash) (*wire.MsgBlock, error) {
+func (t *tNodeConnection) GetBlock(context.Context, *chainhash.Hash) (*wire.MsgBlock, error) {
 	b57 := []byte("07000000ddb9fb70cb6ed184f57bfb94abebe7e7b9819e27d6e3ca819" +
 		"f1f73c7218100007de69dd9365ba5a39178870780d78d86aa6d53a649a54bd65" +
 		"faac4be8123253e7f98f31055b0f3e94dd48e67f43742b028623192dd684d053" +

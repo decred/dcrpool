@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Decred developers
+// Copyright (c) 2021-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -35,12 +35,9 @@ var boltDBUpgradeTests = [...]struct {
 func TestBoltDBUpgrades(t *testing.T) {
 	t.Parallel()
 
-	d, err := os.MkdirTemp("", "dcrpool_test_upgrades")
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	d := t.TempDir()
 	t.Run("group", func(t *testing.T) {
+		t.Parallel()
 		for i, test := range boltDBUpgradeTests {
 			test := test
 			name := fmt.Sprintf("test%d", i)
@@ -78,8 +75,6 @@ func TestBoltDBUpgrades(t *testing.T) {
 			})
 		}
 	})
-
-	os.RemoveAll(d)
 }
 
 func verifyV2Upgrade(t *testing.T, db *BoltDB) {

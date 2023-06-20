@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 The Decred developers
+// Copyright (c) 2019-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -215,10 +215,10 @@ func newConfigParser(cfg *config, so *serviceOptions, options flags.Options) (*f
 // line options.
 //
 // The configuration proceeds as follows:
-// 	1) Start with a default config with sane settings
-// 	2) Pre-parse the command line to check for an alternative config file
-// 	3) Load configuration file overwriting defaults with any specified options
-// 	4) Parse CLI options and overwrite/add any specified options
+//  1. Start with a default config with sane settings
+//  2. Pre-parse the command line to check for an alternative config file
+//  3. Load configuration file overwriting defaults with any specified options
+//  4. Parse CLI options and overwrite/add any specified options
 //
 // The above results in dcrpool functioning properly without any config settings
 // while still allowing the user to override settings with config files and
@@ -257,10 +257,9 @@ func loadConfig() (*config, []string, error) {
 			if e.Type != flags.ErrHelp {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
-			} else {
-				fmt.Fprintln(os.Stdout, err)
-				os.Exit(0)
 			}
+			fmt.Fprintln(os.Stdout, err)
+			os.Exit(0)
 		}
 	}
 
@@ -445,7 +444,7 @@ func loadConfig() (*config, []string, error) {
 	// Sanitize the pool address if it has the stratum prefix.
 	cfg.Pool = strings.Replace(cfg.Pool, "stratum+tcp://", "", 1)
 
-	// Check the pool addres is a valid address.
+	// Check the pool address is a valid address.
 	_, poolPort, err := net.SplitHostPort(cfg.Pool)
 	if err != nil {
 		str := "%s: invalid pool address, %s"

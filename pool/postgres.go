@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 The Decred developers
+// Copyright (c) 2020-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -259,13 +259,13 @@ func decodeHashDataRows(rows *sql.Rows) (map[string]*HashData, error) {
 }
 
 // httpBackup is not implemented for postgres database.
-func (db *PostgresDB) httpBackup(w http.ResponseWriter) error {
+func (db *PostgresDB) httpBackup(_ http.ResponseWriter) error {
 	return errs.DBError(errs.Unsupported, "httpBackup is not supported "+
 		"for postgres database")
 }
 
 // Backup is not implemented for postgres database.
-func (db *PostgresDB) Backup(fileName string) error {
+func (db *PostgresDB) Backup(_ string) error {
 	return errs.DBError(errs.Unsupported, "backup is not supported "+
 		"for postgres database")
 }

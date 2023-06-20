@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 The Decred developers
+// Copyright (c) 2019-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -14,7 +14,8 @@ import (
 // ShareWeights reprsents the associated weights for each known DCR miner.
 // With the share weight of the lowest hash DCR miner (LHM) being 1, the
 // rest were calculated as :
-// 				(Hash of Miner X * Weight of LHM)/ Hash of LHM
+//
+//	(Hash of Miner X * Weight of LHM)/ Hash of LHM
 var ShareWeights = map[string]*big.Rat{
 	CPU:           new(big.Rat).SetFloat64(1.0), // Reserved for testing.
 	ObeliskDCR1:   new(big.Rat).SetFloat64(1.0),

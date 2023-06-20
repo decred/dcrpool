@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 The Decred developers
+// Copyright (c) 2019-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -720,52 +720,56 @@ func SubmitWorkRequest(id *uint64, workerName string, jobID string, extraNonce2 
 func ParseSubmitWorkRequest(req *Request, miner string) (string, string, string, string, string, error) {
 	const funcName = "ParseSubmitWorkRequest"
 	if req.Method != Submit {
-		desc := fmt.Sprintf("%s: request method is not submit", funcName)
+		desc := fmt.Sprintf("%s: invalid method %q from %q",
+			funcName, req.Method, miner)
 		return "", "", "", "", "", errs.MsgError(errs.Parse, desc)
 	}
 
 	params, ok := req.Params.([]interface{})
 	if !ok {
-		desc := fmt.Sprintf("%s: unable to parse submit work parameters",
-			funcName)
+		desc := fmt.Sprintf("%s: unable to parse submit work parameters from %q",
+			funcName, miner)
 		return "", "", "", "", "", errs.MsgError(errs.Parse, desc)
 	}
 
 	if len(params) < 5 {
 		desc := fmt.Sprintf("%s: expected 5 submit work "+
-			"parameters, got %d", funcName, len(params))
+			"parameters, got %d from %q", funcName, len(params), miner)
 		return "", "", "", "", "", errs.MsgError(errs.Parse, desc)
 	}
 
 	workerName, ok := params[0].(string)
 	if !ok {
-		desc := fmt.Sprintf("%s: unable to parse workerName parameter",
-			funcName)
+		desc := fmt.Sprintf("%s: unable to parse workerName parameter from %q",
+			funcName, miner)
 		return "", "", "", "", "", errs.MsgError(errs.Parse, desc)
 	}
 
 	jobID, ok := params[1].(string)
 	if !ok {
-		desc := fmt.Sprintf("%s: unable to parse jobID parameter", funcName)
+		desc := fmt.Sprintf("%s: unable to parse jobID parameter from %q",
+			funcName, miner)
 		return "", "", "", "", "", errs.MsgError(errs.Parse, desc)
 	}
 
 	extraNonce2, ok := params[2].(string)
 	if !ok {
-		desc := fmt.Sprintf("%s: unable to parse extraNonce2 parameter",
-			funcName)
+		desc := fmt.Sprintf("%s: unable to parse extraNonce2 parameter from %q",
+			funcName, miner)
 		return "", "", "", "", "", errs.MsgError(errs.Parse, desc)
 	}
 
 	nTime, ok := params[3].(string)
 	if !ok {
-		desc := fmt.Sprintf("%s: unable to parse nTime parameter", funcName)
+		desc := fmt.Sprintf("%s: unable to parse nTime parameter from %q",
+			funcName, miner)
 		return "", "", "", "", "", errs.MsgError(errs.Parse, desc)
 	}
 
 	nonce, ok := params[4].(string)
 	if !ok {
-		desc := fmt.Sprintf("%s: unable to parse nonce parameter", funcName)
+		desc := fmt.Sprintf("%s: unable to parse nonce parameter from %q",
+			funcName, miner)
 		return "", "", "", "", "", errs.MsgError(errs.Parse, desc)
 	}
 
