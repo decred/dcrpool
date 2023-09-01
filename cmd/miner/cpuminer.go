@@ -148,7 +148,7 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 
 				// A valid submission is generated when the block hash is less
 				// than the pool target of the client.
-				hash := header.BlockHash()
+				hash := header.PowHashV2()
 				hashNum.SetInt(standalone.HashToBig(&hash))
 				hashesCompleted++
 
