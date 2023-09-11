@@ -38,7 +38,7 @@ import (
 
 const (
 	// MaxReorgLimit is an estimated maximum chain reorganization limit.
-	// That is, it is highly improbable for the the chain to reorg beyond six
+	// That is, it is highly improbable for the chain to reorg beyond six
 	// blocks from the chain tip.
 	MaxReorgLimit = 6
 
