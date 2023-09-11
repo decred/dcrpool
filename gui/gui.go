@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 The Decred developers
+// Copyright (c) 2020-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -86,7 +86,7 @@ type Config struct {
 	FetchCacheChannel func() chan pool.CacheUpdateEvent
 }
 
-// GUI represents the the mining pool user interface.
+// GUI represents the mining pool user interface.
 type GUI struct {
 	cfg             *Config
 	limiter         *pool.RateLimiter

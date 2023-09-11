@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Decred developers
+// Copyright (c) 2021-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -66,7 +66,7 @@ type ChainState struct {
 	currentWorkMtx sync.RWMutex
 }
 
-// NewChainState creates a a chain state.
+// NewChainState creates a chain state.
 func NewChainState(sCfg *ChainStateConfig) *ChainState {
 	return &ChainState{
 		cfg:    sCfg,
@@ -307,7 +307,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			work, err := cs.cfg.db.fetchAcceptedWork(parentID)
 			if err != nil {
 				// If the parent of the connected block is not an accepted
-				// work of the the pool, ignore it.
+				// work of the pool, ignore it.
 				if errors.Is(err, errs.ValueNotFound) {
 					log.Tracef("Block #%d (%s) is not an accepted "+
 						"work of the pool", parentHeight, parentHash)
@@ -434,7 +434,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				}
 
 				// If the parent of the disconnected block is not an accepted
-				// work of the the pool, ignore it.
+				// work of the pool, ignore it.
 			}
 
 			if confirmedWork != nil {
@@ -462,7 +462,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 			work, err := cs.cfg.db.fetchAcceptedWork(id)
 			if err != nil {
 				// If the disconnected block is not an accepted
-				// work of the the pool, ignore it.
+				// work of the pool, ignore it.
 				if errors.Is(err, errs.ValueNotFound) {
 					close(msg.Done)
 					continue

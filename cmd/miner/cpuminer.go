@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2016 The btcsuite developers
-// Copyright (c) 2015-2021 The Decred developers
+// Copyright (c) 2015-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -185,9 +185,9 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 	}
 }
 
-// solve is the main work horse of generateblocks. It attempts to solve
-// blocks while detecting when it is performing stale work. When a
-// a block is solved it is sent via the work channel.
+// solve is the main work horse of generateblocks. It attempts to solve blocks
+// while detecting when it is performing stale work. When a block is solved it
+// is sent via the work channel.
 func (m *CPUMiner) solve(ctx context.Context) {
 	for {
 		m.miner.workMtx.RLock()
