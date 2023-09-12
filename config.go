@@ -244,9 +244,8 @@ func genCertPair(certFile, keyFile string) error {
 }
 
 // newConfigParser returns a new command line flags parser.
-func newConfigParser(cfg *config, options flags.Options) (*flags.Parser, error) {
-	parser := flags.NewParser(cfg, options)
-	return parser, nil
+func newConfigParser(cfg *config, options flags.Options) *flags.Parser {
+	return flags.NewParser(cfg, options)
 }
 
 // cleanAndExpandPath expands environment variables and leading ~ in the
@@ -370,13 +369,8 @@ func loadConfig() (*config, []string, error) {
 	// help message error can be ignored here since they will be caught by
 	// the final parse below.
 	preCfg := cfg
-	preParser, err := newConfigParser(&preCfg, flags.HelpFlag)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
-	_, err = preParser.Parse()
+	preParser := newConfigParser(&preCfg, flags.HelpFlag)
+	_, err := preParser.Parse()
 	if err != nil {
 		var e *flags.Error
 		if errors.As(err, &e) {
@@ -491,12 +485,7 @@ func loadConfig() (*config, []string, error) {
 
 	// Load additional config from file.
 	var configFileError error
-	parser, err := newConfigParser(&cfg, flags.Default)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return nil, nil, err
-	}
-
+	parser := newConfigParser(&cfg, flags.Default)
 	err = flags.NewIniParser(parser).ParseFile(preCfg.ConfigFile)
 	if err != nil {
 		var e *os.PathError
