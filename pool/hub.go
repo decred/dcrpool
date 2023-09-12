@@ -480,11 +480,11 @@ func (h *Hub) FetchLastWorkHeight() uint32 {
 func (h *Hub) FetchLastPaymentInfo() (uint32, int64, int64, error) {
 	height, paidOn, err := h.cfg.DB.loadLastPaymentInfo()
 	if err != nil {
-		return 0, 0, 0, nil
+		return 0, 0, 0, err
 	}
 	createdOn, err := h.cfg.DB.loadLastPaymentCreatedOn()
 	if err != nil {
-		return 0, 0, 0, nil
+		return 0, 0, 0, err
 	}
 	return height, paidOn, createdOn, nil
 }
