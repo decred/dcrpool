@@ -75,12 +75,12 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 	var err error
 	p.hub, err = pool.NewHub(p.cancel, hcfg)
 	if err != nil {
-		return nil, fmt.Errorf("unable to initialize hub: %v", err)
+		return nil, fmt.Errorf("unable to initialize hub: %w", err)
 	}
 
 	err = p.hub.Connect(p.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to establish node connections: %v", err)
+		return nil, fmt.Errorf("unable to establish node connections: %w", err)
 	}
 
 	err = p.hub.FetchWork(p.ctx)

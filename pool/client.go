@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 The Decred developers
+// Copyright (c) 2019-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -581,7 +581,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	if !c.cfg.SoloPool {
 		err := c.claimWeightedShare()
 		if err != nil {
-			err := fmt.Errorf("%s: %v", id, err)
+			err := fmt.Errorf("%s: %w", id, err)
 			sErr := NewStratumError(Unknown, err)
 			resp := SubmitWorkResponse(*req.ID, false, sErr)
 			c.ch <- resp

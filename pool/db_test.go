@@ -81,15 +81,14 @@ func Test_BoltDB_FetchBucketHelpers(t *testing.T) {
 		if pbkt == nil {
 			pbkt, err = tx.CreateBucketIfNotExists(poolBkt)
 			if err != nil {
-				return fmt.Errorf("unable to create %s bucket: %v",
+				return fmt.Errorf("unable to create %s bucket: %w",
 					string(poolBkt), err)
-
 			}
 			vbytes := make([]byte, 4)
 			binary.LittleEndian.PutUint32(vbytes, BoltDBVersion)
 			err = pbkt.Put(versionK, vbytes)
 			if err != nil {
-				return fmt.Errorf("unable to persist version: %v", err)
+				return fmt.Errorf("unable to persist version: %w", err)
 			}
 		}
 		return nil
