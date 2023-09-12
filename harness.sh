@@ -89,7 +89,7 @@ mkdir -p "${HARNESS_ROOT}/vwallet"
 mkdir -p "${HARNESS_ROOT}/pool"
 mkdir -p "${HARNESS_ROOT}/gui"
 
-cp -r gui/assets ${GUI_DIR}/assets
+cp -r internal/gui/assets ${GUI_DIR}/assets
 
 for ((i = 0; i < $NUMBER_OF_CLIENTS; i++)); do
 PROFILE_PORT=$(($i + 6061))

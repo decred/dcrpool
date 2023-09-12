@@ -13,7 +13,7 @@ import (
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
 
-	"github.com/decred/dcrpool/gui"
+	"github.com/decred/dcrpool/internal/gui"
 	"github.com/decred/dcrpool/pool"
 )
 

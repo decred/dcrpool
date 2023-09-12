@@ -92,10 +92,11 @@ dcrpool --configfile=path/to/config.conf
 ## Configuration
 
 dcrpool requires [dcrd](https://github.com/decred/dcrd) and [dcrwallet](https://github.com/decred/dcrwallet) when configured as a mining pool, it only requires dcrd when configured as a solo pool.
-Deploying the user interface requires copying the `dcrpool/gui/assets` folder from 
-source to a reachable location and updating the gui directory (`--guidir`) of 
-the configuration. Currently only single instance deployments are supported, 
-support for distributed deployments will be implemented in the future.
+Deploying the user interface requires copying the `dcrpool/internal/gui/assets`
+folder from source to a reachable location and updating the gui directory
+(`--guidir`) of the configuration. Currently only single instance deployments
+are supported, support for distributed deployments will be implemented in the
+future.
 
 ### Example of a solo pool configuration
 

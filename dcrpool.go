@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"github.com/decred/dcrd/rpcclient/v8"
-	"github.com/decred/dcrpool/gui"
+	"github.com/decred/dcrpool/internal/gui"
 	"github.com/decred/dcrpool/pool"
 )
 
