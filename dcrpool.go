@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -13,7 +14,9 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/decred/dcrd/rpcclient/v8"
 	"github.com/decred/dcrpool/gui"
@@ -142,8 +145,16 @@ func realMain() error {
 
 	// Load configuration and parse command line. This also initializes
 	// logging and configures it accordingly.
-	cfg, _, err := loadConfig()
+	appName := filepath.Base(os.Args[0])
+	appName = strings.TrimSuffix(appName, filepath.Ext(appName))
+	cfg, _, err := loadConfig(appName)
 	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		var e suppressUsageError
+		if !errors.As(err, &e) {
+			usageMessage := fmt.Sprintf("Use %s -h to show usage", appName)
+			fmt.Fprintln(os.Stderr, usageMessage)
+		}
 		return err
 	}
 	defer func() {
