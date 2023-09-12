@@ -87,7 +87,7 @@ var (
 
 // config defines the configuration options for the pool.
 type config struct {
-	ShowVersion           bool          `long:"version" no-ini:"true" description:"Display version information and exit."`
+	ShowVersion           bool          `short:"V" long:"version" no-ini:"true" description:"Display version information and exit."`
 	HomeDir               string        `long:"appdata" ini-name:"appdata" description:"Path to application home directory."`
 	ConfigFile            string        `long:"configfile" ini-name:"configfile" description:"Path to configuration file."`
 	DataDir               string        `long:"datadir" ini-name:"datadir" description:"The data directory."`
@@ -396,7 +396,7 @@ func loadConfig(appName string) (*config, []string, error) {
 	// Show the version and exit if the version flag was specified.
 	if preCfg.ShowVersion {
 		fmt.Printf("%s version %s (Go version %s %s/%s)\n", appName,
-			version(), runtime.Version(), runtime.GOOS, runtime.GOARCH)
+			Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 		os.Exit(0)
 	}
 
