@@ -141,7 +141,6 @@ func verifyV3Upgrade(t *testing.T, db *BoltDB) {
 			if !bytes.Equal(k, []byte(id)) {
 				return fmt.Errorf("%s: expected payment id (%s) to be "+
 					"the same as its key (%x)", funcName, id, k)
-
 			}
 
 			if payment.Source == nil {

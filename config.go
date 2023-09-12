@@ -758,7 +758,6 @@ func loadConfig() (*config, []string, error) {
 			err := fmt.Errorf(str, funcName, err)
 			fmt.Fprintln(os.Stderr, err)
 			return nil, nil, err
-
 		}
 	}
 
@@ -810,7 +809,6 @@ func loadConfig() (*config, []string, error) {
 			fmt.Fprintln(os.Stderr, err)
 			fmt.Fprintln(os.Stderr, usageMessage)
 			return nil, nil, err
-
 		}
 
 		// Generate self-signed wallet TLS cert and key if they do not
@@ -824,7 +822,6 @@ func loadConfig() (*config, []string, error) {
 				fmt.Fprintln(os.Stderr, err)
 				fmt.Fprintln(os.Stderr, usageMessage)
 				return nil, nil, err
-
 			}
 		}
 	}
