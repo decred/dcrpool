@@ -9,6 +9,7 @@ linters:
     - bodyclose
     - durationcheck
     - errchkjson
+    - errorlint
     - exportloopref
     - gofmt
     - goimports
