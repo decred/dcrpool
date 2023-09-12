@@ -133,7 +133,9 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 	return p, nil
 }
 
-func main() {
+// realMain is the real main function for dcrpool.  It is necessary to work
+// around the fact that deferred functions do not run when os.Exit() is called.
+func realMain() error {
 	// Listen for interrupt signals.
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, signals...)
@@ -142,7 +144,7 @@ func main() {
 	// logging and configures it accordingly.
 	cfg, _, err := loadConfig()
 	if err != nil {
-		os.Exit(1)
+		return err
 	}
 	defer func() {
 		if logRotator != nil {
@@ -160,13 +162,13 @@ func main() {
 
 	if err != nil {
 		mpLog.Errorf("failed to initialize database: %v", err)
-		os.Exit(1)
+		return err
 	}
 
 	p, err := newPool(db, cfg)
 	if err != nil {
 		mpLog.Errorf("failed to initialize pool: %v", err)
-		os.Exit(1)
+		return err
 	}
 
 	if cfg.Profile != "" {
@@ -215,4 +217,12 @@ func main() {
 
 	db.Close()
 	mpLog.Info("dcrpool shut down.")
+	return nil
+}
+
+func main() {
+	// Work around defer not working after os.Exit()
+	if err := realMain(); err != nil {
+		os.Exit(1)
+	}
 }
