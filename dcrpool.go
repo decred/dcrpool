@@ -200,10 +200,10 @@ func realMain() error {
 		}()
 	}
 
-	mpLog.Infof("Version: %s", version())
-	mpLog.Infof("Runtime: Go version %s", runtime.Version())
+	mpLog.Infof("%s version %s (Go version %s %s/%s)", appName,
+		Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	mpLog.Infof("Home dir: %s", cfg.HomeDir)
-	mpLog.Infof("Started dcrpool.")
+	mpLog.Infof("Started dcrpool")
 
 	go func() {
 		select {
