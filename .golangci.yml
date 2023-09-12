@@ -10,6 +10,7 @@ linters:
     - dupword
     - durationcheck
     - errchkjson
+    - errorlint
     - exportloopref
     - gofmt
     - goimports
