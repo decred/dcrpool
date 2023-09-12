@@ -878,7 +878,6 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		desc := fmt.Sprintf("%s: unable to sign transaction: %v",
 			funcName, err)
 		return errs.PoolError(errs.SignTx, desc)
-
 	}
 
 	pubTxReq := &walletrpc.PublishTransactionRequest{

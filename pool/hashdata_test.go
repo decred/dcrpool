@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Decred developers
+// Copyright (c) 2021-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -138,5 +138,4 @@ func testHashData(t *testing.T) {
 		t.Fatalf("expected a value not found error for "+
 			"pruned hash data, got %v", err)
 	}
-
 }

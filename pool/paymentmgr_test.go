@@ -390,7 +390,6 @@ func testPaymentMgrPPLNS(t *testing.T) {
 		t.Fatalf("expected the sum of all payments to be %v, got %v",
 			coinbase, sum)
 	}
-
 }
 
 func testPaymentMgrMaturity(t *testing.T) {
