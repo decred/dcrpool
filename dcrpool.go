@@ -27,32 +27,24 @@ import (
 // Conditional compilation is used to also include SIGTERM and SIGHUP on Unix.
 var signals = []os.Signal{os.Interrupt}
 
-// miningPool represents a decred proof-of-Work mining pool.
-type miningPool struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	hub    *pool.Hub
-	gui    *gui.GUI
-}
-
-// newPool initializes the mining pool.
-func newPool(db pool.Database, cfg *config) (*miningPool, error) {
-	p := new(miningPool)
-	dcrdRPCCfg := &rpcclient.ConnConfig{
+// newHub returns a new pool hub configured with the provided details that is
+// ready to connect to a consensus daemon and wallet in the case of publicly
+// available pools.
+func newHub(cfg *config, db pool.Database, cancel context.CancelFunc) (*pool.Hub, error) {
+	dcrdRPCCfg := rpcclient.ConnConfig{
 		Host:         cfg.DcrdRPCHost,
 		Endpoint:     "ws",
 		User:         cfg.RPCUser,
 		Pass:         cfg.RPCPass,
 		Certificates: cfg.dcrdRPCCerts,
 	}
-	p.ctx, p.cancel = context.WithCancel(context.Background())
 	powLimit := cfg.net.PowLimit
 	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
 	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
 
 	hcfg := &pool.HubConfig{
 		DB:                    db,
-		NodeRPCConfig:         dcrdRPCCfg,
+		NodeRPCConfig:         &dcrdRPCCfg,
 		WalletRPCCert:         cfg.WalletRPCCert,
 		WalletTLSCert:         cfg.WalletTLSCert,
 		WalletTLSKey:          cfg.WalletTLSKey,
@@ -75,23 +67,13 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 		ClientTimeout:         cfg.clientTimeout,
 	}
 
-	var err error
-	p.hub, err = pool.NewHub(p.cancel, hcfg)
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize hub: %w", err)
-	}
+	return pool.NewHub(cancel, hcfg)
+}
 
-	err = p.hub.Connect(p.ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to establish node connections: %w", err)
-	}
-
-	err = p.hub.FetchWork(p.ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	csrfSecret, err := p.hub.CSRFSecret()
+// newGUI returns a new GUI configured with the provided details that is ready
+// to run.
+func newGUI(cfg *config, hub *pool.Hub) (*gui.GUI, error) {
+	csrfSecret, err := hub.CSRFSecret()
 	if err != nil {
 		return nil, err
 	}
@@ -113,27 +95,23 @@ func newPool(db pool.Database, cfg *config) (*miningPool, error) {
 		PoolFee:               cfg.PoolFee,
 		CSRFSecret:            csrfSecret,
 		MinerListen:           cfg.MinerListen,
-		WithinLimit:           p.hub.WithinLimit,
-		FetchLastWorkHeight:   p.hub.FetchLastWorkHeight,
-		FetchLastPaymentInfo:  p.hub.FetchLastPaymentInfo,
-		FetchMinedWork:        p.hub.FetchMinedWork,
-		FetchWorkQuotas:       p.hub.FetchWorkQuotas,
-		FetchHashData:         p.hub.FetchHashData,
-		AccountExists:         p.hub.AccountExists,
-		FetchArchivedPayments: p.hub.FetchArchivedPayments,
-		FetchPendingPayments:  p.hub.FetchPendingPayments,
-		FetchCacheChannel:     p.hub.FetchCacheChannel,
+		WithinLimit:           hub.WithinLimit,
+		FetchLastWorkHeight:   hub.FetchLastWorkHeight,
+		FetchLastPaymentInfo:  hub.FetchLastPaymentInfo,
+		FetchMinedWork:        hub.FetchMinedWork,
+		FetchWorkQuotas:       hub.FetchWorkQuotas,
+		FetchHashData:         hub.FetchHashData,
+		AccountExists:         hub.AccountExists,
+		FetchArchivedPayments: hub.FetchArchivedPayments,
+		FetchPendingPayments:  hub.FetchPendingPayments,
+		FetchCacheChannel:     hub.FetchCacheChannel,
 	}
 
 	if !cfg.UsePostgres {
-		gcfg.HTTPBackupDB = p.hub.HTTPBackupDB
+		gcfg.HTTPBackupDB = hub.HTTPBackupDB
 	}
 
-	p.gui, err = gui.NewGUI(gcfg)
-	if err != nil {
-		return nil, err
-	}
-	return p, nil
+	return gui.NewGUI(gcfg)
 }
 
 // realMain is the real main function for dcrpool.  It is necessary to work
@@ -162,7 +140,15 @@ func realMain() error {
 			logRotator.Close()
 		}
 	}()
+
+	// Primary context that controls the entire process.
+	ctx, cancel := context.WithCancel(context.Background())
 	defer mpLog.Info("Shutdown complete")
+
+	// Show version and home dir at startup.
+	mpLog.Infof("%s version %s (Go version %s %s/%s)", appName,
+		Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	mpLog.Infof("Home dir: %s", cfg.HomeDir)
 
 	var db pool.Database
 	if cfg.UsePostgres {
@@ -172,16 +158,11 @@ func realMain() error {
 		db, err = pool.InitBoltDB(cfg.DBFile)
 	}
 	if err != nil {
+		cancel()
 		mpLog.Errorf("failed to initialize database: %v", err)
 		return err
 	}
 	defer db.Close()
-
-	p, err := newPool(db, cfg)
-	if err != nil {
-		mpLog.Errorf("failed to initialize pool: %v", err)
-		return err
-	}
 
 	if cfg.Profile != "" {
 		// Start the profiler.
@@ -195,27 +176,57 @@ func realMain() error {
 			err := http.ListenAndServe(listenAddr, nil)
 			if err != nil {
 				mpLog.Criticalf(err.Error())
-				p.cancel()
+				cancel()
 			}
 		}()
 	}
 
-	mpLog.Infof("%s version %s (Go version %s %s/%s)", appName,
-		Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
-	mpLog.Infof("Home dir: %s", cfg.HomeDir)
-	mpLog.Infof("Started dcrpool")
-
 	go func() {
 		select {
-		case <-p.ctx.Done():
+		case <-ctx.Done():
 			return
 
 		case <-interrupt:
-			p.cancel()
+			cancel()
 		}
 	}()
-	p.gui.Run(p.ctx)
-	p.hub.Run(p.ctx)
+
+	// Create a hub and GUI instance.
+	hub, err := newHub(cfg, db, cancel)
+	if err != nil {
+		mpLog.Errorf("unable to initialize hub: %v", err)
+		return err
+	}
+	gui, err := newGUI(cfg, hub)
+	if err != nil {
+		mpLog.Errorf("unable to initialize GUI: %v", err)
+		return err
+	}
+
+	// Run the GUI in the background.
+	go gui.Run(ctx)
+
+	// Run the hub.  This will block until the context is cancelled.
+	runHub := func(ctx context.Context, h *pool.Hub) error {
+		// Ideally these would go into hub.Run, but the tests don't work
+		// properly with this code there due to their tight coupling.
+		if err := h.Connect(ctx); err != nil {
+			return fmt.Errorf("unable to establish node connections: %w", err)
+		}
+
+		if err := h.FetchWork(ctx); err != nil {
+			return fmt.Errorf("unable to get work from consensus daemon: %w", err)
+		}
+
+		h.Run(ctx)
+		return nil
+	}
+	if err := runHub(ctx, hub); err != nil {
+		// Ensure the GUI is signaled to shutdown.
+		cancel()
+		mpLog.Errorf("unable to run pool hub: %v", err)
+		return err
+	}
 
 	// hub.Run() blocks until the pool is fully shut down. When it returns,
 	// write a backup of the DB (if not using postgres), and then close the DB.

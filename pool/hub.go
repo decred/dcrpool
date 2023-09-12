@@ -192,7 +192,6 @@ type Hub struct {
 	chainState     *ChainState
 	connections    map[string]uint32
 	connectionsMtx sync.RWMutex
-	cancel         context.CancelFunc
 	endpoint       *Endpoint
 	blake256Pad    []byte
 	wg             *sync.WaitGroup
@@ -232,7 +231,6 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		wg:          new(sync.WaitGroup),
 		connections: make(map[string]uint32),
 		cacheCh:     make(chan CacheUpdateEvent, bufferSize),
-		cancel:      cancel,
 	}
 	h.blake256Pad = generateBlake256Pad()
 	powLimit := new(big.Rat).SetInt(h.cfg.ActiveNet.PowLimit)
@@ -277,7 +275,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		GeneratePayments:      h.paymentMgr.generatePayments,
 		GetBlock:              h.getBlock,
 		GetBlockConfirmations: h.getBlockConfirmations,
-		Cancel:                h.cancel,
+		Cancel:                cancel,
 		SignalCache:           h.SignalCache,
 		HubWg:                 h.wg,
 	}
@@ -741,7 +739,6 @@ func (h *Hub) AccountExists(accountID string) bool {
 // CSRFSecret fetches a persisted secret or generates a new one.
 func (h *Hub) CSRFSecret() ([]byte, error) {
 	secret, err := h.cfg.DB.fetchCSRFSecret()
-
 	if err != nil {
 		if errors.Is(err, errs.ValueNotFound) {
 			// If the database doesnt contain a CSRF secret, generate one and
