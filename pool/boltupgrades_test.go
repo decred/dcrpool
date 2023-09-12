@@ -9,6 +9,7 @@ import (
 	"compress/gzip"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -57,11 +58,18 @@ func TestBoltDBUpgrades(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = io.Copy(fi, r)
-				fi.Close()
-				if err != nil {
-					t.Fatal(err)
+				for {
+					_, err = io.CopyN(fi, r, 1024)
+					if err != nil {
+						if errors.Is(err, io.EOF) {
+							break
+						}
+
+						fi.Close()
+						t.Fatal(err)
+					}
 				}
+				fi.Close()
 				db, err := openBoltDB(dbPath)
 				if err != nil {
 					t.Fatal(err)
