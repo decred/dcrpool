@@ -162,6 +162,7 @@ func realMain() error {
 			logRotator.Close()
 		}
 	}()
+	defer mpLog.Info("Shutdown complete")
 
 	var db pool.Database
 	if cfg.UsePostgres {
@@ -170,11 +171,11 @@ func realMain() error {
 	} else {
 		db, err = pool.InitBoltDB(cfg.DBFile)
 	}
-
 	if err != nil {
 		mpLog.Errorf("failed to initialize database: %v", err)
 		return err
 	}
+	defer db.Close()
 
 	p, err := newPool(db, cfg)
 	if err != nil {
@@ -226,8 +227,7 @@ func realMain() error {
 		}
 	}
 
-	db.Close()
-	mpLog.Info("dcrpool shut down.")
+	mpLog.Info("Hub shutdown complete")
 	return nil
 }
 
