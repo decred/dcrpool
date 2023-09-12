@@ -97,7 +97,7 @@ func verifyV2Upgrade(t *testing.T, db *BoltDB) {
 			var share Share
 			err := json.Unmarshal(v, &share)
 			if err != nil {
-				return fmt.Errorf("%s: unable to unmarshal share: %v",
+				return fmt.Errorf("%s: unable to unmarshal share: %w",
 					funcName, err)
 			}
 
@@ -133,7 +133,7 @@ func verifyV3Upgrade(t *testing.T, db *BoltDB) {
 			var payment Payment
 			err := json.Unmarshal(v, &payment)
 			if err != nil {
-				return fmt.Errorf("%s: unable to unmarshal payment: %v",
+				return fmt.Errorf("%s: unable to unmarshal payment: %w",
 					funcName, err)
 			}
 
@@ -161,7 +161,7 @@ func verifyV3Upgrade(t *testing.T, db *BoltDB) {
 			var payment Payment
 			err := json.Unmarshal(v, &payment)
 			if err != nil {
-				return fmt.Errorf("%s: unable to unmarshal payment: %v",
+				return fmt.Errorf("%s: unable to unmarshal payment: %w",
 					funcName, err)
 			}
 
@@ -224,7 +224,7 @@ func verifyV5Upgrade(t *testing.T, db *BoltDB) {
 			var share Share
 			err := json.Unmarshal(v, &share)
 			if err != nil {
-				return fmt.Errorf("%s: unable to unmarshal share: %v",
+				return fmt.Errorf("%s: unable to unmarshal share: %w",
 					funcName, err)
 			}
 
@@ -269,7 +269,7 @@ func verifyV6Upgrade(t *testing.T, db *BoltDB) {
 			var pmt Payment
 			err := json.Unmarshal(v, &pmt)
 			if err != nil {
-				return fmt.Errorf("%s: unable to unmarshal payment: %v",
+				return fmt.Errorf("%s: unable to unmarshal payment: %w",
 					funcName, err)
 			}
 
@@ -295,7 +295,7 @@ func verifyV6Upgrade(t *testing.T, db *BoltDB) {
 			var pmt Payment
 			err := json.Unmarshal(v, &pmt)
 			if err != nil {
-				return fmt.Errorf("%s: unable to unmarshal archived payment: %v",
+				return fmt.Errorf("%s: unable to unmarshal archived payment: %w",
 					funcName, err)
 			}
 

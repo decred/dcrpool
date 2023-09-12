@@ -513,7 +513,7 @@ func loadConfig() (*config, []string, error) {
 		err = preIni.WriteFile(preCfg.ConfigFile,
 			flags.IniIncludeComments|flags.IniIncludeDefaults)
 		if err != nil {
-			err = fmt.Errorf("error creating a default config file: %v", err)
+			err = fmt.Errorf("error creating a default config file: %w", err)
 			fmt.Fprintln(os.Stderr, err)
 			return nil, nil, err
 		}
@@ -786,7 +786,7 @@ func loadConfig() (*config, []string, error) {
 		// Ensure the profiling address is a valid tcp address.
 		_, portStr, err := net.SplitHostPort(cfg.Profile)
 		if err != nil {
-			err := fmt.Errorf("invalid profile address: %s", err)
+			err := fmt.Errorf("invalid profile address: %w", err)
 			fmt.Fprintln(os.Stderr, err)
 			fmt.Fprintln(os.Stderr, usageMessage)
 			return nil, nil, err

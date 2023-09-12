@@ -296,7 +296,7 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		if errors.Is(err, errs.ValueNotFound) {
 			err = hcfg.DB.persistPoolMode(cfgMode)
 			if err != nil {
-				return nil, fmt.Errorf("failed to persist pool mode: %v", err)
+				return nil, fmt.Errorf("failed to persist pool mode: %w", err)
 			}
 			dbMode = cfgMode
 		} else {
@@ -383,7 +383,7 @@ func (h *Hub) Connect(ctx context.Context) error {
 		keypair, err := tls.LoadX509KeyPair(h.cfg.WalletTLSCert,
 			h.cfg.WalletTLSKey)
 		if err != nil {
-			return fmt.Errorf("unable to read keypair: %v", err)
+			return fmt.Errorf("unable to read keypair: %w", err)
 		}
 		creds := credentials.NewTLS(&tls.Config{
 			Certificates: []tls.Certificate{keypair},
