@@ -85,10 +85,6 @@ var (
 	defaultWalletTLSKeyFile  = filepath.Join(dcrpoolHomeDir, defaultWalletTLSKeyFilename)
 )
 
-// runServiceCommand is only set to a real function on Windows.  It is used
-// to parse and execute service commands specified via the -s flag.
-var runServiceCommand func(string) error
-
 // config defines the configuration options for the pool.
 type config struct {
 	ShowVersion           bool          `long:"version" no-ini:"true" description:"Display version information and exit."`
@@ -144,12 +140,6 @@ type config struct {
 	dcrdRPCCerts          []byte
 	net                   *params
 	clientTimeout         time.Duration
-}
-
-// serviceOptions defines the configuration options for the daemon as a service on
-// Windows.
-type serviceOptions struct {
-	ServiceCommand string `short:"s" long:"service" description:"Service command {install, remove, start, stop}"`
 }
 
 // validLogLevel returns whether or not logLevel is a valid debug log level.
@@ -254,14 +244,8 @@ func genCertPair(certFile, keyFile string) error {
 }
 
 // newConfigParser returns a new command line flags parser.
-func newConfigParser(cfg *config, so *serviceOptions, options flags.Options) (*flags.Parser, error) {
+func newConfigParser(cfg *config, options flags.Options) (*flags.Parser, error) {
 	parser := flags.NewParser(cfg, options)
-	if runtime.GOOS == "windows" {
-		_, err := parser.AddGroup("Service Options", "Service Options", so)
-		if err != nil {
-			return nil, err
-		}
-	}
 	return parser, nil
 }
 
@@ -381,15 +365,12 @@ func loadConfig() (*config, []string, error) {
 		NoGUITLS:              defaultNoGUITLS,
 	}
 
-	// Service options which are only added on Windows.
-	serviceOpts := serviceOptions{}
-
 	// Pre-parse the command line options to see if an alternative config
 	// file or the version flag was specified.  Any errors aside from the
 	// help message error can be ignored here since they will be caught by
 	// the final parse below.
 	preCfg := cfg
-	preParser, err := newConfigParser(&preCfg, &serviceOpts, flags.HelpFlag)
+	preParser, err := newConfigParser(&preCfg, flags.HelpFlag)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -420,17 +401,6 @@ func loadConfig() (*config, []string, error) {
 
 	appName = strings.TrimSuffix(appName, filepath.Ext(appName))
 	usageMessage := fmt.Sprintf("Use %s -h to show usage", appName)
-
-	// Perform service command and exit if specified.  Invalid service
-	// commands show an appropriate error.  Only runs on Windows since
-	// the runServiceCommand function will be nil when not on Windows.
-	if serviceOpts.ServiceCommand != "" && runServiceCommand != nil {
-		err := runServiceCommand(serviceOpts.ServiceCommand)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-		}
-		os.Exit(0)
-	}
 
 	// Update the home directory for dcrpool if specified. Since the home
 	// directory is updated, other variables need to be updated to
@@ -521,7 +491,7 @@ func loadConfig() (*config, []string, error) {
 
 	// Load additional config from file.
 	var configFileError error
-	parser, err := newConfigParser(&cfg, &serviceOpts, flags.Default)
+	parser, err := newConfigParser(&cfg, flags.Default)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return nil, nil, err
