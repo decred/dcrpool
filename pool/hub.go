@@ -194,7 +194,7 @@ type Hub struct {
 	connectionsMtx sync.RWMutex
 	endpoint       *Endpoint
 	blake256Pad    []byte
-	wg             *sync.WaitGroup
+	wg             sync.WaitGroup
 	cacheCh        chan CacheUpdateEvent
 }
 
@@ -228,7 +228,6 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 	h := &Hub{
 		cfg:         hcfg,
 		limiter:     NewRateLimiter(),
-		wg:          new(sync.WaitGroup),
 		connections: make(map[string]uint32),
 		cacheCh:     make(chan CacheUpdateEvent, bufferSize),
 	}
@@ -259,7 +258,6 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		FetchTxBroadcaster:    func() TxBroadcaster { return h.walletConn },
 		CoinbaseConfTimeout:   h.cfg.CoinbaseConfTimeout,
 		SignalCache:           h.SignalCache,
-		HubWg:                 h.wg,
 	}
 
 	var err error
@@ -277,7 +275,6 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		GetBlockConfirmations: h.getBlockConfirmations,
 		Cancel:                cancel,
 		SignalCache:           h.SignalCache,
-		HubWg:                 h.wg,
 	}
 	h.chainState = NewChainState(sCfg)
 
@@ -320,7 +317,6 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		Blake256Pad:           h.blake256Pad,
 		NonceIterations:       h.cfg.NonceIterations,
 		MaxConnectionsPerHost: h.cfg.MaxConnectionsPerHost,
-		HubWg:                 h.wg,
 		FetchMinerDifficulty:  h.poolDiffs.fetchMinerDifficulty,
 		SubmitWork:            h.submitWork,
 		FetchCurrentWork:      h.chainState.fetchCurrentWork,
@@ -632,9 +628,18 @@ func (h *Hub) shutdown() {
 // Run handles the process lifecycles of the pool hub.
 func (h *Hub) Run(ctx context.Context) {
 	h.wg.Add(3)
-	go h.endpoint.run(ctx)
-	go h.chainState.handleChainUpdates(ctx)
-	go h.paymentMgr.handlePayments(ctx)
+	go func() {
+		h.endpoint.run(ctx)
+		h.wg.Done()
+	}()
+	go func() {
+		h.chainState.handleChainUpdates(ctx)
+		h.wg.Done()
+	}()
+	go func() {
+		h.paymentMgr.handlePayments(ctx)
+		h.wg.Done()
+	}()
 
 	// Wait until all hub processes have terminated, and then shutdown.
 	h.wg.Wait()

@@ -193,7 +193,6 @@ func createPaymentMgr(t *testing.T, paymentMethod string) (*PaymentMgr, context.
 		PoolFeeAddrs:          []stdaddr.Address{poolFeeAddrs},
 		SignalCache:           signalCache,
 		CoinbaseConfTimeout:   time.Millisecond * 200,
-		HubWg:                 new(sync.WaitGroup),
 	}
 
 	mgr, err := NewPaymentMgr(pCfg)
@@ -1504,8 +1503,12 @@ func testPaymentMgrSignals(t *testing.T) {
 		Done:           make(chan bool),
 	}
 
-	mgr.cfg.HubWg.Add(1)
-	go mgr.handlePayments(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		mgr.handlePayments(ctx)
+		wg.Done()
+	}()
 
 	mgr.processPayments(&msgA)
 	<-msgA.Done
@@ -1537,5 +1540,5 @@ func testPaymentMgrSignals(t *testing.T) {
 	<-msgB.Done
 
 	cancel()
-	mgr.cfg.HubWg.Wait()
+	wg.Wait()
 }

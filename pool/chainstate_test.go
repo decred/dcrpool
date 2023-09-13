@@ -82,7 +82,6 @@ func testChainState(t *testing.T) {
 		GetBlockConfirmations: getBlockConfirmations,
 		SignalCache:           signalCache,
 		Cancel:                cancel,
-		HubWg:                 new(sync.WaitGroup),
 	}
 
 	cs := NewChainState(cCfg)
@@ -230,8 +229,12 @@ func testChainState(t *testing.T) {
 
 	cs.cfg.GetBlock = getBlock
 
-	cCfg.HubWg.Add(1)
-	go cs.handleChainUpdates(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		cs.handleChainUpdates(ctx)
+		wg.Done()
+	}()
 
 	// Create the accepted work to be confirmed.
 	work := NewAcceptedWork(
@@ -389,5 +392,5 @@ func testChainState(t *testing.T) {
 	}
 
 	cancel()
-	cs.cfg.HubWg.Wait()
+	wg.Wait()
 }

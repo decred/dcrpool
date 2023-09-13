@@ -36,8 +36,6 @@ type EndpointConfig struct {
 	MaxConnectionsPerHost uint32
 	// MaxGenTime represents the share creation target time for the pool.
 	MaxGenTime time.Duration
-	// HubWg represents the hub's waitgroup.
-	HubWg *sync.WaitGroup
 	// FetchMinerDifficulty returns the difficulty information for the
 	// provided miner if it exists.
 	FetchMinerDifficulty func(string) (*DifficultyInfo, error)
@@ -215,7 +213,6 @@ func (e *Endpoint) disconnect(ctx context.Context) {
 			e.clientsMtx.Unlock()
 
 			e.wg.Done()
-			e.cfg.HubWg.Done()
 			return
 
 		case <-e.discCh:

@@ -117,8 +117,6 @@ type PaymentMgrConfig struct {
 	CoinbaseConfTimeout time.Duration
 	// SignalCache sends the provided cache update event to the gui cache.
 	SignalCache func(event CacheUpdateEvent)
-	// HubWg represents the hub's waitgroup.
-	HubWg *sync.WaitGroup
 }
 
 // paymentMsg represents a payment processing signal.
@@ -942,11 +940,11 @@ func (pm *PaymentMgr) processPayments(msg *paymentMsg) {
 }
 
 // handlePayments processes dividend payment signals.
+// This MUST be run as a goroutine.
 func (pm *PaymentMgr) handlePayments(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			pm.cfg.HubWg.Done()
 			return
 
 		case msg := <-pm.paymentCh:
