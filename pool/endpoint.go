@@ -73,7 +73,6 @@ type connection struct {
 type Endpoint struct {
 	listenAddr string
 	connCh     chan *connection
-	discCh     chan struct{}
 	listener   net.Listener
 	cfg        *EndpointConfig
 	clients    map[string]*Client
@@ -88,7 +87,6 @@ func NewEndpoint(eCfg *EndpointConfig, listenAddr string) (*Endpoint, error) {
 		cfg:        eCfg,
 		clients:    make(map[string]*Client),
 		connCh:     make(chan *connection, bufferSize),
-		discCh:     make(chan struct{}, bufferSize),
 	}
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
@@ -109,7 +107,9 @@ func (e *Endpoint) removeClient(c *Client) {
 
 // listen accepts incoming client connections on the endpoint.
 // It must be run as a goroutine.
-func (e *Endpoint) listen() {
+func (e *Endpoint) listen(ctx context.Context) {
+	defer e.wg.Done()
+
 	log.Infof("listening on %s", e.listenAddr)
 	for {
 		conn, err := e.listener.Accept()
@@ -126,9 +126,10 @@ func (e *Endpoint) listen() {
 			log.Errorf("unable to accept client connection: %v", err)
 			return
 		}
-		e.connCh <- &connection{
-			Conn: conn,
-			Done: make(chan bool),
+		select {
+		case <-ctx.Done():
+			return
+		case e.connCh <- &connection{Conn: conn, Done: make(chan bool)}:
 		}
 	}
 }
@@ -136,6 +137,8 @@ func (e *Endpoint) listen() {
 // connect creates new pool clients from established connections.
 // It must be run as a goroutine.
 func (e *Endpoint) connect(ctx context.Context) {
+	defer e.wg.Done()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -203,22 +206,13 @@ func (e *Endpoint) connect(ctx context.Context) {
 // disconnect relays client disconnections to the endpoint for processing.
 // It must be run as a goroutine.
 func (e *Endpoint) disconnect(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			e.clientsMtx.Lock()
-			for _, client := range e.clients {
-				client.cancel()
-			}
-			e.clientsMtx.Unlock()
-
-			e.wg.Done()
-			return
-
-		case <-e.discCh:
-			e.wg.Done()
-		}
+	<-ctx.Done()
+	e.clientsMtx.Lock()
+	for _, client := range e.clients {
+		client.cancel()
 	}
+	e.clientsMtx.Unlock()
+	e.wg.Done()
 }
 
 // generateHashIDs generates hash ids of all client connections to the pool.
@@ -238,8 +232,8 @@ func (e *Endpoint) generateHashIDs() map[string]struct{} {
 // run handles the lifecycle of all endpoint related processes.
 // This should be run as a goroutine.
 func (e *Endpoint) run(ctx context.Context) {
-	e.wg.Add(1)
-	go e.listen()
+	e.wg.Add(3)
+	go e.listen(ctx)
 	go e.connect(ctx)
 	go e.disconnect(ctx)
 	e.wg.Wait()
