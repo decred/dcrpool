@@ -83,7 +83,6 @@ func testEndpoint(t *testing.T) {
 		t.Fatalf("[NewEndpoint] unexpected error: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	endpoint.wg.Add(1)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -235,7 +234,5 @@ func testEndpoint(t *testing.T) {
 	defer conn.Close()
 
 	cancel()
-	// TODO: This never finishes because endpoint.run never actually finishes
-	// due to the internal waitgroup not being handled properly.
-	// wg.Wait()
+	wg.Wait()
 }
