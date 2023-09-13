@@ -45,8 +45,6 @@ type ChainStateConfig struct {
 	Cancel context.CancelFunc
 	// SignalCache sends the provided cache update event to the gui cache.
 	SignalCache func(event CacheUpdateEvent)
-	// HubWg represents the hub's waitgroup.
-	HubWg *sync.WaitGroup
 }
 
 // blockNotification wraps a block header notification and a done channel.
@@ -201,7 +199,6 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 		case <-ctx.Done():
 			close(cs.discCh)
 			close(cs.connCh)
-			cs.cfg.HubWg.Done()
 			return
 
 		case msg := <-cs.connCh:
