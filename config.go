@@ -21,7 +21,6 @@ import (
 	flags "github.com/jessevdk/go-flags"
 
 	"github.com/decred/dcrd/certgen"
-	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/dcrpool/pool"
@@ -67,7 +66,7 @@ const (
 )
 
 var (
-	defaultActiveNet     = chaincfg.SimNetParams().Name
+	defaultActiveNet     = simNetParams.Name
 	defaultPaymentMethod = pool.PPLNS
 	dcrpoolHomeDir       = dcrutil.AppDataDir("dcrpool", false)
 	defaultConfigFile    = filepath.Join(dcrpoolHomeDir, defaultConfigFilename)
@@ -506,11 +505,11 @@ func loadConfig(appName string) (*config, []string, error) {
 
 	// Set the mining active network.
 	switch cfg.ActiveNet {
-	case chaincfg.TestNet3Params().Name:
+	case testNet3Params.Name:
 		cfg.net = &testNet3Params
-	case chaincfg.MainNetParams().Name:
+	case mainNetParams.Name:
 		cfg.net = &mainNetParams
-	case chaincfg.SimNetParams().Name:
+	case simNetParams.Name:
 		cfg.net = &simNetParams
 	default:
 		err := fmt.Errorf("%s: unknown network provided: %v", funcName,
@@ -735,7 +734,7 @@ func loadConfig(appName string) (*config, []string, error) {
 		}
 	}
 
-	if cfg.ActiveNet != chaincfg.SimNetParams().Name && cfg.PurgeDB {
+	if cfg.ActiveNet != simNetParams.Name && cfg.PurgeDB {
 		err := fmt.Errorf("%s: database purging at startup is reserved for "+
 			"simnet testing only", funcName)
 		return nil, nil, err
@@ -764,7 +763,7 @@ func loadConfig(appName string) (*config, []string, error) {
 	// Define the client timeout to be approximately four block times
 	// per the active network, except for simnet.
 	switch cfg.ActiveNet {
-	case chaincfg.TestNet3Params().Name, chaincfg.MainNetParams().Name:
+	case testNet3Params.Name, mainNetParams.Name:
 		cfg.clientTimeout = cfg.net.TargetTimePerBlock * 4
 	default:
 		cfg.clientTimeout = time.Second * 30
