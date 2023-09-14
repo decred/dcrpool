@@ -54,6 +54,10 @@ var (
 
 	// zeroHash is the default value for a chainhash.Hash.
 	zeroHash = chainhash.Hash{0}
+
+	// mainNetName is the name of the main network.  It is stored as a variable
+	// so only a single instance creation is needed.
+	mainNetName = chaincfg.MainNetParams().Name
 )
 
 // readPayload is a convenience type that wraps a message and its
@@ -204,7 +208,7 @@ func (c *Client) claimWeightedShare() error {
 	miner := c.miner
 	c.mtx.RUnlock()
 
-	if c.cfg.ActiveNet.Name == chaincfg.MainNetParams().Name && miner == CPU {
+	if c.cfg.ActiveNet.Name == mainNetName && miner == CPU {
 		desc := "cannot claim shares for cpu miners on mainnet, " +
 			"reserved for testing purposes only (simnet, testnet)"
 		return errs.PoolError(errs.ClaimShare, desc)
