@@ -553,11 +553,7 @@ func (h *Hub) processWork(headerE string) {
 		blockVersion, nBits, nTime, true)
 	h.endpoint.clientsMtx.Lock()
 	for _, client := range h.endpoint.clients {
-		select {
-		case client.ch <- workNotif:
-		default:
-			// Non-blocking send fallthrough.
-		}
+		client.sendMessage(workNotif)
 	}
 	h.endpoint.clientsMtx.Unlock()
 }
