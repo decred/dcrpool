@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright (c) 2020 The Decred developers
 # Use of this source code is governed by an ISC
@@ -30,8 +30,12 @@ PAYMENT_METHOD="pplns"
 LAST_N_PERIOD=5m
 GUI_DIR="${HARNESS_ROOT}/gui"
 
+# Enabling profiling uses a lot more ports that might conflict with other Decred
+# software.  Set to 1 to enable.  Leave blank to disable.
+ENABLE_PROFILING=
+
 # Using postgres requires the DB specified below to already exist.
-USE_POSTGRES=1
+USE_POSTGRES=0
 POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=5432
 POSTGRES_USER=dcrpooluser
@@ -101,21 +105,21 @@ user=m$i
 address=${CLIENT_ADDRS[$i]}
 pool=127.0.0.1:5550
 maxprocs=$MINER_MAX_PROCS
-profile=$PROFILE_PORT
+profile=${ENABLE_PROFILING-$PROFILE_PORT}
 EOF
 done
 
 cat > "${HARNESS_ROOT}/master/dcrmctl.conf" <<EOF
 rpcuser=${RPC_USER}
 rpcpass=${RPC_PASS}
-rpccert=${HARNESS_ROOT}/master/rpc.cert
+rpccert=./rpc.cert
 rpcserver=127.0.0.1:19556
 EOF
 
 cat > "${HARNESS_ROOT}/vnode/dcrvctl.conf" <<EOF
 rpcuser=${RPC_USER}
 rpcpass=${RPC_PASS}
-rpccert=${HARNESS_ROOT}/vnode/rpc.cert
+rpccert=./rpc.cert
 rpcserver=127.0.0.1:19560
 EOF
 
@@ -123,9 +127,9 @@ cat > "${HARNESS_ROOT}/pool/pool.conf" <<EOF
 rpcuser=${RPC_USER}
 rpcpass=${RPC_PASS}
 dcrdrpchost=127.0.0.1:19556
-dcrdrpccert=${HARNESS_ROOT}/master/rpc.cert
+dcrdrpccert=../master/rpc.cert
 walletgrpchost=127.0.0.1:19558
-walletrpccert=${HARNESS_ROOT}/mwallet/rpc.cert
+walletrpccert=../mwallet/rpc.cert
 debuglevel=trace
 maxgentime=${MAX_GEN_TIME}
 solopool=${SOLO_POOL}
@@ -135,9 +139,9 @@ poolfeeaddrs=${PFEE_ADDR}
 paymentmethod=${PAYMENT_METHOD}
 lastnperiod=${LAST_N_PERIOD}
 adminpass=${ADMIN_PASS}
-guidir=${GUI_DIR}
+guidir=../gui
 designation=${TMUX_SESSION}
-profile=6060
+profile=${ENABLE_PROFILING-6060}
 postgres=${USE_POSTGRES}
 postgreshost=${POSTGRES_HOST}
 postgresport=${POSTGRES_PORT}
@@ -149,24 +153,24 @@ EOF
 cat > "${HARNESS_ROOT}/mwallet/dcrmwctl.conf" <<EOF
 rpcuser=${RPC_USER}
 rpcpass=${RPC_PASS}
-rpccert=${HARNESS_ROOT}/mwallet/rpc.cert
+rpccert=./rpc.cert
 rpcserver=127.0.0.1:19557
 EOF
 
 cat > "${HARNESS_ROOT}/vwallet/dcrvwctl.conf" <<EOF
 rpcuser=${RPC_USER}
 rpcpass=${RPC_PASS}
-rpccert=${HARNESS_ROOT}/vwallet/rpc.cert
+rpccert=./rpc.cert
 rpcserver=127.0.0.1:19562
 EOF
 
 cat > "${HARNESS_ROOT}/mwallet/mwallet.conf" <<EOF
 username=${RPC_USER}
 password=${RPC_PASS}
-cafile=${HARNESS_ROOT}/master/rpc.cert
-clientcafile=${HARNESS_ROOT}/pool/wallet.cert
-logdir=${HARNESS_ROOT}/mwallet/log
-appdata=${HARNESS_ROOT}/mwallet
+cafile=../master/rpc.cert
+clientcafile=../pool/wallet.cert
+logdir=./logs
+appdata=../mwallet
 simnet=1
 pass=${WALLET_PASS}
 accountgaplimit=25
@@ -175,9 +179,9 @@ EOF
 cat > "${HARNESS_ROOT}/vwallet/vwallet.conf" <<EOF
 username=${RPC_USER}
 password=${RPC_PASS}
-cafile=${HARNESS_ROOT}/vnode/rpc.cert
-logdir=${HARNESS_ROOT}/vwallet/log
-appdata=${HARNESS_ROOT}/vwallet
+cafile=../vnode/rpc.cert
+logdir=./logs
+appdata=../vwallet
 simnet=1
 enablevoting=1
 enableticketbuyer=1
