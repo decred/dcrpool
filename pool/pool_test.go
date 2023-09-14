@@ -32,12 +32,14 @@ var (
 )
 
 func setupPostgresDB() (*PostgresDB, error) {
-	pgHost := "127.0.0.1"
-	pgPort := uint32(5432)
-	pgUser := "dcrpooluser"
-	pgPass := "12345"
-	pgDBName := "dcrpooltestdb"
-	purgeDB := false
+	const (
+		pgHost   = "127.0.0.1"
+		pgPort   = uint32(5432)
+		pgUser   = "dcrpooluser"
+		pgPass   = "12345"
+		pgDBName = "dcrpooltestdb"
+		purgeDB  = false
+	)
 	return InitPostgresDB(pgHost, pgPort, pgUser, pgPass, pgDBName, purgeDB)
 }
 
