@@ -225,7 +225,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 			"client request limit reached")
 		sErr := NewStratumError(Unknown, err)
 		resp := AuthorizeResponse(*req.ID, false, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return errs.PoolError(errs.LimitExceeded, err.Error())
 	}
 
@@ -236,7 +236,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := AuthorizeResponse(*req.ID, false, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return err
 	}
 
@@ -248,7 +248,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 				"`address.clientid`, got %v", username)
 			sErr := NewStratumError(Unknown, err)
 			resp := AuthorizeResponse(*req.ID, false, sErr)
-			c.ch <- resp
+			c.sendMessage(resp)
 			return errs.MsgError(errs.Parse, err.Error())
 		}
 
@@ -260,7 +260,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 		if err != nil {
 			sErr := NewStratumError(Unknown, err)
 			resp := AuthorizeResponse(*req.ID, false, sErr)
-			c.ch <- resp
+			c.sendMessage(resp)
 			return err
 		}
 
@@ -272,7 +272,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 			if !errors.Is(err, errs.ValueFound) {
 				sErr := NewStratumError(Unknown, err)
 				resp := AuthorizeResponse(*req.ID, false, sErr)
-				c.ch <- resp
+				c.sendMessage(resp)
 				return err
 			}
 		}
@@ -291,7 +291,7 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 	c.authorized = true
 	c.statusMtx.Unlock()
 	resp := AuthorizeResponse(*req.ID, true, nil)
-	c.ch <- resp
+	c.sendMessage(resp)
 
 	return nil
 }
@@ -376,7 +376,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 			"request limit reached")
 		sErr := NewStratumError(Unknown, err)
 		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return errs.PoolError(errs.LimitExceeded, err.Error())
 	}
 
@@ -384,7 +384,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return err
 	}
 
@@ -393,7 +393,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return errs.PoolError(errs.MinerUnknown, err.Error())
 	}
 
@@ -461,7 +461,7 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 	c.subscribed = true
 	c.statusMtx.Unlock()
 
-	c.ch <- resp
+	c.sendMessage(resp)
 
 	return nil
 }
@@ -473,7 +473,7 @@ func (c *Client) handleExtraNonceSubscribeRequest(req *Request, allowed bool) er
 			"client request limit reached")
 		sErr := NewStratumError(Unknown, err)
 		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return errs.PoolError(errs.LimitExceeded, err.Error())
 	}
 
@@ -481,12 +481,12 @@ func (c *Client) handleExtraNonceSubscribeRequest(req *Request, allowed bool) er
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return err
 	}
 
 	resp := ExtraNonceSubscribeResponse(*req.ID)
-	c.ch <- resp
+	c.sendMessage(resp)
 
 	return nil
 }
@@ -504,7 +504,7 @@ func (c *Client) setDifficulty() {
 	c.mtx.RUnlock()
 	diff := new(big.Rat).Set(diffRat)
 	diffNotif := SetDifficultyNotification(diff)
-	c.ch <- diffNotif
+	c.sendMessage(diffNotif)
 }
 
 // handleSubmitWorkRequest processes work submission request messages received.
@@ -514,7 +514,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 			"request limit reached")
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return errs.PoolError(errs.LimitExceeded, err.Error())
 	}
 
@@ -531,14 +531,14 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return err
 	}
 	job, err := c.cfg.db.fetchJob(jobID)
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return err
 	}
 	header, err := GenerateSolvedBlockHeader(job.Header, c.extraNonce1,
@@ -546,7 +546,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return err
 	}
 	target := new(big.Rat).SetInt(standalone.CompactToBig(header.Bits))
@@ -557,7 +557,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 			"low", target)
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return errs.PoolError(errs.LowDifficulty, err.Error())
 	}
 	hash := header.BlockHash()
@@ -575,7 +575,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 			"corresponding pool target", hash.String(), id)
 		sErr := NewStratumError(LowDifficultyShare, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return errs.PoolError(errs.PoolDifficulty, err.Error())
 	}
 	atomic.AddInt64(&c.submissions, 1)
@@ -588,7 +588,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 			err := fmt.Errorf("%s: %w", id, err)
 			sErr := NewStratumError(Unknown, err)
 			resp := SubmitWorkResponse(*req.ID, false, sErr)
-			c.ch <- resp
+			c.sendMessage(resp)
 			return errs.PoolError(errs.ClaimShare, err.Error())
 		}
 
@@ -602,7 +602,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		// Accept the submitted work but note it is not less than the
 		// network target difficulty.
 		resp := SubmitWorkResponse(*req.ID, true, nil)
-		c.ch <- resp
+		c.sendMessage(resp)
 
 		desc := fmt.Sprintf("submitted work %s from %s is not "+
 			"less than the network target difficulty", hash.String(), id)
@@ -614,7 +614,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return err
 	}
 	submissionB := make([]byte, getworkDataLen)
@@ -626,12 +626,13 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return err
 	}
 
 	if !accepted {
-		c.ch <- SubmitWorkResponse(*req.ID, false, nil)
+		resp := SubmitWorkResponse(*req.ID, false, nil)
+		c.sendMessage(resp)
 
 		desc := fmt.Sprintf("%s: work %s rejected by the network",
 			id, hash.String())
@@ -659,17 +660,17 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		if errors.Is(err, errs.ValueFound) {
 			sErr := NewStratumError(DuplicateShare, err)
 			resp := SubmitWorkResponse(*req.ID, false, sErr)
-			c.ch <- resp
+			c.sendMessage(resp)
 			return err
 		}
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
-		c.ch <- resp
+		c.sendMessage(resp)
 		return err
 	}
 	log.Tracef("Work %s accepted by the network", hash.String())
 	resp := SubmitWorkResponse(*req.ID, true, nil)
-	c.ch <- resp
+	c.sendMessage(resp)
 	return nil
 }
 
@@ -813,13 +814,10 @@ func (c *Client) updateWork(cleanJob bool) {
 	}
 	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
 		blockVersion, nBits, nTime, cleanJob)
-	select {
-	case c.ch <- workNotif:
-		log.Tracef("Sent a timestamp-rolled current work at "+
-			"height #%v to %v", height, id)
-	default:
-		// Non-blocking send fallthrough.
-	}
+
+	c.sendMessage(workNotif)
+	log.Tracef("Sent a timestamp-rolled current work at "+
+		"height #%v to %v", height, id)
 }
 
 // process  handles incoming messages from the connected pool client.
@@ -1206,6 +1204,13 @@ func (c *Client) hashMonitor() {
 					"id %s: %v", hashData.UUID, err)
 			}
 		}
+	}
+}
+
+func (c *Client) sendMessage(msg Message) {
+	select {
+	case c.ch <- msg:
+	case <-c.ctx.Done():
 	}
 }
 
