@@ -150,39 +150,30 @@ type Client struct {
 	wg          sync.WaitGroup
 }
 
-// generateExtraNonce1 generates a random 4-byte extraNonce1
-// for the client.
-func (c *Client) generateExtraNonce1() error {
-	id := make([]byte, 4)
-	_, err := rand.Read(id)
-	if err != nil {
-		return err
-	}
-	c.extraNonce1 = hex.EncodeToString(id)
-	return nil
-}
-
 // NewClient creates client connection instance.
 func NewClient(ctx context.Context, conn net.Conn, addr *net.TCPAddr, cCfg *ClientConfig) (*Client, error) {
-	ctx, cancel := context.WithCancel(ctx)
-	c := &Client{
-		addr:     addr,
-		cfg:      cCfg,
-		conn:     conn,
-		ctx:      ctx,
-		cancel:   cancel,
-		ch:       make(chan Message),
-		readCh:   make(chan readPayload),
-		encoder:  json.NewEncoder(conn),
-		reader:   bufio.NewReaderSize(conn, maxMessageSize),
-		hashRate: ZeroRat,
-	}
-	err := c.generateExtraNonce1()
+	// Generate a random 4-byte value to use as extraNonce1 for the client.
+	var extraNonce1 [4]byte
+	_, err := rand.Read(extraNonce1[:])
 	if err != nil {
 		return nil, err
 	}
 
-	return c, nil
+	ctx, cancel := context.WithCancel(ctx)
+	c := Client{
+		addr:        addr,
+		cfg:         cCfg,
+		conn:        conn,
+		ctx:         ctx,
+		cancel:      cancel,
+		ch:          make(chan Message),
+		extraNonce1: hex.EncodeToString(extraNonce1[:]),
+		readCh:      make(chan readPayload),
+		encoder:     json.NewEncoder(conn),
+		reader:      bufio.NewReaderSize(conn, maxMessageSize),
+		hashRate:    ZeroRat,
+	}
+	return &c, nil
 }
 
 // shutdown terminates all client processes and established connections.
