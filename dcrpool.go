@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/decred/dcrd/rpcclient/v8"
 	"github.com/decred/dcrpool/internal/gui"
@@ -188,45 +189,43 @@ func realMain() error {
 		}
 	}()
 
-	// Create a hub and GUI instance.
+	// Create a hub instance and attempt to perform initial connection and work
+	// acquisition.
 	hub, err := newHub(cfg, db, cancel)
 	if err != nil {
 		mpLog.Errorf("unable to initialize hub: %v", err)
 		return err
 	}
+	if err := hub.Connect(ctx); err != nil {
+		mpLog.Errorf("unable to establish node connections: %v", err)
+		return err
+	}
+	if err := hub.FetchWork(ctx); err != nil {
+		mpLog.Errorf("unable to get work from consensus daemon: %v", err)
+		return err
+	}
+
+	// Create a gui instance.
 	gui, err := newGUI(cfg, hub)
 	if err != nil {
 		mpLog.Errorf("unable to initialize GUI: %v", err)
 		return err
 	}
 
-	// Run the GUI in the background.
-	go gui.Run(ctx)
+	// Run the GUI and hub in the background.
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		hub.Run(ctx)
+		wg.Done()
+	}()
+	go func() {
+		gui.Run(ctx)
+		wg.Done()
+	}()
+	wg.Wait()
 
-	// Run the hub.  This will block until the context is cancelled.
-	runHub := func(ctx context.Context, h *pool.Hub) error {
-		// Ideally these would go into hub.Run, but the tests don't work
-		// properly with this code there due to their tight coupling.
-		if err := h.Connect(ctx); err != nil {
-			return fmt.Errorf("unable to establish node connections: %w", err)
-		}
-
-		if err := h.FetchWork(ctx); err != nil {
-			return fmt.Errorf("unable to get work from consensus daemon: %w", err)
-		}
-
-		h.Run(ctx)
-		return nil
-	}
-	if err := runHub(ctx, hub); err != nil {
-		// Ensure the GUI is signaled to shutdown.
-		cancel()
-		mpLog.Errorf("unable to run pool hub: %v", err)
-		return err
-	}
-
-	// hub.Run() blocks until the pool is fully shut down. When it returns,
-	// write a backup of the DB (if not using postgres), and then close the DB.
+	// Write a backup of the DB (if not using postgres) once the hub shuts down.
 	if !cfg.UsePostgres {
 		mpLog.Info("Backing up database.")
 		err = db.Backup(pool.BoltBackupFile)
