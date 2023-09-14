@@ -123,7 +123,7 @@ type PaymentMgrConfig struct {
 type paymentMsg struct {
 	CurrentHeight  uint32
 	TreasuryActive bool
-	Done           chan bool
+	Done           chan struct{}
 }
 
 // PaymentMgr handles generating shares and paying out dividends to

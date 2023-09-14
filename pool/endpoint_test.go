@@ -129,7 +129,7 @@ func testEndpoint(t *testing.T) {
 	defer srvA.Close()
 	msgA := &connection{
 		Conn: connA,
-		Done: make(chan bool),
+		Done: make(chan struct{}),
 	}
 	endpoint.connCh <- msgA
 	<-msgA.Done
@@ -156,7 +156,7 @@ func testEndpoint(t *testing.T) {
 	defer srvB.Close()
 	msgB := &connection{
 		Conn: connB,
-		Done: make(chan bool),
+		Done: make(chan struct{}),
 	}
 	endpoint.connCh <- msgB
 	<-msgB.Done
@@ -168,7 +168,7 @@ func testEndpoint(t *testing.T) {
 	defer srvC.Close()
 	msgC := &connection{
 		Conn: connC,
-		Done: make(chan bool),
+		Done: make(chan struct{}),
 	}
 	endpoint.connCh <- msgC
 	<-msgC.Done
@@ -189,7 +189,7 @@ func testEndpoint(t *testing.T) {
 	defer srvD.Close()
 	msgD := &connection{
 		Conn: connD,
-		Done: make(chan bool),
+		Done: make(chan struct{}),
 	}
 	endpoint.connCh <- msgD
 	<-msgD.Done

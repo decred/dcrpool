@@ -1500,7 +1500,7 @@ func testPaymentMgrSignals(t *testing.T) {
 	msgA := paymentMsg{
 		CurrentHeight:  estMaturity + 1,
 		TreasuryActive: false,
-		Done:           make(chan bool),
+		Done:           make(chan struct{}),
 	}
 
 	var wg sync.WaitGroup
@@ -1534,7 +1534,7 @@ func testPaymentMgrSignals(t *testing.T) {
 	msgB := paymentMsg{
 		CurrentHeight:  estMaturity + 1,
 		TreasuryActive: false,
-		Done:           make(chan bool),
+		Done:           make(chan struct{}),
 	}
 	mgr.processPayments(&msgB)
 	<-msgB.Done

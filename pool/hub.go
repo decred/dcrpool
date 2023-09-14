@@ -564,13 +564,13 @@ func (h *Hub) createNotificationHandlers() *rpcclient.NotificationHandlers {
 		OnBlockConnected: func(headerB []byte, transactions [][]byte) {
 			h.chainState.connCh <- &blockNotification{
 				Header: headerB,
-				Done:   make(chan bool),
+				Done:   make(chan struct{}),
 			}
 		},
 		OnBlockDisconnected: func(headerB []byte) {
 			h.chainState.discCh <- &blockNotification{
 				Header: headerB,
-				Done:   make(chan bool),
+				Done:   make(chan struct{}),
 			}
 		},
 		OnWork: func(headerB []byte, target []byte, reason string) {
