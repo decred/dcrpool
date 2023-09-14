@@ -381,6 +381,7 @@ func (h *Hub) Connect(ctx context.Context) error {
 		creds := credentials.NewTLS(&tls.Config{
 			Certificates: []tls.Certificate{keypair},
 			RootCAs:      serverCAs,
+			MinVersion:   tls.VersionTLS12,
 		})
 		grpc, err := grpc.Dial(h.cfg.WalletGRPCHost,
 			grpc.WithTransportCredentials(creds))
