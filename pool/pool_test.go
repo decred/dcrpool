@@ -73,7 +73,6 @@ func teardownBoltDB(db *BoltDB, dbPath string) error {
 
 // TestPool runs all pool related tests which require a real database.
 func TestPool(t *testing.T) {
-
 	// All sub-tests to run. All of these tests will be run with a postgres
 	// database and a bolt database.
 	tests := map[string]func(*testing.T){

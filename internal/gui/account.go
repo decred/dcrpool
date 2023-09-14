@@ -30,7 +30,6 @@ type accountPageData struct {
 // a valid address with associated account information is provided,
 // otherwise renders the index template with an appropriate error message.
 func (ui *GUI) account(w http.ResponseWriter, r *http.Request) {
-
 	address := r.FormValue("address")
 	if address == "" {
 		ui.renderIndex(w, r, "No address provided")
@@ -88,7 +87,6 @@ func (ui *GUI) account(w http.ResponseWriter, r *http.Request) {
 // address has an account on the server a "200 OK" response is returned,
 // otherwise a "400 Bad Request" or "404 Not Found" are returned.
 func (ui *GUI) isPoolAccount(w http.ResponseWriter, r *http.Request) {
-
 	address := r.FormValue("address")
 
 	// Generate the account ID of the provided address.
