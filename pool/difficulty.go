@@ -62,13 +62,11 @@ func DifficultyToTarget(net *chaincfg.Params, difficulty *big.Rat) *big.Rat {
 // hashrate can generate a pool share by the provided target time.
 func calculatePoolDifficulty(net *chaincfg.Params, hashRate *big.Int, targetTimeSecs *big.Int) *big.Rat {
 	hashesPerTargetTime := new(big.Int).Mul(hashRate, targetTimeSecs)
-	powLimit := net.PowLimit
-	powLimitFloat, _ := new(big.Float).SetInt(powLimit).Float64()
 
 	// The number of possible iterations is calculated as:
 	//
 	//    iterations := 2^(256 - floor(log2(pow_limit)))
-	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitFloat)))
+	iterations := math.Pow(2, float64(256-net.PowLimit.BitLen()))
 
 	// The difficulty at which the provided hashrate can mine a block is
 	// calculated as:

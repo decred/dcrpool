@@ -30,14 +30,13 @@ var (
 	currentWork    string
 	currentWorkMtx sync.RWMutex
 
-	powLimit     = chaincfg.SimNetParams().PowLimit
-	powLimitF, _ = new(big.Float).SetInt(powLimit).Float64()
-	iterations   = math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
-	blake256Pad  = generateBlake256Pad()
-	maxGenTime   = time.Millisecond * 500
-	cTimeout     = time.Millisecond * 2000
-	hashCalcMax  = time.Millisecond * 1500
-	poolDiffs    = NewDifficultySet(chaincfg.SimNetParams(),
+	powLimit    = chaincfg.SimNetParams().PowLimit
+	iterations  = math.Pow(2, float64(256-powLimit.BitLen()))
+	blake256Pad = generateBlake256Pad()
+	maxGenTime  = time.Millisecond * 500
+	cTimeout    = time.Millisecond * 2000
+	hashCalcMax = time.Millisecond * 1500
+	poolDiffs   = NewDifficultySet(chaincfg.SimNetParams(),
 		new(big.Rat).SetInt(powLimit), maxGenTime)
 	config = &ClientConfig{
 		ActiveNet:       chaincfg.SimNetParams(),

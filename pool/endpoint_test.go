@@ -29,8 +29,7 @@ func makeConn(listener *net.TCPListener, serverCh chan net.Conn) (net.Conn, net.
 
 func testEndpoint(t *testing.T) {
 	powLimit := chaincfg.SimNetParams().PowLimit
-	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
-	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
+	iterations := math.Pow(2, float64(256-powLimit.BitLen()))
 	maxGenTime := time.Second * 20
 	blake256Pad := generateBlake256Pad()
 	poolDiffs := NewDifficultySet(chaincfg.SimNetParams(),

@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -38,9 +37,7 @@ func newHub(cfg *config, db pool.Database, cancel context.CancelFunc) (*pool.Hub
 		Pass:         cfg.RPCPass,
 		Certificates: cfg.dcrdRPCCerts,
 	}
-	powLimit := cfg.net.PowLimit
-	powLimitF, _ := new(big.Float).SetInt(powLimit).Float64()
-	iterations := math.Pow(2, 256-math.Floor(math.Log2(powLimitF)))
+	iterations := math.Pow(2, float64(256-cfg.net.PowLimit.BitLen()))
 
 	hcfg := &pool.HubConfig{
 		DB:                    db,
