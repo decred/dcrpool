@@ -840,7 +840,6 @@ func (db *PostgresDB) persistAcceptedWork(work *AcceptedWork) error {
 	_, err := db.DB.Exec(insertAcceptedWork, work.UUID, work.BlockHash, work.PrevHash,
 		work.Height, work.MinedBy, work.Miner, work.CreatedOn, work.Confirmed)
 	if err != nil {
-
 		var pqError *pq.Error
 		if errors.As(err, &pqError) {
 			if pqError.Code.Name() == "unique_violation" {
@@ -951,7 +950,6 @@ func (db *PostgresDB) persistJob(job *Job) error {
 
 	_, err := db.DB.Exec(insertJob, job.UUID, job.Height, job.Header)
 	if err != nil {
-
 		var pqError *pq.Error
 		if errors.As(err, &pqError) {
 			if pqError.Code.Name() == "unique_violation" {
@@ -1000,7 +998,6 @@ func (db *PostgresDB) persistHashData(hashData *HashData) error {
 		hashData.Miner, hashData.IP, hashData.HashRate.RatString(),
 		hashData.UpdatedOn)
 	if err != nil {
-
 		var pqError *pq.Error
 		if errors.As(err, &pqError) {
 			if pqError.Code.Name() == "unique_violation" {
