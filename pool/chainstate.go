@@ -50,7 +50,7 @@ type ChainStateConfig struct {
 // blockNotification wraps a block header notification and a done channel.
 type blockNotification struct {
 	Header []byte
-	Done   chan bool
+	Done   chan struct{}
 }
 
 // ChainState represents the current state of the chain.
@@ -233,7 +233,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				go cs.cfg.ProcessPayments(&paymentMsg{
 					CurrentHeight:  header.Height,
 					TreasuryActive: treasuryActive,
-					Done:           make(chan bool),
+					Done:           make(chan struct{}),
 				})
 			}
 

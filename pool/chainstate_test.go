@@ -274,7 +274,7 @@ func testChainState(t *testing.T) {
 
 	malformedMsg := &blockNotification{
 		Header: headerMB,
-		Done:   make(chan bool),
+		Done:   make(chan struct{}),
 	}
 	cs.connCh <- malformedMsg
 	<-malformedMsg.Done
@@ -301,13 +301,13 @@ func testChainState(t *testing.T) {
 
 	minedMsg := &blockNotification{
 		Header: minedHeaderB,
-		Done:   make(chan bool),
+		Done:   make(chan struct{}),
 	}
 	cs.connCh <- minedMsg
 	<-minedMsg.Done
 	confMsg := &blockNotification{
 		Header: confHeaderB,
-		Done:   make(chan bool),
+		Done:   make(chan struct{}),
 	}
 	cs.connCh <- confMsg
 	<-confMsg.Done
@@ -324,13 +324,13 @@ func testChainState(t *testing.T) {
 
 	discConfMsg := &blockNotification{
 		Header: confHeaderB,
-		Done:   make(chan bool),
+		Done:   make(chan struct{}),
 	}
 	cs.discCh <- discConfMsg
 	<-discConfMsg.Done
 	discMinedMsg := &blockNotification{
 		Header: minedHeaderB,
-		Done:   make(chan bool),
+		Done:   make(chan struct{}),
 	}
 	cs.discCh <- discMinedMsg
 	<-discMinedMsg.Done
@@ -349,20 +349,20 @@ func testChainState(t *testing.T) {
 	// process.
 	malformedMsg = &blockNotification{
 		Header: headerMB,
-		Done:   make(chan bool),
+		Done:   make(chan struct{}),
 	}
 	cs.discCh <- malformedMsg
 	<-malformedMsg.Done
 
 	confMsg = &blockNotification{
 		Header: confHeaderB,
-		Done:   make(chan bool),
+		Done:   make(chan struct{}),
 	}
 	cs.connCh <- confMsg
 	<-confMsg.Done
 	discConfMsg = &blockNotification{
 		Header: confHeaderB,
-		Done:   make(chan bool),
+		Done:   make(chan struct{}),
 	}
 	cs.discCh <- discConfMsg
 	<-discConfMsg.Done

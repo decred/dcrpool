@@ -66,7 +66,7 @@ type EndpointConfig struct {
 // connection wraps a client connection and a done channel.
 type connection struct {
 	Conn net.Conn
-	Done chan bool
+	Done chan struct{}
 }
 
 // Endpoint represents a stratum endpoint.
@@ -129,7 +129,7 @@ func (e *Endpoint) listen(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case e.connCh <- &connection{Conn: conn, Done: make(chan bool)}:
+		case e.connCh <- &connection{Conn: conn, Done: make(chan struct{})}:
 		}
 	}
 }

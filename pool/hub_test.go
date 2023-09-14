@@ -455,7 +455,7 @@ func testHub(t *testing.T) {
 
 	msgA := &connection{
 		Conn: conn,
-		Done: make(chan bool),
+		Done: make(chan struct{}),
 	}
 	hub.endpoint.connCh <- msgA
 	<-msgA.Done
@@ -501,7 +501,7 @@ func testHub(t *testing.T) {
 	}
 	confNotif := &blockNotification{
 		Header: headerB,
-		Done:   make(chan bool),
+		Done:   make(chan struct{}),
 	}
 	hub.chainState.connCh <- confNotif
 	<-confNotif.Done
