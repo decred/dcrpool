@@ -51,7 +51,7 @@ var (
 			// Do Nothing.
 		},
 		RemoveClient: func(c *Client) {},
-		SubmitWork: func(_ context.Context, submission *string) (bool, error) {
+		SubmitWork: func(_ context.Context, submission string) (bool, error) {
 			return false, nil
 		},
 		FetchCurrentWork: func() string {
@@ -1017,7 +1017,7 @@ func testClientMessageHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected set miner error: %v", err)
 	}
-	client.cfg.SubmitWork = func(_ context.Context, submission *string) (bool, error) {
+	client.cfg.SubmitWork = func(_ context.Context, submission string) (bool, error) {
 		return false, fmt.Errorf("unable to submit work")
 	}
 	id++
@@ -1048,7 +1048,7 @@ func testClientMessageHandling(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatalf("expected a submit work error")
 	}
-	client.cfg.SubmitWork = func(_ context.Context, submission *string) (bool, error) {
+	client.cfg.SubmitWork = func(_ context.Context, submission string) (bool, error) {
 		return true, nil
 	}
 
@@ -1115,7 +1115,7 @@ func testClientMessageHandling(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatal("expected a work exists work submission error")
 	}
-	client.cfg.SubmitWork = func(_ context.Context, submission *string) (bool, error) {
+	client.cfg.SubmitWork = func(_ context.Context, submission string) (bool, error) {
 		return false, nil
 	}
 

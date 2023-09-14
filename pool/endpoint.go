@@ -40,7 +40,7 @@ type EndpointConfig struct {
 	// provided miner if it exists.
 	FetchMinerDifficulty func(string) (*DifficultyInfo, error)
 	// SubmitWork sends solved block data to the consensus daemon.
-	SubmitWork func(context.Context, *string) (bool, error)
+	SubmitWork func(context.Context, string) (bool, error)
 	// FetchCurrentWork returns the current work of the pool.
 	FetchCurrentWork func() string
 	// WithinLimit returns if a client is within its request limits.
