@@ -522,8 +522,8 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 
 	// Create an invalid block hash / payment set entry.
-	invalidBlockHash := "0123456789012345678901234567890123456789" +
-		"0123456789012345678912345"
+	const invalidBlockHash = "01234567890123456789012345678901234567890123456" +
+		"789012345678912345"
 	mPmts[invalidBlockHash] = []*Payment{pmtB}
 
 	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
@@ -752,7 +752,7 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	// Ensure generating payout tx details returns an error if an account
 	// referenced by a payment cannot be found.
-	unknownID := "abcd"
+	const unknownID = "abcd"
 	unknownIDCoinbase := chainhash.Hash{'u'}
 	pmtD := NewPayment(unknownID, randSource, amt, height, estMaturity)
 	mPmts[unknownIDCoinbase.String()] = []*Payment{pmtD}

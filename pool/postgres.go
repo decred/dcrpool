@@ -97,7 +97,7 @@ func InitPostgresDB(host string, port uint32, user, pass, dbName string, purgeDB
 
 // Close closes the postgres database connection.
 func (db *PostgresDB) Close() error {
-	funcName := "Close"
+	const funcName = "Close"
 	err := db.DB.Close()
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to close db: %v", funcName, err)
@@ -109,7 +109,7 @@ func (db *PostgresDB) Close() error {
 // purge wipes all persisted data. This is intended for use with testnet and
 // simnet testing purposes only.
 func (db *PostgresDB) purge() error {
-	funcName := "purge"
+	const funcName = "purge"
 	_, err := db.DB.Exec(purgeDB)
 	if err != nil {
 		desc := fmt.Sprintf("%s: unable to purge db: %v", funcName, err)

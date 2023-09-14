@@ -200,7 +200,7 @@ func (c *Client) shutdown() {
 // serves as proof of verifiable work contributed to the mining pool.
 func (c *Client) claimWeightedShare() error {
 	if c.cfg.SoloPool {
-		desc := "cannot claim shares in solo pool mode"
+		const desc = "cannot claim shares in solo pool mode"
 		return errs.PoolError(errs.ClaimShare, desc)
 	}
 
@@ -1042,7 +1042,7 @@ func (c *Client) handleWhatsminerD1Work(req *Request) {
 
 // handleCPUWork prepares work for the cpu miner.
 func (c *Client) handleCPUWork(req *Request) {
-	miner := "CPU"
+	const miner = "CPU"
 	err := c.encoder.Encode(req)
 	if err != nil {
 		log.Errorf("%s: work encoding error: %v", miner, err)

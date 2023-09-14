@@ -265,7 +265,7 @@ func (pm *PaymentMgr) PPLNSSharePercentages() (map[string]*big.Rat, error) {
 // calculatePayments creates the payments due participating accounts.
 func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *PaymentSource,
 	total dcrutil.Amount, poolFee float64, height uint32, estMaturity uint32) ([]*Payment, int64, error) {
-	funcName := "calculatePayments"
+	const funcName = "calculatePayments"
 	if len(ratios) == 0 {
 		desc := fmt.Sprintf("%s: valid share ratios required to "+
 			"generate payments", funcName)
@@ -441,7 +441,7 @@ func (pm *PaymentMgr) pruneOrphanedPayments(ctx context.Context, pmts map[string
 // pool fees.
 func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs map[string]dcrutil.Amount,
 	tOut dcrutil.Amount, feeAddr stdaddr.Address) (dcrutil.Amount, dcrutil.Amount, error) {
-	funcName := "applyTxFees"
+	const funcName = "applyTxFees"
 	if len(inputs) == 0 {
 		desc := fmt.Sprintf("%s: cannot create a payout transaction "+
 			"without a tx input", funcName)
@@ -493,7 +493,7 @@ func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs m
 // The context passed to this function must have a corresponding
 // cancellation to allow for a clean shutdown process.
 func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txB TxBroadcaster, txHashes map[chainhash.Hash]uint32) error {
-	funcName := "confirmCoinbases"
+	const funcName = "confirmCoinbases"
 	maxSpendableConfs := int32(pm.cfg.ActiveNet.CoinbaseMaturity) + 1
 
 	keys := make([]chainhash.Hash, 0, len(txHashes))
@@ -550,7 +550,7 @@ func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txB TxBroadcaster, t
 // It will return when either a response or error is received from the
 // provided rescan source, or when the provided context is cancelled.
 func fetchRescanResponse(ctx context.Context, rescanSource func() (*walletrpc.RescanResponse, error)) (*walletrpc.RescanResponse, error) {
-	funcName := "fetchRescanResponse"
+	const funcName = "fetchRescanResponse"
 	respCh := make(chan *rescanMsg)
 	go func(ch chan *rescanMsg) {
 		resp, err := rescanSource()
@@ -580,7 +580,7 @@ func fetchRescanResponse(ctx context.Context, rescanSource func() (*walletrpc.Re
 // The context passed to this function must have a corresponding
 // cancellation to allow for a clean shutdown process.
 func (pm *PaymentMgr) monitorRescan(ctx context.Context, rescanSource walletrpc.WalletService_RescanClient, height int32) error {
-	funcName := "monitorRescan"
+	const funcName = "monitorRescan"
 	for {
 		resp, err := fetchRescanResponse(ctx, rescanSource.Recv)
 		if err != nil {
@@ -603,7 +603,7 @@ func (pm *PaymentMgr) monitorRescan(ctx context.Context, rescanSource walletrpc.
 // from the provided payments
 func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator, feeAddr stdaddr.Address, payments map[string][]*Payment, treasuryActive bool) ([]chainjson.TransactionInput,
 	map[chainhash.Hash]uint32, map[string]dcrutil.Amount, dcrutil.Amount, error) {
-	funcName := "generatePayoutTxDetails"
+	const funcName = "generatePayoutTxDetails"
 
 	// The coinbase output prior to
 	// [DCP0006](https://github.com/decred/dcps/pull/17)
@@ -713,7 +713,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 
 // PayDividends pays mature mining rewards to participating accounts.
 func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryActive bool) error {
-	funcName := "payDividends"
+	const funcName = "payDividends"
 	mPmts, err := pm.cfg.db.maturePendingPayments(height)
 	if err != nil {
 		return err
