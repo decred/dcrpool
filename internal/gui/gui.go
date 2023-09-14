@@ -345,81 +345,79 @@ func (ui *GUI) Run(ctx context.Context) {
 
 	// Use a ticker to periodically update cached data and push updates through
 	// any established websockets
-	go func(ctx context.Context) {
-		signalCh := ui.cfg.FetchCacheChannel()
-		ticker := time.NewTicker(15 * time.Second)
-		defer ticker.Stop()
+	signalCh := ui.cfg.FetchCacheChannel()
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				hashData, err := ui.cfg.FetchHashData()
+	for {
+		select {
+		case <-ticker.C:
+			hashData, err := ui.cfg.FetchHashData()
+			if err != nil {
+				log.Error(err)
+				continue
+			}
+
+			ui.cache.updateHashData(hashData)
+			ui.websocketServer.send(payload{
+				PoolHashRate: ui.cache.getPoolHash(),
+			})
+
+		case msg := <-signalCh:
+			switch msg {
+			case pool.Confirmed, pool.Unconfirmed:
+				work, err := ui.cfg.FetchMinedWork()
 				if err != nil {
 					log.Error(err)
 					continue
 				}
 
-				ui.cache.updateHashData(hashData)
+				ui.cache.updateMinedWork(work)
 				ui.websocketServer.send(payload{
-					PoolHashRate: ui.cache.getPoolHash(),
+					LastWorkHeight: ui.cfg.FetchLastWorkHeight(),
 				})
 
-			case msg := <-signalCh:
-				switch msg {
-				case pool.Confirmed, pool.Unconfirmed:
-					work, err := ui.cfg.FetchMinedWork()
-					if err != nil {
-						log.Error(err)
-						continue
-					}
-
-					ui.cache.updateMinedWork(work)
-					ui.websocketServer.send(payload{
-						LastWorkHeight: ui.cfg.FetchLastWorkHeight(),
-					})
-
-				case pool.ClaimedShare:
-					quotas, err := ui.cfg.FetchWorkQuotas()
-					if err != nil {
-						log.Error(err)
-						continue
-					}
-
-					ui.cache.updateRewardQuotas(quotas)
-
-				case pool.DividendsPaid:
-					pendingPayments, err := ui.cfg.FetchPendingPayments()
-					if err != nil {
-						log.Error(err)
-						continue
-					}
-
-					archivedPayments, err := ui.cfg.FetchArchivedPayments()
-					if err != nil {
-						log.Error(err)
-						continue
-					}
-
-					ui.cache.updatePayments(pendingPayments, archivedPayments)
-
-					lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn, err := ui.cfg.FetchLastPaymentInfo()
-					if err != nil {
-						log.Error(err)
-						continue
-					}
-					ui.cache.updateLastPaymentInfo(lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn)
-
-					ui.websocketServer.send(payload{
-						LastPaymentHeight: lastPmtHeight,
-					})
-
-				default:
-					log.Errorf("unknown cache signal received: %v", msg)
+			case pool.ClaimedShare:
+				quotas, err := ui.cfg.FetchWorkQuotas()
+				if err != nil {
+					log.Error(err)
+					continue
 				}
 
-			case <-ctx.Done():
-				return
+				ui.cache.updateRewardQuotas(quotas)
+
+			case pool.DividendsPaid:
+				pendingPayments, err := ui.cfg.FetchPendingPayments()
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+
+				archivedPayments, err := ui.cfg.FetchArchivedPayments()
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+
+				ui.cache.updatePayments(pendingPayments, archivedPayments)
+
+				lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn, err := ui.cfg.FetchLastPaymentInfo()
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+				ui.cache.updateLastPaymentInfo(lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn)
+
+				ui.websocketServer.send(payload{
+					LastPaymentHeight: lastPmtHeight,
+				})
+
+			default:
+				log.Errorf("unknown cache signal received: %v", msg)
 			}
+
+		case <-ctx.Done():
+			return
 		}
-	}(ctx)
+	}
 }
