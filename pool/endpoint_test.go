@@ -46,7 +46,7 @@ func testEndpoint(t *testing.T) {
 		FetchMinerDifficulty: func(miner string) (*DifficultyInfo, error) {
 			return poolDiffs.fetchMinerDifficulty(miner)
 		},
-		SubmitWork: func(_ context.Context, submission *string) (bool, error) {
+		SubmitWork: func(_ context.Context, submission string) (bool, error) {
 			return false, nil
 		},
 		FetchCurrentWork: func() string {

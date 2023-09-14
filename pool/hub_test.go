@@ -508,7 +508,7 @@ func testHub(t *testing.T) {
 	<-confNotif.Done
 
 	// Ensure the hub can process submitted work.
-	_, err = hub.submitWork(ctx, &workE)
+	_, err = hub.submitWork(ctx, workE)
 	if err != nil {
 		t.Fatalf("unexpected submit work error: %v", err)
 	}

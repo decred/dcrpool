@@ -418,12 +418,12 @@ func (h *Hub) Connect(ctx context.Context) error {
 }
 
 // submitWork sends solved block data to the consensus daemon for evaluation.
-func (h *Hub) submitWork(ctx context.Context, data *string) (bool, error) {
+func (h *Hub) submitWork(ctx context.Context, data string) (bool, error) {
 	if h.nodeConn == nil {
 		return false, errs.PoolError(errs.Disconnected, "node disconnected")
 	}
 
-	return h.nodeConn.GetWorkSubmit(ctx, *data)
+	return h.nodeConn.GetWorkSubmit(ctx, data)
 }
 
 // getWork fetches available work from the consensus daemon.

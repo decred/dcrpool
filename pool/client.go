@@ -89,7 +89,7 @@ type ClientConfig struct {
 	// RemoveClient removes the client from the pool.
 	RemoveClient func(*Client)
 	// SubmitWork sends solved block data to the consensus daemon.
-	SubmitWork func(context.Context, *string) (bool, error)
+	SubmitWork func(context.Context, string) (bool, error)
 	// FetchCurrentWork returns the current work of the pool.
 	FetchCurrentWork func() string
 	// WithinLimit returns if the client is still within its request limits.
@@ -622,7 +622,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	copy(submissionB[wire.MaxBlockHeaderPayload:],
 		c.cfg.Blake256Pad)
 	submission := hex.EncodeToString(submissionB)
-	accepted, err := c.cfg.SubmitWork(ctx, &submission)
+	accepted, err := c.cfg.SubmitWork(ctx, submission)
 	if err != nil {
 		sErr := NewStratumError(Unknown, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
