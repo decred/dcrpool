@@ -394,6 +394,9 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 	info, err := c.cfg.FetchMinerDifficulty(miner)
 	if err != nil {
 		c.mtx.Unlock()
+		sErr := NewStratumError(Unknown, err)
+		resp := SubscribeResponse(*req.ID, "", "", 0, sErr)
+		c.sendMessage(resp)
 		return err
 	}
 	c.miner = miner
