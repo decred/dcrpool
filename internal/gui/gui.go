@@ -121,8 +121,6 @@ type headerData struct {
 
 // route configures the http router of the user interface.
 func (ui *GUI) route() {
-	ui.router = mux.NewRouter()
-
 	// Use a separate router without rate limiting (or other restrictions) for
 	// static assets.
 	assetsRouter := ui.router.PathPrefix("/assets").Subrouter()
@@ -179,28 +177,8 @@ func (ui *GUI) renderTemplate(w http.ResponseWriter, name string, data interface
 	}
 }
 
-// NewGUI creates an instance of the user interface.
-func NewGUI(cfg *Config) (*GUI, error) {
-	ui := &GUI{
-		cfg:     cfg,
-		limiter: pool.NewRateLimiter(),
-	}
-
-	ui.cookieStore = sessions.NewCookieStore(cfg.CSRFSecret)
-	ui.websocketServer = NewWebsocketServer()
-
-	err := ui.loadTemplates()
-	if err != nil {
-		return nil, err
-	}
-
-	ui.route()
-
-	return ui, nil
-}
-
 // loadTemplates initializes the html templates of the pool user interface.
-func (ui *GUI) loadTemplates() error {
+func loadTemplates(cfg *Config) (*template.Template, error) {
 	var templates []string
 	findTemplate := func(path string, f os.FileInfo, err error) error {
 		// If path doesn't exist, or other error with path, return error so
@@ -214,9 +192,9 @@ func (ui *GUI) loadTemplates() error {
 		return nil
 	}
 
-	err := filepath.Walk(ui.cfg.GUIDir, findTemplate)
+	err := filepath.Walk(cfg.GUIDir, findTemplate)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	httpTemplates := template.New("template").Funcs(template.FuncMap{
@@ -224,16 +202,26 @@ func (ui *GUI) loadTemplates() error {
 		"floatToPercent": floatToPercent,
 	})
 
-	// Since template.Must panics with non-nil error, it is much more
-	// informative to pass the error to the caller to log it and exit
-	// gracefully.
-	httpTemplates, err = httpTemplates.ParseFiles(templates...)
+	return httpTemplates.ParseFiles(templates...)
+}
+
+// NewGUI creates an instance of the user interface.
+func NewGUI(cfg *Config) (*GUI, error) {
+	templates, err := loadTemplates(cfg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	ui.templates = template.Must(httpTemplates, nil)
-	return nil
+	ui := GUI{
+		cfg:             cfg,
+		limiter:         pool.NewRateLimiter(),
+		templates:       templates,
+		cookieStore:     sessions.NewCookieStore(cfg.CSRFSecret),
+		router:          mux.NewRouter(),
+		websocketServer: NewWebsocketServer(),
+	}
+	ui.route()
+	return &ui, nil
 }
 
 // Run starts the user interface.
