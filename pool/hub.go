@@ -194,7 +194,6 @@ type Hub struct {
 	connectionsMtx sync.RWMutex
 	endpoint       *Endpoint
 	blake256Pad    []byte
-	wg             sync.WaitGroup
 	cacheCh        chan CacheUpdateEvent
 }
 
@@ -623,22 +622,23 @@ func (h *Hub) shutdown() {
 
 // Run handles the process lifecycles of the pool hub.
 func (h *Hub) Run(ctx context.Context) {
-	h.wg.Add(3)
+	var wg sync.WaitGroup
+	wg.Add(3)
 	go func() {
 		h.endpoint.run(ctx)
-		h.wg.Done()
+		wg.Done()
 	}()
 	go func() {
 		h.chainState.handleChainUpdates(ctx)
-		h.wg.Done()
+		wg.Done()
 	}()
 	go func() {
 		h.paymentMgr.handlePayments(ctx)
-		h.wg.Done()
+		wg.Done()
 	}()
 
 	// Wait until all hub processes have terminated, and then shutdown.
-	h.wg.Wait()
+	wg.Wait()
 	h.shutdown()
 }
 

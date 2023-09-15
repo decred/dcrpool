@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -397,7 +398,12 @@ func testHub(t *testing.T) {
 			" than account x's work quota")
 	}
 
-	go hub.Run(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		hub.Run(ctx)
+		wg.Done()
+	}()
 
 	// Create the mined work to be confirmed.
 	work := NewAcceptedWork(
@@ -534,5 +540,5 @@ func testHub(t *testing.T) {
 	}
 
 	cancel()
-	hub.wg.Wait()
+	wg.Wait()
 }
