@@ -89,19 +89,45 @@ type Cache struct {
 	lastPaymentInfoMtx    sync.RWMutex
 }
 
-// InitCache initialises and returns a cache for use in the GUI.
-func InitCache(work []*pool.AcceptedWork, quotas []*pool.Quota,
-	hashData map[string][]*pool.HashData, pendingPmts []*pool.Payment,
-	archivedPmts []*pool.Payment, blockExplorerURL string,
-	lastPmtHeight uint32, lastPmtPaidOn, lastPmtCreatedOn int64) *Cache {
+// initCache initialises and returns a cache for use in the GUI.
+func initCache(cfg *Config) (*Cache, error) {
+	work, err := cfg.FetchMinedWork()
+	if err != nil {
+		return nil, err
+	}
 
-	cache := Cache{blockExplorerURL: blockExplorerURL}
+	quotas, err := cfg.FetchWorkQuotas()
+	if err != nil {
+		return nil, err
+	}
+
+	hashData, err := cfg.FetchHashData()
+	if err != nil {
+		return nil, err
+	}
+
+	pendingPmts, err := cfg.FetchPendingPayments()
+	if err != nil {
+		return nil, err
+	}
+
+	archivedPmts, err := cfg.FetchArchivedPayments()
+	if err != nil {
+		return nil, err
+	}
+
+	lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn, err := cfg.FetchLastPaymentInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	cache := Cache{blockExplorerURL: cfg.BlockExplorerURL}
 	cache.updateMinedWork(work)
 	cache.updateRewardQuotas(quotas)
 	cache.updateHashData(hashData)
 	cache.updatePayments(pendingPmts, archivedPmts)
 	cache.updateLastPaymentInfo(lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn)
-	return &cache
+	return &cache, nil
 }
 
 // min returns the smaller of the two provided integers.
