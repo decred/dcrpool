@@ -741,7 +741,12 @@ func (c *Client) read() {
 			c.cancel()
 			return
 		}
-		c.readCh <- readPayload{msg, reqType}
+		select {
+		case c.readCh <- readPayload{msg, reqType}:
+		case <-c.ctx.Done():
+			c.cancel()
+			return
+		}
 	}
 }
 
@@ -1286,10 +1291,12 @@ func (c *Client) send() {
 
 // run handles the process lifecycles of the pool client.
 func (c *Client) run() {
-	go c.read()
-
 	var wg sync.WaitGroup
-	wg.Add(4)
+	wg.Add(5)
+	go func() {
+		c.read()
+		wg.Done()
+	}()
 	go func() {
 		c.process()
 		wg.Done()
