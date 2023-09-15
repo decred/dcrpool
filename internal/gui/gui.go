@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/acme/autocert"
@@ -230,75 +231,11 @@ func NewGUI(cfg *Config) (*GUI, error) {
 	return &ui, nil
 }
 
-// Run starts the user interface.
-func (ui *GUI) Run(ctx context.Context) {
-	go func() {
-		switch {
-		case ui.cfg.UseLEHTTPS:
-			certMgr := &autocert.Manager{
-				Prompt:     autocert.AcceptTOS,
-				Cache:      autocert.DirCache("certs"),
-				HostPolicy: autocert.HostWhitelist(ui.cfg.Domain),
-			}
-
-			log.Info("Starting GUI server on port 443 (https)")
-			ui.server = &http.Server{
-				WriteTimeout: time.Second * 30,
-				ReadTimeout:  time.Second * 30,
-				IdleTimeout:  time.Second * 30,
-				Addr:         ":https",
-				Handler:      ui.router,
-				TLSConfig: &tls.Config{
-					GetCertificate: certMgr.GetCertificate,
-					MinVersion:     tls.VersionTLS12,
-					CipherSuites: []uint16{
-						tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-						tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-						tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-						tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-						tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-						tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-					},
-				},
-			}
-
-			if err := ui.server.ListenAndServeTLS("", ""); err != nil {
-				log.Error(err)
-			}
-		case ui.cfg.NoGUITLS:
-			log.Infof("Starting GUI server on %s (http)", ui.cfg.GUIListen)
-			ui.server = &http.Server{
-				WriteTimeout: time.Second * 30,
-				ReadTimeout:  time.Second * 30,
-				IdleTimeout:  time.Second * 30,
-				Addr:         ui.cfg.GUIListen,
-				Handler:      ui.router,
-			}
-
-			if err := ui.server.ListenAndServe(); err != nil &&
-				!errors.Is(err, http.ErrServerClosed) {
-				log.Error(err)
-			}
-		default:
-			log.Infof("Starting GUI server on %s (https)", ui.cfg.GUIListen)
-			ui.server = &http.Server{
-				WriteTimeout: time.Second * 30,
-				ReadTimeout:  time.Second * 30,
-				IdleTimeout:  time.Second * 30,
-				Addr:         ui.cfg.GUIListen,
-				Handler:      ui.router,
-			}
-
-			if err := ui.server.ListenAndServeTLS(ui.cfg.TLSCertFile,
-				ui.cfg.TLSKeyFile); err != nil &&
-				!errors.Is(err, http.ErrServerClosed) {
-				log.Error(err)
-			}
-		}
-	}()
-
-	// Use a ticker to periodically update cached data and push updates through
-	// any established websockets
+// updateCacheAndNotifyWebsocketClients periodically updates cached data and
+// pushes updates to any established websocket clients.
+//
+// It must be run as a routine.
+func (ui *GUI) updateCacheAndNotifyWebsocketClients(ctx context.Context) {
 	signalCh := ui.cfg.FetchCacheChannel()
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
@@ -374,4 +311,80 @@ func (ui *GUI) Run(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// Run starts the user interface.
+func (ui *GUI) Run(ctx context.Context) {
+	go func() {
+		switch {
+		case ui.cfg.UseLEHTTPS:
+			certMgr := &autocert.Manager{
+				Prompt:     autocert.AcceptTOS,
+				Cache:      autocert.DirCache("certs"),
+				HostPolicy: autocert.HostWhitelist(ui.cfg.Domain),
+			}
+
+			log.Info("Starting GUI server on port 443 (https)")
+			ui.server = &http.Server{
+				WriteTimeout: time.Second * 30,
+				ReadTimeout:  time.Second * 30,
+				IdleTimeout:  time.Second * 30,
+				Addr:         ":https",
+				Handler:      ui.router,
+				TLSConfig: &tls.Config{
+					GetCertificate: certMgr.GetCertificate,
+					MinVersion:     tls.VersionTLS12,
+					CipherSuites: []uint16{
+						tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+						tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+						tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+						tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+						tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+						tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+					},
+				},
+			}
+
+			if err := ui.server.ListenAndServeTLS("", ""); err != nil {
+				log.Error(err)
+			}
+		case ui.cfg.NoGUITLS:
+			log.Infof("Starting GUI server on %s (http)", ui.cfg.GUIListen)
+			ui.server = &http.Server{
+				WriteTimeout: time.Second * 30,
+				ReadTimeout:  time.Second * 30,
+				IdleTimeout:  time.Second * 30,
+				Addr:         ui.cfg.GUIListen,
+				Handler:      ui.router,
+			}
+
+			if err := ui.server.ListenAndServe(); err != nil &&
+				!errors.Is(err, http.ErrServerClosed) {
+				log.Error(err)
+			}
+		default:
+			log.Infof("Starting GUI server on %s (https)", ui.cfg.GUIListen)
+			ui.server = &http.Server{
+				WriteTimeout: time.Second * 30,
+				ReadTimeout:  time.Second * 30,
+				IdleTimeout:  time.Second * 30,
+				Addr:         ui.cfg.GUIListen,
+				Handler:      ui.router,
+			}
+
+			if err := ui.server.ListenAndServeTLS(ui.cfg.TLSCertFile,
+				ui.cfg.TLSKeyFile); err != nil &&
+				!errors.Is(err, http.ErrServerClosed) {
+				log.Error(err)
+			}
+		}
+	}()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		ui.updateCacheAndNotifyWebsocketClients(ctx)
+		wg.Done()
+	}()
+	wg.Wait()
 }
