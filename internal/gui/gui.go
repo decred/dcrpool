@@ -10,6 +10,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"html/template"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -235,6 +236,22 @@ func NewGUI(cfg *Config) (*GUI, error) {
 //
 // It must be run as a routine.
 func (ui *GUI) runWebServer(ctx context.Context) {
+	// Create base HTTP/S server configuration.
+	server := http.Server{
+		// Use the provided context as the parent context for all requests to
+		// ensure handlers are able to react to both client disconnects as well
+		// as shutdown via the provided context.
+		BaseContext: func(l net.Listener) context.Context {
+			return ctx
+		},
+
+		WriteTimeout: time.Second * 30,
+		ReadTimeout:  time.Second * 30,
+		IdleTimeout:  time.Second * 30,
+		Addr:         ui.cfg.GUIListen,
+		Handler:      ui.router,
+	}
+
 	switch {
 	case ui.cfg.UseLEHTTPS:
 		certMgr := &autocert.Manager{
@@ -243,60 +260,50 @@ func (ui *GUI) runWebServer(ctx context.Context) {
 			HostPolicy: autocert.HostWhitelist(ui.cfg.Domain),
 		}
 
-		log.Info("Starting GUI server on port 443 (https)")
-		server := &http.Server{
-			WriteTimeout: time.Second * 30,
-			ReadTimeout:  time.Second * 30,
-			IdleTimeout:  time.Second * 30,
-			Addr:         ":https",
-			Handler:      ui.router,
-			TLSConfig: &tls.Config{
-				GetCertificate: certMgr.GetCertificate,
-				MinVersion:     tls.VersionTLS12,
-				CipherSuites: []uint16{
-					tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-					tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-				},
+		server.Addr = ":https"
+		server.TLSConfig = &tls.Config{
+			GetCertificate: certMgr.GetCertificate,
+			MinVersion:     tls.VersionTLS12,
+			CipherSuites: []uint16{
+				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			},
 		}
 
-		if err := server.ListenAndServeTLS("", ""); err != nil {
-			log.Error(err)
-		}
+		go func() {
+			log.Info("Starting GUI server on port 443 (https)")
+			if err := server.ListenAndServeTLS("", ""); err != nil {
+				log.Error(err)
+			}
+		}()
+
 	case ui.cfg.NoGUITLS:
-		log.Infof("Starting GUI server on %s (http)", ui.cfg.GUIListen)
-		server := &http.Server{
-			WriteTimeout: time.Second * 30,
-			ReadTimeout:  time.Second * 30,
-			IdleTimeout:  time.Second * 30,
-			Addr:         ui.cfg.GUIListen,
-			Handler:      ui.router,
-		}
+		go func() {
+			log.Infof("Starting GUI server on %s (http)", ui.cfg.GUIListen)
+			if err := server.ListenAndServe(); err != nil &&
+				!errors.Is(err, http.ErrServerClosed) {
+				log.Error(err)
+			}
+		}()
 
-		if err := server.ListenAndServe(); err != nil &&
-			!errors.Is(err, http.ErrServerClosed) {
-			log.Error(err)
-		}
 	default:
-		log.Infof("Starting GUI server on %s (https)", ui.cfg.GUIListen)
-		server := &http.Server{
-			WriteTimeout: time.Second * 30,
-			ReadTimeout:  time.Second * 30,
-			IdleTimeout:  time.Second * 30,
-			Addr:         ui.cfg.GUIListen,
-			Handler:      ui.router,
-		}
-
-		if err := server.ListenAndServeTLS(ui.cfg.TLSCertFile,
-			ui.cfg.TLSKeyFile); err != nil &&
-			!errors.Is(err, http.ErrServerClosed) {
-			log.Error(err)
-		}
+		go func() {
+			log.Infof("Starting GUI server on %s (https)", ui.cfg.GUIListen)
+			if err := server.ListenAndServeTLS(ui.cfg.TLSCertFile,
+				ui.cfg.TLSKeyFile); err != nil &&
+				!errors.Is(err, http.ErrServerClosed) {
+				log.Error(err)
+			}
+		}()
 	}
+
+	// Wait until the context is canceled and gracefully shutdown the server.
+	<-ctx.Done()
+	server.Shutdown(ctx)
 }
 
 // updateCacheAndNotifyWebsocketClients periodically updates cached data and
@@ -383,10 +390,12 @@ func (ui *GUI) updateCacheAndNotifyWebsocketClients(ctx context.Context) {
 
 // Run starts the user interface.
 func (ui *GUI) Run(ctx context.Context) {
-	go ui.runWebServer(ctx)
-
 	var wg sync.WaitGroup
-	wg.Add(1)
+	wg.Add(2)
+	go func() {
+		ui.runWebServer(ctx)
+		wg.Done()
+	}()
 	go func() {
 		ui.updateCacheAndNotifyWebsocketClients(ctx)
 		wg.Done()
