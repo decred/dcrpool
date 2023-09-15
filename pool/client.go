@@ -147,7 +147,6 @@ type Client struct {
 
 	hashRate    *big.Rat
 	hashRateMtx sync.RWMutex
-	wg          sync.WaitGroup
 }
 
 // NewClient creates client connection instance.
@@ -673,10 +672,9 @@ func (c *Client) rollWork() {
 	for {
 		select {
 		case <-c.ctx.Done():
-			c.wg.Done()
 			return
-		case <-ticker.C:
 
+		case <-ticker.C:
 			// Send a timetamp-rolled work to the client if it fails to
 			// generate a work submission in twice the time it is estimated
 			// to according to its pool target.
@@ -824,7 +822,6 @@ func (c *Client) process() {
 				c.mtx.RUnlock()
 				log.Errorf("%s: unable to close connection: %v", id, err)
 			}
-			c.wg.Done()
 			return
 
 		case payload := <-c.readCh:
@@ -1126,7 +1123,6 @@ func (c *Client) hashMonitor() {
 	for {
 		select {
 		case <-c.ctx.Done():
-			c.wg.Done()
 			return
 
 		case <-ticker.C:
@@ -1210,7 +1206,6 @@ func (c *Client) send() {
 	for {
 		select {
 		case <-c.ctx.Done():
-			c.wg.Done()
 			return
 
 		case msg := <-c.ch:
@@ -1290,12 +1285,25 @@ func (c *Client) send() {
 func (c *Client) run() {
 	go c.read()
 
-	c.wg.Add(4)
-	go c.process()
-	go c.send()
-	go c.hashMonitor()
-	go c.rollWork()
-	c.wg.Wait()
+	var wg sync.WaitGroup
+	wg.Add(4)
+	go func() {
+		c.process()
+		wg.Done()
+	}()
+	go func() {
+		c.send()
+		wg.Done()
+	}()
+	go func() {
+		c.hashMonitor()
+		wg.Done()
+	}()
+	go func() {
+		c.rollWork()
+		wg.Done()
+	}()
+	wg.Wait()
 
 	c.shutdown()
 	c.cfg.Disconnect()

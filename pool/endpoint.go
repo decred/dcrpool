@@ -77,7 +77,6 @@ type Endpoint struct {
 	cfg        *EndpointConfig
 	clients    map[string]*Client
 	clientsMtx sync.Mutex
-	wg         sync.WaitGroup
 }
 
 // NewEndpoint creates an new miner endpoint.
@@ -108,8 +107,6 @@ func (e *Endpoint) removeClient(c *Client) {
 // listen accepts incoming client connections on the endpoint.
 // It must be run as a goroutine.
 func (e *Endpoint) listen(ctx context.Context) {
-	defer e.wg.Done()
-
 	log.Infof("listening on %s", e.listenAddr)
 	for {
 		conn, err := e.listener.Accept()
@@ -137,7 +134,10 @@ func (e *Endpoint) listen(ctx context.Context) {
 // connect creates new pool clients from established connections.
 // It must be run as a goroutine.
 func (e *Endpoint) connect(ctx context.Context) {
-	defer e.wg.Done()
+	// Separate waitgroup for all client connections to ensure all clients are
+	// disconnected prior to terminating the goroutine.
+	var clientWg sync.WaitGroup
+	defer clientWg.Wait()
 
 	for {
 		select {
@@ -168,7 +168,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 				Blake256Pad:          e.cfg.Blake256Pad,
 				NonceIterations:      e.cfg.NonceIterations,
 				FetchMinerDifficulty: e.cfg.FetchMinerDifficulty,
-				Disconnect:           func() { e.wg.Done() },
+				Disconnect:           func() { clientWg.Done() },
 				RemoveClient:         e.removeClient,
 				SubmitWork:           e.cfg.SubmitWork,
 				FetchCurrentWork:     e.cfg.FetchCurrentWork,
@@ -192,7 +192,7 @@ func (e *Endpoint) connect(ctx context.Context) {
 			e.clients[client.extraNonce1] = client
 			e.clientsMtx.Unlock()
 			e.cfg.AddConnection(host)
-			e.wg.Add(1)
+			clientWg.Add(1)
 			go client.run()
 
 			log.Infof("Mining client connected. extranonce1=%s, addr=%s",
@@ -212,7 +212,6 @@ func (e *Endpoint) disconnect(ctx context.Context) {
 		client.cancel()
 	}
 	e.clientsMtx.Unlock()
-	e.wg.Done()
 }
 
 // generateHashIDs generates hash ids of all client connections to the pool.
@@ -232,9 +231,19 @@ func (e *Endpoint) generateHashIDs() map[string]struct{} {
 // run handles the lifecycle of all endpoint related processes.
 // This should be run as a goroutine.
 func (e *Endpoint) run(ctx context.Context) {
-	e.wg.Add(3)
-	go e.listen(ctx)
-	go e.connect(ctx)
-	go e.disconnect(ctx)
-	e.wg.Wait()
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		e.listen(ctx)
+		wg.Done()
+	}()
+	go func() {
+		e.connect(ctx)
+		wg.Done()
+	}()
+	go func() {
+		e.disconnect(ctx)
+		wg.Done()
+	}()
+	wg.Wait()
 }
