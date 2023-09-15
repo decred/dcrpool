@@ -212,12 +212,18 @@ func NewGUI(cfg *Config) (*GUI, error) {
 		return nil, err
 	}
 
+	cache, err := initCache(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	ui := GUI{
 		cfg:             cfg,
 		limiter:         pool.NewRateLimiter(),
 		templates:       templates,
 		cookieStore:     sessions.NewCookieStore(cfg.CSRFSecret),
 		router:          mux.NewRouter(),
+		cache:           cache,
 		websocketServer: NewWebsocketServer(),
 	}
 	ui.route()
@@ -290,46 +296,6 @@ func (ui *GUI) Run(ctx context.Context) {
 			}
 		}
 	}()
-
-	// Initialise the cache.
-	work, err := ui.cfg.FetchMinedWork()
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	quotas, err := ui.cfg.FetchWorkQuotas()
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	hashData, err := ui.cfg.FetchHashData()
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	pendingPayments, err := ui.cfg.FetchPendingPayments()
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	archivedPayments, err := ui.cfg.FetchArchivedPayments()
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn, err := ui.cfg.FetchLastPaymentInfo()
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	ui.cache = InitCache(work, quotas, hashData, pendingPayments, archivedPayments,
-		ui.cfg.BlockExplorerURL, lastPmtHeight, lastPmtPaidOn, lastPmtCreatedOn)
 
 	// Use a ticker to periodically update cached data and push updates through
 	// any established websockets
