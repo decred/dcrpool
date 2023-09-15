@@ -183,6 +183,11 @@ func (c *Client) shutdown() {
 	id := c.id
 	c.mtx.RUnlock()
 
+	// Connections that never identify will not have an ID set, so use their
+	// uniquely-assigned extranonce in that case.
+	if id == "" {
+		id = c.extraNonce1
+	}
 	log.Tracef("%s connection terminated.", id)
 }
 
@@ -711,27 +716,21 @@ func (c *Client) read() {
 		data, err := c.reader.ReadBytes('\n')
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				log.Errorf("%s: EOF", id)
 				c.cancel()
 				return
 			}
-			var nErr *net.OpError
-			if !errors.As(err, &nErr) {
-				log.Errorf("%s: unable to read bytes: %v", id, err)
-				c.cancel()
-				return
-			}
-			if nErr.Op == "read" && nErr.Net == "tcp" {
-				switch {
-				case nErr.Timeout():
-					log.Errorf("%s: read timeout: %v", id, err)
-				case !nErr.Timeout():
-					log.Errorf("%s: read error: %v", id, err)
+			var nErr net.Error
+			if errors.As(err, &nErr) && nErr.Timeout() {
+				// Connections that never identify will not have an ID set, so
+				// use their uniquely-assigned extranonce in that case.
+				if id == "" {
+					id = c.extraNonce1
 				}
+				log.Errorf("%s: read timeout: %v", id, err)
 				c.cancel()
 				return
 			}
-			log.Errorf("unable to read bytes: %v %T", err, err)
+			log.Errorf("%s: unable to read bytes: %v (%[2]T)", id, err)
 			c.cancel()
 			return
 		}
