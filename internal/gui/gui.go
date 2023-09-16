@@ -91,6 +91,7 @@ type Config struct {
 // GUI represents the mining pool user interface.
 type GUI struct {
 	cfg             *Config
+	listener        net.Listener
 	limiter         *pool.RateLimiter
 	templates       *template.Template
 	cookieStore     *sessions.CookieStore
@@ -206,8 +207,64 @@ func loadTemplates(cfg *Config) (*template.Template, error) {
 	return httpTemplates.ParseFiles(templates...)
 }
 
-// NewGUI creates an instance of the user interface.
-func NewGUI(cfg *Config) (*GUI, error) {
+// New creates an instance of the user interface.
+func New(cfg *Config) (*GUI, error) {
+	// Create TCP listener based on configuration options.
+	baseTLSConfig := func() tls.Config {
+		return tls.Config{
+			MinVersion: tls.VersionTLS12,
+			CipherSuites: []uint16{
+				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			},
+		}
+	}
+	listenFunc := net.Listen
+	listenAddr := cfg.GUIListen
+	switch {
+	case cfg.UseLEHTTPS:
+		certMgr := &autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			Cache:      autocert.DirCache("certs"),
+			HostPolicy: autocert.HostWhitelist(cfg.Domain),
+		}
+
+		tlsConfig := baseTLSConfig()
+		tlsConfig.GetCertificate = certMgr.GetCertificate
+
+		// Change the standard net.Listen function to the tls one and the
+		// address to use the https port.
+		listenFunc = func(net string, laddr string) (net.Listener, error) {
+			return tls.Listen(net, laddr, &tlsConfig)
+		}
+		listenAddr = ":https"
+
+	case cfg.NoGUITLS:
+		// Nothing special.
+
+	default:
+		serverCert, err := tls.LoadX509KeyPair(cfg.TLSCertFile, cfg.TLSKeyFile)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig := baseTLSConfig()
+		tlsConfig.Certificates = []tls.Certificate{serverCert}
+
+		// Change the standard net.Listen function to the tls one.
+		listenFunc = func(net string, laddr string) (net.Listener, error) {
+			return tls.Listen(net, laddr, &tlsConfig)
+		}
+	}
+
+	listener, err := listenFunc("tcp", listenAddr)
+	if err != nil {
+		return nil, err
+	}
+
 	templates, err := loadTemplates(cfg)
 	if err != nil {
 		return nil, err
@@ -220,6 +277,7 @@ func NewGUI(cfg *Config) (*GUI, error) {
 
 	ui := GUI{
 		cfg:             cfg,
+		listener:        listener,
 		limiter:         pool.NewRateLimiter(),
 		templates:       templates,
 		cookieStore:     sessions.NewCookieStore(cfg.CSRFSecret),
@@ -236,7 +294,6 @@ func NewGUI(cfg *Config) (*GUI, error) {
 //
 // It must be run as a routine.
 func (ui *GUI) runWebServer(ctx context.Context) {
-	// Create base HTTP/S server configuration.
 	server := http.Server{
 		// Use the provided context as the parent context for all requests to
 		// ensure handlers are able to react to both client disconnects as well
@@ -248,58 +305,15 @@ func (ui *GUI) runWebServer(ctx context.Context) {
 		WriteTimeout: time.Second * 30,
 		ReadTimeout:  time.Second * 30,
 		IdleTimeout:  time.Second * 30,
-		Addr:         ui.cfg.GUIListen,
 		Handler:      ui.router,
 	}
-
-	switch {
-	case ui.cfg.UseLEHTTPS:
-		certMgr := &autocert.Manager{
-			Prompt:     autocert.AcceptTOS,
-			Cache:      autocert.DirCache("certs"),
-			HostPolicy: autocert.HostWhitelist(ui.cfg.Domain),
+	go func() {
+		log.Infof("Starting GUI server on %s", ui.listener.Addr())
+		err := server.Serve(ui.listener)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error(err)
 		}
-
-		server.Addr = ":https"
-		server.TLSConfig = &tls.Config{
-			GetCertificate: certMgr.GetCertificate,
-			MinVersion:     tls.VersionTLS12,
-			CipherSuites: []uint16{
-				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			},
-		}
-
-		go func() {
-			log.Info("Starting GUI server on port 443 (https)")
-			if err := server.ListenAndServeTLS("", ""); err != nil {
-				log.Error(err)
-			}
-		}()
-
-	case ui.cfg.NoGUITLS:
-		go func() {
-			log.Infof("Starting GUI server on %s (http)", ui.cfg.GUIListen)
-			if err := server.ListenAndServe(); err != nil &&
-				!errors.Is(err, http.ErrServerClosed) {
-				log.Error(err)
-			}
-		}()
-
-	default:
-		go func() {
-			log.Infof("Starting GUI server on %s (https)", ui.cfg.GUIListen)
-			if err := server.ListenAndServeTLS(ui.cfg.TLSCertFile,
-				ui.cfg.TLSKeyFile); err != nil &&
-				!errors.Is(err, http.ErrServerClosed) {
-				log.Error(err)
-			}
-		}()
-	}
+	}()
 
 	// Wait until the context is canceled and gracefully shutdown the server.
 	<-ctx.Done()
