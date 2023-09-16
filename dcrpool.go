@@ -109,7 +109,7 @@ func newGUI(cfg *config, hub *pool.Hub) (*gui.GUI, error) {
 		gcfg.HTTPBackupDB = hub.HTTPBackupDB
 	}
 
-	return gui.NewGUI(gcfg)
+	return gui.New(gcfg)
 }
 
 // realMain is the real main function for dcrpool.  It is necessary to work
