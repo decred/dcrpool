@@ -96,6 +96,14 @@ func NewEndpoint(eCfg *EndpointConfig, listenAddr string) (*Endpoint, error) {
 	return endpoint, nil
 }
 
+// addClient adds a connected pool client to its associated endpoint.
+func (e *Endpoint) addClient(c *Client) {
+	e.clientsMtx.Lock()
+	e.clients[c.extraNonce1] = c
+	e.clientsMtx.Unlock()
+	e.cfg.AddConnection(c.addr.IP.String())
+}
+
 // removeClient removes a disconnected pool client from its associated endpoint.
 func (e *Endpoint) removeClient(c *Client) {
 	e.clientsMtx.Lock()
@@ -168,8 +176,6 @@ func (e *Endpoint) connect(ctx context.Context) {
 				Blake256Pad:          e.cfg.Blake256Pad,
 				NonceIterations:      e.cfg.NonceIterations,
 				FetchMinerDifficulty: e.cfg.FetchMinerDifficulty,
-				Disconnect:           func() { clientWg.Done() },
-				RemoveClient:         e.removeClient,
 				SubmitWork:           e.cfg.SubmitWork,
 				FetchCurrentWork:     e.cfg.FetchCurrentWork,
 				WithinLimit:          e.cfg.WithinLimit,
@@ -188,12 +194,17 @@ func (e *Endpoint) connect(ctx context.Context) {
 				close(msg.Done)
 				continue
 			}
-			e.clientsMtx.Lock()
-			e.clients[client.extraNonce1] = client
-			e.clientsMtx.Unlock()
-			e.cfg.AddConnection(host)
+
+			// Add the client to the endpoint and start a goroutine that runs
+			// the client, waits for it to disconnect, and then removes it from
+			// the endpoint.
+			e.addClient(client)
 			clientWg.Add(1)
-			go client.run()
+			go func(c *Client) {
+				c.run()
+				e.removeClient(c)
+				clientWg.Done()
+			}(client)
 
 			log.Infof("Mining client connected. extranonce1=%s, addr=%s",
 				client.extraNonce1, client.addr)

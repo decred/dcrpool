@@ -47,10 +47,6 @@ var (
 			return poolDiffs.fetchMinerDifficulty(miner)
 		},
 		SoloPool: false,
-		Disconnect: func() {
-			// Do Nothing.
-		},
-		RemoveClient: func(c *Client) {},
 		SubmitWork: func(_ context.Context, submission string) (bool, error) {
 			return false, nil
 		},
