@@ -30,7 +30,7 @@ var signals = []os.Signal{os.Interrupt}
 // newHub returns a new pool hub configured with the provided details that is
 // ready to connect to a consensus daemon and wallet in the case of publicly
 // available pools.
-func newHub(cfg *config, db pool.Database, cancel context.CancelFunc) (*pool.Hub, error) {
+func newHub(cfg *config, db pool.Database) (*pool.Hub, error) {
 	dcrdRPCCfg := rpcclient.ConnConfig{
 		Host:         cfg.DcrdRPCHost,
 		Endpoint:     "ws",
@@ -65,7 +65,7 @@ func newHub(cfg *config, db pool.Database, cancel context.CancelFunc) (*pool.Hub
 		ClientTimeout:         cfg.clientTimeout,
 	}
 
-	return pool.NewHub(cancel, hcfg)
+	return pool.NewHub(hcfg)
 }
 
 // newGUI returns a new GUI configured with the provided details that is ready
@@ -191,7 +191,7 @@ func realMain() error {
 
 	// Create a hub instance and attempt to perform initial connection and work
 	// acquisition.
-	hub, err := newHub(cfg, db, cancel)
+	hub, err := newHub(cfg, db)
 	if err != nil {
 		mpLog.Errorf("unable to initialize hub: %v", err)
 		return err
@@ -216,7 +216,20 @@ func realMain() error {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
+		// Ensure the overall process context is cancelled once Run returns
+		// since the pool can't operate without it and it's possible the hub
+		// shut itself down due to an error deep in the chain state.
+		//
+		// The entire pool really generally shouldn't be shutting itself down
+		// due to chainstate issues and should instead go into a temporarily
+		// disabled state where it stops serving miners while it retries with
+		// increasing backoffs while it attempts to resolve whatever caused it
+		// to shutdown to begin with.
+		//
+		// However, since the code is currently structured under the assumption
+		// the entire process exits, this retains that behavior.
 		hub.Run(ctx)
+		cancel()
 		wg.Done()
 	}()
 	go func() {
