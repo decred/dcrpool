@@ -84,10 +84,6 @@ type ClientConfig struct {
 	// FetchMinerDifficulty returns the difficulty information for the
 	// provided miner, if it exists.
 	FetchMinerDifficulty func(string) (*DifficultyInfo, error)
-	// Disconnect relays a disconnection signal to the client endpoint.
-	Disconnect func()
-	// RemoveClient removes the client from the pool.
-	RemoveClient func(*Client)
 	// SubmitWork sends solved block data to the consensus daemon.
 	SubmitWork func(context.Context, string) (bool, error)
 	// FetchCurrentWork returns the current work of the pool.
@@ -178,8 +174,6 @@ func NewClient(ctx context.Context, conn net.Conn, addr *net.TCPAddr, cCfg *Clie
 // shutdown terminates all client processes and established connections.
 func (c *Client) shutdown() {
 	c.cancel()
-
-	c.cfg.RemoveClient(c)
 
 	c.mtx.RLock()
 	id := c.id
@@ -1317,5 +1311,4 @@ func (c *Client) run() {
 	wg.Wait()
 
 	c.shutdown()
-	c.cfg.Disconnect()
 }

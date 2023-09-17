@@ -36,6 +36,7 @@ func testEndpoint(t *testing.T) {
 		new(big.Rat).SetInt(powLimit), maxGenTime)
 	connections := make(map[string]uint32)
 	var connectionsMtx sync.RWMutex
+	var connectionsWg sync.WaitGroup
 	eCfg := &EndpointConfig{
 		ActiveNet:             chaincfg.SimNetParams(),
 		db:                    db,
@@ -56,6 +57,7 @@ func testEndpoint(t *testing.T) {
 			return true
 		},
 		AddConnection: func(host string) {
+			connectionsWg.Add(1)
 			connectionsMtx.Lock()
 			connections[host]++
 			connectionsMtx.Unlock()
@@ -64,6 +66,7 @@ func testEndpoint(t *testing.T) {
 			connectionsMtx.Lock()
 			connections[host]--
 			connectionsMtx.Unlock()
+			connectionsWg.Done()
 		},
 		FetchHostConnections: func(host string) uint32 {
 			connectionsMtx.RLock()
@@ -213,6 +216,7 @@ func testEndpoint(t *testing.T) {
 	for _, cl := range clients {
 		cl.shutdown()
 	}
+	connectionsWg.Wait()
 
 	// Ensure there are no connected clients to the host.
 	hostConnections = endpoint.cfg.FetchHostConnections(host)
