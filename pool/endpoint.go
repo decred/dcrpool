@@ -203,17 +203,6 @@ func (e *Endpoint) connect(ctx context.Context) {
 	}
 }
 
-// disconnect relays client disconnections to the endpoint for processing.
-// It must be run as a goroutine.
-func (e *Endpoint) disconnect(ctx context.Context) {
-	<-ctx.Done()
-	e.clientsMtx.Lock()
-	for _, client := range e.clients {
-		client.cancel()
-	}
-	e.clientsMtx.Unlock()
-}
-
 // generateHashIDs generates hash ids of all client connections to the pool.
 func (e *Endpoint) generateHashIDs() map[string]struct{} {
 	e.clientsMtx.Lock()
@@ -232,17 +221,13 @@ func (e *Endpoint) generateHashIDs() map[string]struct{} {
 // This should be run as a goroutine.
 func (e *Endpoint) run(ctx context.Context) {
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(2)
 	go func() {
 		e.listen(ctx)
 		wg.Done()
 	}()
 	go func() {
 		e.connect(ctx)
-		wg.Done()
-	}()
-	go func() {
-		e.disconnect(ctx)
 		wg.Done()
 	}()
 	wg.Wait()

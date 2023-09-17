@@ -177,6 +177,8 @@ func NewClient(ctx context.Context, conn net.Conn, addr *net.TCPAddr, cCfg *Clie
 
 // shutdown terminates all client processes and established connections.
 func (c *Client) shutdown() {
+	c.cancel()
+
 	c.cfg.RemoveClient(c)
 
 	c.mtx.RLock()
