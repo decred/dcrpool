@@ -300,12 +300,12 @@ func testHub(t *testing.T) {
 		MaxUpgradeTries:       5,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	hub, err := NewHub(cancel, hcfg)
+	hub, err := NewHub(hcfg)
 	if err != nil {
 		t.Fatalf("[NewHub] unexpected error: %v", err)
 	}
 
-	notifHandlers := hub.createNotificationHandlers()
+	notifHandlers := hub.createNotificationHandlers(ctx)
 	if notifHandlers == nil {
 		t.Fatalf("[CreatNotificationHandlers] expected an "+
 			"initialized notifications handler: %v", err)
@@ -402,6 +402,7 @@ func testHub(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		hub.Run(ctx)
+		cancel()
 		wg.Done()
 	}()
 
@@ -509,8 +510,16 @@ func testHub(t *testing.T) {
 		Header: headerB,
 		Done:   make(chan struct{}),
 	}
-	hub.chainState.connCh <- confNotif
-	<-confNotif.Done
+	select {
+	case hub.chainState.connCh <- confNotif:
+	case <-ctx.Done():
+		t.Fatalf("unexpected hub shutdown")
+	}
+	select {
+	case <-confNotif.Done:
+	case <-ctx.Done():
+		t.Fatalf("unexpected hub shutdown")
+	}
 
 	// Ensure the hub can process submitted work.
 	_, err = hub.submitWork(ctx, workE)

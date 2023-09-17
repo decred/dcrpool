@@ -223,7 +223,7 @@ func generateBlake256Pad() []byte {
 }
 
 // NewHub initializes the mining pool hub.
-func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
+func NewHub(hcfg *HubConfig) (*Hub, error) {
 	h := &Hub{
 		cfg:         hcfg,
 		limiter:     NewRateLimiter(),
@@ -272,7 +272,6 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 		GeneratePayments:      h.paymentMgr.generatePayments,
 		GetBlock:              h.getBlock,
 		GetBlockConfirmations: h.getBlockConfirmations,
-		Cancel:                cancel,
 		SignalCache:           h.SignalCache,
 	}
 	h.chainState = NewChainState(sCfg)
@@ -342,8 +341,8 @@ func NewHub(cancel context.CancelFunc, hcfg *HubConfig) (*Hub, error) {
 // if the pool is a publicly available one.
 func (h *Hub) Connect(ctx context.Context) error {
 	// Establish a connection to the mining node.
-	nodeConn, err := rpcclient.New(h.cfg.NodeRPCConfig,
-		h.createNotificationHandlers())
+	ntfnHandlers := h.createNotificationHandlers(ctx)
+	nodeConn, err := rpcclient.New(h.cfg.NodeRPCConfig, ntfnHandlers)
 	if err != nil {
 		return err
 	}
@@ -559,18 +558,27 @@ func (h *Hub) processWork(headerE string) {
 }
 
 // createNotificationHandlers returns handlers for block and work notifications.
-func (h *Hub) createNotificationHandlers() *rpcclient.NotificationHandlers {
+func (h *Hub) createNotificationHandlers(ctx context.Context) *rpcclient.NotificationHandlers {
+	var closeConnChOnce, closeDiscChOnce sync.Once
 	return &rpcclient.NotificationHandlers{
 		OnBlockConnected: func(headerB []byte, transactions [][]byte) {
-			h.chainState.connCh <- &blockNotification{
+			select {
+			case <-ctx.Done():
+				closeConnChOnce.Do(func() { close(h.chainState.connCh) })
+			case h.chainState.connCh <- &blockNotification{
 				Header: headerB,
 				Done:   make(chan struct{}),
+			}:
 			}
 		},
 		OnBlockDisconnected: func(headerB []byte) {
-			h.chainState.discCh <- &blockNotification{
+			select {
+			case <-ctx.Done():
+				closeDiscChOnce.Do(func() { close(h.chainState.discCh) })
+			case h.chainState.discCh <- &blockNotification{
 				Header: headerB,
 				Done:   make(chan struct{}),
+			}:
 			}
 		},
 		OnWork: func(headerB []byte, target []byte, reason string) {
@@ -623,6 +631,9 @@ func (h *Hub) shutdown() {
 
 // Run handles the process lifecycles of the pool hub.
 func (h *Hub) Run(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() {
@@ -630,7 +641,16 @@ func (h *Hub) Run(ctx context.Context) {
 		wg.Done()
 	}()
 	go func() {
-		h.chainState.handleChainUpdates(ctx)
+		err := h.chainState.handleChainUpdates(ctx)
+		if err != nil {
+			// Ensure the context is canceled so the remaining goroutines exit
+			// when there was an error that caused the chain update handler to
+			// exit prematurely.
+			if !errors.Is(err, context.Canceled) {
+				log.Error(err)
+			}
+			cancel()
+		}
 		wg.Done()
 	}()
 	go func() {

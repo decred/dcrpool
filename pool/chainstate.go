@@ -7,6 +7,7 @@ package pool
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,8 +42,6 @@ type ChainStateConfig struct {
 	// GetBlockConfirmations fetches the block confirmations with the provided
 	// block hash.
 	GetBlockConfirmations func(context.Context, *chainhash.Hash) (int64, error)
-	// Cancel represents the pool's context cancellation function.
-	Cancel context.CancelFunc
 	// SignalCache sends the provided cache update event to the gui cache.
 	SignalCache func(event CacheUpdateEvent)
 }
@@ -193,13 +192,13 @@ func isTreasuryActive(tx *wire.MsgTx) bool {
 
 // handleChainUpdates processes connected and disconnected block
 // notifications from the consensus daemon.
-func (cs *ChainState) handleChainUpdates(ctx context.Context) {
+//
+// This must be run as a goroutine.
+func (cs *ChainState) handleChainUpdates(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			close(cs.discCh)
-			close(cs.connCh)
-			return
+			return nil
 
 		case msg := <-cs.connCh:
 			var header wire.BlockHeader
@@ -218,11 +217,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				// work are curently fatal because payments are
 				// sourced from coinbases. The chainstate process will be
 				// terminated as a result.
-				log.Errorf("unable to fetch block with hash %x: %v",
-					header.PrevBlock, err)
 				close(msg.Done)
-				cs.cfg.Cancel()
-				continue
+				return fmt.Errorf("unable to fetch block with hash %x: %w",
+					header.PrevBlock, err)
 			}
 
 			coinbaseTx := block.Transactions[0]
@@ -245,11 +242,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					// Errors generated pruning invalidated jobs indicate an
 					// underlying issue accessing the database. The chainstate
 					// process will be terminated as a result.
-					log.Errorf("unable to prune jobs to height %d: %v",
-						pruneLimit, err)
 					close(msg.Done)
-					cs.cfg.Cancel()
-					continue
+					return fmt.Errorf("unable to prune jobs to height %d: %w",
+						pruneLimit, err)
 				}
 
 				// Prune all hash data not updated in the past ten minutes.
@@ -263,10 +258,8 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					// indicate an underlying issue accessing the
 					// database. The chainstate process will be
 					// terminated as a result.
-					log.Errorf("unable to prune hash data: %v", err)
 					close(msg.Done)
-					cs.cfg.Cancel()
-					continue
+					return fmt.Errorf("unable to prune hash data: %w", err)
 				}
 
 				err = cs.pruneAcceptedWork(ctx, pruneLimit)
@@ -275,11 +268,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					// work indicate an underlying issue accessing
 					// the database. The chainstate process will be
 					// terminated as a result.
-					log.Errorf("unable to prune accepted work below "+
-						"height #%d: %v", pruneLimit, err)
 					close(msg.Done)
-					cs.cfg.Cancel()
-					continue
+					return fmt.Errorf("unable to prune accepted work below "+
+						"height #%d: %w", pruneLimit, err)
 				}
 
 				err = cs.prunePayments(ctx, header.Height)
@@ -288,11 +279,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					// indicate an underlying issue accessing the
 					// database. The chainstate process will be
 					// terminated as a result.
-					log.Errorf("unable to prune orphaned payments at "+
-						"height #%d: %v", header.Height, err)
 					close(msg.Done)
-					cs.cfg.Cancel()
-					continue
+					return fmt.Errorf("unable to prune orphaned payments at "+
+						"height #%d: %w", header.Height, err)
 				}
 			}
 
@@ -316,11 +305,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				// looking up accepted work indicates an underlying issue
 				// accessing the database. The chainstate process will be
 				// terminated as a result.
-				log.Errorf("unable to fetch accepted work for block #%d's "+
-					"parent %s : %v", header.Height, parentHash, err)
 				close(msg.Done)
-				cs.cfg.Cancel()
-				continue
+				return fmt.Errorf("unable to fetch accepted work for block "+
+					"#%d's parent %s : %w", header.Height, parentHash, err)
 			}
 
 			// If the parent block is already confirmed as mined by the pool,
@@ -337,11 +324,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				// Errors generated updating work state indicate an underlying
 				// issue accessing the database. The chainstate process will
 				// be terminated as a result.
-				log.Errorf("unable to confirm accepted work for block "+
-					"%s: %v", header.PrevBlock.String(), err)
 				close(msg.Done)
-				cs.cfg.Cancel()
-				continue
+				return fmt.Errorf("unable to confirm accepted work for block "+
+					"%s: %w", header.PrevBlock.String(), err)
 			}
 			log.Infof("Mined work %s confirmed by connected block #%d (%s)",
 				header.PrevBlock.String(), header.Height,
@@ -356,11 +341,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					// Errors generated looking up pending payments
 					// indicates an underlying issue accessing the database.
 					// The chainstate process will be terminated as a result.
-					log.Errorf("failed to fetch pending payments "+
-						"at height #%d: %v", parentHeight, err)
 					close(msg.Done)
-					cs.cfg.Cancel()
-					continue
+					return fmt.Errorf("failed to fetch pending payments "+
+						"at height #%d: %w", parentHeight, err)
 				}
 
 				// If the parent block already has payments generated for it
@@ -391,10 +374,8 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					// Errors generated creating payments are fatal since it is
 					// required to distribute payments to participating miners.
 					// The chainstate process will be terminated as a result.
-					log.Error(err)
 					close(msg.Done)
-					cs.cfg.Cancel()
-					continue
+					return err
 				}
 			}
 
@@ -423,11 +404,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				// accessing the database. The chainstate process will be
 				// terminated as a result.
 				if !errors.Is(err, errs.ValueNotFound) {
-					log.Errorf("unable to fetch accepted work for block "+
-						"#%d's parent %s: %v", header.Height, parentHash, err)
 					close(msg.Done)
-					cs.cfg.Cancel()
-					continue
+					return fmt.Errorf("unable to fetch accepted work for block "+
+						"#%d's parent %s: %w", header.Height, parentHash, err)
 				}
 
 				// If the parent of the disconnected block is not an accepted
@@ -441,11 +420,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 					// Errors generated updating work state indicate an underlying
 					// issue accessing the database. The chainstate process will
 					// be terminated as a result.
-					log.Errorf("unable to unconfirm accepted work for block "+
-						"%s: %v", parentHash, err)
 					close(msg.Done)
-					cs.cfg.Cancel()
-					continue
+					return fmt.Errorf("unable to unconfirm accepted work for "+
+						"block %s: %w", parentHash, err)
 				}
 
 				log.Infof("Mined work %s unconfirmed via disconnected "+
@@ -469,11 +446,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				// looking up accepted work indicates an underlying issue
 				// accessing the database. The chainstate process will be
 				// terminated as a result.
-				log.Errorf("unable to fetch accepted work for block #%d: %v",
-					header.Height, blockHash, err)
 				close(msg.Done)
-				cs.cfg.Cancel()
-				continue
+				return fmt.Errorf("unable to fetch accepted work for block "+
+					"#%d (hash %s): %w", header.Height, blockHash, err)
 			}
 
 			work.Confirmed = false
@@ -482,11 +457,9 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) {
 				// Errors generated updating work state indicate an underlying
 				// issue accessing the database. The chainstate process will
 				// be terminated as a result.
-				log.Errorf("unable to unconfirm mined work at "+
-					"height #%d: %v", err)
 				close(msg.Done)
-				cs.cfg.Cancel()
-				continue
+				return fmt.Errorf("unable to unconfirm mined work at height "+
+					"#%d: %w", header.Height, err)
 			}
 
 			log.Infof("Disconnected mined work %s at height #%d",

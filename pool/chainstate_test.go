@@ -71,6 +71,7 @@ func testChainState(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	var confHeader wire.BlockHeader
 	cCfg := &ChainStateConfig{
 		db:                    db,
@@ -80,7 +81,6 @@ func testChainState(t *testing.T) {
 		GetBlock:              getBlock,
 		GetBlockConfirmations: getBlockConfirmations,
 		SignalCache:           signalCache,
-		Cancel:                cancel,
 	}
 
 	cs := NewChainState(cCfg)
@@ -231,9 +231,37 @@ func testChainState(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		cs.handleChainUpdates(ctx)
+		err := cs.handleChainUpdates(ctx)
+		if err != nil {
+			t.Logf("unexpected error from chain update handler: %v", err)
+		}
+		cancel()
 		wg.Done()
 	}()
+	sendToConnChanOrFatal := func(ntfn *blockNotification) {
+		select {
+		case cs.connCh <- ntfn:
+		case <-ctx.Done():
+			t.Fatalf("unexpected chainstate shutdown")
+		}
+		select {
+		case <-ntfn.Done:
+		case <-ctx.Done():
+			t.Fatalf("unexpected chainstate shutdown")
+		}
+	}
+	sendToDiscChanOrFatal := func(ntfn *blockNotification) {
+		select {
+		case cs.discCh <- ntfn:
+		case <-ctx.Done():
+			t.Fatalf("unexpected chainstate shutdown")
+		}
+		select {
+		case <-ntfn.Done:
+		case <-ctx.Done():
+			t.Fatalf("unexpected chainstate shutdown")
+		}
+	}
 
 	// Create the accepted work to be confirmed.
 	work := NewAcceptedWork(
@@ -255,8 +283,7 @@ func testChainState(t *testing.T) {
 	job := NewJob(workE, 42)
 	err = cs.cfg.db.persistJob(job)
 	if err != nil {
-		log.Errorf("failed to persist job %v", err)
-		return
+		t.Fatalf("failed to persist job %v", err)
 	}
 
 	// Ensure a malformed connected block does not terminate the chain
@@ -276,8 +303,7 @@ func testChainState(t *testing.T) {
 		Header: headerMB,
 		Done:   make(chan struct{}),
 	}
-	cs.connCh <- malformedMsg
-	<-malformedMsg.Done
+	sendToConnChanOrFatal(malformedMsg)
 
 	// Create confirmation block header.
 	const headerE2 = "0700000083127dbbb05f24bd248798e1b912417f137cf2bb60c7f68" +
@@ -303,14 +329,12 @@ func testChainState(t *testing.T) {
 		Header: minedHeaderB,
 		Done:   make(chan struct{}),
 	}
-	cs.connCh <- minedMsg
-	<-minedMsg.Done
+	sendToConnChanOrFatal(minedMsg)
 	confMsg := &blockNotification{
 		Header: confHeaderB,
 		Done:   make(chan struct{}),
 	}
-	cs.connCh <- confMsg
-	<-confMsg.Done
+	sendToConnChanOrFatal(confMsg)
 
 	// Ensure the accepted work is now confirmed mined.
 	confirmedWork, err := cs.cfg.db.fetchAcceptedWork(work.UUID)
@@ -326,14 +350,12 @@ func testChainState(t *testing.T) {
 		Header: confHeaderB,
 		Done:   make(chan struct{}),
 	}
-	cs.discCh <- discConfMsg
-	<-discConfMsg.Done
+	sendToDiscChanOrFatal(discConfMsg)
 	discMinedMsg := &blockNotification{
 		Header: minedHeaderB,
 		Done:   make(chan struct{}),
 	}
-	cs.discCh <- discMinedMsg
-	<-discMinedMsg.Done
+	sendToDiscChanOrFatal(discMinedMsg)
 
 	// Ensure the mined work is no longer confirmed mined.
 	discMinedWork, err := cs.cfg.db.fetchAcceptedWork(work.UUID)
@@ -351,21 +373,18 @@ func testChainState(t *testing.T) {
 		Header: headerMB,
 		Done:   make(chan struct{}),
 	}
-	cs.discCh <- malformedMsg
-	<-malformedMsg.Done
+	sendToDiscChanOrFatal(malformedMsg)
 
 	confMsg = &blockNotification{
 		Header: confHeaderB,
 		Done:   make(chan struct{}),
 	}
-	cs.connCh <- confMsg
-	<-confMsg.Done
+	sendToConnChanOrFatal(confMsg)
 	discConfMsg = &blockNotification{
 		Header: confHeaderB,
 		Done:   make(chan struct{}),
 	}
-	cs.discCh <- discConfMsg
-	<-discConfMsg.Done
+	sendToDiscChanOrFatal(discConfMsg)
 
 	// Ensure the last work height can be updated.
 	initialLastWorkHeight := cs.fetchLastWorkHeight()
