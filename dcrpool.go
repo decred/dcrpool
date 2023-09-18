@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/decred/dcrd/rpcclient/v8"
 	"github.com/decred/dcrpool/internal/gui"
@@ -160,14 +161,17 @@ func realMain() error {
 		// Start the profiler.
 		go func() {
 			listenAddr := cfg.Profile
-			mpLog.Infof("Creating profiling server listening "+
-				"on %s", listenAddr)
+			mpLog.Infof("Creating profiling server listening on %s", listenAddr)
 			profileRedirect := http.RedirectHandler("/debug/pprof",
 				http.StatusSeeOther)
 			http.Handle("/", profileRedirect)
-			err := http.ListenAndServe(listenAddr, nil)
+			server := &http.Server{
+				Addr:              listenAddr,
+				ReadHeaderTimeout: time.Second * 3,
+			}
+			err := server.ListenAndServe()
 			if err != nil {
-				mpLog.Criticalf(err.Error())
+				mpLog.Critical(err)
 				cancel()
 			}
 		}()
