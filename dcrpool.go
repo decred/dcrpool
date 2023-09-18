@@ -5,14 +5,12 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -22,10 +20,6 @@ import (
 	"github.com/decred/dcrpool/internal/gui"
 	"github.com/decred/dcrpool/pool"
 )
-
-// signals defines the signals that are handled to do a clean shutdown.
-// Conditional compilation is used to also include SIGTERM and SIGHUP on Unix.
-var signals = []os.Signal{os.Interrupt}
 
 // newHub returns a new pool hub configured with the provided details that is
 // ready to connect to a consensus daemon and wallet in the case of publicly
@@ -115,10 +109,6 @@ func newGUI(cfg *config, hub *pool.Hub) (*gui.GUI, error) {
 // realMain is the real main function for dcrpool.  It is necessary to work
 // around the fact that deferred functions do not run when os.Exit() is called.
 func realMain() error {
-	// Listen for interrupt signals.
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, signals...)
-
 	// Load configuration and parse command line. This also initializes
 	// logging and configures it accordingly.
 	appName := filepath.Base(os.Args[0])
@@ -139,8 +129,12 @@ func realMain() error {
 		}
 	}()
 
+	// Get a context whose done channel will be closed when a shutdown signal
+	// has been triggered from an OS signal such as SIGINT (Ctrl+C) or when the
+	// returned cancel function is manually called.
+	//
 	// Primary context that controls the entire process.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := shutdownListener()
 	defer mpLog.Info("Shutdown complete")
 
 	// Show version and home dir at startup.
@@ -178,16 +172,6 @@ func realMain() error {
 			}
 		}()
 	}
-
-	go func() {
-		select {
-		case <-ctx.Done():
-			return
-
-		case <-interrupt:
-			cancel()
-		}
-	}()
 
 	// Create a hub instance and attempt to perform initial connection and work
 	// acquisition.
