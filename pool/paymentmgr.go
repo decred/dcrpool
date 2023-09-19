@@ -132,6 +132,8 @@ type PaymentMgr struct {
 	failedTxConfs uint32 // update atomically.
 	txConfHashes  map[chainhash.Hash]uint32
 
+	prng *rand.Rand
+
 	processing bool
 	paymentCh  chan *paymentMsg
 	cfg        *PaymentMgrConfig
@@ -143,9 +145,9 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	pm := &PaymentMgr{
 		cfg:          pCfg,
 		txConfHashes: make(map[chainhash.Hash]uint32),
+		prng:         rand.New(rand.NewSource(time.Now().UnixNano())),
 		paymentCh:    make(chan *paymentMsg, paymentBufferSize),
 	}
-	rand.Seed(time.Now().UnixNano())
 
 	// Initialize last payment info (height and paid-on).
 	_, _, err := pm.cfg.db.loadLastPaymentInfo()
@@ -807,7 +809,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	// addresses to make it difficult for third-parties wanting to track
 	// pool fees collected by the pool and ultimately determine the
 	// cumulative value accrued by pool operators.
-	feeAddr := pm.cfg.PoolFeeAddrs[rand.Intn(len(pm.cfg.PoolFeeAddrs))]
+	feeAddr := pm.cfg.PoolFeeAddrs[pm.prng.Intn(len(pm.cfg.PoolFeeAddrs))]
 
 	inputs, inputTxHashes, outputs, tOut, err :=
 		pm.generatePayoutTxDetails(ctx, txC, feeAddr, pmts, treasuryActive)
