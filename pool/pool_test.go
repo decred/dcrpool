@@ -111,6 +111,10 @@ func TestPool(t *testing.T) {
 
 	// Run all tests with bolt DB.
 	for testName, test := range tests {
+		if t.Failed() {
+			break
+		}
+
 		boltDB, err := setupBoltDB()
 		if err != nil {
 			t.Fatalf("setupBoltDB error: %v", err)
@@ -130,6 +134,10 @@ func TestPool(t *testing.T) {
 
 	// Run all tests with postgres DB.
 	for testName, test := range tests {
+		if t.Failed() {
+			break
+		}
+
 		postgresDB, err := setupPostgresDB()
 		if err != nil {
 			t.Fatalf("setupPostgresDB error: %v", err)
