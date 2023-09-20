@@ -196,7 +196,7 @@ Refer to [config descriptions](config.go) for more detail.
 
 In mining pool mode the ideal wallet setup is to have two wallet accounts, the
 pool account and the fee account, for the mining pool. This account structure
-separates revenue earned from pool operations from mining rewards gotten on
+separates revenue earned from pool operations from mining rewards received on
 behalf of participating clients. The pool account's purpose is to receive mining
 rewards of the pool. The addresses generated from it should be the mining
 addresses (`--miningaddr`) set for the mining node. It is important to set
@@ -214,10 +214,10 @@ the pool fee addresses (`--poolfeeaddrs`) of the mining pool.
 
 ## Wallet Client Authentication
 
-dcrwallet v1.6 requires client authentication certificates to be provided on
-startup via the client CA file config option (`--clientcafile`).  Since dcrpool
-is expected to maintain a grpc connection to the wallet it needs to generate the
-needed certificate before the wallet is started. A config option
+dcrwallet v1.6 and greater requires client authentication certificates to be
+provided on startup via the client CA file config option (`--clientcafile`).
+Since dcrpool is expected to maintain a grpc connection to the wallet it needs
+to generate the needed certificate before the wallet is started. A config option
 (`--gencertsonly`) which allows the generation of all key pairs without starting
 the pool has been added for this purpose. Pool operators running a publicly
 available mining pool will be required to first run their pools with
@@ -228,8 +228,8 @@ provides a detailed example for reference.
 ## Pool Fees
 
 In mining pool mode pool fees collected by the pool operator are for maintaining
-a connection to the decred network for the delivery of work to mining clients,
-the submission of solved work by mining clients to the network and processing of
+a connection to the decred network, the delivery of work to mining clients, the
+submission of solved work by mining clients to the network, and processing of
 block rewards based on work contributed by participting accounts.
 
 ## Transaction fees
