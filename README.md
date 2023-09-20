@@ -143,15 +143,13 @@ config options will be needed, refer to [postgres.md](./docs/postgres.md).
 
 ```no-highlight
 dcrpool --configfile=pool.conf --appdata=/tmp/dcrpool-harness/pool
-2020-12-22 20:10:31.120 [INF] POOL: Maximum work submission generation time at pool difficulty is 28s.
-2020-12-22 20:10:31.129 [INF] POOL: Solo pool mode active.
-2020-12-22 20:10:31.149 [INF] MP: Version: 1.1.0+dev
-2020-12-22 20:10:31.149 [INF] MP: Runtime: Go version go1.15.6
-2020-12-22 20:10:31.149 [INF] MP: Home dir: /tmp/dcrpool-harness/pool
-2020-12-22 20:10:31.149 [INF] MP: Started dcrpool.
-2020-12-22 20:10:31.149 [INF] GUI: Starting GUI server on port 8080 (https)
-2020-12-22 20:10:31.149 [INF] MP: Creating profiling server listening on 127.0.0.1:6060
-2020-12-22 20:10:31.150 [INF] POOL: listening on :5550
+2023-09-19 20:10:31.149 [INF] MP: Version: 1.3.0-pre+88afbe8d1 (Go version go1.21.1 linux/amd64)
+2023-09-19 20:10:31.149 [INF] MP: Home dir: /tmp/dcrpool-harness/pool
+2023-09-19 20:10:31.120 [INF] POOL: Maximum work submission generation time at pool difficulty is 28s.
+2023-09-19 20:10:31.149 [INF] MP: Creating profiling server listening on 127.0.0.1:6060
+2023-09-19 20:10:31.129 [INF] POOL: Solo pool mode active.
+2023-09-19 20:10:31.150 [INF] POOL: listening on 0.0.0.0:5550
+2023-09-19 20:10:31.149 [INF] GUI: Starting GUI server on [::]:8080
 ```
 
 ### Example of a mining pool configuration
@@ -182,15 +180,13 @@ config options will be needed, refer to [postgres.md](./docs/postgres.md).
 
 ```no-highlight
 dcrpool --configfile=pool.conf --appdata=/tmp/dcrpool-harness/pool
-2020-12-22 19:57:45.795 [INF] POOL: Maximum work submission generation time at pool difficulty is 20s.
-2020-12-22 19:57:45.816 [INF] POOL: Payment method is PPLNS.
-2020-12-22 19:57:45.916 [INF] MP: Version: 1.1.0+dev
-2020-12-22 19:57:45.916 [INF] MP: Runtime: Go version go1.15.6
-2020-12-22 19:57:45.916 [INF] MP: Creating profiling server listening on 127.0.0.1:6060
-2020-12-22 19:57:45.916 [INF] MP: Home dir: /tmp/dcrpool-harness/pool
-2020-12-22 19:57:45.917 [INF] MP: Started dcrpool.
-2020-12-22 19:57:45.917 [INF] GUI: Starting GUI server on port 8080 (https)
-2020-12-22 19:57:45.932 [INF] POOL: listening on :5550
+2023-09-19 19:57:45.916 [INF] MP: Version: 1.3.0-pre+88afbe8d1 (Go version go1.21.1 linux/amd64)
+2023-09-19 19:57:45.916 [INF] MP: Home dir: /tmp/dcrpool-harness/pool
+2023-09-19 19:57:45.795 [INF] POOL: Maximum work submission generation time at pool difficulty is 20s.
+2023-09-19 19:57:45.916 [INF] MP: Creating profiling server listening on 127.0.0.1:6060
+2023-09-19 19:57:45.816 [INF] POOL: Payment method is PPLNS.
+2023-09-19 19:57:45.917 [INF] GUI: Starting GUI server on [::]:8080
+2023-09-19 19:57:45.932 [INF] POOL: listening on 0.0.0.0:5550
 ```
 
 Refer to [config descriptions](config.go) for more detail. 
