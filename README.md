@@ -6,13 +6,18 @@
 
 ## Overview
 
-dcrpool is a stratum decred mining pool. It currently supports:
+dcrpool is a stratum Decred mining pool.
 
-* Obelisk DCR1 (supported firmware: [obelisk-sc1-v1.3.2.img](https://mining.obelisk.tech/downloads/firmware/obelisk-sc1-v1.3.2.img))
-* Innosilicon D9 (supported firmware: [d9_20190521_071217.swu](http://www.innosilicon.com.cn/download/d9_20190521_071217.swu))
-* Antminer DR3 (supported firmware: [Antminer-DR3-201907161805-410M.tar.gz](https://file12.bitmain.com/shop-product/firmware/Antminer%20DR3/Firmware/007201907271437364778LxDsS1k06AF/Antminer-DR3-201907161805-410M.tar.gz))
-* Antminer DR5 (supported firmware: [Antminer-DR5-201907161801-600M.tar.gz](https://file12.bitmain.com/shop-product/firmware/Antminer%20DR5/Firmware/00720190727142534231Ato7d2300650/Antminer-DR5-201907161801-600M.tar.gz))
-* Whatsminer D1 (supported firmware: [upgrade-whatsminer-h6-20190404.18.zip](https://github.com/decred/dcrpool/files/5651882/upgrade-whatsminer-h6-20190404.18.zip))
+---
+
+WARNING: This does not currently work since it only supports the mining
+algorithm used by Decred prior to the activation of
+[DCP0011](https://github.com/decred/dcps/blob/master/dcp-0011/dcp-0011.mediawiki).
+
+However, it is in the process of being updated to support the new algorithm.
+This text will be updated once support has landed.
+
+---
 
 The default port all supported miners connect to the pool via is `:5550`.  The
 pool can be configured to mine in solo pool mode or as a publicly available
