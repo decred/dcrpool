@@ -26,6 +26,12 @@ automatically by dcrpool.
     CREATE DATABASE
     ```
 
+    Alternatively the test suite can be run against a database created in a Docker container using the following one-liner:
+
+    ```no-highlight
+    docker run -d --rm -e POSTGRES_USER=dcrpooluser -e POSTGRES_PASSWORD=12345 -e POSTGRES_DB=dcrpooltestdb -p 5432:5432 postgres:16.0
+    ```
+
 1. Add the database connection details to the dcrpool config file.
 
     ```no-highlight
