@@ -127,7 +127,7 @@ future.
 ```no-highlight
 rpcuser=user
 rpcpass=pass
-dcrdrpchost=127.0.0.1:19556
+dcrdrpchost=127.0.0.1:9109
 dcrdrpccert=/home/.dcrd/rpc.cert
 solopool=true
 activenet=mainnet
@@ -159,13 +159,13 @@ dcrpool --configfile=pool.conf --appdata=/tmp/dcrpool-harness/pool
 ```no-highlight
 rpcuser=user
 rpcpass=pass
-dcrdrpchost=127.0.0.1:19556
+dcrdrpchost=127.0.0.1:9109
 dcrdrpccert=/home/.dcrd/rpc.cert
-walletgrpchost=127.0.0.1:19558
+walletgrpchost=127.0.0.1:9111
 walletrpccert=/home/.dcrwallet/rpc.cert
 maxgentime=20s
 solopool=false
-activenet=simnet
+activenet=mainnet
 walletpass=walletpass
 poolfeeaddrs=SsVPfV8yoMu7AvF5fGjxTGmQ57pGkaY6n8z
 paymentmethod=pplns
