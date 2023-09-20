@@ -5,6 +5,7 @@
 package pool
 
 import (
+	"flag"
 	"os"
 	"testing"
 
@@ -73,6 +74,17 @@ func teardownBoltDB(db *BoltDB, dbPath string) error {
 	return os.Remove(dbPath)
 }
 
+// isFailFastSet returns whether or not the failfast test flag is set.
+func isFailFastSet() bool {
+	failfastFlag := flag.Lookup("test.failfast")
+	if failfastFlag == nil {
+		return false
+	}
+	failfast := failfastFlag.Value.(flag.Getter).Get()
+	isSet, ok := failfast.(bool)
+	return ok && isSet
+}
+
 // TestPool runs all pool related tests which require a real database.
 func TestPool(t *testing.T) {
 	// All sub-tests to run. All of these tests will be run with a postgres
@@ -128,6 +140,17 @@ func TestPool(t *testing.T) {
 		boltDB.Close()
 	}
 
+	// Cleanup postgres DB from potential failed previous runs.
+	postgresDB, err := setupPostgresDB()
+	if err != nil {
+		t.Fatalf("setupPostgresDB error: %v", err)
+	}
+	err = postgresDB.purge()
+	if err != nil {
+		t.Fatalf("postgres teardown error: %v", err)
+	}
+	postgresDB.Close()
+
 	// Run all tests with postgres DB.
 	for testName, test := range tests {
 		postgresDB, err := setupPostgresDB()
@@ -138,6 +161,13 @@ func TestPool(t *testing.T) {
 		db = postgresDB
 
 		t.Run(testName+"_Postgres", test)
+
+		// Avoid purging the database and running other tests on test failures
+		// when the failfast flag is set.
+		if t.Failed() && isFailFastSet() {
+			postgresDB.Close()
+			break
+		}
 
 		err = postgresDB.purge()
 		if err != nil {
