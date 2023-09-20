@@ -29,7 +29,7 @@ it is disabled as a result.
 
 In solo pool mining mode, miners only need to identify themselves when
 connecting to the pool. The miner's username, specifically the username sent in
-a `mining.authorize` message should be a unique name identifying the client.
+a `mining.authorize` message, should be a unique name identifying the client.
 
 The pool supports Pay Per Share (`PPS`) and Pay Per Last N Shares (`PPLNS`)
 payment schemes when configured for pool mining. With pool mining, mining
@@ -55,24 +55,50 @@ certificate, served on port `:8080`. In production, particularly for pool
 mining, a certificate from an authority (`CA`) like
 [letsencrypt](https://letsencrypt.org/) is recommended.
 
-## Installing and Updating
+## Build and installation
 
-Building or updating from source requires the following build dependencies:
+- **Install Go 1.17 or higher**
 
-- **Go 1.17 or later**
+  Installation instructions can be found here: https://golang.org/doc/install.
+  Ensure Go was installed properly and is a supported version:
+  ```sh
+  $ go version
+  $ go env GOROOT GOPATH
+  ```
+  NOTE: if `GOROOT` and `GOPATH` are initialized they must not be at the same path.
+  It is recommended to add `$GOPATH/bin` to your `PATH` according to the Golang.org
+  instructions.
 
-  Installation instructions can be found here: <https://golang.org/doc/install>.
-  It is recommended to add `$GOPATH/bin` to your `PATH` at this point.
+- **Build and Install or Update dcrpool**
 
-- **Git**
+  The latest release of `dcrpool` may be built and installed with a single
+  command without cloning this repository:
 
-  Installation instructions can be found at <https://git-scm.com> or
-  <https://gitforwindows.org>.
+  ```sh
+  $ go install github.com/decred/dcrpool@v1.2.0
+  ```
 
-To build and install from a checked-out repo or a copy of the latest release,
-run `go install . ./cmd/...` in the root directory.  The `dcrpool` executable
-will be installed to `$GOPATH/bin`.  `GOPATH` defaults to `$HOME/go` (or
-`%USERPROFILE%\go` on Windows) if unset.
+  Using `@master` instead will perform a build using the latest code from the
+  master branch.  This may be useful to use newer features or bug fixes not yet
+  found in the latest release:
+
+  ```sh
+  $ go install github.com/decred/dcrpool@master
+  ```
+
+  Alternatively, a development build can be performed by running `go install` in
+  a locally checked-out repository.
+
+  In all cases, the `dcrpool` executable will be installed to the `bin`
+  directory rooted at the path reported by `go env GOPATH`.
+
+  Therefore, if you want to easily access `dcrpool` from the command-line
+  without having to type the full path to the binary every time, ensure the
+  aforementioned directory is added to your system path:
+
+  * macOS: [how to add binary to your PATH](https://gist.github.com/nex3/c395b2f8fd4b02068be37c961301caa7#mac-os-x)
+  * Windows: [how to add binary to your PATH](https://gist.github.com/nex3/c395b2f8fd4b02068be37c961301caa7#windows)
+  * Linux and other Unix: [how to add binary to your PATH](https://gist.github.com/nex3/c395b2f8fd4b02068be37c961301caa7#linux)
 
 ## Database
 
@@ -84,15 +110,6 @@ When running in Bolt mode, the pool maintains a backup of the database
 (`backup.kv`), created on shutdown in the same directory as the database itself.
 The user interface also provides functionality for pool administrators to backup
 Bolt database when necessary.
-
-### Example of obtaining and building from source on Ubuntu
-
-```sh
-git clone https://github.com/decred/dcrpool.git
-cd dcrpool
-go install
-dcrpool --configfile=path/to/config.conf
-```
 
 ## Configuration
 
