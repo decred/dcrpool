@@ -5,6 +5,7 @@
 package pool
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -223,6 +224,15 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
 			string(shareBkt))
 		return errs.DBError(errs.StorageNotFound, desc)
+	}
+
+	// shareID generates the share id using the provided account and random
+	// uint64 that was in effect at the time of the upgrade.
+	shareID := func(account string, createdOn int64) string {
+		var buf bytes.Buffer
+		_, _ = buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOn)))
+		_, _ = buf.WriteString(account)
+		return buf.String()
 	}
 
 	toDelete := [][]byte{}
