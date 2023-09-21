@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	mrand "math/rand"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -208,6 +209,7 @@ func testPaymentMgrPPS(t *testing.T) {
 
 	// Ensure Pay-Per-Share (PPS) works as expected.
 	now := time.Now()
+	prng := mrand.New(mrand.NewSource(now.UnixNano()))
 	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
 	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
 	shareCount := 10
@@ -217,11 +219,11 @@ func testPaymentMgrPPS(t *testing.T) {
 
 	// Create shares for account x and y.
 	for i := 0; i < shareCount; i++ {
-		err := persistShare(db, xID, weight, sixtyBefore+int64(i))
+		err := persistShare(db, xID, weight, sixtyBefore+int64(i), prng.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = persistShare(db, yID, weight, thirtyBefore+int64(i))
+		err = persistShare(db, yID, weight, thirtyBefore+int64(i), prng.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -302,6 +304,7 @@ func testPaymentMgrPPLNS(t *testing.T) {
 
 	// Ensure Pay-Per-Last-N-Shares (PPLNS) works as expected.
 	now := time.Now()
+	prng := mrand.New(mrand.NewSource(now.UnixNano()))
 	shareCount := 5
 	coinbaseValue := 60
 	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
@@ -311,11 +314,11 @@ func testPaymentMgrPPLNS(t *testing.T) {
 
 	// Create shares for account x and y.
 	for i := 0; i < shareCount; i++ {
-		err := persistShare(db, xID, weight, sixtyBefore+int64(i))
+		err := persistShare(db, xID, weight, sixtyBefore+int64(i), prng.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = persistShare(db, yID, weight, thirtyBefore+int64(i))
+		err = persistShare(db, yID, weight, thirtyBefore+int64(i), prng.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -395,6 +398,7 @@ func testPaymentMgrMaturity(t *testing.T) {
 	mgr, _, _ := createPaymentMgr(t, PPLNS)
 
 	now := time.Now()
+	prng := mrand.New(mrand.NewSource(now.UnixNano()))
 	shareCount := 3
 	coinbaseValue := 60
 	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
@@ -405,7 +409,7 @@ func testPaymentMgrMaturity(t *testing.T) {
 	// Ensure payment maturity works as expected.
 	for i := 0; i < shareCount; i++ {
 		// Create readily available shares for account X.
-		err := persistShare(db, xID, weight, thirtyBefore+int64(i))
+		err := persistShare(db, xID, weight, thirtyBefore+int64(i), prng.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -413,7 +417,7 @@ func testPaymentMgrMaturity(t *testing.T) {
 	sixtyAfter := time.Now().Add((time.Second * 60)).UnixNano()
 	for i := 0; i < shareCount; i++ {
 		// Create future shares for account Y.
-		err := persistShare(db, yID, weight, sixtyAfter+int64(i))
+		err := persistShare(db, yID, weight, sixtyAfter+int64(i), prng.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1311,17 +1315,18 @@ func testPaymentMgrDust(t *testing.T) {
 	// Ensure dust payments are forfeited by their originating accounts and
 	// added to the pool fee payout.
 	now := time.Now()
+	prng := mrand.New(mrand.NewSource(now.UnixNano()))
 	coinbaseValue := 1
 	mul := 100000
 	weight := new(big.Rat).SetFloat64(1.0)
 	yWeight := new(big.Rat).Mul(weight, new(big.Rat).SetInt64(int64(mul)))
 
 	// Create shares for account x and y.
-	err := persistShare(db, xID, weight, now.UnixNano())
+	err := persistShare(db, xID, weight, now.UnixNano(), prng.Uint64())
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = persistShare(db, yID, yWeight, now.UnixNano())
+	err = persistShare(db, yID, yWeight, now.UnixNano(), prng.Uint64())
 	if err != nil {
 		t.Fatal(err)
 	}

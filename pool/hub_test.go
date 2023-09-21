@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand"
 	"net"
 	"strings"
 	"sync"
@@ -348,20 +349,21 @@ func testHub(t *testing.T) {
 
 	// Ensure work quotas are generated as expected.
 	now := time.Now()
+	prng := rand.New(rand.NewSource(now.UnixNano()))
 	tenBefore := now.Add(-(time.Second * 10)).UnixNano()
 	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
 	sixtyAfter := now.Add(time.Second * 60).UnixNano()
 	xWeight := new(big.Rat).SetFloat64(1.0)
 	yWeight := new(big.Rat).SetFloat64(4.0)
-	err = persistShare(db, xID, xWeight, sixtyAfter)
+	err = persistShare(db, xID, xWeight, sixtyAfter, prng.Uint64())
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = persistShare(db, xID, xWeight, tenBefore)
+	err = persistShare(db, xID, xWeight, tenBefore, prng.Uint64())
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = persistShare(db, yID, yWeight, thirtyBefore)
+	err = persistShare(db, yID, yWeight, thirtyBefore, prng.Uint64())
 	if err != nil {
 		t.Fatal(err)
 	}

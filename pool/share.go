@@ -6,10 +6,16 @@ package pool
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"math/big"
+	"math/rand"
 	"time"
 )
+
+// uuidPRNG is a pseudo-random number generator used as a part of generating the
+// UUID for submitted shares.
+var uuidPRNG = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // ShareWeights reprsents the associated weights for each known DCR miner.
 // With the share weight of the lowest hash DCR miner (LHM) being 1, the
@@ -25,12 +31,15 @@ var ShareWeights = map[string]*big.Rat{
 	WhatsminerD1:  new(big.Rat).SetFloat64(43.636),
 }
 
-// shareID generates a unique share id using the provided account and time
-// created.
-func shareID(account string, createdOn int64) string {
+// shareID generates a unique share id using the provided account, creation
+// time, and random uint64.
+func shareID(account string, createdOn int64, randVal uint64) string {
+	var randValEncoded [8]byte
+	binary.BigEndian.PutUint64(randValEncoded[:], randVal)
 	var buf bytes.Buffer
 	_, _ = buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOn)))
 	_, _ = buf.WriteString(account)
+	_, _ = buf.WriteString(hex.EncodeToString(randValEncoded[:]))
 	return buf.String()
 }
 
@@ -46,7 +55,7 @@ type Share struct {
 func NewShare(account string, weight *big.Rat) *Share {
 	now := time.Now().UnixNano()
 	return &Share{
-		UUID:      shareID(account, now),
+		UUID:      shareID(account, now, uuidPRNG.Uint64()),
 		Account:   account,
 		Weight:    weight,
 		CreatedOn: now,

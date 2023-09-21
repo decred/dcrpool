@@ -7,17 +7,18 @@ package pool
 import (
 	"errors"
 	"math/big"
+	"math/rand"
 	"testing"
 	"time"
 
 	errs "github.com/decred/dcrpool/errors"
 )
 
-// persistShare creates a persisted share with the provided account and share
-// weight.
-func persistShare(db Database, account string, weight *big.Rat, createdOnNano int64) error {
+// persistShare creates a persisted share with the provided account, share
+// weight, creation time, and random value used for the creation of the UUID.
+func persistShare(db Database, account string, weight *big.Rat, createdOnNano int64, randVal uint64) error {
 	share := &Share{
-		UUID:      shareID(account, createdOnNano),
+		UUID:      shareID(account, createdOnNano, randVal),
 		Account:   account,
 		Weight:    weight,
 		CreatedOn: createdOnNano,
@@ -82,6 +83,7 @@ func testShares(t *testing.T) {
 
 func testPPSEligibleShares(t *testing.T) {
 	now := time.Now()
+	prng := rand.New(rand.NewSource(now.UnixNano()))
 	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
 	eightyBefore := now.Add(-(time.Second * 80)).UnixNano()
 	tenAfter := now.Add(time.Second * 10).UnixNano()
@@ -90,22 +92,22 @@ func testPPSEligibleShares(t *testing.T) {
 	shareCount := 1
 	expectedShareCount := 2
 
-	err := persistShare(db, xID, weight, eightyBefore) // Share A
+	err := persistShare(db, xID, weight, eightyBefore, prng.Uint64()) // Share A
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = persistShare(db, xID, weight, tenAfter) // Share B
+	err = persistShare(db, xID, weight, tenAfter, prng.Uint64()) // Share B
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = persistShare(db, yID, weight, sixtyBefore) // Share C
+	err = persistShare(db, yID, weight, sixtyBefore, prng.Uint64()) // Share C
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = persistShare(db, yID, weight, tenAfter) // Share D
+	err = persistShare(db, yID, weight, tenAfter, prng.Uint64()) // Share D
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,6 +157,7 @@ func testPPSEligibleShares(t *testing.T) {
 
 func testPPLNSEligibleShares(t *testing.T) {
 	now := time.Now()
+	prng := rand.New(rand.NewSource(now.UnixNano()))
 	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
 	eightyBefore := now.Add(-(time.Second * 80)).UnixNano()
 	tenAfter := now.Add(time.Second * 10).UnixNano()
@@ -164,37 +167,37 @@ func testPPLNSEligibleShares(t *testing.T) {
 	expectedShareCount := 2
 
 	// Create a share below the minimum exclusive PPLNS time for account x.
-	err := persistShare(db, xID, weight, eightyBefore)
+	err := persistShare(db, xID, weight, eightyBefore, prng.Uint64())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share below the minimum exclusive PPLNS time for account y.
-	err = persistShare(db, yID, weight, eightyBefore)
+	err = persistShare(db, yID, weight, eightyBefore, prng.Uint64())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share at minimum exclusive PPLNS time for account x.
-	err = persistShare(db, xID, weight, sixtyBefore)
+	err = persistShare(db, xID, weight, sixtyBefore, prng.Uint64())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share at minimum exclusive PPLNS time for account y.
-	err = persistShare(db, yID, weight, sixtyBefore)
+	err = persistShare(db, yID, weight, sixtyBefore, prng.Uint64())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share above minimum exclusive PPLNS time for account x.
-	err = persistShare(db, xID, weight, now.UnixNano())
+	err = persistShare(db, xID, weight, now.UnixNano(), prng.Uint64())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a share above minimum exclusive PPLNS time for account y.
-	err = persistShare(db, yID, weight, tenAfter)
+	err = persistShare(db, yID, weight, tenAfter, prng.Uint64())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,18 +246,21 @@ func testPPLNSEligibleShares(t *testing.T) {
 
 func testPruneShares(t *testing.T) {
 	now := time.Now()
+	prng := rand.New(rand.NewSource(now.UnixNano()))
 	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
 	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
 	eightyBefore := now.Add(-(time.Second * 80)).UnixNano()
 	tenAfter := now.Add(time.Second * 10).UnixNano()
 	weight := new(big.Rat).SetFloat64(1.0)
 
-	err := persistShare(db, xID, weight, eightyBefore) // Share A
+	xRand := prng.Uint64()
+	err := persistShare(db, xID, weight, eightyBefore, xRand) // Share A
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = persistShare(db, yID, weight, thirtyBefore) // Share B
+	yRand := prng.Uint64()
+	err = persistShare(db, yID, weight, thirtyBefore, yRand) // Share B
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,13 +271,13 @@ func testPruneShares(t *testing.T) {
 	}
 
 	// Ensure share A got pruned with share B remaining.
-	shareAID := shareID(xID, eightyBefore)
+	shareAID := shareID(xID, eightyBefore, xRand)
 	_, err = db.fetchShare(shareAID)
 	if !errors.Is(err, errs.ValueNotFound) {
 		t.Fatalf("expected value not found error, got %v", err)
 	}
 
-	shareBID := shareID(yID, thirtyBefore)
+	shareBID := shareID(yID, thirtyBefore, yRand)
 	_, err = db.fetchShare(shareBID)
 	if err != nil {
 		t.Fatalf("unexpected error fetching share B: %v", err)
