@@ -6,15 +6,12 @@ package pool
 
 import (
 	"compress/gzip"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
-
-	bolt "go.etcd.io/bbolt"
 )
 
 var boltDBUpgradeTests = [...]struct {
@@ -22,7 +19,6 @@ var boltDBUpgradeTests = [...]struct {
 	filename string // in testdata directory
 }{
 	// No upgrade test for V1, it is a backwards-compatible upgrade
-	{verifyV2Upgrade, "v1.db.gz"},
 }
 
 func TestBoltDBUpgrades(t *testing.T) {
@@ -75,40 +71,4 @@ func TestBoltDBUpgrades(t *testing.T) {
 			})
 		}
 	})
-}
-
-func verifyV2Upgrade(t *testing.T, db *BoltDB) {
-	const funcName = "verifyV2Upgrade"
-	err := db.DB.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		if pbkt == nil {
-			return fmt.Errorf("%s: bucket %s not found", funcName,
-				string(poolBkt))
-		}
-
-		sbkt := pbkt.Bucket(shareBkt)
-		if sbkt == nil {
-			return fmt.Errorf("%s: bucket %s not found", funcName,
-				string(shareBkt))
-		}
-
-		c := sbkt.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			var share Share
-			err := json.Unmarshal(v, &share)
-			if err != nil {
-				return fmt.Errorf("%s: unable to unmarshal share: %w",
-					funcName, err)
-			}
-
-			if string(k) != share.UUID {
-				return fmt.Errorf("%s: expected share id (%s) to be the same as "+
-					"its key (%x)", funcName, share.UUID, k)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		t.Error(err)
-	}
 }

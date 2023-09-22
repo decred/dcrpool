@@ -5,9 +5,7 @@
 package pool
 
 import (
-	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -21,22 +19,17 @@ const (
 	// transactionId field to the payments struct for payment tracking purposes.
 	transactionIDVersion = 1
 
-	// shareIDVersion is the second version of the database. It updates
-	// the share id key and removes the created on time field.
-	shareIDVersion = 2
-
 	// BoltDBVersion is the latest version of the bolt database that is
 	// understood by the program. Databases with recorded versions higher than
 	// this will fail to open (meaning any upgrades prevent reverting to older
 	// software).
-	BoltDBVersion = shareIDVersion
+	BoltDBVersion = transactionIDVersion
 )
 
 // upgrades maps between old database versions and the upgrade function to
 // upgrade the database to the next version.
 var upgrades = [...]func(tx *bolt.Tx) error{
 	transactionIDVersion - 1: transactionIDUpgrade,
-	shareIDVersion - 1:       shareIDUpgrade,
 }
 
 func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
@@ -165,88 +158,6 @@ func transactionIDUpgrade(tx *bolt.Tx) error {
 			desc := fmt.Sprintf("%s: unable to persist payment: %v",
 				funcName, err)
 			return errs.DBError(errs.PersistEntry, desc)
-		}
-	}
-
-	return setDBVersion(tx, newVersion)
-}
-
-func shareIDUpgrade(tx *bolt.Tx) error {
-	const oldVersion = 1
-	const newVersion = 2
-
-	const funcName = "shareIDUpgrade"
-
-	dbVersion, err := fetchDBVersion(tx)
-	if err != nil {
-		return err
-	}
-
-	if dbVersion != oldVersion {
-		desc := fmt.Sprintf("%s: inappropriately called", funcName)
-		return errs.DBError(errs.DBUpgrade, desc)
-	}
-
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return errs.DBError(errs.StorageNotFound, desc)
-	}
-
-	sbkt := pbkt.Bucket(shareBkt)
-	if sbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(shareBkt))
-		return errs.DBError(errs.StorageNotFound, desc)
-	}
-
-	// shareID generates the share id using the provided account and random
-	// uint64 that was in effect at the time of the upgrade.
-	shareID := func(account string, createdOn int64) string {
-		var buf bytes.Buffer
-		_, _ = buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOn)))
-		_, _ = buf.WriteString(account)
-		return buf.String()
-	}
-
-	toDelete := [][]byte{}
-	c := sbkt.Cursor()
-	for k, v := c.First(); k != nil; k, v = c.Next() {
-		var share Share
-		err := json.Unmarshal(v, &share)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to unmarshal share: %v",
-				funcName, err)
-			return errs.DBError(errs.Parse, desc)
-		}
-
-		createdOn := bigEndianBytesToNano(k)
-		share.UUID = shareID(share.Account, int64(createdOn))
-
-		sBytes, err := json.Marshal(share)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal share bytes: %v",
-				funcName, err)
-			return errs.DBError(errs.Parse, desc)
-		}
-
-		err = sbkt.Put([]byte(share.UUID), sBytes)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to persist share: %v",
-				funcName, err)
-			return errs.DBError(errs.PersistEntry, desc)
-		}
-
-		toDelete = append(toDelete, k)
-	}
-
-	for _, entry := range toDelete {
-		err := sbkt.Delete(entry)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to delete share: %v",
-				funcName, err)
-			return errs.DBError(errs.DeleteEntry, desc)
 		}
 	}
 
