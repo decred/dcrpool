@@ -41,10 +41,6 @@ const (
 	// It adds the UUID field to payments.
 	paymentUUIDVersion = 6
 
-	// hashDataVersion is the seventh version of the database.
-	// It adds a hash data bucket to the database.
-	hashDataVersion = 7
-
 	// BoltDBVersion is the latest version of the bolt database that is
 	// understood by the program. Databases with recorded versions higher than
 	// this will fail to open (meaning any upgrades prevent reverting to older
@@ -61,7 +57,6 @@ var upgrades = [...]func(tx *bolt.Tx) error{
 	removeTxFeeReserveVersion - 1: removeTxFeeReserveUpgrade,
 	shareCreatedOnVersion - 1:     shareCreatedOnUpgrade,
 	paymentUUIDVersion - 1:        paymentUUIDUpgrade,
-	hashDataVersion - 1:           hashDataUpgrade,
 }
 
 func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
@@ -596,37 +591,6 @@ func paymentUUIDUpgrade(tx *bolt.Tx) error {
 				funcName, err)
 			return errs.DBError(errs.PersistEntry, desc)
 		}
-	}
-
-	return setDBVersion(tx, newVersion)
-}
-
-func hashDataUpgrade(tx *bolt.Tx) error {
-	const oldVersion = 6
-	const newVersion = 7
-
-	const funcName = "hashDataUpgrade"
-
-	dbVersion, err := fetchDBVersion(tx)
-	if err != nil {
-		return err
-	}
-
-	if dbVersion != oldVersion {
-		desc := fmt.Sprintf("%s: inappropriately called", funcName)
-		return errs.DBError(errs.DBUpgrade, desc)
-	}
-
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return errs.DBError(errs.StorageNotFound, desc)
-	}
-
-	err = createNestedBucket(pbkt, hashDataBkt)
-	if err != nil {
-		return err
 	}
 
 	return setDBVersion(tx, newVersion)

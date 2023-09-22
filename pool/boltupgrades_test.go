@@ -30,7 +30,6 @@ var boltDBUpgradeTests = [...]struct {
 	{verifyV4Upgrade, "v2.db.gz"},
 	{verifyV5Upgrade, "v4.db.gz"},
 	{verifyV6Upgrade, "v5.db.gz"},
-	// No upgrade test for V6, it is a backwards-compatible upgrade
 }
 
 func TestBoltDBUpgrades(t *testing.T) {
