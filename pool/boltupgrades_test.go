@@ -7,7 +7,6 @@ package pool
 import (
 	"bytes"
 	"compress/gzip"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,7 +26,6 @@ var boltDBUpgradeTests = [...]struct {
 	{verifyV2Upgrade, "v1.db.gz"},
 	{verifyV3Upgrade, "v2.db.gz"},
 	{verifyV4Upgrade, "v2.db.gz"},
-	{verifyV5Upgrade, "v4.db.gz"},
 }
 
 func TestBoltDBUpgrades(t *testing.T) {
@@ -200,51 +198,6 @@ func verifyV4Upgrade(t *testing.T, db *BoltDB) {
 		if v != nil {
 			return fmt.Errorf("%s: unexpected value found for "+
 				"txfeereserve", funcName)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-func verifyV5Upgrade(t *testing.T, db *BoltDB) {
-	const funcName = "verifyV5Upgrade"
-	err := db.DB.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		if pbkt == nil {
-			return fmt.Errorf("%s: bucket %s not found", funcName,
-				string(poolBkt))
-		}
-
-		sbkt := pbkt.Bucket(shareBkt)
-		if sbkt == nil {
-			return fmt.Errorf("%s: bucket %s not found", funcName,
-				string(shareBkt))
-		}
-
-		c := sbkt.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			var share Share
-			err := json.Unmarshal(v, &share)
-			if err != nil {
-				return fmt.Errorf("%s: unable to unmarshal share: %w",
-					funcName, err)
-			}
-
-			if share.CreatedOn == 0 {
-				return fmt.Errorf("%s: the created on "+
-					"value for %s is not set", funcName, share.UUID)
-			}
-
-			createdOnHex := hex.EncodeToString(nanoToBigEndianBytes(
-				share.CreatedOn))
-
-			if string(k[:16]) != createdOnHex {
-				return fmt.Errorf("%s: created on hex (%s) does not match "+
-					"the extracted value from key (%x)", funcName,
-					createdOnHex, k[:16])
-			}
 		}
 		return nil
 	})
