@@ -6,6 +6,7 @@ package pool
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"time"
 
@@ -32,12 +33,16 @@ type Payment struct {
 	Source *PaymentSource `json:"source"`
 }
 
-// paymentID generates a unique id using the provided payment details.
-func paymentID(height uint32, createdOnNano int64, account string) string {
+// paymentID generates a unique id using the provided payment details and a
+// random uint64.
+func paymentID(height uint32, createdOnNano int64, account string, randVal uint64) string {
+	var randValEncoded [8]byte
+	binary.BigEndian.PutUint64(randValEncoded[:], randVal)
 	var buf bytes.Buffer
 	_, _ = buf.WriteString(hex.EncodeToString(heightToBigEndianBytes(height)))
 	_, _ = buf.WriteString(hex.EncodeToString(nanoToBigEndianBytes(createdOnNano)))
 	_, _ = buf.WriteString(account)
+	_, _ = buf.WriteString(hex.EncodeToString(randValEncoded[:]))
 	return buf.String()
 }
 
@@ -46,7 +51,7 @@ func NewPayment(account string, source *PaymentSource, amount dcrutil.Amount,
 	height uint32, estMaturity uint32) *Payment {
 	now := time.Now().UnixNano()
 	return &Payment{
-		UUID:              paymentID(height, now, account),
+		UUID:              paymentID(height, now, account, uuidPRNG.Uint64()),
 		Account:           account,
 		Amount:            amount,
 		Height:            height,
