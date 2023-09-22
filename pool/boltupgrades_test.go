@@ -25,7 +25,6 @@ var boltDBUpgradeTests = [...]struct {
 	// No upgrade test for V1, it is a backwards-compatible upgrade
 	{verifyV2Upgrade, "v1.db.gz"},
 	{verifyV3Upgrade, "v2.db.gz"},
-	{verifyV4Upgrade, "v2.db.gz"},
 }
 
 func TestBoltDBUpgrades(t *testing.T) {
@@ -177,27 +176,6 @@ func verifyV3Upgrade(t *testing.T, db *BoltDB) {
 				return fmt.Errorf("%s: expected a non-nil payment source",
 					funcName)
 			}
-		}
-		return nil
-	})
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-func verifyV4Upgrade(t *testing.T, db *BoltDB) {
-	const funcName = "verifyV4Upgrade"
-	err := db.DB.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		if pbkt == nil {
-			return fmt.Errorf("%s: bucket %s not found", funcName,
-				string(poolBkt))
-		}
-
-		v := pbkt.Get([]byte("txfeereserve"))
-		if v != nil {
-			return fmt.Errorf("%s: unexpected value found for "+
-				"txfeereserve", funcName)
 		}
 		return nil
 	})

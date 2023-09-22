@@ -29,24 +29,19 @@ const (
 	// payment source tracking to payments.
 	paymentSourceVersion = 3
 
-	// removeTxfeeReserveVersion is the fourth version of the database.
-	// It removes the tx fee reserve from the database.
-	removeTxFeeReserveVersion = 4
-
 	// BoltDBVersion is the latest version of the bolt database that is
 	// understood by the program. Databases with recorded versions higher than
 	// this will fail to open (meaning any upgrades prevent reverting to older
 	// software).
-	BoltDBVersion = removeTxFeeReserveVersion
+	BoltDBVersion = paymentSourceVersion
 )
 
 // upgrades maps between old database versions and the upgrade function to
 // upgrade the database to the next version.
 var upgrades = [...]func(tx *bolt.Tx) error{
-	transactionIDVersion - 1:      transactionIDUpgrade,
-	shareIDVersion - 1:            shareIDUpgrade,
-	paymentSourceVersion - 1:      paymentSourceUpgrade,
-	removeTxFeeReserveVersion - 1: removeTxFeeReserveUpgrade,
+	transactionIDVersion - 1: transactionIDUpgrade,
+	shareIDVersion - 1:       shareIDUpgrade,
+	paymentSourceVersion - 1: paymentSourceUpgrade,
 }
 
 func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
@@ -384,39 +379,6 @@ func paymentSourceUpgrade(tx *bolt.Tx) error {
 				funcName, err)
 			return errs.DBError(errs.DeleteEntry, desc)
 		}
-	}
-
-	return setDBVersion(tx, newVersion)
-}
-
-func removeTxFeeReserveUpgrade(tx *bolt.Tx) error {
-	const oldVersion = 3
-	const newVersion = 4
-
-	const funcName = "removeTxFeeReserveUpgrade"
-
-	dbVersion, err := fetchDBVersion(tx)
-	if err != nil {
-		return err
-	}
-
-	if dbVersion != oldVersion {
-		desc := fmt.Sprintf("%s: inappropriately called", funcName)
-		return errs.DBError(errs.DBUpgrade, desc)
-	}
-
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return errs.DBError(errs.StorageNotFound, desc)
-	}
-
-	err = pbkt.Delete([]byte("txfeereserve"))
-	if err != nil {
-		desc := fmt.Sprintf("%s: unable to remove tx fee reserve entry",
-			funcName)
-		return errs.DBError(errs.DeleteEntry, desc)
 	}
 
 	return setDBVersion(tx, newVersion)
