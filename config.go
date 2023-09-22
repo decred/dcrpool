@@ -103,13 +103,11 @@ type config struct {
 	RPCPass               string        `long:"rpcpass" ini-name:"rpcpass" default-mask:"-" description:"Password for RPC connections."`
 	PoolFeeAddrs          []string      `long:"poolfeeaddrs" ini-name:"poolfeeaddrs" description:"Payment addresses to use for pool fee transactions. These addresses should be generated from a dedicated wallet account for pool fees."`
 	PoolFee               float64       `long:"poolfee" ini-name:"poolfee" description:"The fee charged for pool participation. Minimum 0.002 (0.2%), maximum 0.05 (5%)."`
-	MaxTxFeeReserve       float64       `long:"maxtxfeereserve" ini-name:"maxtxfeereserve" description:"DEPRECATED -- The maximum amount reserved for transaction fees, in DCR."`
 	MaxGenTime            time.Duration `long:"maxgentime" ini-name:"maxgentime" description:"The share creation target time for the pool. Valid time units are {s,m,h}. Minimum 2 seconds. This currently should be below 30 seconds to increase the likelihood a work submission for clients between new work distributions by the pool."`
 	PaymentMethod         string        `long:"paymentmethod" ini-name:"paymentmethod" description:"The payment method of the pool. {pps, pplns}"`
 	LastNPeriod           time.Duration `long:"lastnperiod" ini-name:"lastnperiod" description:"The time period of interest when using PPLNS payment scheme. Valid time units are {s,m,h}. Minimum 60 seconds."`
 	WalletPass            string        `long:"walletpass" ini-name:"walletpass" description:"The wallet passphrase to use when paying dividends to pool contributors."`
 	WalletAccount         uint32        `long:"walletaccount" ini-name:"walletaccount" description:"The wallet account that will receive mining rewards when not mining as a solo pool."`
-	MinPayment            float64       `long:"minpayment" ini-name:"minpayment" description:"DEPRECATED -- The minimum payment to process for an account."`
 	SoloPool              bool          `long:"solopool" ini-name:"solopool" description:"Solo pool mode. This disables payment processing when enabled."`
 	AdminPass             string        `long:"adminpass" ini-name:"adminpass" description:"The admin password."`
 	GUIDir                string        `long:"guidir" ini-name:"guidir" description:"The path to the directory containing the pool's user interface assets (templates, css etc.)"`
@@ -738,19 +736,6 @@ func loadConfig(appName string) (*config, []string, error) {
 		err := fmt.Errorf("%s: database purging at startup is reserved for "+
 			"simnet testing only", funcName)
 		return nil, nil, err
-	}
-
-	// Warn about deprecated config options if they have been set.
-	if cfg.MaxTxFeeReserve > 0 {
-		const str = "%s: maxtxfeereserve has been deprecated, please remove " +
-			"from your config file"
-		mpLog.Warnf(str, funcName)
-	}
-
-	if cfg.MinPayment > 0 {
-		const str = "%s: minpayment has been deprecated, please remove from " +
-			"your config file"
-		mpLog.Warnf(str, funcName)
 	}
 
 	// Only generate needed key pairs and terminate if GenCertsOnly is active.
