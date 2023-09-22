@@ -18,7 +18,7 @@ var boltDBUpgradeTests = [...]struct {
 	verify   func(*testing.T, *BoltDB)
 	filename string // in testdata directory
 }{
-	// No upgrade test for V1, it is a backwards-compatible upgrade
+	// Add tests here when a database upgrade is necessary.
 }
 
 func TestBoltDBUpgrades(t *testing.T) {
