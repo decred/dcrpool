@@ -6,7 +6,7 @@ package pool
 
 import (
 	"context"
-	"crypto/rand"
+	crand "crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	mrand "math/rand"
 	"net/http"
 	"os"
 	"strings"
@@ -95,6 +96,10 @@ var (
 	// high value to reduce the number of round trips to the pool by connected
 	// pool clients since pool shares are a non factor in solo pool mode.
 	soloMaxGenTime = time.Second * 28
+
+	// uuidPRNG is a pseudo-random number generator used as a part of generating
+	// the UUIDs for payments and submitted shares.
+	uuidPRNG = mrand.New(mrand.NewSource(time.Now().UnixNano()))
 )
 
 // WalletConnection defines the functionality needed by a wallet
@@ -766,7 +771,7 @@ func (h *Hub) CSRFSecret() ([]byte, error) {
 			// If the database doesnt contain a CSRF secret, generate one and
 			// persist it.
 			secret = make([]byte, 32)
-			_, err = rand.Read(secret)
+			_, err = crand.Read(secret)
 			if err != nil {
 				return nil, err
 			}

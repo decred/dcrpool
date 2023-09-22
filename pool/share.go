@@ -9,13 +9,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"math/big"
-	"math/rand"
 	"time"
 )
-
-// uuidPRNG is a pseudo-random number generator used as a part of generating the
-// UUID for submitted shares.
-var uuidPRNG = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // ShareWeights reprsents the associated weights for each known DCR miner.
 // With the share weight of the lowest hash DCR miner (LHM) being 1, the
