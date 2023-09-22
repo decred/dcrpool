@@ -25,15 +25,11 @@ const (
 	// the share id key and removes the created on time field.
 	shareIDVersion = 2
 
-	// paymentSourceVersion is the third version of the database. It adds
-	// payment source tracking to payments.
-	paymentSourceVersion = 3
-
 	// BoltDBVersion is the latest version of the bolt database that is
 	// understood by the program. Databases with recorded versions higher than
 	// this will fail to open (meaning any upgrades prevent reverting to older
 	// software).
-	BoltDBVersion = paymentSourceVersion
+	BoltDBVersion = shareIDVersion
 )
 
 // upgrades maps between old database versions and the upgrade function to
@@ -41,7 +37,6 @@ const (
 var upgrades = [...]func(tx *bolt.Tx) error{
 	transactionIDVersion - 1: transactionIDUpgrade,
 	shareIDVersion - 1:       shareIDUpgrade,
-	paymentSourceVersion - 1: paymentSourceUpgrade,
 }
 
 func fetchDBVersion(tx *bolt.Tx) (uint32, error) {
@@ -250,132 +245,6 @@ func shareIDUpgrade(tx *bolt.Tx) error {
 		err := sbkt.Delete(entry)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to delete share: %v",
-				funcName, err)
-			return errs.DBError(errs.DeleteEntry, desc)
-		}
-	}
-
-	return setDBVersion(tx, newVersion)
-}
-
-func paymentSourceUpgrade(tx *bolt.Tx) error {
-	const oldVersion = 2
-	const newVersion = 3
-
-	const funcName = "paymentSourceUpgrade"
-
-	dbVersion, err := fetchDBVersion(tx)
-	if err != nil {
-		return err
-	}
-
-	if dbVersion != oldVersion {
-		desc := fmt.Sprintf("%s: inappropriately called", funcName)
-		return errs.DBError(errs.DBUpgrade, desc)
-	}
-
-	pbkt := tx.Bucket(poolBkt)
-	if pbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(poolBkt))
-		return errs.DBError(errs.StorageNotFound, desc)
-	}
-
-	// Update all entries in the payment and payment archive buckets.
-	//
-	// Payment sources for payments before the upgrade will have an empty
-	// string for coinbase and block hash fields.
-
-	pmtbkt := pbkt.Bucket(paymentBkt)
-	if pmtbkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(paymentBkt))
-		return errs.DBError(errs.StorageNotFound, desc)
-	}
-
-	zeroSource := &PaymentSource{}
-	toDelete := [][]byte{}
-
-	c := pmtbkt.Cursor()
-	for k, v := c.First(); k != nil; k, v = c.Next() {
-		var payment Payment
-		err := json.Unmarshal(v, &payment)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to unmarshal payment: %v",
-				funcName, err)
-			return errs.DBError(errs.Parse, desc)
-		}
-
-		payment.Source = zeroSource
-
-		pBytes, err := json.Marshal(payment)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
-				funcName, err)
-			return errs.DBError(errs.Parse, desc)
-		}
-
-		key := paymentID(payment.Height, payment.CreatedOn, payment.Account)
-		err = pmtbkt.Put([]byte(key), pBytes)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to persist payment: %v",
-				funcName, err)
-			return errs.DBError(errs.PersistEntry, desc)
-		}
-
-		toDelete = append(toDelete, k)
-	}
-
-	for _, entry := range toDelete {
-		err := pmtbkt.Delete(entry)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to delete payment: %v",
-				funcName, err)
-			return errs.DBError(errs.DeleteEntry, desc)
-		}
-	}
-
-	abkt := pbkt.Bucket(paymentArchiveBkt)
-	if abkt == nil {
-		desc := fmt.Sprintf("%s: bucket %s not found", funcName,
-			string(paymentArchiveBkt))
-		return errs.DBError(errs.StorageNotFound, desc)
-	}
-
-	toDelete = [][]byte{}
-
-	c = abkt.Cursor()
-	for k, v := c.First(); k != nil; k, v = c.Next() {
-		var payment Payment
-		err := json.Unmarshal(v, &payment)
-		if err != nil {
-			return err
-		}
-
-		payment.Source = zeroSource
-
-		pBytes, err := json.Marshal(payment)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to marshal payment bytes: %v",
-				funcName, err)
-			return errs.DBError(errs.Parse, desc)
-		}
-
-		key := paymentID(payment.Height, payment.CreatedOn, payment.Account)
-		err = abkt.Put([]byte(key), pBytes)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to persist payment: %v",
-				funcName, err)
-			return errs.DBError(errs.PersistEntry, desc)
-		}
-
-		toDelete = append(toDelete, k)
-	}
-
-	for _, entry := range toDelete {
-		err := abkt.Delete(entry)
-		if err != nil {
-			desc := fmt.Sprintf("%s: unable to delete payment: %v",
 				funcName, err)
 			return errs.DBError(errs.DeleteEntry, desc)
 		}

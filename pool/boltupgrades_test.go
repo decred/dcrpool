@@ -5,7 +5,6 @@
 package pool
 
 import (
-	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
@@ -24,7 +23,6 @@ var boltDBUpgradeTests = [...]struct {
 }{
 	// No upgrade test for V1, it is a backwards-compatible upgrade
 	{verifyV2Upgrade, "v1.db.gz"},
-	{verifyV3Upgrade, "v2.db.gz"},
 }
 
 func TestBoltDBUpgrades(t *testing.T) {
@@ -106,75 +104,6 @@ func verifyV2Upgrade(t *testing.T, db *BoltDB) {
 			if string(k) != share.UUID {
 				return fmt.Errorf("%s: expected share id (%s) to be the same as "+
 					"its key (%x)", funcName, share.UUID, k)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-func verifyV3Upgrade(t *testing.T, db *BoltDB) {
-	const funcName = "verifyV3Upgrade"
-	err := db.DB.View(func(tx *bolt.Tx) error {
-		pbkt := tx.Bucket(poolBkt)
-		if pbkt == nil {
-			return fmt.Errorf("%s: bucket %s not found",
-				funcName, string(poolBkt))
-		}
-
-		sbkt := pbkt.Bucket(paymentBkt)
-		if sbkt == nil {
-			return fmt.Errorf("%s: bucket %s not found",
-				funcName, string(paymentBkt))
-		}
-
-		c := sbkt.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			var payment Payment
-			err := json.Unmarshal(v, &payment)
-			if err != nil {
-				return fmt.Errorf("%s: unable to unmarshal payment: %w",
-					funcName, err)
-			}
-
-			id := paymentID(payment.Height, payment.CreatedOn, payment.Account)
-			if !bytes.Equal(k, []byte(id)) {
-				return fmt.Errorf("%s: expected payment id (%s) to be "+
-					"the same as its key (%x)", funcName, id, k)
-			}
-
-			if payment.Source == nil {
-				return fmt.Errorf("%s: expected a non-nil payment source",
-					funcName)
-			}
-		}
-
-		abkt := pbkt.Bucket(paymentArchiveBkt)
-		if sbkt == nil {
-			return fmt.Errorf("%s: bucket %s not found",
-				funcName, string(paymentArchiveBkt))
-		}
-
-		c = abkt.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			var payment Payment
-			err := json.Unmarshal(v, &payment)
-			if err != nil {
-				return fmt.Errorf("%s: unable to unmarshal payment: %w",
-					funcName, err)
-			}
-
-			id := paymentID(payment.Height, payment.CreatedOn, payment.Account)
-			if !bytes.Equal(k, []byte(id)) {
-				return fmt.Errorf("%s: expected archived payment id "+
-					"(%s) to be the same as its key (%x)", funcName, id, k)
-			}
-
-			if payment.Source == nil {
-				return fmt.Errorf("%s: expected a non-nil payment source",
-					funcName)
 			}
 		}
 		return nil
