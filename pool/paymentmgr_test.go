@@ -1515,7 +1515,7 @@ func testPaymentMgrSignals(t *testing.T) {
 		wg.Done()
 	}()
 
-	mgr.processPayments(&msgA)
+	mgr.processPayments(ctx, &msgA)
 	<-msgA.Done
 
 	// Esure the payment lifecycle process cancels the context when an
@@ -1541,7 +1541,7 @@ func testPaymentMgrSignals(t *testing.T) {
 		TreasuryActive: false,
 		Done:           make(chan struct{}),
 	}
-	mgr.processPayments(&msgB)
+	mgr.processPayments(ctx, &msgB)
 	<-msgB.Done
 
 	cancel()

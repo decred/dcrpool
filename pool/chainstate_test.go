@@ -43,7 +43,7 @@ func testChainState(t *testing.T) {
 		t.Fatalf("unexpected serialization error: %v", err)
 	}
 
-	processPayments := func(*paymentMsg) {}
+	processPayments := func(context.Context, *paymentMsg) {}
 	generatePayments := func(uint32, *PaymentSource, dcrutil.Amount, int64) error {
 		return nil
 	}
