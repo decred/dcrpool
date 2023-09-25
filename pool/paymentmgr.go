@@ -937,8 +937,11 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 }
 
 // processPayments relays payment signals for processing.
-func (pm *PaymentMgr) processPayments(msg *paymentMsg) {
-	pm.paymentCh <- msg
+func (pm *PaymentMgr) processPayments(ctx context.Context, msg *paymentMsg) {
+	select {
+	case <-ctx.Done():
+	case pm.paymentCh <- msg:
+	}
 }
 
 // handlePayments processes dividend payment signals.

@@ -33,7 +33,7 @@ type ChainStateConfig struct {
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
 	// ProcessPayments relays payment signals for processing.
-	ProcessPayments func(msg *paymentMsg)
+	ProcessPayments func(context.Context, *paymentMsg)
 	// GeneratePayments creates payments for participating accounts in pool
 	// mining mode based on the configured payment scheme.
 	GeneratePayments func(uint32, *PaymentSource, dcrutil.Amount, int64) error
@@ -227,7 +227,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) error {
 
 			soloPool := cs.cfg.SoloPool
 			if !soloPool {
-				go cs.cfg.ProcessPayments(&paymentMsg{
+				go cs.cfg.ProcessPayments(ctx, &paymentMsg{
 					CurrentHeight:  header.Height,
 					TreasuryActive: treasuryActive,
 					Done:           make(chan struct{}),
