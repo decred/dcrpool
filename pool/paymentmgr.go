@@ -556,10 +556,14 @@ func fetchRescanResponse(ctx context.Context, rescanSource func() (*walletrpc.Re
 	respCh := make(chan *rescanMsg)
 	go func(ch chan *rescanMsg) {
 		resp, err := rescanSource()
-		ch <- &rescanMsg{
+		select {
+		case <-ctx.Done():
+		case ch <- &rescanMsg{
 			resp: resp,
 			err:  err,
+		}:
 		}
+		close(ch)
 	}(respCh)
 
 	select {
@@ -567,7 +571,6 @@ func fetchRescanResponse(ctx context.Context, rescanSource func() (*walletrpc.Re
 		log.Tracef("%s: context cancelled fetching rescan response", funcName)
 		return nil, errs.ContextCancelled
 	case msg := <-respCh:
-		close(respCh)
 		if msg.err != nil {
 			desc := fmt.Sprintf("%s: unable fetch wallet rescan response, %s",
 				funcName, msg.err)
