@@ -180,21 +180,6 @@ func NewPaymentMgr(pCfg *PaymentMgrConfig) (*PaymentMgr, error) {
 	return pm, nil
 }
 
-// isProcessing returns whether the payment manager is in the process of
-// paying out dividends.
-func (pm *PaymentMgr) isProcessing() bool {
-	pm.mtx.Lock()
-	defer pm.mtx.Unlock()
-	return pm.processing
-}
-
-// setProcessing sets the processing flag to the provided boolean.
-func (pm *PaymentMgr) setProcessing(status bool) {
-	pm.mtx.Lock()
-	pm.processing = status
-	pm.mtx.Unlock()
-}
-
 // sharePercentages calculates the percentages due each participating account
 // according to their weighted shares.
 func (pm *PaymentMgr) sharePercentages(shares []*Share) (map[string]*big.Rat, error) {
@@ -634,7 +619,6 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator
 
 		// Ensure the referenced prevout to be spent is spendable at
 		// the current height.
-
 		txOutResult, err := txC.GetTxOut(ctx, txHash, coinbaseIndex, wire.TxTreeRegular, false)
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to find tx output: %v",
@@ -729,13 +713,19 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		return nil
 	}
 
-	if pm.isProcessing() {
+	pm.mtx.Lock()
+	if pm.processing {
+		pm.mtx.Unlock()
 		log.Info("payment processing already in progress, terminating")
 		return nil
 	}
-
-	pm.setProcessing(true)
-	defer pm.setProcessing(false)
+	pm.processing = true
+	pm.mtx.Unlock()
+	defer func() {
+		pm.mtx.Lock()
+		pm.processing = false
+		pm.mtx.Unlock()
+	}()
 
 	txB := pm.cfg.FetchTxBroadcaster()
 	if txB == nil {
