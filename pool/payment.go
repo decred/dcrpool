@@ -29,8 +29,6 @@ type Payment struct {
 	PaidOnHeight      uint32         `json:"paidonheight"`
 	TransactionID     string         `json:"transactionid"`
 
-	// The source could be empty if the payment was
-	// created before the version 3 db upgrade.
 	Source *PaymentSource `json:"source"`
 }
 
