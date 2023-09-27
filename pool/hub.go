@@ -564,12 +564,10 @@ func (h *Hub) processWork(headerE string) {
 
 // createNotificationHandlers returns handlers for block and work notifications.
 func (h *Hub) createNotificationHandlers(ctx context.Context) *rpcclient.NotificationHandlers {
-	var closeConnChOnce, closeDiscChOnce sync.Once
 	return &rpcclient.NotificationHandlers{
 		OnBlockConnected: func(headerB []byte, transactions [][]byte) {
 			select {
 			case <-ctx.Done():
-				closeConnChOnce.Do(func() { close(h.chainState.connCh) })
 			case h.chainState.connCh <- &blockNotification{
 				Header: headerB,
 				Done:   make(chan struct{}),
@@ -579,7 +577,6 @@ func (h *Hub) createNotificationHandlers(ctx context.Context) *rpcclient.Notific
 		OnBlockDisconnected: func(headerB []byte) {
 			select {
 			case <-ctx.Done():
-				closeDiscChOnce.Do(func() { close(h.chainState.discCh) })
 			case h.chainState.discCh <- &blockNotification{
 				Header: headerB,
 				Done:   make(chan struct{}),
