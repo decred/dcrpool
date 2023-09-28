@@ -420,9 +420,9 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 		resp = SubscribeResponse(*req.ID, nid, c.extraNonce1,
 			ExtraNonce2Size, nil)
 
-	case AntminerDR3, AntminerDR5:
-		// The DR5 and DR3 are not fully complaint with the stratum spec.
-		// They use an 8-byte extraNonce2 regardless of the
+	case AntminerDR3:
+		// The DR3 is not fully complaint with the stratum spec.
+		// It uses an 8-byte extraNonce2 regardless of the
 		// extraNonce2Size provided.
 		//
 		// The extraNonce1 is appended to the extraNonce2 in the

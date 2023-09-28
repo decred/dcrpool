@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Decred developers
+// Copyright (c) 2021-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -86,10 +86,14 @@ func testChainState(t *testing.T) {
 	cs := NewChainState(cCfg)
 
 	// Test pruneAcceptedWork.
+	const (
+		xClient = "cpux"
+		yClient = "cpuy"
+	)
 	workA := NewAcceptedWork(
 		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
 		"000000000000000007301a21efa98033e06f7eba836990394fff9f765f1556b1",
-		396692, yID, "dr3")
+		396692, yID, yClient)
 	workA.Confirmed = true
 	err = db.persistAcceptedWork(workA)
 	if err != nil {
@@ -99,7 +103,7 @@ func testChainState(t *testing.T) {
 	workB := NewAcceptedWork(
 		"000000000000000025aa4a7ba8c3ece4608376bf84a82ec7e025991460097198",
 		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
-		396693, xID, "dr5")
+		396693, xID, xClient)
 	err = db.persistAcceptedWork(workB)
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +112,7 @@ func testChainState(t *testing.T) {
 	workC := NewAcceptedWork(
 		zeroHash.String(),
 		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
-		396694, xID, "dr5")
+		396694, xID, xClient)
 	err = db.persistAcceptedWork(workC)
 	if err != nil {
 		t.Fatal(err)
