@@ -6,7 +6,6 @@ package pool
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -375,43 +374,6 @@ func testClientMessageHandling(t *testing.T) {
 		t.Fatalf("expected %s message method, got %s", SetDifficulty, req.Method)
 	}
 
-	// Ensure an Obelisk DCR1 client receives a valid non-error
-	// response when a valid subscribe request is sent.
-	err = setMiner(client, ObeliskDCR1)
-	if err != nil {
-		t.Fatalf("unexpected set miner error: %v", err)
-	}
-
-	id++
-	dcr1, dcr1Version := splitMinerID(dcr1ID)
-	r = SubscribeRequest(&id, userAgent(dcr1, dcr1Version), "")
-	err = sE.Encode(r)
-	if err != nil {
-		t.Fatalf("[Encode] unexpected error: %v", err)
-	}
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case data = <-recvCh:
-	}
-	msg, mType, err = IdentifyMessage(data)
-	if err != nil {
-		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
-	}
-	if mType != ResponseMessage {
-		t.Fatalf("expected a subscribe response message, got %v", mType)
-	}
-	resp, ok = msg.(*Response)
-	if !ok {
-		t.Fatalf("expected subsribe response with id %d, got %d", *r.ID, resp.ID)
-	}
-	if resp.ID != *r.ID {
-		t.Fatalf("expected subscribe response with id %d, got %d", *r.ID, resp.ID)
-	}
-	if resp.Error != nil {
-		t.Fatalf("expected a non-error response, got %s", resp.Error.Message)
-	}
-
 	// Ensure a CPU client receives a valid non-error response when a
 	// valid subscribe request is sent.
 	err = setMiner(client, CPU)
@@ -542,35 +504,6 @@ func testClientMessageHandling(t *testing.T) {
 		t.Fatalf("expected last work time for %s connection "+
 			"to be more than zero, got %d", client.id,
 			client.lastWorkTime)
-	}
-
-	// Send a work notification to an Obelisk DCR1 client.
-	err = setMiner(client, ObeliskDCR1)
-	if err != nil {
-		t.Fatalf("unexpected set miner error: %v", err)
-	}
-
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case client.ch <- r:
-	}
-
-	// Ensure the work notification received is unique to the DCR1.
-	var dcr1Work []byte
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case dcr1Work = <-recvCh:
-	}
-	if bytes.Equal(cpuWork, dcr1Work) {
-		t.Fatalf("expected obelisk DCR1 work to be different from cpu work")
-	}
-
-	// Claim a weighted share for the Obelisk DCR1.
-	err = client.claimWeightedShare()
-	if err != nil {
-		t.Fatalf("[claimWeightedShare (DCR1)] unexpected error: %v", err)
 	}
 
 	// Ensure a CPU client receives an error response when
@@ -870,40 +803,6 @@ func testClientMessageHandling(t *testing.T) {
 	}
 	if resp.Error != nil {
 		t.Fatalf("expected no-error work submission response, got %v", resp.Error)
-	}
-
-	// Ensure the pool processes Obelisk DCR1 work submissions.
-	err = setMiner(client, ObeliskDCR1)
-	if err != nil {
-		t.Fatalf("unexpected set miner error: %v", err)
-	}
-
-	id++
-	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000",
-		"954cee5d", "6ddf0200")
-	err = sE.Encode(sub)
-	if err != nil {
-		t.Fatalf("[Encode] unexpected error: %v", err)
-	}
-	var dcr1Sub []byte
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case dcr1Sub = <-recvCh:
-	}
-	msg, mType, err = IdentifyMessage(dcr1Sub)
-	if err != nil {
-		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
-	}
-	if mType != ResponseMessage {
-		t.Fatalf("expected a response message, got %v", mType)
-	}
-	resp, ok = msg.(*Response)
-	if !ok {
-		t.Fatalf("unable to cast message as response")
-	}
-	if resp.ID != *sub.ID {
-		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
 	}
 
 	// Ensure the client gets terminated if it sends an unknown message type.

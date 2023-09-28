@@ -413,13 +413,6 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 
 	var resp *Response
 	switch miner {
-	case ObeliskDCR1:
-		// The DCR1 is not fully complaint with the stratum spec.
-		// It uses a 4-byte extraNonce2 regardless of the
-		// extraNonce2Size provided.
-		resp = SubscribeResponse(*req.ID, nid, c.extraNonce1,
-			ExtraNonce2Size, nil)
-
 	default:
 		// The default case handles mining clients that support the
 		// stratum spec and respect the extraNonce2Size provided.
@@ -880,78 +873,12 @@ func (c *Client) process() {
 	}
 }
 
-// reversePrevBlockWords reverses each 4-byte word in the provided hex encoded
-// previous block hash.
-func reversePrevBlockWords(hashE string) string {
-	var buf bytes.Buffer
-	for i := 0; i < len(hashE); i += 8 {
-		_, _ = buf.WriteString(hashE[i+6 : i+8])
-		_, _ = buf.WriteString(hashE[i+4 : i+6])
-		_, _ = buf.WriteString(hashE[i+2 : i+4])
-		_, _ = buf.WriteString(hashE[i : i+2])
-	}
-	return buf.String()
-}
-
-// hexReversed reverses a hex string.
-func hexReversed(in string) (string, error) {
-	const funcName = "hexReversed"
-	if len(in)%2 != 0 {
-		desc := fmt.Sprintf("%s: expected even hex input length, got %d",
-			funcName, len(in))
-		return "", errs.PoolError(errs.HexLength, desc)
-	}
-	var buf bytes.Buffer
-	for i := len(in) - 1; i > -1; i -= 2 {
-		_ = buf.WriteByte(in[i-1])
-		_ = buf.WriteByte(in[i])
-	}
-	return buf.String(), nil
-}
-
 // handleCPUWork prepares work for the cpu miner.
 func (c *Client) handleCPUWork(req *Request) {
 	const miner = "CPU"
 	err := c.encoder.Encode(req)
 	if err != nil {
 		log.Errorf("%s: work encoding error: %v", miner, err)
-		c.cancel()
-		return
-	}
-
-	atomic.StoreInt64(&c.lastWorkTime, time.Now().Unix())
-}
-
-// handleObeliskDCR1Work prepares work for the Obelisk DCR1.
-func (c *Client) handleObeliskDCR1Work(req *Request) {
-	miner := "ObeliskDCR1"
-	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
-		cleanJob, err := ParseWorkNotification(req)
-	if err != nil {
-		log.Errorf("%s: %v", miner, err)
-	}
-
-	// The DCR1 requires the nBits and nTime fields of a mining.notify message
-	// as big endian.
-	nBits, err = hexReversed(nBits)
-	if err != nil {
-		log.Errorf("%s: %v for nBits", miner, err)
-		c.cancel()
-		return
-	}
-	nTime, err = hexReversed(nTime)
-	if err != nil {
-		log.Errorf("%s: %v for nTime", miner, err)
-		c.cancel()
-		return
-	}
-
-	prevBlockRev := reversePrevBlockWords(prevBlock)
-	workNotif := WorkNotification(jobID, prevBlockRev,
-		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
-	err = c.encoder.Encode(workNotif)
-	if err != nil {
-		log.Errorf("%s: work encoding error, %v", miner, err)
 		c.cancel()
 		return
 	}
@@ -1123,10 +1050,6 @@ func (c *Client) send() {
 					switch miner {
 					case CPU, NiceHashValidator:
 						c.handleCPUWork(req)
-						log.Tracef("%s notified of new work", id)
-
-					case ObeliskDCR1:
-						c.handleObeliskDCR1Work(req)
 						log.Tracef("%s notified of new work", id)
 
 					default:
