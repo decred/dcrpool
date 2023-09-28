@@ -375,117 +375,6 @@ func testClientMessageHandling(t *testing.T) {
 		t.Fatalf("expected %s message method, got %s", SetDifficulty, req.Method)
 	}
 
-	// Ensure a Whatsminer D1 client receives an error response when a
-	// malformed subscribe request with an invalid user format is sent.
-	err = setMiner(client, WhatsminerD1)
-	if err != nil {
-		t.Fatalf("unexpected set miner error: %v", err)
-	}
-
-	id++
-	r = &Request{
-		ID:     &id,
-		Method: Subscribe,
-		Params: nil,
-	}
-	err = sE.Encode(r)
-	if err != nil {
-		t.Fatalf("[Encode] unexpected error: %v", err)
-	}
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case data = <-recvCh:
-	}
-	msg, mType, err = IdentifyMessage(data)
-	if err != nil {
-		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
-	}
-	if mType != ResponseMessage {
-		t.Fatalf("expected a subscribe response message, got %v", mType)
-	}
-	resp, ok = msg.(*Response)
-	if !ok {
-		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
-	}
-	if resp.ID != *r.ID {
-		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
-	}
-	if resp.Error == nil {
-		t.Fatal("expected a malformed subscribe request error response")
-	}
-
-	// Ensure a Whatsminer D1 client receives an error response when
-	// it has exhausted its request limits.
-	client.cfg.WithinLimit = func(ip string, clientType int) bool {
-		return false
-	}
-	id++
-
-	d1, d1Version := splitMinerID(d1ID)
-
-	r = SubscribeRequest(&id, userAgent(d1, d1Version), "mn001")
-	err = sE.Encode(r)
-	if err != nil {
-		t.Fatalf("[Encode] unexpected error: %v", err)
-	}
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case data = <-recvCh:
-	}
-	msg, mType, err = IdentifyMessage(data)
-	if err != nil {
-		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
-	}
-	if mType != ResponseMessage {
-		t.Fatalf("expected a subscribe response message, got %v", mType)
-	}
-	resp, ok = msg.(*Response)
-	if !ok {
-		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
-	}
-	if resp.ID != *r.ID {
-		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
-	}
-	if resp.Error == nil {
-		t.Fatal("expected a rate limit error response")
-	}
-	client.cfg.WithinLimit = func(ip string, clientType int) bool {
-		return true
-	}
-
-	// Ensure a Whatsminer D1 client receives a valid non-error
-	// response when a valid subscribe request is sent.
-	id++
-	r = SubscribeRequest(&id, userAgent(d1, d1Version), "")
-	err = sE.Encode(r)
-	if err != nil {
-		t.Fatalf("[Encode] unexpected error: %v", err)
-	}
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case data = <-recvCh:
-	}
-	msg, mType, err = IdentifyMessage(data)
-	if err != nil {
-		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
-	}
-	if mType != ResponseMessage {
-		t.Fatalf("expected a subscribe response message, got %v", mType)
-	}
-	resp, ok = msg.(*Response)
-	if !ok {
-		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
-	}
-	if resp.ID != *r.ID {
-		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
-	}
-	if resp.Error != nil {
-		t.Fatalf("expected a non-error response, got %s", resp.Error.Message)
-	}
-
 	// Ensure an Antminer DR3 client receives a valid non-error
 	// response when a valid subscribe request is sent.
 	err = setMiner(client, AntminerDR3)
@@ -758,36 +647,6 @@ func testClientMessageHandling(t *testing.T) {
 		t.Fatalf("[claimWeightedShare (D9)] unexpected error: %v", err)
 	}
 
-	// Send a work notification to a Whatsminer D1 client.
-	err = setMiner(client, WhatsminerD1)
-	if err != nil {
-		t.Fatalf("unexpected set miner error: %v", err)
-	}
-
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case client.ch <- r:
-	}
-
-	// Ensure the work notification received is unique to the D1.
-	var d1Work []byte
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case d1Work = <-recvCh:
-	}
-	if bytes.Equal(d1Work, d9Work) {
-		t.Fatalf("expected whatsminer d1 work to be different from " +
-			"innosilion d9 work")
-	}
-
-	// Claim a weighted share for the Whatsminer D1.
-	err = client.claimWeightedShare()
-	if err != nil {
-		t.Fatalf("[claimWeightedShare (D1)] unexpected error: %v", err)
-	}
-
 	// Send a work notification to an Antminer DR3 client.
 	err = setMiner(client, AntminerDR3)
 	if err != nil {
@@ -807,9 +666,9 @@ func testClientMessageHandling(t *testing.T) {
 		t.Fatalf("client context done: %v", err)
 	case dr3Work = <-recvCh:
 	}
-	if bytes.Equal(d1Work, dr3Work) {
-		t.Fatalf("expected antminer dr3 work to be different from " +
-			"whatsminer d1 work")
+	if !bytes.Equal(dr3Work, d9Work) {
+		t.Fatalf("expected antminer dr3 work to be equal to innosilicon d9 " +
+			"work")
 	}
 
 	// Claim a weighted share for the Antminer DR3.
@@ -1174,40 +1033,6 @@ func testClientMessageHandling(t *testing.T) {
 	}
 	if resp.Error != nil {
 		t.Fatalf("expected no-error work submission response, got %v", resp.Error)
-	}
-
-	// Ensure the pool processes Whatsminer D1 work submissions.
-	err = setMiner(client, WhatsminerD1)
-	if err != nil {
-		t.Fatalf("unexpected set miner error: %v", err)
-	}
-
-	id++
-	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000",
-		"954cee5d", "6ddf0200")
-	err = sE.Encode(sub)
-	if err != nil {
-		t.Fatalf("[Encode] unexpected error: %v", err)
-	}
-	var d1Sub []byte
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case d1Sub = <-recvCh:
-	}
-	msg, mType, err = IdentifyMessage(d1Sub)
-	if err != nil {
-		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
-	}
-	if mType != ResponseMessage {
-		t.Fatalf("expected a response message, got %v", mType)
-	}
-	resp, ok = msg.(*Response)
-	if !ok {
-		t.Fatalf("unable to cast message as response")
-	}
-	if resp.ID != *sub.ID {
-		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
 	}
 
 	// Ensure the pool processes Antminer DR3 work submissions.

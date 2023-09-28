@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 The Decred developers
+// Copyright (c) 2020-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -18,7 +18,6 @@ var (
 	dcr1ID = "cgminer/4.10.0"
 	d9ID   = "sgminer/4.4.2"
 	dr3ID  = "cgminer/4.9.0"
-	d1ID   = "whatsminer/d1-v1.0"
 	nhID   = "NiceHash/1.0.0"
 )
 
@@ -49,14 +48,12 @@ func generateMinerIDs() map[string]*minerIDPair {
 	obelisk := newMinerIDPair(dcr1ID, ObeliskDCR1)
 	innosilicon := newMinerIDPair(d9ID, InnosiliconD9)
 	antminer := newMinerIDPair(dr3ID, AntminerDR3, AntminerDR5)
-	whatsminer := newMinerIDPair(d1ID, WhatsminerD1)
 	nicehash := newMinerIDPair(nhID, NiceHashValidator)
 
 	ids[cpu.id] = cpu
 	ids[obelisk.id] = obelisk
 	ids[innosilicon.id] = innosilicon
 	ids[antminer.id] = antminer
-	ids[whatsminer.id] = whatsminer
 	ids[nicehash.id] = nicehash
 	return ids
 }

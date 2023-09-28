@@ -664,25 +664,6 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string,
 		copy(headerEB[288:296], []byte(extraNonce1E))
 		copy(headerEB[296:304], []byte(extraNonce2E))
 
-	// The Whatsminer D1 does not respect the extraNonce2Size specified in the
-	// mining.subscribe response sent to it. The 8-byte extranonce submitted is
-	// for the extraNonce1 and extraNonce2. The nTime and nonce values submitted
-	// are big endian, they have to be reversed to little endian before header
-	// reconstruction.
-	case WhatsminerD1:
-		nTimeERev, err := hexReversed(nTimeE)
-		if err != nil {
-			return nil, err
-		}
-		copy(headerEB[272:280], []byte(nTimeERev))
-
-		nonceERev, err := hexReversed(nonceE)
-		if err != nil {
-			return nil, err
-		}
-		copy(headerEB[280:288], []byte(nonceERev))
-		copy(headerEB[288:304], []byte(extraNonce2E))
-
 	default:
 		desc := fmt.Sprintf("miner %s is unknown", miner)
 		return nil, errs.MsgError(errs.MinerUnknown, desc)

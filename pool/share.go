@@ -12,9 +12,9 @@ import (
 	"time"
 )
 
-// ShareWeights reprsents the associated weights for each known DCR miner.
+// ShareWeights represents the associated weights for each known DCR miner.
 // With the share weight of the lowest hash DCR miner (LHM) being 1, the
-// rest were calculated as :
+// rest were calculated as:
 //
 //	(Hash of Miner X * Weight of LHM)/ Hash of LHM
 var ShareWeights = map[string]*big.Rat{
@@ -23,7 +23,6 @@ var ShareWeights = map[string]*big.Rat{
 	InnosiliconD9: new(big.Rat).SetFloat64(2.182),
 	AntminerDR3:   new(big.Rat).SetFloat64(7.091),
 	AntminerDR5:   new(big.Rat).SetFloat64(31.181),
-	WhatsminerD1:  new(big.Rat).SetFloat64(43.636),
 }
 
 // shareID generates a unique share id using the provided account, creation

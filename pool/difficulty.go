@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Decred developers
+// Copyright (c) 2021-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -22,7 +22,6 @@ const (
 	InnosiliconD9     = "innosilicond9"
 	AntminerDR3       = "antminerdr3"
 	AntminerDR5       = "antminerdr5"
-	WhatsminerD1      = "whatsminerd1"
 	ObeliskDCR1       = "obeliskdcr1"
 	NiceHashValidator = "nicehash"
 )
@@ -36,7 +35,6 @@ var (
 		InnosiliconD9:     new(big.Int).SetInt64(2.4e12),
 		AntminerDR3:       new(big.Int).SetInt64(7.8e12),
 		AntminerDR5:       new(big.Int).SetInt64(35e12),
-		WhatsminerD1:      new(big.Int).SetInt64(48e12),
 		NiceHashValidator: new(big.Int).SetInt64(20e10),
 	}
 )
