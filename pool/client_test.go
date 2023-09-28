@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Decred developers
+// Copyright (c) 2021-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -1543,26 +1543,63 @@ func testClientTimeRolledWork(t *testing.T) {
 }
 
 func testClientUpgrades(t *testing.T) {
+	// Create mock upgrade path for CPU mining.
+	const clientCPU2 = CPU + "2"
+	activeNet := config.ActiveNet
+	mockPoolDiffs := func() map[string]*DifficultyInfo {
+		const maxGenTime = time.Millisecond * 500
+		genTime := new(big.Int).SetInt64(int64(maxGenTime.Seconds()))
+		return map[string]*DifficultyInfo{
+			CPU: func() *DifficultyInfo {
+				hashRate := minerHashes[CPU]
+				target, diff := calculatePoolTarget(activeNet, hashRate, genTime)
+				return &DifficultyInfo{
+					target:     target,
+					difficulty: diff,
+					powLimit:   new(big.Rat).SetInt(activeNet.PowLimit),
+				}
+			}(),
+			clientCPU2: func() *DifficultyInfo {
+				hashRate := new(big.Int).Mul(minerHashes[CPU], big.NewInt(2))
+				target, diff := calculatePoolTarget(activeNet, hashRate, genTime)
+				return &DifficultyInfo{
+					target:     target,
+					difficulty: diff,
+					powLimit:   new(big.Rat).SetInt(activeNet.PowLimit),
+				}
+			}(),
+		}
+	}()
+	fetchMinerDifficulty := func(miner string) (*DifficultyInfo, error) {
+		diffData, ok := mockPoolDiffs[miner]
+		if !ok {
+			desc := fmt.Sprintf("no difficulty data found for miner %s", miner)
+			return nil, errs.PoolError(errs.ValueNotFound, desc)
+		}
+		return diffData, nil
+	}
+
 	ctx := context.Background()
 	cfg := *config
 	cfg.RollWorkCycle = time.Minute * 5 // Avoiding rolled work for this test.
 	cfg.MaxUpgradeTries = 2
 	cfg.MonitorCycle = time.Millisecond * 100
 	cfg.ClientTimeout = time.Millisecond * 300
+	cfg.FetchMinerDifficulty = fetchMinerDifficulty
 	_, ln, client, _, _, err := setup(ctx, &cfg)
 	if err != nil {
 		ln.Close()
 		t.Fatalf("[setup] unexpected error: %v", err)
 	}
 
-	err = setMiner(client, AntminerDR3)
+	err = setMiner(client, CPU)
 	if err != nil {
 		ln.Close()
 		t.Fatalf("unexpected set miner error: %v", err)
 	}
 
-	minerIdx := 0
-	idPair := minerIDs[dr3ID]
+	const minerIdx = 0
+	idPair := newMinerIDPair(cpuID, CPU, clientCPU2)
 
 	// Trigger a client upgrade.
 	atomic.StoreInt64(&client.submissions, 50)
@@ -1570,9 +1607,9 @@ func testClientUpgrades(t *testing.T) {
 	go client.monitor(minerIdx, idPair, cfg.MonitorCycle, cfg.MaxUpgradeTries)
 	time.Sleep(cfg.MonitorCycle + (cfg.MonitorCycle / 2))
 
-	if fetchMiner(client) != AntminerDR5 {
+	if fetchMiner(client) != clientCPU2 {
 		ln.Close()
-		t.Fatalf("expected a miner id of %s, got %s", AntminerDR5, client.miner)
+		t.Fatalf("expected a miner id of %s, got %s", clientCPU2, client.miner)
 	}
 
 	client.cancel()
@@ -1588,7 +1625,7 @@ func testClientUpgrades(t *testing.T) {
 
 	defer ln.Close()
 
-	err = setMiner(client, AntminerDR3)
+	err = setMiner(client, CPU)
 	if err != nil {
 		t.Fatalf("unexpected set miner error: %v", err)
 	}
@@ -1598,8 +1635,8 @@ func testClientUpgrades(t *testing.T) {
 	go client.monitor(minerIdx, idPair, cfg.MonitorCycle, cfg.MaxUpgradeTries)
 	time.Sleep(cfg.MonitorCycle + (cfg.MonitorCycle / 2))
 
-	if fetchMiner(client) == AntminerDR3 {
-		t.Fatalf("expected a miner of %s, got %s", AntminerDR3, client.miner)
+	if fetchMiner(client) == CPU {
+		t.Fatalf("expected a miner of %s, got %s", CPU, client.miner)
 	}
 
 	// Trigger a client timeout by waiting.
