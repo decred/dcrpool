@@ -19,7 +19,6 @@ import (
 // Supported mining clients.
 const (
 	CPU               = "cpu"
-	ObeliskDCR1       = "obeliskdcr1"
 	NiceHashValidator = "nicehash"
 )
 
@@ -28,7 +27,6 @@ var (
 	// corresponding hash rates.
 	minerHashes = map[string]*big.Int{
 		CPU:               new(big.Int).SetInt64(5e3),
-		ObeliskDCR1:       new(big.Int).SetInt64(1.2e12),
 		NiceHashValidator: new(big.Int).SetInt64(20e10),
 	}
 )

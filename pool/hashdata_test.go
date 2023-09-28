@@ -14,7 +14,7 @@ import (
 )
 
 func testHashData(t *testing.T) {
-	miner := ObeliskDCR1
+	const miner = CPU
 	extraNonce1 := "ca750c60"
 	ip := "127.0.0.1:5550"
 	now := time.Now()

@@ -14,9 +14,8 @@ var (
 	// These miner ids represent the expected identifications returned by
 	// supported miners in their mining.subscribe requests.
 
-	cpuID  = "cpuminer/1.0.0"
-	dcr1ID = "cgminer/4.10.0"
-	nhID   = "NiceHash/1.0.0"
+	cpuID = "cpuminer/1.0.0"
+	nhID  = "NiceHash/1.0.0"
 )
 
 // minerIDPair represents miner subscription identification pairing
@@ -43,11 +42,9 @@ func newMinerIDPair(id string, miners ...string) *minerIDPair {
 func generateMinerIDs() map[string]*minerIDPair {
 	ids := make(map[string]*minerIDPair)
 	cpu := newMinerIDPair(cpuID, CPU)
-	obelisk := newMinerIDPair(dcr1ID, ObeliskDCR1)
 	nicehash := newMinerIDPair(nhID, NiceHashValidator)
 
 	ids[cpu.id] = cpu
-	ids[obelisk.id] = obelisk
 	ids[nicehash.id] = nicehash
 	return ids
 }
