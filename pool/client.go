@@ -432,19 +432,6 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 		paddedExtraNonce1 := strings.Repeat("0", 16) + c.extraNonce1
 		resp = SubscribeResponse(*req.ID, nid, paddedExtraNonce1, 8, nil)
 
-	case WhatsminerD1:
-		// The D1 is not fully complaint with the stratum spec.
-		// It uses a 4-byte extraNonce2 regardless of the
-		// extraNonce2Size provided.
-		//
-		// The extraNonce1 is appended to the extraNonce2 in the
-		// extraNonce2 value returned in mining.submit. As a result,
-		// the extraNonce1 sent in mining.subscribe response is formatted as:
-		// 	extraNonce2 space (4-byte) + miner's extraNonce1 (4-byte)
-		paddedExtraNonce1 := strings.Repeat("0", 8) + c.extraNonce1
-		resp = SubscribeResponse(*req.ID, nid, paddedExtraNonce1,
-			ExtraNonce2Size, nil)
-
 	default:
 		// The default case handles mining clients that support the
 		// stratum spec and respect the extraNonce2Size provided.
@@ -1006,31 +993,6 @@ func (c *Client) handleInnosiliconD9Work(req *Request) {
 	atomic.StoreInt64(&c.lastWorkTime, time.Now().Unix())
 }
 
-// handleWhatsminerD1Work prepares work notifications for the Whatsminer D1.
-func (c *Client) handleWhatsminerD1Work(req *Request) {
-	miner := "WhatsminerD1"
-	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
-		cleanJob, err := ParseWorkNotification(req)
-	if err != nil {
-		log.Errorf("%s: %v", miner, err)
-	}
-
-	// The D1 requires the nBits and nTime fields of a mining.notify message
-	// as little endian. Since they're already in the preferred format there
-	// is no need to reverse bytes for nBits and nTime.
-	prevBlockRev := reversePrevBlockWords(prevBlock)
-	workNotif := WorkNotification(jobID, prevBlockRev,
-		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
-	err = c.encoder.Encode(workNotif)
-	if err != nil {
-		log.Errorf("%s: work encoding error: %v", miner, err)
-		c.cancel()
-		return
-	}
-
-	atomic.StoreInt64(&c.lastWorkTime, time.Now().Unix())
-}
-
 // handleCPUWork prepares work for the cpu miner.
 func (c *Client) handleCPUWork(req *Request) {
 	const miner = "CPU"
@@ -1253,10 +1215,6 @@ func (c *Client) send() {
 
 					case InnosiliconD9:
 						c.handleInnosiliconD9Work(req)
-						log.Tracef("%s notified of new work", id)
-
-					case WhatsminerD1:
-						c.handleWhatsminerD1Work(req)
 						log.Tracef("%s notified of new work", id)
 
 					case ObeliskDCR1:
