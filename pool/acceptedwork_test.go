@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Decred developers
+// Copyright (c) 2021-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -13,10 +13,15 @@ import (
 
 func testAcceptedWork(t *testing.T) {
 	// Created some valid accepted work.
+	const (
+		xClient  = "cpux"
+		x2Client = "cpux2"
+		yClient  = "cpuy"
+	)
 	workA := NewAcceptedWork(
 		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
 		"000000000000000007301a21efa98033e06f7eba836990394fff9f765f1556b1",
-		396692, yID, "dr3")
+		396692, yID, yClient)
 	err := db.persistAcceptedWork(workA)
 	if err != nil {
 		t.Fatal(err)
@@ -25,7 +30,7 @@ func testAcceptedWork(t *testing.T) {
 	workB := NewAcceptedWork(
 		"000000000000000025aa4a7ba8c3ece4608376bf84a82ec7e025991460097198",
 		"00000000000000001e2065a7248a9b4d3886fe3ca3128eebedddaf35fb26e58c",
-		396693, xID, "dr5")
+		396693, xID, xClient)
 	err = db.persistAcceptedWork(workB)
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +39,7 @@ func testAcceptedWork(t *testing.T) {
 	workC := NewAcceptedWork(
 		"0000000000000000053236ce6c274aa49a1cc6e9d906e855725c79f69c1089d3",
 		"000000000000000025aa4a7ba8c3ece4608376bf84a82ec7e025991460097198",
-		396694, xID, "dr5")
+		396694, xID, xClient)
 	err = db.persistAcceptedWork(workC)
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +48,7 @@ func testAcceptedWork(t *testing.T) {
 	workD := NewAcceptedWork(
 		"000000000000000020f9ab2b1e144a818d36a857aefda55363f5e86e01855c79",
 		"0000000000000000053236ce6c274aa49a1cc6e9d906e855725c79f69c1089d3",
-		396695, xID, "dr5")
+		396695, xID, xClient)
 	err = db.persistAcceptedWork(workD)
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +57,7 @@ func testAcceptedWork(t *testing.T) {
 	workE := NewAcceptedWork(
 		"0000000000000000032e25218be722327ae3dccf9015756facb2f98931fda7b8",
 		"00000000000000000476712b2f5df31bc62b9976066262af2d639a551853c056",
-		431611, xID, "dcr1")
+		431611, xID, x2Client)
 
 	// Ensure updating a non persisted accepted work returns an error.
 	err = db.updateAcceptedWork(workE)
