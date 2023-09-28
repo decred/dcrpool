@@ -1209,7 +1209,7 @@ func (c *Client) send() {
 						c.handleCPUWork(req)
 						log.Tracef("%s notified of new work", id)
 
-					case AntminerDR3, AntminerDR5:
+					case AntminerDR3:
 						c.handleAntminerDR3Work(req)
 						log.Tracef("%s notified of new work", id)
 
