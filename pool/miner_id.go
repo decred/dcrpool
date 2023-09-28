@@ -47,7 +47,7 @@ func generateMinerIDs() map[string]*minerIDPair {
 	cpu := newMinerIDPair(cpuID, CPU)
 	obelisk := newMinerIDPair(dcr1ID, ObeliskDCR1)
 	innosilicon := newMinerIDPair(d9ID, InnosiliconD9)
-	antminer := newMinerIDPair(dr3ID, AntminerDR3, AntminerDR5)
+	antminer := newMinerIDPair(dr3ID, AntminerDR3)
 	nicehash := newMinerIDPair(nhID, NiceHashValidator)
 
 	ids[cpu.id] = cpu

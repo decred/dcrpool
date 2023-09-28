@@ -21,7 +21,6 @@ const (
 	CPU               = "cpu"
 	InnosiliconD9     = "innosilicond9"
 	AntminerDR3       = "antminerdr3"
-	AntminerDR5       = "antminerdr5"
 	ObeliskDCR1       = "obeliskdcr1"
 	NiceHashValidator = "nicehash"
 )
@@ -34,7 +33,6 @@ var (
 		ObeliskDCR1:       new(big.Int).SetInt64(1.2e12),
 		InnosiliconD9:     new(big.Int).SetInt64(2.4e12),
 		AntminerDR3:       new(big.Int).SetInt64(7.8e12),
-		AntminerDR5:       new(big.Int).SetInt64(35e12),
 		NiceHashValidator: new(big.Int).SetInt64(20e10),
 	}
 )

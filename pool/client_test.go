@@ -677,35 +677,6 @@ func testClientMessageHandling(t *testing.T) {
 		t.Fatalf("[claimWeightedShare (DR3)] unexpected error: %v", err)
 	}
 
-	// Send a work notification to an Antminer DR5 client.
-	err = setMiner(client, AntminerDR5)
-	if err != nil {
-		t.Fatalf("unexpected set miner error: %v", err)
-	}
-
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case client.ch <- r:
-	}
-
-	// Ensure the work notification received is identical to that of the DR3.
-	var dr5Work []byte
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case dr5Work = <-recvCh:
-	}
-	if !bytes.Equal(dr5Work, dr3Work) {
-		t.Fatalf("expected antminer dr5 work to be equal to antminer dr3 work")
-	}
-
-	// Claim a weighted share for the Antminer DR5.
-	err = client.claimWeightedShare()
-	if err != nil {
-		t.Fatalf("[claimWeightedShare (DR5)] unexpected error: %v", err)
-	}
-
 	// Send a work notification to an Obelisk DCR1 client.
 	err = setMiner(client, ObeliskDCR1)
 	if err != nil {
@@ -725,9 +696,9 @@ func testClientMessageHandling(t *testing.T) {
 		t.Fatalf("client context done: %v", err)
 	case dcr1Work = <-recvCh:
 	}
-	if !bytes.Equal(dr5Work, dcr1Work) {
+	if !bytes.Equal(dr3Work, dcr1Work) {
 		t.Fatalf("expected obelisk DCR1 work to be different from " +
-			"antminer dr5 work")
+			"antminer dr3 work")
 	}
 
 	// Claim a weighted share for the Obelisk DCR1.
@@ -1055,40 +1026,6 @@ func testClientMessageHandling(t *testing.T) {
 	case dr3Sub = <-recvCh:
 	}
 	msg, mType, err = IdentifyMessage(dr3Sub)
-	if err != nil {
-		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
-	}
-	if mType != ResponseMessage {
-		t.Fatalf("expected a response message, got %v", mType)
-	}
-	resp, ok = msg.(*Response)
-	if !ok {
-		t.Fatalf("unable to cast message as response")
-	}
-	if resp.ID != *sub.ID {
-		t.Fatalf("expected a response with id %d, got %d", *sub.ID, resp.ID)
-	}
-
-	// Ensure the pool processes Antminer DR5 work submissions.
-	err = setMiner(client, AntminerDR5)
-	if err != nil {
-		t.Fatalf("unexpected set miner error: %v", err)
-	}
-
-	id++
-	sub = SubmitWorkRequest(&id, "tcl", job.UUID, "00000000",
-		"954cee5d", "6ddf0200")
-	err = sE.Encode(sub)
-	if err != nil {
-		t.Fatalf("[Encode] unexpected error: %v", err)
-	}
-	var dr5Sub []byte
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("client context done: %v", err)
-	case dr5Sub = <-recvCh:
-	}
-	msg, mType, err = IdentifyMessage(dr5Sub)
 	if err != nil {
 		t.Fatalf("[IdentifyMessage] unexpected error: %v", err)
 	}
