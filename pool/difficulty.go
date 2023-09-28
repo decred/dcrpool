@@ -19,7 +19,6 @@ import (
 // Supported mining clients.
 const (
 	CPU               = "cpu"
-	InnosiliconD9     = "innosilicond9"
 	ObeliskDCR1       = "obeliskdcr1"
 	NiceHashValidator = "nicehash"
 )
@@ -30,7 +29,6 @@ var (
 	minerHashes = map[string]*big.Int{
 		CPU:               new(big.Int).SetInt64(5e3),
 		ObeliskDCR1:       new(big.Int).SetInt64(1.2e12),
-		InnosiliconD9:     new(big.Int).SetInt64(2.4e12),
 		NiceHashValidator: new(big.Int).SetInt64(20e10),
 	}
 )

@@ -909,42 +909,6 @@ func hexReversed(in string) (string, error) {
 	return buf.String(), nil
 }
 
-// handleInnosiliconD9Work prepares work notifications for the Innosilicon D9.
-func (c *Client) handleInnosiliconD9Work(req *Request) {
-	miner := "InnosiliconD9"
-	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
-		cleanJob, err := ParseWorkNotification(req)
-	if err != nil {
-		log.Errorf("%s: %v", miner, err)
-	}
-
-	// The D9 requires the nBits and nTime fields of a mining.notify message
-	// as big endian.
-	nBits, err = hexReversed(nBits)
-	if err != nil {
-		log.Errorf("%s: %v for nBits", miner, err)
-		c.cancel()
-		return
-	}
-	nTime, err = hexReversed(nTime)
-	if err != nil {
-		log.Errorf("%s: %v for nTime", miner, err)
-		c.cancel()
-		return
-	}
-	prevBlockRev := reversePrevBlockWords(prevBlock)
-	workNotif := WorkNotification(jobID, prevBlockRev,
-		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
-	err = c.encoder.Encode(workNotif)
-	if err != nil {
-		log.Errorf("%s: work encoding error, %v", miner, err)
-		c.cancel()
-		return
-	}
-
-	atomic.StoreInt64(&c.lastWorkTime, time.Now().Unix())
-}
-
 // handleCPUWork prepares work for the cpu miner.
 func (c *Client) handleCPUWork(req *Request) {
 	const miner = "CPU"
@@ -1159,10 +1123,6 @@ func (c *Client) send() {
 					switch miner {
 					case CPU, NiceHashValidator:
 						c.handleCPUWork(req)
-						log.Tracef("%s notified of new work", id)
-
-					case InnosiliconD9:
-						c.handleInnosiliconD9Work(req)
 						log.Tracef("%s notified of new work", id)
 
 					case ObeliskDCR1:
