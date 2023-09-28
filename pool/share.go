@@ -21,7 +21,6 @@ var ShareWeights = map[string]*big.Rat{
 	CPU:           new(big.Rat).SetFloat64(1.0), // Reserved for testing.
 	ObeliskDCR1:   new(big.Rat).SetFloat64(1.0),
 	InnosiliconD9: new(big.Rat).SetFloat64(2.182),
-	AntminerDR3:   new(big.Rat).SetFloat64(7.091),
 }
 
 // shareID generates a unique share id using the provided account, creation

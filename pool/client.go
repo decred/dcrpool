@@ -420,18 +420,6 @@ func (c *Client) handleSubscribeRequest(req *Request, allowed bool) error {
 		resp = SubscribeResponse(*req.ID, nid, c.extraNonce1,
 			ExtraNonce2Size, nil)
 
-	case AntminerDR3:
-		// The DR3 is not fully complaint with the stratum spec.
-		// It uses an 8-byte extraNonce2 regardless of the
-		// extraNonce2Size provided.
-		//
-		// The extraNonce1 is appended to the extraNonce2 in the
-		// extraNonce2 value returned in mining.submit. As a result,
-		// the extraNonce1 sent in mining.subscribe response is formatted as:
-		// 	extraNonce2 space (8-byte) + miner's extraNonce1 (4-byte)
-		paddedExtraNonce1 := strings.Repeat("0", 16) + c.extraNonce1
-		resp = SubscribeResponse(*req.ID, nid, paddedExtraNonce1, 8, nil)
-
 	default:
 		// The default case handles mining clients that support the
 		// stratum spec and respect the extraNonce2Size provided.
@@ -921,42 +909,6 @@ func hexReversed(in string) (string, error) {
 	return buf.String(), nil
 }
 
-// handleAntminerDR3 prepares work notifications for the Antminer DR3.
-func (c *Client) handleAntminerDR3Work(req *Request) {
-	miner := "AntminerDR3"
-	jobID, prevBlock, genTx1, genTx2, blockVersion, nBits, nTime,
-		cleanJob, err := ParseWorkNotification(req)
-	if err != nil {
-		log.Errorf("%s: %v", miner, err)
-	}
-
-	// The DR3 requires the nBits and nTime fields of a mining.notify message
-	// as big endian.
-	nBits, err = hexReversed(nBits)
-	if err != nil {
-		log.Errorf("%s: %v for nBits", miner, err)
-		c.cancel()
-		return
-	}
-	nTime, err = hexReversed(nTime)
-	if err != nil {
-		log.Errorf("%s: %v for nTime", miner, err)
-		c.cancel()
-		return
-	}
-	prevBlockRev := reversePrevBlockWords(prevBlock)
-	workNotif := WorkNotification(jobID, prevBlockRev,
-		genTx1, genTx2, blockVersion, nBits, nTime, cleanJob)
-	err = c.encoder.Encode(workNotif)
-	if err != nil {
-		log.Errorf("%s: work encoding error, %v", miner, err)
-		c.cancel()
-		return
-	}
-
-	atomic.StoreInt64(&c.lastWorkTime, time.Now().Unix())
-}
-
 // handleInnosiliconD9Work prepares work notifications for the Innosilicon D9.
 func (c *Client) handleInnosiliconD9Work(req *Request) {
 	miner := "InnosiliconD9"
@@ -1207,10 +1159,6 @@ func (c *Client) send() {
 					switch miner {
 					case CPU, NiceHashValidator:
 						c.handleCPUWork(req)
-						log.Tracef("%s notified of new work", id)
-
-					case AntminerDR3:
-						c.handleAntminerDR3Work(req)
 						log.Tracef("%s notified of new work", id)
 
 					case InnosiliconD9:

@@ -17,7 +17,6 @@ var (
 	cpuID  = "cpuminer/1.0.0"
 	dcr1ID = "cgminer/4.10.0"
 	d9ID   = "sgminer/4.4.2"
-	dr3ID  = "cgminer/4.9.0"
 	nhID   = "NiceHash/1.0.0"
 )
 
@@ -47,13 +46,11 @@ func generateMinerIDs() map[string]*minerIDPair {
 	cpu := newMinerIDPair(cpuID, CPU)
 	obelisk := newMinerIDPair(dcr1ID, ObeliskDCR1)
 	innosilicon := newMinerIDPair(d9ID, InnosiliconD9)
-	antminer := newMinerIDPair(dr3ID, AntminerDR3)
 	nicehash := newMinerIDPair(nhID, NiceHashValidator)
 
 	ids[cpu.id] = cpu
 	ids[obelisk.id] = obelisk
 	ids[innosilicon.id] = innosilicon
-	ids[antminer.id] = antminer
 	ids[nicehash.id] = nicehash
 	return ids
 }

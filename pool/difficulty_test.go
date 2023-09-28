@@ -73,20 +73,16 @@ func TestDifficulty(t *testing.T) {
 	diffSet := []struct {
 		miner       string
 		expectedErr error
-	}{
-		{
-			miner:       CPU,
-			expectedErr: nil,
-		},
-		{
-			miner:       "",
-			expectedErr: errs.ValueNotFound,
-		},
-		{
-			miner:       "antminerdr7",
-			expectedErr: errs.ValueNotFound,
-		},
-	}
+	}{{
+		miner:       CPU,
+		expectedErr: nil,
+	}, {
+		miner:       "",
+		expectedErr: errs.ValueNotFound,
+	}, {
+		miner:       "non-existent",
+		expectedErr: errs.ValueNotFound,
+	}}
 
 	for idx, tc := range diffSet {
 		net := chaincfg.SimNetParams()
