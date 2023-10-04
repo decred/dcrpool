@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 The Decred developers
+// Copyright (c) 2019-2023 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -221,7 +221,7 @@ func (e *Endpoint) generateHashIDs() map[string]struct{} {
 
 	ids := make(map[string]struct{}, len(e.clients))
 	for _, c := range e.clients {
-		hashID := hashDataID(c.account, c.extraNonce1)
+		hashID := hashDataID(c.FetchAccountID(), c.extraNonce1)
 		ids[hashID] = struct{}{}
 	}
 
