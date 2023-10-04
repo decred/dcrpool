@@ -129,11 +129,15 @@ type Client struct {
 	reader      *bufio.Reader
 	ctx         context.Context
 	cancel      context.CancelFunc
-	name        string
 	extraNonce1 string
 	ch          chan Message
 	readCh      chan readPayload
-	account     string
+
+	// These fields track the client's account ID and name from the authorize
+	// message.
+	accountMtx sync.RWMutex
+	account    string
+	name       string
 
 	// These fields track the authorization and subscription status of
 	// the miner.
@@ -205,7 +209,7 @@ func (c *Client) claimWeightedShare() error {
 		return errs.PoolError(errs.ClaimShare, desc)
 	}
 	weight := ShareWeights[miner]
-	share := NewShare(c.account, weight)
+	share := NewShare(c.FetchAccountID(), weight)
 	return c.cfg.db.PersistShare(share)
 }
 
@@ -268,14 +272,17 @@ func (c *Client) handleAuthorizeRequest(req *Request, allowed bool) error {
 			}
 		}
 
+		c.accountMtx.Lock()
 		c.account = account.UUID
 		c.name = name
+		c.accountMtx.Unlock()
 
 	case true:
 		// Set a default account id.
+		c.accountMtx.Lock()
 		c.account = defaultAccountID
-
 		c.name = username
+		c.accountMtx.Unlock()
 	}
 
 	c.statusMtx.Lock()
@@ -614,7 +621,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	// Create accepted work if the work submission is accepted
 	// by the mining node.
 	work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
-		header.Height, c.account, miner)
+		header.Height, c.FetchAccountID(), miner)
 	err = c.cfg.db.persistAcceptedWork(work)
 	if err != nil {
 		// If the submitted accepted work already exists, ignore the
@@ -916,6 +923,9 @@ func (c *Client) FetchMinerType() string {
 
 // FetchAccountID gets the client's account ID.
 func (c *Client) FetchAccountID() string {
+	defer c.accountMtx.RUnlock()
+	c.accountMtx.RLock()
+
 	return c.account
 }
 
@@ -968,11 +978,12 @@ func (c *Client) hashMonitor() {
 			miner := c.miner
 			c.mtx.RUnlock()
 
-			hashID := hashDataID(c.account, c.extraNonce1)
+			account := c.FetchAccountID()
+			hashID := hashDataID(account, c.extraNonce1)
 			hashData, err := c.cfg.db.fetchHashData(hashID)
 			if err != nil {
 				if errors.Is(err, errs.ValueNotFound) {
-					hashData = newHashData(miner, c.account, c.addr.String(),
+					hashData = newHashData(miner, account, c.addr.String(),
 						c.extraNonce1, hash)
 					err = c.cfg.db.persistHashData(hashData)
 					if err != nil {
