@@ -172,8 +172,8 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 					m.workData.extraNonce2 = extraNonce2
 
 					m.updateHashes <- hashesCompleted
-					log.Infof("Solved block hash at height (%v) is (%v)",
-						header.Height, header.BlockHash().String())
+					log.Infof("Found hash at height %d with work below target!"+
+						" (pow hash %v)", header.Height, hash)
 					return true
 				}
 
