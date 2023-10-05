@@ -13,13 +13,39 @@ import (
 )
 
 // ShareWeights represents the associated weights for each known DCR miner.
-// With the share weight of the lowest hash DCR miner (LHM) being 1, the
-// rest were calculated as:
 //
-//	(Hash of Miner X * Weight of LHM)/ Hash of LHM
-var ShareWeights = map[string]*big.Rat{
-	CPU: new(big.Rat).SetFloat64(1.0), // Reserved for testing.
-}
+// The weights are calculated as:
+//
+//	Hash of Miner X / Hash of LHM
+var ShareWeights = func() map[string]*big.Rat {
+	// In practice there will always be at least the CPU miner, however, be safe
+	// and return an empty map if the miner hashes somehow ends up empty in the
+	// future.
+	if len(minerHashes) == 0 {
+		return make(map[string]*big.Rat, len(minerHashes))
+	}
+
+	// Find the lowest hash rate miner.
+	lowestHashRate := big.NewInt(0)
+	for _, hashRate := range minerHashes {
+		if lowestHashRate.Sign() == 0 || hashRate.Cmp(lowestHashRate) < 0 {
+			lowestHashRate.Set(hashRate)
+		}
+	}
+
+	shareWeights := make(map[string]*big.Rat, len(minerHashes))
+	for miner, hashRate := range minerHashes {
+		// Ensure CPU is always a share weight of 1.0 as it is only valid in
+		// either testing scenarios or a CPU-only mining regime.
+		if miner == CPU {
+			shareWeights[CPU] = new(big.Rat).SetFloat64(1.0)
+			continue
+		}
+
+		shareWeights[miner] = new(big.Rat).SetFrac(hashRate, lowestHashRate)
+	}
+	return shareWeights
+}()
 
 // shareID generates a unique share id using the provided account, creation
 // time, and random uint64.
