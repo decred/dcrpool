@@ -303,8 +303,9 @@ func (m *Miner) process(ctx context.Context) {
 						continue
 					}
 
-					log.Tracef("subscription details: %s, %s, %d",
-						notifyID, extraNonce1E, extraNonce2Size)
+					log.Tracef("Subscription details (notifyID: %s, "+
+						"extraNonce1: %s, extraNonce2Size: %d)", notifyID,
+						extraNonce1E, extraNonce2Size)
 
 					m.extraNonce1E = extraNonce1E
 					m.extraNonce2Size = extraNonce2Size
