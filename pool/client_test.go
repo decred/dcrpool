@@ -254,7 +254,7 @@ func testClientMessageHandling(t *testing.T) {
 	}
 	resp, ok := msg.(*Response)
 	if !ok {
-		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+		t.Fatalf("expected response, got %T", msg)
 	}
 	if resp.ID != *r.ID {
 		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
@@ -286,7 +286,7 @@ func testClientMessageHandling(t *testing.T) {
 	}
 	resp, ok = msg.(*Response)
 	if !ok {
-		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+		t.Fatalf("expected response, got %T", msg)
 	}
 	if resp.Error == nil {
 		t.Fatal("expected an invalid username authorize error response")
@@ -314,7 +314,7 @@ func testClientMessageHandling(t *testing.T) {
 	}
 	resp, ok = msg.(*Response)
 	if !ok {
-		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+		t.Fatalf("expected response, got %T", msg)
 	}
 	if resp.Error == nil {
 		t.Fatal("expected a rate limit error response")
@@ -346,7 +346,7 @@ func testClientMessageHandling(t *testing.T) {
 	}
 	resp, ok = msg.(*Response)
 	if !ok {
-		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
+		t.Fatalf("expected response, got %T", msg)
 	}
 	if resp.ID != *r.ID {
 		t.Fatalf("expected response with id %d, got %d", *r.ID, resp.ID)
