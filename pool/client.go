@@ -541,7 +541,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	// less than the pool target for the client.
 	if hashTarget.Cmp(tgt) > 0 {
 		err := fmt.Errorf("submitted work %s from %s is not less than its "+
-			"corresponding pool target", hash.String(), id)
+			"corresponding pool target", hash, id)
 		sErr := NewStratumError(LowDifficultyShare, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.sendMessage(resp)
@@ -573,8 +573,8 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		resp := SubmitWorkResponse(*req.ID, true, nil)
 		c.sendMessage(resp)
 
-		desc := fmt.Sprintf("submitted work %s from %s is not "+
-			"less than the network target difficulty", hash.String(), id)
+		desc := fmt.Sprintf("submitted work %s from %s is not less than the "+
+			"network target difficulty", hash, id)
 		return errs.PoolError(errs.NetworkDifficulty, desc)
 	}
 
@@ -880,9 +880,13 @@ func (c *Client) process() {
 	}
 }
 
-// handleCPUWork prepares work for the cpu miner.
-func (c *Client) handleCPUWork(req *Request) {
-	const miner = "CPU"
+// sendWorkDefault prepares and sends work for miners that do not require
+// any manipulation of the parameters.
+//
+// Since the stratum protocol is not well defined, some miners might require the
+// parameters with different endianness and thus require special handling to
+// manipulate the parameters accordingly.
+func (c *Client) sendWorkDefault(req *Request, miner string) {
 	err := c.encoder.Encode(req)
 	if err != nil {
 		log.Errorf("%s: work encoding error: %v", miner, err)
@@ -1060,7 +1064,7 @@ func (c *Client) send() {
 
 					switch miner {
 					case CPU, NiceHashValidator:
-						c.handleCPUWork(req)
+						c.sendWorkDefault(req, miner)
 						log.Tracef("%s notified of new work", id)
 
 					default:
