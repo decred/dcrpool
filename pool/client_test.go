@@ -64,16 +64,9 @@ var (
 		MaxUpgradeTries: 5,
 		RollWorkCycle:   rollWorkCycle,
 	}
-	userAgent = func(miner, version string) string {
-		return fmt.Sprintf("%s/%s", miner, version)
-	}
 )
 
-func splitMinerID(id string) (string, string) {
-	const separator = "/"
-	split := strings.Split(id, separator)
-	return split[0], split[1]
-}
+const cpuUserAgent = "cpuminer/1.0.0"
 
 func setCurrentWork(work string) {
 	currentWorkMtx.Lock()
@@ -380,8 +373,7 @@ func testClientMessageHandling(t *testing.T) {
 	}
 
 	id++
-	cpu, cpuVersion := splitMinerID(cpuID)
-	r = SubscribeRequest(&id, userAgent(cpu, cpuVersion), "")
+	r = SubscribeRequest(&id, cpuUserAgent, "")
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
@@ -916,8 +908,7 @@ func testClientTimeRolledWork(t *testing.T) {
 	// Ensure a CPU client receives a valid non-error response when
 	// a valid subscribe request is sent.
 	id++
-	cpu, cpuVersion := splitMinerID(cpuID)
-	r = SubscribeRequest(&id, userAgent(cpu, cpuVersion), "")
+	r = SubscribeRequest(&id, cpuUserAgent, "")
 	err = sE.Encode(r)
 	if err != nil {
 		t.Fatalf("[Encode] unexpected error: %v", err)
@@ -1055,12 +1046,12 @@ func testClientUpgrades(t *testing.T) {
 	}
 
 	const minerIdx = 0
-	idPair := newMinerIDPair(cpuID, CPU, clientCPU2)
+	clients := []string{CPU, clientCPU2}
 
 	// Trigger a client upgrade.
 	atomic.StoreInt64(&client.submissions, 50)
 
-	go client.monitor(minerIdx, idPair, cfg.MonitorCycle, cfg.MaxUpgradeTries)
+	go client.monitor(minerIdx, clients, cfg.MonitorCycle, cfg.MaxUpgradeTries)
 	time.Sleep(cfg.MonitorCycle + (cfg.MonitorCycle / 2))
 
 	if fetchMiner(client) != clientCPU2 {
@@ -1088,7 +1079,7 @@ func testClientUpgrades(t *testing.T) {
 
 	atomic.StoreInt64(&client.submissions, 2)
 
-	go client.monitor(minerIdx, idPair, cfg.MonitorCycle, cfg.MaxUpgradeTries)
+	go client.monitor(minerIdx, clients, cfg.MonitorCycle, cfg.MaxUpgradeTries)
 	time.Sleep(cfg.MonitorCycle + (cfg.MonitorCycle / 2))
 
 	if fetchMiner(client) == CPU {

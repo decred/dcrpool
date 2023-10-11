@@ -6,60 +6,54 @@ package pool
 
 import (
 	"fmt"
+	"regexp"
 
 	errs "github.com/decred/dcrpool/errors"
 )
 
-var (
-	// These miner ids represent the expected identifications returned by
-	// supported miners in their mining.subscribe requests.
+// newUserAgentRE returns a compiled regular expression that matches a user
+// agent with the provided client name, major version, and minor version as well
+// as any patch, pre-release, and build metadata suffix that are valid per the
+// semantic versioning 2.0.0 spec.
+//
+// For reference, user agents are expected to be of the form "name/version"
+// where the name is a string and the version follows the semantic versioning
+// 2.0.0 spec.
+func newUserAgentRE(clientName string, clientMajor, clientMinor uint32) *regexp.Regexp {
+	// semverBuildAndMetadataSuffixRE is a regular expression to match the
+	// optional pre-release and build metadata portions of a semantic version
+	// 2.0 string.
+	const semverBuildAndMetadataSuffixRE = `(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-]` +
+		`[0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?` +
+		`(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?`
 
-	cpuID = "cpuminer/1.0.0"
-	nhID  = "NiceHash/1.0.0"
-)
-
-// minerIDPair represents miner subscription identification pairing
-// between the id and the miners that identify as.
-type minerIDPair struct {
-	id     string
-	miners map[int]string
-}
-
-// newMinerIDPair creates a new miner ID pair.
-func newMinerIDPair(id string, miners ...string) *minerIDPair {
-	set := make(map[int]string, len(miners))
-	for id, entry := range miners {
-		set[id] = entry
-	}
-	sub := &minerIDPair{
-		id:     id,
-		miners: set,
-	}
-	return sub
-}
-
-// generateMinerIDs creates the miner id pairings for all supported miners.
-func generateMinerIDs() map[string]*minerIDPair {
-	ids := make(map[string]*minerIDPair)
-	cpu := newMinerIDPair(cpuID, CPU)
-	nicehash := newMinerIDPair(nhID, NiceHashValidator)
-
-	ids[cpu.id] = cpu
-	ids[nicehash.id] = nicehash
-	return ids
+	return regexp.MustCompile(fmt.Sprintf(`^%s\/%d\.%d\.(0|[1-9]\d*)%s$`,
+		clientName, clientMajor, clientMinor, semverBuildAndMetadataSuffixRE))
 }
 
 var (
-	// minerIDs represents the minder id pairings for all supported miners.
-	minerIDs = generateMinerIDs()
+	// These regular expressions are used to identify the expected mining
+	// clients by the user agents in their mining.subscribe requests.
+	cpuRE = newUserAgentRE("cpuminer", 1, 0)
+	nhRE  = newUserAgentRE("NiceHash", 1, 0)
+
+	// miningClients maps regular expressions to the supported mining client IDs
+	// for all user agents that match the regular expression.
+	miningClients = map[*regexp.Regexp][]string{
+		cpuRE: {CPU},
+		nhRE:  {NiceHashValidator},
+	}
 )
 
-// identifyMiner determines if the provided miner id is supported by the pool.
-func identifyMiner(id string) (*minerIDPair, error) {
-	mID, ok := minerIDs[id]
-	if !ok {
-		msg := fmt.Sprintf("connected miner with id %s is unsupported", id)
-		return nil, errs.PoolError(errs.MinerUnknown, msg)
+// identifyMiningClients returns the possible mining client IDs for a given user agent
+// or an error when the user agent is not supported.
+func identifyMiningClients(userAgent string) ([]string, error) {
+	for re, clients := range miningClients {
+		if re.MatchString(userAgent) {
+			return clients, nil
+		}
 	}
-	return mID, nil
+
+	msg := fmt.Sprintf("connected miner with id %s is unsupported", userAgent)
+	return nil, errs.PoolError(errs.MinerUnknown, msg)
 }
