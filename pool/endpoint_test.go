@@ -32,7 +32,6 @@ func testEndpoint(t *testing.T) {
 	powLimit := chaincfg.SimNetParams().PowLimit
 	iterations := math.Pow(2, float64(256-powLimit.BitLen()))
 	maxGenTime := time.Second * 20
-	blake256Pad := generateBlake256Pad()
 	poolDiffs := NewDifficultySet(chaincfg.SimNetParams(),
 		new(big.Rat).SetInt(powLimit), maxGenTime)
 	connections := make(map[string]uint32)
@@ -42,7 +41,6 @@ func testEndpoint(t *testing.T) {
 		ActiveNet:             chaincfg.SimNetParams(),
 		db:                    db,
 		SoloPool:              true,
-		Blake256Pad:           blake256Pad,
 		NonceIterations:       iterations,
 		MaxConnectionsPerHost: maxConnsPerHost,
 		FetchMinerDifficulty: func(miner string) (*DifficultyInfo, error) {

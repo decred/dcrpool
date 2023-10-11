@@ -26,9 +26,6 @@ type EndpointConfig struct {
 	db Database
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
-	// Blake256Pad represents the extra padding needed for work
-	// submissions over the getwork RPC.
-	Blake256Pad []byte
 	// NonceIterations returns the possible header nonce iterations.
 	NonceIterations float64
 	// MaxConnectionsPerHost represents the maximum number of connections
@@ -173,7 +170,6 @@ func (e *Endpoint) connect(ctx context.Context) {
 				ActiveNet:            e.cfg.ActiveNet,
 				db:                   e.cfg.db,
 				SoloPool:             e.cfg.SoloPool,
-				Blake256Pad:          e.cfg.Blake256Pad,
 				NonceIterations:      e.cfg.NonceIterations,
 				FetchMinerDifficulty: e.cfg.FetchMinerDifficulty,
 				SubmitWork:           e.cfg.SubmitWork,

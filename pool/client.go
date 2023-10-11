@@ -76,9 +76,6 @@ type ClientConfig struct {
 	db Database
 	// SoloPool represents the solo pool mining mode.
 	SoloPool bool
-	// Blake256Pad represents the extra padding needed for work
-	// submissions over the getwork RPC.
-	Blake256Pad []byte
 	// NonceIterations returns the possible header nonce iterations.
 	NonceIterations float64
 	// FetchMinerDifficulty returns the difficulty information for the
@@ -588,8 +585,6 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	}
 	submissionB := make([]byte, getworkDataLen)
 	copy(submissionB[:wire.MaxBlockHeaderPayload], headerB)
-	copy(submissionB[wire.MaxBlockHeaderPayload:],
-		c.cfg.Blake256Pad)
 	submission := hex.EncodeToString(submissionB)
 	accepted, err := c.cfg.SubmitWork(ctx, submission)
 	if err != nil {

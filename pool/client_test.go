@@ -31,7 +31,6 @@ var (
 
 	powLimit    = chaincfg.SimNetParams().PowLimit
 	iterations  = math.Pow(2, float64(256-powLimit.BitLen()))
-	blake256Pad = generateBlake256Pad()
 	maxGenTime  = time.Millisecond * 500
 	cTimeout    = time.Millisecond * 2000
 	hashCalcMax = time.Millisecond * 1500
@@ -39,7 +38,6 @@ var (
 		new(big.Rat).SetInt(powLimit), maxGenTime)
 	config = &ClientConfig{
 		ActiveNet:       chaincfg.SimNetParams(),
-		Blake256Pad:     blake256Pad,
 		NonceIterations: iterations,
 		MaxGenTime:      maxGenTime,
 		FetchMinerDifficulty: func(miner string) (*DifficultyInfo, error) {
