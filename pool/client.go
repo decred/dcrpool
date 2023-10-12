@@ -603,8 +603,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		resp := SubmitWorkResponse(*req.ID, false, nil)
 		c.sendMessage(resp)
 
-		desc := fmt.Sprintf("%s: work %s rejected by the network",
-			id, hash.String())
+		desc := fmt.Sprintf("%s: work %s rejected by the network", id, hash)
 		if err != nil {
 			// send the current work if the error is a block difficulty mismatch.
 			if strings.Contains(err.Error(), "block difficulty of") {
@@ -612,7 +611,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 			}
 
 			desc = fmt.Sprintf("%s: work %s rejected by the network (%v)",
-				id, hash.String(), err)
+				id, hash, err)
 		}
 
 		return errs.PoolError(errs.WorkRejected, desc)
@@ -637,7 +636,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.sendMessage(resp)
 		return err
 	}
-	log.Tracef("Work %s accepted by the network", hash.String())
+	log.Tracef("Work %s accepted by the network", hash)
 	resp := SubmitWorkResponse(*req.ID, true, nil)
 	c.sendMessage(resp)
 	return nil

@@ -165,7 +165,7 @@ func testChainState(t *testing.T) {
 	cs.cfg.GetBlock = func(ctx context.Context, hash *chainhash.Hash) (*wire.MsgBlock, error) {
 		return nil, &dcrjson.RPCError{
 			Code:    dcrjson.ErrRPCBlockNotFound,
-			Message: fmt.Sprintf("no block found with hash: %v", hash.String()),
+			Message: fmt.Sprintf("no block found with hash: %v", hash),
 		}
 	}
 	height := uint32(10)
