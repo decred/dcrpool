@@ -371,7 +371,7 @@ func (m *Miner) process(ctx context.Context) {
 						continue
 					}
 
-					jobID, prevBlockE, genTx1E, genTx2E, blockVersionE, _, _,
+					jobID, prevBlockE, genTx1E, blockVersionE, _, _,
 						cleanJob, err := pool.ParseWorkNotification(notif)
 					if err != nil {
 						log.Errorf("parse job notification error: %v", err)
@@ -380,7 +380,7 @@ func (m *Miner) process(ctx context.Context) {
 					}
 
 					blockHeader, err := pool.GenerateBlockHeader(blockVersionE,
-						prevBlockE, genTx1E, m.extraNonce1E, genTx2E)
+						prevBlockE, genTx1E, m.extraNonce1E)
 					if err != nil {
 						log.Errorf("generate block header error: %v", err)
 						m.cancel()

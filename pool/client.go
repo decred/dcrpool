@@ -541,7 +541,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 	// less than the pool target for the client.
 	if hashTarget.Cmp(tgt) > 0 {
 		err := fmt.Errorf("submitted work %s from %s is not less than its "+
-			"corresponding pool target", hash.String(), id)
+			"corresponding pool target", hash, id)
 		sErr := NewStratumError(LowDifficultyShare, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.sendMessage(resp)
@@ -759,10 +759,9 @@ func (c *Client) updateWork(cleanJob bool) {
 	updatedWorkE := buf.String()
 	blockVersion := updatedWorkE[:8]
 	prevBlock := updatedWorkE[8:72]
-	genTx1 := updatedWorkE[72:288]
+	genTx1 := updatedWorkE[72:360]
 	nBits := updatedWorkE[232:240]
 	nTime := updatedWorkE[272:280]
-	genTx2 := updatedWorkE[352:360]
 
 	heightD, err := hex.DecodeString(updatedWorkE[256:264])
 	if err != nil {
@@ -779,8 +778,8 @@ func (c *Client) updateWork(cleanJob bool) {
 		log.Error(err)
 		return
 	}
-	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
-		blockVersion, nBits, nTime, cleanJob)
+	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, blockVersion,
+		nBits, nTime, cleanJob)
 
 	c.sendMessage(workNotif)
 	log.Tracef("Sent a timestamp-rolled current work at "+

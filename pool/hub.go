@@ -543,18 +543,17 @@ func (h *Hub) processWork(headerE string) {
 
 	blockVersion := headerE[:8]
 	prevBlock := headerE[8:72]
-	genTx1 := headerE[72:288]
+	genTx1 := headerE[72:360]
 	nBits := headerE[232:240]
 	nTime := headerE[272:280]
-	genTx2 := headerE[352:360]
 	job := NewJob(headerE, height)
 	err = h.cfg.DB.persistJob(job)
 	if err != nil {
 		log.Error(err)
 		return
 	}
-	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, genTx2,
-		blockVersion, nBits, nTime, true)
+	workNotif := WorkNotification(job.UUID, prevBlock, genTx1, blockVersion,
+		nBits, nTime, true)
 	h.endpoint.clientsMtx.Lock()
 	for _, client := range h.endpoint.clients {
 		client.sendMessage(workNotif)

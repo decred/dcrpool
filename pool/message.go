@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/decred/dcrd/wire"
 
@@ -473,7 +472,9 @@ func ParseSetDifficultyNotification(req *Request) (uint64, error) {
 }
 
 // WorkNotification creates a work notification message.
-func WorkNotification(jobID string, prevBlock string, genTx1 string, genTx2 string, blockVersion string, nBits string, nTime string, cleanJob bool) *Request {
+func WorkNotification(jobID string, prevBlock string, genTx1 string, blockVersion string, nBits string, nTime string, cleanJob bool) *Request {
+	// The genTx2 parameter is not needed in Decred, so it is left blank.
+	const genTx2 = ""
 	return &Request{
 		Method: Notify,
 		Params: []interface{}{jobID, prevBlock, genTx1, genTx2, []string{},
@@ -482,49 +483,45 @@ func WorkNotification(jobID string, prevBlock string, genTx1 string, genTx2 stri
 }
 
 // ParseWorkNotification resolves a work notification message into its components.
-func ParseWorkNotification(req *Request) (string, string, string, string, string, string, string, bool, error) {
+func ParseWorkNotification(req *Request) (string, string, string, string, string, string, bool, error) {
 	const funcName = "ParseWorkNotification"
 	if req.Method != Notify {
 		desc := fmt.Sprintf("%s: notification method is not notify", funcName)
-		return "", "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
+		return "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
 	}
 
 	params, ok := req.Params.([]interface{})
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification "+
 			"parameters", funcName)
-		return "", "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
+		return "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
 	}
 
 	jobID, ok := params[0].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification "+
 			"jobID parameter", funcName)
-		return "", "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
+		return "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
 	}
 
 	prevBlock, ok := params[1].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification prevBlock "+
 			"parameter", funcName)
-		return "", "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
+		return "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
 	}
 
 	genTx1, ok := params[2].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification genTx1 "+
 			"parameter", funcName)
-		return "", "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
+		return "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
 	}
 
-	genTx2, ok := params[3].(string)
-	if !ok {
-		desc := fmt.Sprintf("%s: unable to parse work notification genTx2 "+
-			"parameter", funcName)
-		return "", "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
-	}
+	// Note that params[3] which is a second generation transaction is not
+	// applicable for decred.
 
-	// Note that param[4] which is the list of merkle branches is not
+	// Note that params[4] which is the list of merkle branches is not
 	// applicable for decred, the final merkle root is already
 	// included in the block.
 
@@ -532,46 +529,56 @@ func ParseWorkNotification(req *Request) (string, string, string, string, string
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification "+
 			"blockVersion parameter", funcName)
-		return "", "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
+		return "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
 	}
 
 	nBits, ok := params[6].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification "+
 			"nBits parameter", funcName)
-		return "", "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
+		return "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
 	}
 
 	nTime, ok := params[7].(string)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification "+
 			"nTime parameter", funcName)
-		return "", "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
+		return "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
 	}
 
 	cleanJob, ok := params[8].(bool)
 	if !ok {
 		desc := fmt.Sprintf("%s: unable to parse work notification "+
 			"cleanJob parameter", funcName)
-		return "", "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
+		return "", "", "", "", "", "", false, errs.MsgError(errs.Parse, desc)
 	}
 
-	return jobID, prevBlock, genTx1, genTx2, blockVersion,
-		nBits, nTime, cleanJob, nil
+	return jobID, prevBlock, genTx1, blockVersion, nBits, nTime, cleanJob, nil
 }
 
 // GenerateBlockHeader creates a block header from a mining.notify
 // message and the extraNonce1 of the client.
 func GenerateBlockHeader(blockVersionE string, prevBlockE string,
-	genTx1E string, extraNonce1E string, genTx2E string) (*wire.BlockHeader, error) {
+	genTx1E string, extraNonce1E string) (*wire.BlockHeader, error) {
+
 	const funcName = "GenerateBlockHeader"
+
+	// Ensure the provide generation tx (partial header) has the minimum
+	// required length.
+	const minGenTx1ELen = 288
+	if len(genTx1E) < minGenTx1ELen {
+		desc := fmt.Sprintf("%s: genTx1E field length of %d is less than the "+
+			"required minimum length of %d", funcName, len(genTx1E),
+			minGenTx1ELen)
+		return nil, errs.MsgError(errs.Decode, desc)
+	}
+
 	var buf bytes.Buffer
 	_, _ = buf.WriteString(blockVersionE)
 	_, _ = buf.WriteString(prevBlockE)
-	_, _ = buf.WriteString(genTx1E)
+	_, _ = buf.WriteString(genTx1E[:216])
 	_, _ = buf.WriteString(extraNonce1E)
-	_, _ = buf.WriteString(strings.Repeat("0", 56))
-	_, _ = buf.WriteString(genTx2E)
+	_, _ = buf.WriteString(genTx1E[224:])
 	headerE := buf.String()
 
 	headerD, err := hex.DecodeString(headerE)
