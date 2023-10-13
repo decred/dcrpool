@@ -34,14 +34,16 @@ func newUserAgentRE(clientName string, clientMajor, clientMinor uint32) *regexp.
 var (
 	// These regular expressions are used to identify the expected mining
 	// clients by the user agents in their mining.subscribe requests.
-	cpuRE = newUserAgentRE("cpuminer", 1, 0)
-	nhRE  = newUserAgentRE("NiceHash", 1, 0)
+	cpuRE     = newUserAgentRE("cpuminer", 1, 0)
+	gominerRE = newUserAgentRE("decred-gominer", 2, 0)
+	nhRE      = newUserAgentRE("NiceHash", 1, 0)
 
 	// miningClients maps regular expressions to the supported mining client IDs
 	// for all user agents that match the regular expression.
 	miningClients = map[*regexp.Regexp][]string{
-		cpuRE: {CPU},
-		nhRE:  {NiceHashValidator},
+		cpuRE:     {CPU},
+		gominerRE: {Gominer},
+		nhRE:      {NiceHashValidator},
 	}
 )
 
