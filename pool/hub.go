@@ -228,6 +228,9 @@ func NewHub(hcfg *HubConfig) (*Hub, error) {
 	if h.cfg.SoloPool {
 		maxGenTime = soloMaxGenTime
 	}
+	if maxGenTime > h.cfg.ActiveNet.TargetTimePerBlock {
+		maxGenTime = h.cfg.ActiveNet.TargetTimePerBlock
+	}
 
 	log.Infof("Maximum work submission generation time at "+
 		"pool difficulty is %s.", maxGenTime)
