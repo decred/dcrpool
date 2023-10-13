@@ -526,7 +526,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.sendMessage(resp)
 		return errs.PoolError(errs.LowDifficulty, err.Error())
 	}
-	hash := header.BlockHash()
+	hash := header.PowHashV2()
 	hashTarget := new(big.Rat).SetInt(standalone.HashToBig(&hash))
 	netDiff := new(big.Rat).Quo(powLimit, target)
 	hashDiff := new(big.Rat).Quo(powLimit, hashTarget)
@@ -562,7 +562,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.cfg.SignalCache(ClaimedShare)
 	}
 
-	// Only submit work to the network if the submitted blockhash is
+	// Only submit work to the network if the submitted proof of work hash is
 	// less than the network target difficulty.
 	if hashTarget.Cmp(target) > 0 {
 		// Accept the submitted work but note it is not less than the
@@ -583,7 +583,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.sendMessage(resp)
 		return err
 	}
-	submissionB := make([]byte, getworkDataLen)
+	submissionB := make([]byte, getworkDataLenBlake3)
 	copy(submissionB[:wire.MaxBlockHeaderPayload], headerB)
 	submission := hex.EncodeToString(submissionB)
 	accepted, err := c.cfg.SubmitWork(ctx, submission)

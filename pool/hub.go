@@ -43,19 +43,16 @@ const (
 	// blocks from the chain tip.
 	MaxReorgLimit = 6
 
-	// getworkDataLen is the length of the data field of the getwork RPC.
-	// It consists of the serialized block header plus the internal blake256
-	// padding.  The internal blake256 padding consists of a single 1 bit
-	// followed by zeros and a final 1 bit in order to pad the message out
-	// to 56 bytes followed by length of the message in bits encoded as a
-	// big-endian uint64 (8 bytes).  Thus, the resulting length is a
-	// multiple of the blake256 block size (64 bytes).  Given the padding
-	// requires at least a 1 bit and 64 bits for the padding, the following
-	// converts the block header length and hash block size to bits in order
-	// to ensure the correct number of hash blocks are calculated and then
-	// multiplies the result by the block hash block size in bytes.
-	getworkDataLen = (1 + ((wire.MaxBlockHeaderPayload*8 + 65) /
-		(chainhash.HashBlockSize * 8))) * chainhash.HashBlockSize
+	// blake3BlkSize is the internal block size of the blake3 hashing algorithm.
+	blake3BlkSize = 64
+
+	// getworkDataLenBlake3 is the length of the data field of the getwork RPC
+	// when providing work for blake3.  It consists of the serialized block
+	// header plus the internal blake3 padding.  The internal blake3 padding
+	// consists of enough zeros to pad the message out to a multiple of the
+	// blake3 block size (64 bytes).
+	getworkDataLenBlake3 = ((wire.MaxBlockHeaderPayload + (blake3BlkSize - 1)) /
+		blake3BlkSize) * blake3BlkSize
 
 	// NewParent is the reason given when a work notification is generated
 	// because there is a new chain tip.
