@@ -6,18 +6,8 @@
 
 ## Overview
 
-dcrpool is a stratum Decred mining pool.
-
----
-
-WARNING: This does not currently work since it only supports the mining
-algorithm used by Decred prior to the activation of
-[DCP0011](https://github.com/decred/dcps/blob/master/dcp-0011/dcp-0011.mediawiki).
-
-However, it is in the process of being updated to support the new algorithm.
-This text will be updated once support has landed.
-
----
+dcrpool is a stratum Decred mining pool.  It supports BLAKE3 mining as required
+by [DCP0011](https://github.com/decred/dcps/blob/master/dcp-0011/dcp-0011.mediawiki).
 
 The default port all supported miners connect to the pool via is `:5550`.  The
 pool can be configured to mine in solo pool mode or as a publicly available
