@@ -605,7 +605,7 @@ func GenerateSolvedBlockHeader(headerE string, extraNonce1E string,
 	headerEB := []byte(headerE)
 
 	switch miner {
-	case CPU:
+	case CPU, Gominer:
 		copy(headerEB[272:280], []byte(nTimeE))
 		copy(headerEB[280:288], []byte(nonceE))
 		copy(headerEB[288:296], []byte(extraNonce1E))

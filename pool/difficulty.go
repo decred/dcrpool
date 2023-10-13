@@ -19,6 +19,7 @@ import (
 // Supported mining clients.
 const (
 	CPU               = "cpu"
+	Gominer           = "decred-gominer"
 	NiceHashValidator = "nicehash"
 )
 
@@ -27,6 +28,7 @@ var (
 	// corresponding hash rates.
 	minerHashes = map[string]*big.Int{
 		CPU:               new(big.Int).SetInt64(5e3),
+		Gominer:           new(big.Int).SetInt64(5e9),
 		NiceHashValidator: new(big.Int).SetInt64(20e10),
 	}
 )
