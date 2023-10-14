@@ -9,20 +9,20 @@ import (
 	"testing"
 )
 
-// TestNewUserAgentRE ensures the mining client user agent regular-expression
-// matching logic works as intended.
-func TestNewUserAgentRE(t *testing.T) {
-	// perRETest describes a test to run against the same regular expression.
-	type perRETest struct {
+// TestUserAgentMatching ensures the mining client user agent matching logic
+// works as intended.
+func TestUserAgentMatching(t *testing.T) {
+	// perClientTest describes a test to run against the same client.
+	type perClientTest struct {
 		clientUA  string // user agent string to test
 		wantMatch bool   // expected match result
 	}
 
-	// makePerRETests returns a series of tests for a variety of client UAs that
-	// are generated based on the provided parameters to help ensure the exact
-	// semantics that each test intends to test are actually what is being
+	// makePerClientTests returns a series of tests for a variety of client UAs
+	// that are generated based on the provided parameters to help ensure the
+	// exact semantics that each test intends to test are actually what is being
 	// tested.
-	makePerRETests := func(client string, major, minor uint32) []perRETest {
+	makePerClientTests := func(client string, major, minor uint32) []perClientTest {
 		p := fmt.Sprintf
 		pcmm := func(format string, a ...interface{}) string {
 			params := make([]interface{}, 0, len(a)+3)
@@ -32,7 +32,15 @@ func TestNewUserAgentRE(t *testing.T) {
 			params = append(params, a...)
 			return p(format, params...)
 		}
-		return []perRETest{
+
+		// Old minor revisions are allowed.
+		var tests []perClientTest
+		if minor > 0 {
+			test := perClientTest{p("%s/%d.%d.0", client, major, minor-1), true}
+			tests = append(tests, test)
+		}
+
+		return append(tests, []perClientTest{
 			// All patch versions including multi digit are allowed.
 			{pcmm("%s/%d.%d.0"), true},
 			{pcmm("%s/%d.%d.1"), true},
@@ -116,7 +124,7 @@ func TestNewUserAgentRE(t *testing.T) {
 			{p("%s/+justmeta", client), false},
 			{pcmm("%s/%d.%d.7+meta+meta"), false},
 			{pcmm("%s/%d.%d.7-whatever+meta+meta"), false},
-		}
+		}...)
 	}
 
 	tests := []struct {
@@ -147,17 +155,24 @@ func TestNewUserAgentRE(t *testing.T) {
 	}}
 
 	for _, test := range tests {
-		// Create the compiled regular expression as well as client UAs and
-		// expected results.
-		re := newUserAgentRE(test.clientName, test.major, test.minor)
-		perRETests := makePerRETests(test.clientName, test.major, test.minor)
+		// Create a match function for the provided data as well as client UAs
+		// and expected results.
+		matchFn := matchesUserAgentMaxMinor(test.clientName, test.major,
+			test.minor)
+		subTests := makePerClientTests(test.clientName, test.major, test.minor)
 
 		// Ensure all of the client UAs produce the expected match results.
-		for _, subTest := range perRETests {
-			gotMatch := re.MatchString(subTest.clientUA)
+		for _, subTest := range subTests {
+			// Attempt to parse and match against the user agent.
+			var gotMatch bool
+			if parsedUA, ok := parseUserAgent(subTest.clientUA); ok {
+				gotMatch = matchFn(parsedUA)
+			}
+
 			if gotMatch != subTest.wantMatch {
-				t.Errorf("%s: (ua: %q): unexpected match result -- got %v, want %v",
-					test.name, subTest.clientUA, gotMatch, subTest.wantMatch)
+				t.Errorf("%s: (ua: %q): unexpected match result -- got %v, "+
+					"want %v", test.name, subTest.clientUA, gotMatch,
+					subTest.wantMatch)
 				continue
 			}
 		}
