@@ -146,10 +146,10 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 					return false
 				}
 
-				// A valid submission is generated when the block hash is less
-				// than the pool target of the client.
-				hash := header.PowHashV2()
-				hashNum.SetInt(standalone.HashToBig(&hash))
+				// A valid submission is generated when the block proof of work
+				// hash is less than the pool target of the client.
+				powHash := header.PowHashV2()
+				hashNum.SetInt(standalone.HashToBig(&powHash))
 				hashesCompleted++
 
 				if hashNum.Cmp(target) < 0 {
@@ -173,7 +173,7 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 
 					m.updateHashes <- hashesCompleted
 					log.Infof("Found hash at height %d with work below target!"+
-						" (pow hash %v)", header.Height, hash)
+						" (pow hash %v)", header.Height, powHash)
 					return true
 				}
 
