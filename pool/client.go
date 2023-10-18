@@ -526,19 +526,19 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.sendMessage(resp)
 		return errs.PoolError(errs.LowDifficulty, err.Error())
 	}
-	hash := header.PowHashV2()
-	hashTarget := new(big.Rat).SetInt(standalone.HashToBig(&hash))
+	powHash := header.PowHashV2()
+	hashTarget := new(big.Rat).SetInt(standalone.HashToBig(&powHash))
 	netDiff := new(big.Rat).Quo(powLimit, target)
 	hashDiff := new(big.Rat).Quo(powLimit, hashTarget)
 	log.Tracef("network difficulty is: %s", netDiff.FloatString(4))
 	log.Tracef("pool difficulty is: %s", diff.FloatString(4))
 	log.Tracef("hash difficulty is: %s", hashDiff.FloatString(4))
 
-	// Only submit work to the network if the submitted blockhash is
-	// less than the pool target for the client.
+	// Only submit work to the network if the submitted block proof of work hash
+	// is less than the pool target for the client.
 	if hashTarget.Cmp(tgt) > 0 {
 		err := fmt.Errorf("submitted work %s from %s is not less than its "+
-			"corresponding pool target", hash, id)
+			"corresponding pool target", powHash, id)
 		sErr := NewStratumError(LowDifficultyShare, err)
 		resp := SubmitWorkResponse(*req.ID, false, sErr)
 		c.sendMessage(resp)
@@ -571,7 +571,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.sendMessage(resp)
 
 		desc := fmt.Sprintf("submitted work %s from %s is not less than the "+
-			"network target difficulty", hash, id)
+			"network target difficulty", powHash, id)
 		return errs.PoolError(errs.NetworkDifficulty, desc)
 	}
 
@@ -598,7 +598,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		resp := SubmitWorkResponse(*req.ID, false, nil)
 		c.sendMessage(resp)
 
-		desc := fmt.Sprintf("%s: work %s rejected by the network", id, hash)
+		desc := fmt.Sprintf("%s: work %s rejected by the network", id, powHash)
 		if err != nil {
 			// send the current work if the error is a block difficulty mismatch.
 			if strings.Contains(err.Error(), "block difficulty of") {
@@ -606,7 +606,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 			}
 
 			desc = fmt.Sprintf("%s: work %s rejected by the network (%v)",
-				id, hash, err)
+				id, powHash, err)
 		}
 
 		return errs.PoolError(errs.WorkRejected, desc)
@@ -614,7 +614,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 
 	// Create accepted work if the work submission is accepted
 	// by the mining node.
-	work := NewAcceptedWork(hash.String(), header.PrevBlock.String(),
+	work := NewAcceptedWork(powHash.String(), header.PrevBlock.String(),
 		header.Height, c.FetchAccountID(), miner)
 	err = c.cfg.db.persistAcceptedWork(work)
 	if err != nil {
@@ -631,7 +631,7 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		c.sendMessage(resp)
 		return err
 	}
-	log.Tracef("Work %s accepted by the network", hash)
+	log.Tracef("Work %s accepted by the network", powHash)
 	resp := SubmitWorkResponse(*req.ID, true, nil)
 	c.sendMessage(resp)
 	return nil
