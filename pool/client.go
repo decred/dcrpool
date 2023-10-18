@@ -612,9 +612,9 @@ func (c *Client) handleSubmitWorkRequest(ctx context.Context, req *Request, allo
 		return errs.PoolError(errs.WorkRejected, desc)
 	}
 
-	// Create accepted work if the work submission is accepted
-	// by the mining node.
-	work := NewAcceptedWork(powHash.String(), header.PrevBlock.String(),
+	// Create accepted work if the work submission is accepted by the mining
+	// node.
+	work := NewAcceptedWork(header.BlockHash().String(), header.PrevBlock.String(),
 		header.Height, c.FetchAccountID(), miner)
 	err = c.cfg.db.persistAcceptedWork(work)
 	if err != nil {
