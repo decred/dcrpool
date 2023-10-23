@@ -208,6 +208,7 @@ tmux send-keys "cd ${HARNESS_ROOT}/master" C-m
 
 echo "Starting simnet master node"
 tmux send-keys "dcrd --appdata=${HARNESS_ROOT}/master \
+--nobanning \
 --rpcuser=${RPC_USER} --rpcpass=${RPC_PASS} \
 --miningaddr=${POOL_MINING_ADDR} \
 --txindex --debuglevel=debug \
@@ -303,6 +304,7 @@ tmux send-keys "cd ${HARNESS_ROOT}/vnode" C-m
 echo "Starting simnet voting node"
 
 tmux send-keys "dcrd --appdata=${HARNESS_ROOT}/vnode \
+--nobanning \
 --rpcuser=${RPC_USER} --rpcpass=${RPC_PASS} \
 --connect=127.0.0.1:18555 \
 --listen=127.0.0.1:19559 --rpclisten=127.0.0.1:19560 \
