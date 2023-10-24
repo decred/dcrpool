@@ -190,6 +190,23 @@ func isTreasuryActive(tx *wire.MsgTx) bool {
 	return true
 }
 
+// coinbaseIndex returns the index of the coinbase output in the provided
+// transaction.
+func coinbaseIndex(tx *wire.MsgTx) uint32 {
+	treasuryActive := isTreasuryActive(tx)
+
+	// The coinbase output prior to
+	// [DCP0006](https://github.com/decred/dcps/pull/17)
+	// activation is at the third index position and at
+	// the second index position once DCP0006 is activated.
+	coinbaseIndex := uint32(1)
+	if !treasuryActive {
+		coinbaseIndex = 2
+	}
+
+	return coinbaseIndex
+}
+
 // handleChainUpdates processes connected and disconnected block
 // notifications from the consensus daemon.
 //
@@ -223,14 +240,14 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) error {
 			}
 
 			coinbaseTx := block.Transactions[0]
-			treasuryActive := isTreasuryActive(coinbaseTx)
+			coinbaseIndex := coinbaseIndex(coinbaseTx)
 
 			soloPool := cs.cfg.SoloPool
 			if !soloPool {
 				go cs.cfg.ProcessPayments(ctx, &paymentMsg{
-					CurrentHeight:  header.Height,
-					TreasuryActive: treasuryActive,
-					Done:           make(chan struct{}),
+					CurrentHeight: header.Height,
+					CoinbaseIndex: coinbaseIndex,
+					Done:          make(chan struct{}),
 				})
 			}
 
@@ -359,14 +376,7 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) error {
 					Coinbase:  coinbaseTx.TxHash().String(),
 				}
 
-				// The coinbase output prior to
-				// [DCP0006](https://github.com/decred/dcps/pull/17)
-				// activation is at the third index position and at
-				// the second index position once DCP0006 is activated.
-				amt := dcrutil.Amount(coinbaseTx.TxOut[1].Value)
-				if !treasuryActive {
-					amt = dcrutil.Amount(coinbaseTx.TxOut[2].Value)
-				}
+				amt := dcrutil.Amount(coinbaseTx.TxOut[coinbaseIndex].Value)
 
 				err = cs.cfg.GeneratePayments(block.Header.Height, source,
 					amt, work.CreatedOn)

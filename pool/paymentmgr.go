@@ -121,9 +121,9 @@ type PaymentMgrConfig struct {
 
 // paymentMsg represents a payment processing signal.
 type paymentMsg struct {
-	CurrentHeight  uint32
-	TreasuryActive bool
-	Done           chan struct{}
+	CurrentHeight uint32
+	CoinbaseIndex uint32
+	Done          chan struct{}
 }
 
 // PaymentMgr handles generating shares and paying out dividends to
@@ -591,18 +591,9 @@ func (pm *PaymentMgr) monitorRescan(ctx context.Context, rescanSource walletrpc.
 
 // generatePayoutTxDetails creates the payout transaction inputs and outputs
 // from the provided payments
-func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC txCreator, feeAddr stdaddr.Address, payments map[string][]*Payment, treasuryActive bool) ([]chainjson.TransactionInput,
+func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC txCreator, feeAddr stdaddr.Address, payments map[string][]*Payment, coinbaseIndex uint32) ([]chainjson.TransactionInput,
 	map[chainhash.Hash]uint32, map[string]dcrutil.Amount, dcrutil.Amount, error) {
 	const funcName = "generatePayoutTxDetails"
-
-	// The coinbase output prior to
-	// [DCP0006](https://github.com/decred/dcps/pull/17)
-	// activation is at the third index position and at
-	// the second index position once DCP0006 is activated.
-	coinbaseIndex := uint32(1)
-	if !treasuryActive {
-		coinbaseIndex = 2
-	}
 
 	var tIn, tOut dcrutil.Amount
 	inputs := make([]chainjson.TransactionInput, 0)
@@ -701,7 +692,7 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC txCreator
 }
 
 // PayDividends pays mature mining rewards to participating accounts.
-func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryActive bool) error {
+func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, coinbaseIndex uint32) error {
 	const funcName = "payDividends"
 	mPmts, err := pm.cfg.db.maturePendingPayments(height)
 	if err != nil {
@@ -805,7 +796,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 	feeAddr := pm.cfg.PoolFeeAddrs[pm.prng.Intn(len(pm.cfg.PoolFeeAddrs))]
 
 	inputs, inputTxHashes, outputs, tOut, err :=
-		pm.generatePayoutTxDetails(ctx, txC, feeAddr, pmts, treasuryActive)
+		pm.generatePayoutTxDetails(ctx, txC, feeAddr, pmts, coinbaseIndex)
 	if err != nil {
 		return err
 	}
@@ -947,7 +938,7 @@ func (pm *PaymentMgr) handlePayments(ctx context.Context) {
 
 		case msg := <-pm.paymentCh:
 			if !pm.cfg.SoloPool {
-				err := pm.payDividends(ctx, msg.CurrentHeight, msg.TreasuryActive)
+				err := pm.payDividends(ctx, msg.CurrentHeight, msg.CoinbaseIndex)
 				if err != nil {
 					log.Errorf("unable to process payments: %v", err)
 					close(msg.Done)
