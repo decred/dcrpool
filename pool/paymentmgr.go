@@ -51,7 +51,7 @@ const (
 )
 
 // TxCreator defines the functionality needed by a transaction creator for the
-// pool.
+// pool. Typically a dcrd client but can be stubbed for testing.
 type TxCreator interface {
 	// GetTxOut fetches the output referenced by the provided txHash and index.
 	GetTxOut(context.Context, *chainhash.Hash, uint32, int8, bool) (*chainjson.GetTxOutResult, error)
@@ -63,7 +63,7 @@ type TxCreator interface {
 }
 
 // TxBroadcaster defines the functionality needed by a transaction broadcaster
-// for the pool.
+// for the pool. Typically a dcrwallet client but can be stubbed for testing.
 type TxBroadcaster interface {
 	// SignTransaction signs transaction inputs, unlocking them for use.
 	SignTransaction(context.Context, *walletrpc.SignTransactionRequest, ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
@@ -106,12 +106,12 @@ type PaymentMgrConfig struct {
 	// GetBlockConfirmations returns the number of block confirmations for the
 	// provided block hash.
 	GetBlockConfirmations func(context.Context, *chainhash.Hash) (int64, error)
-	// FetchTxCreator returns a transaction creator that allows coinbase lookups
-	// and payment transaction creation.
-	FetchTxCreator func() TxCreator
-	// FetchTxBroadcaster returns a transaction broadcaster that allows signing
-	// and publishing of transactions.
-	FetchTxBroadcaster func() TxBroadcaster
+	// TxCreator is a transaction creator that allows coinbase lookups and
+	// payment transaction creation.
+	TxCreator TxCreator
+	// TxBroadcaster is a transaction broadcaster that allows signing and
+	// publishing of transactions.
+	TxBroadcaster TxBroadcaster
 	// CoinbaseConfTimeout is the duration to wait for coinbase confirmations
 	// when generating a payout transaction.
 	CoinbaseConfTimeout time.Duration
@@ -727,7 +727,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		pm.mtx.Unlock()
 	}()
 
-	txB := pm.cfg.FetchTxBroadcaster()
+	txB := pm.cfg.TxBroadcaster
 	if txB == nil {
 		desc := fmt.Sprintf("%s: tx broadcaster cannot be nil", funcName)
 		return errs.PoolError(errs.Disconnected, desc)
@@ -784,7 +784,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, treasuryA
 		}
 	}
 
-	txC := pm.cfg.FetchTxCreator()
+	txC := pm.cfg.TxCreator
 	if txC == nil {
 		desc := fmt.Sprintf("%s: tx creator cannot be nil", funcName)
 		return errs.PoolError(errs.Disconnected, desc)

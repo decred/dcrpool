@@ -245,8 +245,8 @@ func NewHub(hcfg *HubConfig) (*Hub, error) {
 		WalletAccount:         h.cfg.WalletAccount,
 		WalletPass:            h.cfg.WalletPass,
 		GetBlockConfirmations: h.getBlockConfirmations,
-		FetchTxCreator:        func() TxCreator { return h.nodeConn },
-		FetchTxBroadcaster:    func() TxBroadcaster { return h.walletConn },
+		TxCreator:             h.nodeConn,
+		TxBroadcaster:         h.walletConn,
 		CoinbaseConfTimeout:   h.cfg.CoinbaseConfTimeout,
 		SignalCache:           h.SignalCache,
 	}
