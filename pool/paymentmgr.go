@@ -50,9 +50,9 @@ const (
 	paymentBufferSize = uint32(30)
 )
 
-// TxCreator defines the functionality needed by a transaction creator for the
+// txCreator defines the functionality needed by a transaction creator for the
 // pool. Typically a dcrd client but can be stubbed for testing.
-type TxCreator interface {
+type txCreator interface {
 	// GetTxOut fetches the output referenced by the provided txHash and index.
 	GetTxOut(context.Context, *chainhash.Hash, uint32, int8, bool) (*chainjson.GetTxOutResult, error)
 	// CreateRawTransaction generates a transaction from the provided
@@ -62,9 +62,9 @@ type TxCreator interface {
 	GetBlock(ctx context.Context, blockHash *chainhash.Hash) (*wire.MsgBlock, error)
 }
 
-// TxBroadcaster defines the functionality needed by a transaction broadcaster
+// txBroadcaster defines the functionality needed by a transaction broadcaster
 // for the pool. Typically a dcrwallet client but can be stubbed for testing.
-type TxBroadcaster interface {
+type txBroadcaster interface {
 	// SignTransaction signs transaction inputs, unlocking them for use.
 	SignTransaction(context.Context, *walletrpc.SignTransactionRequest, ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error)
 	// PublishTransaction broadcasts the transaction unto the network.
@@ -108,10 +108,10 @@ type PaymentMgrConfig struct {
 	GetBlockConfirmations func(context.Context, *chainhash.Hash) (int64, error)
 	// TxCreator is a transaction creator that allows coinbase lookups and
 	// payment transaction creation.
-	TxCreator TxCreator
+	TxCreator txCreator
 	// TxBroadcaster is a transaction broadcaster that allows signing and
 	// publishing of transactions.
-	TxBroadcaster TxBroadcaster
+	TxBroadcaster txBroadcaster
 	// CoinbaseConfTimeout is the duration to wait for coinbase confirmations
 	// when generating a payout transaction.
 	CoinbaseConfTimeout time.Duration
@@ -479,7 +479,7 @@ func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs m
 //
 // The context passed to this function must have a corresponding
 // cancellation to allow for a clean shutdown process.
-func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txB TxBroadcaster, txHashes map[chainhash.Hash]uint32) error {
+func (pm *PaymentMgr) confirmCoinbases(ctx context.Context, txB txBroadcaster, txHashes map[chainhash.Hash]uint32) error {
 	const funcName = "confirmCoinbases"
 	maxSpendableConfs := int32(pm.cfg.ActiveNet.CoinbaseMaturity) + 1
 
@@ -591,7 +591,7 @@ func (pm *PaymentMgr) monitorRescan(ctx context.Context, rescanSource walletrpc.
 
 // generatePayoutTxDetails creates the payout transaction inputs and outputs
 // from the provided payments
-func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC TxCreator, feeAddr stdaddr.Address, payments map[string][]*Payment, treasuryActive bool) ([]chainjson.TransactionInput,
+func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC txCreator, feeAddr stdaddr.Address, payments map[string][]*Payment, treasuryActive bool) ([]chainjson.TransactionInput,
 	map[chainhash.Hash]uint32, map[string]dcrutil.Amount, dcrutil.Amount, error) {
 	const funcName = "generatePayoutTxDetails"
 
