@@ -218,268 +218,265 @@ func (cs *ChainState) handleChainUpdates(ctx context.Context) error {
 			return nil
 
 		case msg := <-cs.connCh:
-			var header wire.BlockHeader
-			err := header.FromBytes(msg.Header)
-			if err != nil {
-				// Errors generated parsing block notifications should not
-				// terminate the chainstate process.
-				log.Errorf("unable to create header from bytes: %v", err)
-				close(msg.Done)
-				continue
-			}
-
-			block, err := cs.cfg.GetBlock(ctx, &header.PrevBlock)
-			if err != nil {
-				// Errors generated fetching blocks of confirmed mined
-				// work are curently fatal because payments are
-				// sourced from coinbases. The chainstate process will be
-				// terminated as a result.
-				close(msg.Done)
-				return fmt.Errorf("unable to fetch block with hash %x: %w",
-					header.PrevBlock, err)
-			}
-
-			coinbaseTx := block.Transactions[0]
-			coinbaseIndex := coinbaseIndex(coinbaseTx)
-
-			soloPool := cs.cfg.SoloPool
-			if !soloPool {
-				go cs.cfg.ProcessPayments(ctx, &paymentMsg{
-					CurrentHeight: header.Height,
-					CoinbaseIndex: coinbaseIndex,
-					Done:          make(chan struct{}),
-				})
-			}
-
-			// Prune invalidated jobs and accepted work.
-			if header.Height > MaxReorgLimit {
-				pruneLimit := header.Height - MaxReorgLimit
-				err := cs.cfg.db.deleteJobsBeforeHeight(pruneLimit)
-				if err != nil {
-					// Errors generated pruning invalidated jobs indicate an
-					// underlying issue accessing the database. The chainstate
-					// process will be terminated as a result.
-					close(msg.Done)
-					return fmt.Errorf("unable to prune jobs to height %d: %w",
-						pruneLimit, err)
-				}
-
-				// Prune all hash data not updated in the past ten minutes.
-				// A connected client should have updated multiple times
-				// by then. Only disconnected miners would not have
-				// updated within the timeframe.
-				tenMinutesAgo := time.Now().Add(-time.Minute * 10).UnixNano()
-				err = cs.cfg.db.pruneHashData(tenMinutesAgo)
-				if err != nil {
-					// Errors generated pruning invalidated hash rate
-					// indicate an underlying issue accessing the
-					// database. The chainstate process will be
-					// terminated as a result.
-					close(msg.Done)
-					return fmt.Errorf("unable to prune hash data: %w", err)
-				}
-
-				err = cs.pruneAcceptedWork(ctx, pruneLimit)
-				if err != nil {
-					// Errors generated pruning invalidated accepted
-					// work indicate an underlying issue accessing
-					// the database. The chainstate process will be
-					// terminated as a result.
-					close(msg.Done)
-					return fmt.Errorf("unable to prune accepted work below "+
-						"height #%d: %w", pruneLimit, err)
-				}
-
-				err = cs.prunePayments(ctx, header.Height)
-				if err != nil {
-					// Errors generated pruning invalidated payments
-					// indicate an underlying issue accessing the
-					// database. The chainstate process will be
-					// terminated as a result.
-					close(msg.Done)
-					return fmt.Errorf("unable to prune orphaned payments at "+
-						"height #%d: %w", header.Height, err)
-				}
-			}
-
-			// Check if the parent of the connected block is an accepted work
-			// of the pool.
-			parentHeight := header.Height - 1
-			parentHash := header.PrevBlock.String()
-			parentID := AcceptedWorkID(parentHash, parentHeight)
-			work, err := cs.cfg.db.fetchAcceptedWork(parentID)
-			if err != nil {
-				// If the parent of the connected block is not an accepted
-				// work of the pool, ignore it.
-				if errors.Is(err, errs.ValueNotFound) {
-					log.Tracef("Block #%d (%s) is not an accepted "+
-						"work of the pool", parentHeight, parentHash)
-					close(msg.Done)
-					continue
-				}
-
-				// Errors generated, except for a value not found error,
-				// looking up accepted work indicates an underlying issue
-				// accessing the database. The chainstate process will be
-				// terminated as a result.
-				close(msg.Done)
-				return fmt.Errorf("unable to fetch accepted work for block "+
-					"#%d's parent %s : %w", header.Height, parentHash, err)
-			}
-
-			// If the parent block is already confirmed as mined by the pool,
-			// ignore it.
-			if work.Confirmed {
-				close(msg.Done)
-				continue
-			}
-
-			// Update accepted work as confirmed mined.
-			work.Confirmed = true
-			err = cs.cfg.db.updateAcceptedWork(work)
-			if err != nil {
-				// Errors generated updating work state indicate an underlying
-				// issue accessing the database. The chainstate process will
-				// be terminated as a result.
-				close(msg.Done)
-				return fmt.Errorf("unable to confirm accepted work for block "+
-					"%s: %w", header.PrevBlock.String(), err)
-			}
-			log.Infof("Mined work %s confirmed by connected block #%d (%s)",
-				header.PrevBlock.String(), header.Height,
-				header.BlockHash().String())
-
-			// Signal the gui cache of the confirmed mined work.
-			cs.cfg.SignalCache(Confirmed)
-
-			if !cs.cfg.SoloPool {
-				count, err := cs.cfg.db.pendingPaymentsForBlockHash(parentHash)
-				if err != nil {
-					// Errors generated looking up pending payments
-					// indicates an underlying issue accessing the database.
-					// The chainstate process will be terminated as a result.
-					close(msg.Done)
-					return fmt.Errorf("failed to fetch pending payments "+
-						"at height #%d: %w", parentHeight, err)
-				}
-
-				// If the parent block already has payments generated for it
-				// do not generate a new set of payments.
-				if count > 0 {
-					close(msg.Done)
-					continue
-				}
-
-				// Generate payments for the confirmed block.
-				source := &PaymentSource{
-					BlockHash: block.BlockHash().String(),
-					Coinbase:  coinbaseTx.TxHash().String(),
-				}
-
-				amt := dcrutil.Amount(coinbaseTx.TxOut[coinbaseIndex].Value)
-
-				err = cs.cfg.GeneratePayments(block.Header.Height, source,
-					amt, work.CreatedOn)
-				if err != nil {
-					// Errors generated creating payments are fatal since it is
-					// required to distribute payments to participating miners.
-					// The chainstate process will be terminated as a result.
-					close(msg.Done)
-					return err
-				}
-			}
-
+			err := cs.blockConnected(ctx, msg.Header)
 			close(msg.Done)
+			if err != nil {
+				return err
+			}
 
 		case msg := <-cs.discCh:
-			var header wire.BlockHeader
-			err := header.FromBytes(msg.Header)
-			if err != nil {
-				// Errors generated parsing block notifications should not
-				// terminate the chainstate process.
-				log.Errorf("unable to create header from bytes: %v", err)
-				close(msg.Done)
-				continue
-			}
-
-			// Check if the disconnected block confirms a mined block, if it
-			// does unconfirm it.
-			parentHeight := header.Height - 1
-			parentHash := header.PrevBlock.String()
-			parentID := AcceptedWorkID(parentHash, parentHeight)
-			confirmedWork, err := cs.cfg.db.fetchAcceptedWork(parentID)
-			if err != nil {
-				// Errors generated, except for a value not found error,
-				// looking up accepted work indicates an underlying issue
-				// accessing the database. The chainstate process will be
-				// terminated as a result.
-				if !errors.Is(err, errs.ValueNotFound) {
-					close(msg.Done)
-					return fmt.Errorf("unable to fetch accepted work for block "+
-						"#%d's parent %s: %w", header.Height, parentHash, err)
-				}
-
-				// If the parent of the disconnected block is not an accepted
-				// work of the pool, ignore it.
-			}
-
-			if confirmedWork != nil {
-				confirmedWork.Confirmed = false
-				err = cs.cfg.db.updateAcceptedWork(confirmedWork)
-				if err != nil {
-					// Errors generated updating work state indicate an underlying
-					// issue accessing the database. The chainstate process will
-					// be terminated as a result.
-					close(msg.Done)
-					return fmt.Errorf("unable to unconfirm accepted work for "+
-						"block %s: %w", parentHash, err)
-				}
-
-				log.Infof("Mined work %s unconfirmed via disconnected "+
-					"block #%d", parentHash, header.Height)
-			}
-
-			// If the disconnected block is an accepted work of the pool
-			// ensure it is not confirmed mined.
-			blockHash := header.BlockHash().String()
-			id := AcceptedWorkID(blockHash, header.Height)
-			work, err := cs.cfg.db.fetchAcceptedWork(id)
-			if err != nil {
-				// If the disconnected block is not an accepted
-				// work of the pool, ignore it.
-				if errors.Is(err, errs.ValueNotFound) {
-					close(msg.Done)
-					continue
-				}
-
-				// Errors generated, except for a value not found error,
-				// looking up accepted work indicates an underlying issue
-				// accessing the database. The chainstate process will be
-				// terminated as a result.
-				close(msg.Done)
-				return fmt.Errorf("unable to fetch accepted work for block "+
-					"#%d (hash %s): %w", header.Height, blockHash, err)
-			}
-
-			work.Confirmed = false
-			err = cs.cfg.db.updateAcceptedWork(work)
-			if err != nil {
-				// Errors generated updating work state indicate an underlying
-				// issue accessing the database. The chainstate process will
-				// be terminated as a result.
-				close(msg.Done)
-				return fmt.Errorf("unable to unconfirm mined work at height "+
-					"#%d: %w", header.Height, err)
-			}
-
-			log.Infof("Disconnected mined work %s at height #%d",
-				blockHash, header.Height)
-
-			// Signal the gui cache of the unconfirmed (due to a reorg)
-			// mined work.
-			cs.cfg.SignalCache(Unconfirmed)
-
+			err := cs.blockDisconnected(ctx, msg.Header)
 			close(msg.Done)
+			if err != nil {
+				return err
+			}
 		}
 	}
+}
+
+func (cs *ChainState) blockConnected(ctx context.Context, msg []byte) error {
+	var header wire.BlockHeader
+	err := header.FromBytes(msg)
+	if err != nil {
+		// Errors generated parsing block notifications should not
+		// terminate the chainstate process.
+		log.Errorf("unable to create header from bytes: %v", err)
+		return nil
+	}
+
+	block, err := cs.cfg.GetBlock(ctx, &header.PrevBlock)
+	if err != nil {
+		// Errors generated fetching blocks of confirmed mined
+		// work are curently fatal because payments are
+		// sourced from coinbases. The chainstate process will be
+		// terminated as a result.
+		return fmt.Errorf("unable to fetch block with hash %x: %w",
+			header.PrevBlock, err)
+	}
+
+	coinbaseTx := block.Transactions[0]
+	coinbaseIndex := coinbaseIndex(coinbaseTx)
+
+	soloPool := cs.cfg.SoloPool
+	if !soloPool {
+		go cs.cfg.ProcessPayments(ctx, &paymentMsg{
+			CurrentHeight: header.Height,
+			CoinbaseIndex: coinbaseIndex,
+			Done:          make(chan struct{}),
+		})
+	}
+
+	// Prune invalidated jobs and accepted work.
+	if header.Height > MaxReorgLimit {
+		pruneLimit := header.Height - MaxReorgLimit
+		err := cs.cfg.db.deleteJobsBeforeHeight(pruneLimit)
+		if err != nil {
+			// Errors generated pruning invalidated jobs indicate an
+			// underlying issue accessing the database. The chainstate
+			// process will be terminated as a result.
+			return fmt.Errorf("unable to prune jobs to height %d: %w",
+				pruneLimit, err)
+		}
+
+		// Prune all hash data not updated in the past ten minutes.
+		// A connected client should have updated multiple times
+		// by then. Only disconnected miners would not have
+		// updated within the timeframe.
+		tenMinutesAgo := time.Now().Add(-time.Minute * 10).UnixNano()
+		err = cs.cfg.db.pruneHashData(tenMinutesAgo)
+		if err != nil {
+			// Errors generated pruning invalidated hash rate
+			// indicate an underlying issue accessing the
+			// database. The chainstate process will be
+			// terminated as a result.
+			return fmt.Errorf("unable to prune hash data: %w", err)
+		}
+
+		err = cs.pruneAcceptedWork(ctx, pruneLimit)
+		if err != nil {
+			// Errors generated pruning invalidated accepted
+			// work indicate an underlying issue accessing
+			// the database. The chainstate process will be
+			// terminated as a result.
+			return fmt.Errorf("unable to prune accepted work below "+
+				"height #%d: %w", pruneLimit, err)
+		}
+
+		err = cs.prunePayments(ctx, header.Height)
+		if err != nil {
+			// Errors generated pruning invalidated payments
+			// indicate an underlying issue accessing the
+			// database. The chainstate process will be
+			// terminated as a result.
+			return fmt.Errorf("unable to prune orphaned payments at "+
+				"height #%d: %w", header.Height, err)
+		}
+	}
+
+	// Check if the parent of the connected block is an accepted work
+	// of the pool.
+	parentHeight := header.Height - 1
+	parentHash := header.PrevBlock.String()
+	parentID := AcceptedWorkID(parentHash, parentHeight)
+	work, err := cs.cfg.db.fetchAcceptedWork(parentID)
+	if err != nil {
+		// If the parent of the connected block is not an accepted
+		// work of the pool, ignore it.
+		if errors.Is(err, errs.ValueNotFound) {
+			log.Tracef("Block #%d (%s) is not an accepted "+
+				"work of the pool", parentHeight, parentHash)
+			return nil
+		}
+
+		// Errors generated, except for a value not found error,
+		// looking up accepted work indicates an underlying issue
+		// accessing the database. The chainstate process will be
+		// terminated as a result.
+		return fmt.Errorf("unable to fetch accepted work for block "+
+			"#%d's parent %s : %w", header.Height, parentHash, err)
+	}
+
+	// If the parent block is already confirmed as mined by the pool,
+	// ignore it.
+	if work.Confirmed {
+		return nil
+	}
+
+	// Update accepted work as confirmed mined.
+	work.Confirmed = true
+	err = cs.cfg.db.updateAcceptedWork(work)
+	if err != nil {
+		// Errors generated updating work state indicate an underlying
+		// issue accessing the database. The chainstate process will
+		// be terminated as a result.
+		return fmt.Errorf("unable to confirm accepted work for block "+
+			"%s: %w", header.PrevBlock.String(), err)
+	}
+	log.Infof("Mined work %s confirmed by connected block #%d (%s)",
+		header.PrevBlock.String(), header.Height,
+		header.BlockHash().String())
+
+	// Signal the gui cache of the confirmed mined work.
+	cs.cfg.SignalCache(Confirmed)
+
+	if !cs.cfg.SoloPool {
+		count, err := cs.cfg.db.pendingPaymentsForBlockHash(parentHash)
+		if err != nil {
+			// Errors generated looking up pending payments
+			// indicates an underlying issue accessing the database.
+			// The chainstate process will be terminated as a result.
+			return fmt.Errorf("failed to fetch pending payments "+
+				"at height #%d: %w", parentHeight, err)
+		}
+
+		// If the parent block already has payments generated for it
+		// do not generate a new set of payments.
+		if count > 0 {
+			return nil
+		}
+
+		// Generate payments for the confirmed block.
+		source := &PaymentSource{
+			BlockHash: block.BlockHash().String(),
+			Coinbase:  coinbaseTx.TxHash().String(),
+		}
+
+		amt := dcrutil.Amount(coinbaseTx.TxOut[coinbaseIndex].Value)
+
+		err = cs.cfg.GeneratePayments(block.Header.Height, source,
+			amt, work.CreatedOn)
+		if err != nil {
+			// Errors generated creating payments are fatal since it is
+			// required to distribute payments to participating miners.
+			// The chainstate process will be terminated as a result.
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (cs *ChainState) blockDisconnected(ctx context.Context, msg []byte) error {
+	var header wire.BlockHeader
+	err := header.FromBytes(msg)
+	if err != nil {
+		// Errors generated parsing block notifications should not
+		// terminate the chainstate process.
+		log.Errorf("unable to create header from bytes: %v", err)
+		return nil
+	}
+
+	// Check if the disconnected block confirms a mined block, if it
+	// does unconfirm it.
+	parentHeight := header.Height - 1
+	parentHash := header.PrevBlock.String()
+	parentID := AcceptedWorkID(parentHash, parentHeight)
+	confirmedWork, err := cs.cfg.db.fetchAcceptedWork(parentID)
+	if err != nil {
+		// Errors generated, except for a value not found error,
+		// looking up accepted work indicates an underlying issue
+		// accessing the database. The chainstate process will be
+		// terminated as a result.
+		if !errors.Is(err, errs.ValueNotFound) {
+			return fmt.Errorf("unable to fetch accepted work for block "+
+				"#%d's parent %s: %w", header.Height, parentHash, err)
+		}
+
+		// If the parent of the disconnected block is not an accepted
+		// work of the pool, ignore it.
+	}
+
+	if confirmedWork != nil {
+		confirmedWork.Confirmed = false
+		err = cs.cfg.db.updateAcceptedWork(confirmedWork)
+		if err != nil {
+			// Errors generated updating work state indicate an underlying
+			// issue accessing the database. The chainstate process will
+			// be terminated as a result.
+			return fmt.Errorf("unable to unconfirm accepted work for "+
+				"block %s: %w", parentHash, err)
+		}
+
+		log.Infof("Mined work %s unconfirmed via disconnected "+
+			"block #%d", parentHash, header.Height)
+	}
+
+	// If the disconnected block is an accepted work of the pool
+	// ensure it is not confirmed mined.
+	blockHash := header.BlockHash().String()
+	id := AcceptedWorkID(blockHash, header.Height)
+	work, err := cs.cfg.db.fetchAcceptedWork(id)
+	if err != nil {
+		// If the disconnected block is not an accepted
+		// work of the pool, ignore it.
+		if errors.Is(err, errs.ValueNotFound) {
+			return nil
+		}
+
+		// Errors generated, except for a value not found error,
+		// looking up accepted work indicates an underlying issue
+		// accessing the database. The chainstate process will be
+		// terminated as a result.
+		return fmt.Errorf("unable to fetch accepted work for block "+
+			"#%d (hash %s): %w", header.Height, blockHash, err)
+	}
+
+	work.Confirmed = false
+	err = cs.cfg.db.updateAcceptedWork(work)
+	if err != nil {
+		// Errors generated updating work state indicate an underlying
+		// issue accessing the database. The chainstate process will
+		// be terminated as a result.
+		return fmt.Errorf("unable to unconfirm mined work at height "+
+			"#%d: %w", header.Height, err)
+	}
+
+	log.Infof("Disconnected mined work %s at height #%d",
+		blockHash, header.Height)
+
+	// Signal the gui cache of the unconfirmed (due to a reorg)
+	// mined work.
+	cs.cfg.SignalCache(Unconfirmed)
+
+	return nil
 }
