@@ -106,12 +106,12 @@ type PaymentMgrConfig struct {
 	// GetBlockConfirmations returns the number of block confirmations for the
 	// provided block hash.
 	GetBlockConfirmations func(context.Context, *chainhash.Hash) (int64, error)
-	// TxCreator is a transaction creator that allows coinbase lookups and
-	// payment transaction creation.
-	TxCreator txCreator
-	// TxBroadcaster is a transaction broadcaster that allows signing and
-	// publishing of transactions.
-	TxBroadcaster txBroadcaster
+	// FetchTxCreator returns a transaction creator that allows coinbase lookups
+	// and payment transaction creation.
+	FetchTxCreator func() txCreator
+	// FetchTxBroadcaster returns a transaction broadcaster that allows signing
+	// and publishing of transactions.
+	FetchTxBroadcaster func() txBroadcaster
 	// CoinbaseConfTimeout is the duration to wait for coinbase confirmations
 	// when generating a payout transaction.
 	CoinbaseConfTimeout time.Duration
@@ -718,7 +718,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, coinbaseI
 		pm.mtx.Unlock()
 	}()
 
-	txB := pm.cfg.TxBroadcaster
+	txB := pm.cfg.FetchTxBroadcaster()
 	if txB == nil {
 		desc := fmt.Sprintf("%s: tx broadcaster cannot be nil", funcName)
 		return errs.PoolError(errs.Disconnected, desc)
@@ -775,7 +775,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, coinbaseI
 		}
 	}
 
-	txC := pm.cfg.TxCreator
+	txC := pm.cfg.FetchTxCreator()
 	if txC == nil {
 		desc := fmt.Sprintf("%s: tx creator cannot be nil", funcName)
 		return errs.PoolError(errs.Disconnected, desc)
