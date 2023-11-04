@@ -168,6 +168,14 @@ func createPaymentMgr(t *testing.T, paymentMethod string) (*PaymentMgr, context.
 		return -1, nil
 	}
 
+	fetchTxCreator := func() txCreator {
+		return nil
+	}
+
+	fetchTxBroadcaster := func() txBroadcaster {
+		return nil
+	}
+
 	signalCache := func(CacheUpdateEvent) {
 		// Do nothing.
 	}
@@ -181,8 +189,8 @@ func createPaymentMgr(t *testing.T, paymentMethod string) (*PaymentMgr, context.
 		SoloPool:              false,
 		PaymentMethod:         paymentMethod,
 		GetBlockConfirmations: getBlockConfirmations,
-		TxCreator:             nil,
-		TxBroadcaster:         nil,
+		FetchTxCreator:        fetchTxCreator,
+		FetchTxBroadcaster:    fetchTxBroadcaster,
 		PoolFeeAddrs:          []stdaddr.Address{poolFeeAddrs},
 		SignalCache:           signalCache,
 		CoinbaseConfTimeout:   time.Millisecond * 200,
@@ -905,7 +913,9 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	// Ensure dividend payment returns an error if the tx creator cannot be
 	// fetched.
-	mgr.cfg.TxCreator = nil
+	mgr.cfg.FetchTxCreator = func() txCreator {
+		return nil
+	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, coinbaseIndex)
 	if !errors.Is(err, errs.Disconnected) {
@@ -915,7 +925,9 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	// Ensure dividend payment returns an error if pruning orphaned payments
 	// fails.
-	mgr.cfg.TxCreator = &txCreatorImpl{}
+	mgr.cfg.FetchTxCreator = func() txCreator {
+		return &txCreatorImpl{}
+	}
 	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
 		return -1, fmt.Errorf("unable to confirm blocks")
 	}
@@ -928,21 +940,25 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	// Ensure dividend payment returns an error if generating payout tx details
 	// fails.
-	mgr.cfg.TxCreator = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
-			return nil, fmt.Errorf("unable to fetch txOut")
-		},
+	mgr.cfg.FetchTxCreator = func() txCreator {
+		return &txCreatorImpl{
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
+				return nil, fmt.Errorf("unable to fetch txOut")
+			},
+		}
 	}
 	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
 		return 16, nil
 	}
-	mgr.cfg.TxBroadcaster = &txBroadcasterImpl{
-		signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
-			return nil, fmt.Errorf("unable to sign transaction")
-		},
-		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
-			return nil, fmt.Errorf("unable to fetch transaction")
-		},
+	mgr.cfg.FetchTxBroadcaster = func() txBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to sign transaction")
+			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to fetch transaction")
+			},
+		}
 	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, coinbaseIndex)
@@ -952,7 +968,9 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 
 	// Ensure dividend payment returns an error if applying tx fees fails.
-	mgr.cfg.TxCreator = &txCreatorImpl{}
+	mgr.cfg.FetchTxCreator = func() txCreator {
+		return &txCreatorImpl{}
+	}
 	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
 		return -1, nil
 	}
@@ -964,15 +982,17 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 
 	// Ensure dividend payment returns an error if confirming a coinbase fails.
-	mgr.cfg.TxCreator = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
-			return &chainjson.GetTxOutResult{
-				BestBlock:     chainhash.Hash{0}.String(),
-				Confirmations: int64(estMaturity) + 1,
-				Value:         5,
-				Coinbase:      true,
-			}, nil
-		},
+	mgr.cfg.FetchTxCreator = func() txCreator {
+		return &txCreatorImpl{
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
+				return &chainjson.GetTxOutResult{
+					BestBlock:     chainhash.Hash{0}.String(),
+					Confirmations: int64(estMaturity) + 1,
+					Value:         5,
+					Coinbase:      true,
+				}, nil
+			},
+		}
 	}
 	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
 		return int64(estMaturity) + 1, nil
@@ -986,18 +1006,20 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	// Ensure dividend payment returns an error if the payout transaction cannot
 	// be created.
-	mgr.cfg.TxCreator = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
-			return &chainjson.GetTxOutResult{
-				BestBlock:     chainhash.Hash{0}.String(),
-				Confirmations: int64(estMaturity) + 1,
-				Value:         5,
-				Coinbase:      true,
-			}, nil
-		},
-		createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
-			return nil, fmt.Errorf("unable to create raw transactions")
-		},
+	mgr.cfg.FetchTxCreator = func() txCreator {
+		return &txCreatorImpl{
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
+				return &chainjson.GetTxOutResult{
+					BestBlock:     chainhash.Hash{0}.String(),
+					Confirmations: int64(estMaturity) + 1,
+					Value:         5,
+					Coinbase:      true,
+				}, nil
+			},
+			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+				return nil, fmt.Errorf("unable to create raw transactions")
+			},
+		}
 	}
 	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
 		return int64(estMaturity) + 1, nil
@@ -1013,23 +1035,27 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	// Ensure dividend payment returns an error if the tx broadcaster cannot be
 	// fetched.
-	mgr.cfg.TxCreator = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
-			return &chainjson.GetTxOutResult{
-				BestBlock:     chainhash.Hash{0}.String(),
-				Confirmations: int64(estMaturity) + 1,
-				Value:         5,
-				Coinbase:      true,
-			}, nil
-		},
-		createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
-			return &wire.MsgTx{}, nil
-		},
+	mgr.cfg.FetchTxCreator = func() txCreator {
+		return &txCreatorImpl{
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
+				return &chainjson.GetTxOutResult{
+					BestBlock:     chainhash.Hash{0}.String(),
+					Confirmations: int64(estMaturity) + 1,
+					Value:         5,
+					Coinbase:      true,
+				}, nil
+			},
+			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+				return &wire.MsgTx{}, nil
+			},
+		}
 	}
 	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
 		return int64(estMaturity) + 1, nil
 	}
-	mgr.cfg.TxBroadcaster = nil
+	mgr.cfg.FetchTxBroadcaster = func() txBroadcaster {
+		return nil
+	}
 	mgr.cfg.WalletPass = "123"
 
 	err = mgr.payDividends(ctx, estMaturity+1, coinbaseIndex)
@@ -1040,29 +1066,33 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	// Ensure dividend payment returns an error if the payout transaction cannot
 	// be signed.
-	mgr.cfg.TxCreator = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
-			return &chainjson.GetTxOutResult{
-				BestBlock:     chainhash.Hash{0}.String(),
-				Confirmations: int64(estMaturity) + 1,
-				Value:         5,
-				Coinbase:      true,
-			}, nil
-		},
-		createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
-			return &wire.MsgTx{}, nil
-		},
+	mgr.cfg.FetchTxCreator = func() txCreator {
+		return &txCreatorImpl{
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
+				return &chainjson.GetTxOutResult{
+					BestBlock:     chainhash.Hash{0}.String(),
+					Confirmations: int64(estMaturity) + 1,
+					Value:         5,
+					Coinbase:      true,
+				}, nil
+			},
+			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+				return &wire.MsgTx{}, nil
+			},
+		}
 	}
-	mgr.cfg.TxBroadcaster = &txBroadcasterImpl{
-		signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
-			return nil, fmt.Errorf("unable to sign transaction")
-		},
-		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
-			return &walletrpc.GetTransactionResponse{
-				Transaction:   &walletrpc.TransactionDetails{},
-				Confirmations: 60,
-			}, nil
-		},
+	mgr.cfg.FetchTxBroadcaster = func() txBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to sign transaction")
+			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
+				}, nil
+			},
+		}
 	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, coinbaseIndex)
@@ -1081,21 +1111,23 @@ func testPaymentMgrPayment(t *testing.T) {
 		"205f466fc47435c1a177482e527ff0e76f3c2c613940b358e57f0f0d78d5f2" +
 		"ffcb012102d040a4c34ae65a2b87ea8e9df7413e6504e5f27c6bde019a78ee" +
 		"96145b27c517")
-	mgr.cfg.TxBroadcaster = &txBroadcasterImpl{
-		signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
-			return &walletrpc.SignTransactionResponse{
-				Transaction: txBytes,
-			}, nil
-		},
-		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
-			return &walletrpc.GetTransactionResponse{
-				Transaction:   &walletrpc.TransactionDetails{},
-				Confirmations: 60,
-			}, nil
-		},
-		publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
-			return nil, fmt.Errorf("unable to publish transaction")
-		},
+	mgr.cfg.FetchTxBroadcaster = func() txBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return &walletrpc.SignTransactionResponse{
+					Transaction: txBytes,
+				}, nil
+			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
+				}, nil
+			},
+			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to publish transaction")
+			},
+		}
 	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, coinbaseIndex)
@@ -1106,24 +1138,26 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	// Ensure dividend payment returns an error if fetching the wallet client
 	// fails.
-	mgr.cfg.TxBroadcaster = &txBroadcasterImpl{
-		signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
-			return &walletrpc.SignTransactionResponse{
-				Transaction: txBytes,
-			}, nil
-		},
-		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
-			return &walletrpc.GetTransactionResponse{
-				Transaction:   &walletrpc.TransactionDetails{},
-				Confirmations: 60,
-			}, nil
-		},
-		publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
-			return nil, fmt.Errorf("unable to publish transaction")
-		},
-		rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
-			return nil, fmt.Errorf("unable to create rescan client")
-		},
+	mgr.cfg.FetchTxBroadcaster = func() txBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return &walletrpc.SignTransactionResponse{
+					Transaction: txBytes,
+				}, nil
+			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
+				}, nil
+			},
+			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to publish transaction")
+			},
+			rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+				return nil, fmt.Errorf("unable to create rescan client")
+			},
+		}
 	}
 
 	atomic.StoreUint32(&mgr.failedTxConfs, maxTxConfThreshold)
@@ -1135,26 +1169,28 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 
 	// Ensure dividend payment returns an error if fetching rescan responses fail.
-	mgr.cfg.TxBroadcaster = &txBroadcasterImpl{
-		signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
-			return &walletrpc.SignTransactionResponse{
-				Transaction: txBytes,
-			}, nil
-		},
-		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
-			return &walletrpc.GetTransactionResponse{
-				Transaction:   &walletrpc.TransactionDetails{},
-				Confirmations: 60,
-			}, nil
-		},
-		publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
-			return nil, fmt.Errorf("unable to publish transaction")
-		},
-		rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
-			return &tRescanClient{
-				err: fmt.Errorf("internal error"),
-			}, nil
-		},
+	mgr.cfg.FetchTxBroadcaster = func() txBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return &walletrpc.SignTransactionResponse{
+					Transaction: txBytes,
+				}, nil
+			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
+				}, nil
+			},
+			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to publish transaction")
+			},
+			rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+				return &tRescanClient{
+					err: fmt.Errorf("internal error"),
+				}, nil
+			},
+		}
 	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, coinbaseIndex)
@@ -1184,28 +1220,30 @@ func testPaymentMgrPayment(t *testing.T) {
 	mgr.mtx.Unlock()
 
 	// Ensure wallet rescan succeeds when it scans through the current height.
-	mgr.cfg.TxBroadcaster = &txBroadcasterImpl{
-		signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
-			return &walletrpc.SignTransactionResponse{
-				Transaction: txBytes,
-			}, nil
-		},
-		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
-			return &walletrpc.GetTransactionResponse{
-				Transaction:   &walletrpc.TransactionDetails{},
-				Confirmations: 60,
-			}, nil
-		},
-		publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
-			return nil, fmt.Errorf("unable to publish transaction")
-		},
-		rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
-			return &tRescanClient{
-				resp: &walletrpc.RescanResponse{
-					RescannedThrough: 30,
-				},
-			}, nil
-		},
+	mgr.cfg.FetchTxBroadcaster = func() txBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return &walletrpc.SignTransactionResponse{
+					Transaction: txBytes,
+				}, nil
+			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
+				}, nil
+			},
+			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
+				return nil, fmt.Errorf("unable to publish transaction")
+			},
+			rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+				return &tRescanClient{
+					resp: &walletrpc.RescanResponse{
+						RescannedThrough: 30,
+					},
+				}, nil
+			},
+		}
 	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, coinbaseIndex)
@@ -1216,30 +1254,32 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	// Ensure paying dividend payment succeeds with valid inputs.
 	txHash, _ := hex.DecodeString("013264da8cc53f70022dc2b5654ebefc9ecfed24ea18dfcfc9adca5642d4fe66")
-	mgr.cfg.TxBroadcaster = &txBroadcasterImpl{
-		signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
-			return &walletrpc.SignTransactionResponse{
-				Transaction: txBytes,
-			}, nil
-		},
-		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
-			return &walletrpc.GetTransactionResponse{
-				Transaction:   &walletrpc.TransactionDetails{},
-				Confirmations: 60,
-			}, nil
-		},
-		publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
-			return &walletrpc.PublishTransactionResponse{
-				TransactionHash: txHash,
-			}, nil
-		},
-		rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
-			return &tRescanClient{
-				resp: &walletrpc.RescanResponse{
-					RescannedThrough: 30,
-				},
-			}, nil
-		},
+	mgr.cfg.FetchTxBroadcaster = func() txBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return &walletrpc.SignTransactionResponse{
+					Transaction: txBytes,
+				}, nil
+			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
+				}, nil
+			},
+			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
+				return &walletrpc.PublishTransactionResponse{
+					TransactionHash: txHash,
+				}, nil
+			},
+			rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+				return &tRescanClient{
+					resp: &walletrpc.RescanResponse{
+						RescannedThrough: 30,
+					},
+				}, nil
+			},
+		}
 	}
 
 	err = mgr.payDividends(ctx, estMaturity+1, coinbaseIndex)
@@ -1413,44 +1453,48 @@ func testPaymentMgrSignals(t *testing.T) {
 		"ffcb012102d040a4c34ae65a2b87ea8e9df7413e6504e5f27c6bde019a78ee" +
 		"96145b27c517")
 	txHash, _ := hex.DecodeString("013264da8cc53f70022dc2b5654ebefc9ecfed24ea18dfcfc9adca5642d4fe66")
-	mgr.cfg.TxBroadcaster = &txBroadcasterImpl{
-		signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
-			return &walletrpc.SignTransactionResponse{
-				Transaction: txBytes,
-			}, nil
-		},
-		getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
-			return &walletrpc.GetTransactionResponse{
-				Transaction:   &walletrpc.TransactionDetails{},
-				Confirmations: 60,
-			}, nil
-		},
-		publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
-			return &walletrpc.PublishTransactionResponse{
-				TransactionHash: txHash,
-			}, nil
-		},
-		rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
-			return &tRescanClient{
-				resp: &walletrpc.RescanResponse{
-					RescannedThrough: 30,
-				},
-			}, nil
-		},
+	mgr.cfg.FetchTxBroadcaster = func() txBroadcaster {
+		return &txBroadcasterImpl{
+			signTransaction: func(ctx context.Context, req *walletrpc.SignTransactionRequest, options ...grpc.CallOption) (*walletrpc.SignTransactionResponse, error) {
+				return &walletrpc.SignTransactionResponse{
+					Transaction: txBytes,
+				}, nil
+			},
+			getTransaction: func(ctx context.Context, req *walletrpc.GetTransactionRequest, options ...grpc.CallOption) (*walletrpc.GetTransactionResponse, error) {
+				return &walletrpc.GetTransactionResponse{
+					Transaction:   &walletrpc.TransactionDetails{},
+					Confirmations: 60,
+				}, nil
+			},
+			publishTransaction: func(ctx context.Context, req *walletrpc.PublishTransactionRequest, options ...grpc.CallOption) (*walletrpc.PublishTransactionResponse, error) {
+				return &walletrpc.PublishTransactionResponse{
+					TransactionHash: txHash,
+				}, nil
+			},
+			rescan: func(ctx context.Context, req *walletrpc.RescanRequest, options ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error) {
+				return &tRescanClient{
+					resp: &walletrpc.RescanResponse{
+						RescannedThrough: 30,
+					},
+				}, nil
+			},
+		}
 	}
 
-	mgr.cfg.TxCreator = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
-			return &chainjson.GetTxOutResult{
-				BestBlock:     chainhash.Hash{0}.String(),
-				Confirmations: int64(estMaturity) + 1,
-				Value:         5,
-				Coinbase:      true,
-			}, nil
-		},
-		createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
-			return &wire.MsgTx{}, nil
-		},
+	mgr.cfg.FetchTxCreator = func() txCreator {
+		return &txCreatorImpl{
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
+				return &chainjson.GetTxOutResult{
+					BestBlock:     chainhash.Hash{0}.String(),
+					Confirmations: int64(estMaturity) + 1,
+					Value:         5,
+					Coinbase:      true,
+				}, nil
+			},
+			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+				return &wire.MsgTx{}, nil
+			},
+		}
 	}
 	mgr.cfg.GetBlockConfirmations = func(ctx context.Context, bh *chainhash.Hash) (int64, error) {
 		return int64(estMaturity) + 1, nil
@@ -1476,18 +1520,20 @@ func testPaymentMgrSignals(t *testing.T) {
 
 	// Esure the payment lifecycle process cancels the context when an
 	// error is encountered.
-	mgr.cfg.TxCreator = &txCreatorImpl{
-		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
-			return &chainjson.GetTxOutResult{
-				BestBlock:     chainhash.Hash{0}.String(),
-				Confirmations: int64(estMaturity) + 1,
-				Value:         5,
-				Coinbase:      true,
-			}, nil
-		},
-		createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
-			return nil, fmt.Errorf("unable to create raw transactions")
-		},
+	mgr.cfg.FetchTxCreator = func() txCreator {
+		return &txCreatorImpl{
+			getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
+				return &chainjson.GetTxOutResult{
+					BestBlock:     chainhash.Hash{0}.String(),
+					Confirmations: int64(estMaturity) + 1,
+					Value:         5,
+					Coinbase:      true,
+				}, nil
+			},
+			createRawTransaction: func(ctx context.Context, inputs []chainjson.TransactionInput, amounts map[stdaddr.Address]dcrutil.Amount, lockTime *int64, expiry *int64) (*wire.MsgTx, error) {
+				return nil, fmt.Errorf("unable to create raw transactions")
+			},
+		}
 	}
 
 	msgB := paymentMsg{
