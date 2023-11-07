@@ -643,29 +643,28 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC txCreator
 
 		// Generate the outputs paying dividends as well as pool fees.
 		for _, pmt := range pmtSet {
+			// If this payment is for pool fees, use the provided pool fee
+			// address. If not, it is a miner dividend payment and their address
+			// is retrieved from the database.
+			var addr string
 			if pmt.Account == PoolFeesK {
-				_, ok := outputs[feeAddr.String()]
-				if !ok {
-					outputs[feeAddr.String()] = pmt.Amount
-					tOut += pmt.Amount
-					continue
+				addr = feeAddr.String()
+			} else {
+				acc, err := pm.cfg.db.fetchAccount(pmt.Account)
+				if err != nil {
+					return nil, nil, nil, 0, err
 				}
-				outputs[feeAddr.String()] += pmt.Amount
-				tOut += pmt.Amount
-				continue
+				addr = acc.Address
 			}
 
-			acc, err := pm.cfg.db.fetchAccount(pmt.Account)
-			if err != nil {
-				return nil, nil, nil, 0, err
-			}
-			_, ok := outputs[acc.Address]
+			// Create an output for this address if one doesn't already exist.
+			_, ok := outputs[addr]
 			if !ok {
-				outputs[acc.Address] = pmt.Amount
-				tOut += pmt.Amount
-				continue
+				outputs[addr] = dcrutil.Amount(0)
 			}
-			outputs[acc.Address] += pmt.Amount
+
+			// Add this payment to the output and update the running total.
+			outputs[addr] += pmt.Amount
 			tOut += pmt.Amount
 		}
 	}
