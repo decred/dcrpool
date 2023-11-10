@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"math/big"
 	mrand "math/rand"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1505,18 +1504,9 @@ func testPaymentMgrSignals(t *testing.T) {
 	msgA := paymentMsg{
 		CurrentHeight: estMaturity + 1,
 		CoinbaseIndex: 2,
-		Done:          make(chan struct{}),
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		mgr.handlePayments(ctx)
-		wg.Done()
-	}()
-
 	mgr.processPayments(ctx, &msgA)
-	<-msgA.Done
 
 	// Esure the payment lifecycle process cancels the context when an
 	// error is encountered.
@@ -1539,11 +1529,8 @@ func testPaymentMgrSignals(t *testing.T) {
 	msgB := paymentMsg{
 		CurrentHeight: estMaturity + 1,
 		CoinbaseIndex: 2,
-		Done:          make(chan struct{}),
 	}
 	mgr.processPayments(ctx, &msgB)
-	<-msgB.Done
 
 	cancel()
-	wg.Wait()
 }

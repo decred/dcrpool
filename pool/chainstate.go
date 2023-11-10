@@ -262,7 +262,6 @@ func (cs *ChainState) blockConnected(ctx context.Context, msg []byte) error {
 		go cs.cfg.ProcessPayments(ctx, &paymentMsg{
 			CurrentHeight: header.Height,
 			CoinbaseIndex: coinbaseIndex,
-			Done:          make(chan struct{}),
 		})
 	}
 

@@ -622,7 +622,7 @@ func (h *Hub) Run(ctx context.Context) {
 	defer cancel()
 
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(2)
 	go func() {
 		h.endpoint.run(ctx)
 		wg.Done()
@@ -638,10 +638,6 @@ func (h *Hub) Run(ctx context.Context) {
 			}
 			cancel()
 		}
-		wg.Done()
-	}()
-	go func() {
-		h.paymentMgr.handlePayments(ctx)
 		wg.Done()
 	}()
 

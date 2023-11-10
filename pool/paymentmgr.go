@@ -123,7 +123,6 @@ type PaymentMgrConfig struct {
 type paymentMsg struct {
 	CurrentHeight uint32
 	CoinbaseIndex uint32
-	Done          chan struct{}
 }
 
 // PaymentMgr handles generating shares and paying out dividends to
@@ -921,34 +920,13 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, coinbaseI
 
 // processPayments relays payment signals for processing.
 func (pm *PaymentMgr) processPayments(ctx context.Context, msg *paymentMsg) {
-	select {
-	case <-ctx.Done():
-	case pm.paymentCh <- msg:
-	}
-}
-
-// handlePayments processes dividend payment signals.
-// This MUST be run as a goroutine.
-func (pm *PaymentMgr) handlePayments(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-
-		case msg := <-pm.paymentCh:
-			if !pm.cfg.SoloPool {
-				err := pm.payDividends(ctx, msg.CurrentHeight, msg.CoinbaseIndex)
-				if err != nil {
-					log.Errorf("unable to process payments: %v", err)
-					close(msg.Done)
-					continue
-				}
-
-				// Signal the gui cache of paid dividends.
-				pm.cfg.SignalCache(DividendsPaid)
-
-				close(msg.Done)
-			}
+	if !pm.cfg.SoloPool {
+		err := pm.payDividends(ctx, msg.CurrentHeight, msg.CoinbaseIndex)
+		if err != nil {
+			log.Errorf("unable to process payments: %v", err)
 		}
+
+		// Signal the gui cache of paid dividends.
+		pm.cfg.SignalCache(DividendsPaid)
 	}
 }
