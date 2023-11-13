@@ -213,7 +213,9 @@ func testPaymentMgrPPS(t *testing.T) {
 	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
 	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
 	shareCount := 10
-	coinbaseValue := 80
+	// Realistic mainnet coinbase value as of DCP-12 activation.
+	coinbaseValue := 8388322 // 0.08388322 DCR
+	coinbase := dcrutil.Amount(coinbaseValue)
 	height := uint32(20)
 	weight := new(big.Rat).SetFloat64(1.0)
 
@@ -227,11 +229,6 @@ func testPaymentMgrPPS(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	}
-
-	coinbase, err := dcrutil.NewAmount(float64(coinbaseValue))
-	if err != nil {
-		t.Fatal(err)
 	}
 
 	// Ensure the last payment created on time was updated.
@@ -306,7 +303,9 @@ func testPaymentMgrPPLNS(t *testing.T) {
 	now := time.Now()
 	prng := mrand.New(mrand.NewSource(now.UnixNano()))
 	shareCount := 5
-	coinbaseValue := 60
+	// Realistic mainnet coinbase value as of DCP-12 activation.
+	coinbaseValue := 8388322 // 0.08388322 DCR
+	coinbase := dcrutil.Amount(coinbaseValue)
 	sixtyBefore := now.Add(-(time.Second * 60)).UnixNano()
 	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
 	height := uint32(20)
@@ -322,11 +321,6 @@ func testPaymentMgrPPLNS(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	}
-
-	coinbase, err := dcrutil.NewAmount(float64(coinbaseValue))
-	if err != nil {
-		t.Fatalf("[NewAmount] unexpected error: %v", err)
 	}
 
 	// Ensure the last payment created on time was updated.
@@ -400,7 +394,9 @@ func testPaymentMgrMaturity(t *testing.T) {
 	now := time.Now()
 	prng := mrand.New(mrand.NewSource(now.UnixNano()))
 	shareCount := 3
-	coinbaseValue := 60
+	// Realistic mainnet coinbase value as of DCP-12 activation.
+	coinbaseValue := 8388322 // 0.08388322 DCR
+	coinbase := dcrutil.Amount(coinbaseValue)
 	thirtyBefore := now.Add(-(time.Second * 30)).UnixNano()
 	height := uint32(20)
 	weight := new(big.Rat).SetFloat64(1.0)
@@ -423,12 +419,7 @@ func testPaymentMgrMaturity(t *testing.T) {
 		}
 	}
 
-	coinbase, err := dcrutil.NewAmount(float64(coinbaseValue))
-	if err != nil {
-		t.Fatalf("[NewAmount] unexpected error: %v", err)
-	}
-
-	err = mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
+	err := mgr.generatePayments(height, zeroSource, coinbase, now.UnixNano())
 	if err != nil {
 		t.Fatalf("unable to generate payments: %v", err)
 	}
@@ -1423,15 +1414,17 @@ func testPaymentMgrPayment(t *testing.T) {
 	}
 }
 
+// testPaymentMgrDust ensures dust payments are forfeited by their originating
+// accounts and added to the pool fee payout.
 func testPaymentMgrDust(t *testing.T) {
 	mgr, _, _ := createPaymentMgr(t, PPLNS)
 	height := uint32(20)
 
-	// Ensure dust payments are forfeited by their originating accounts and
-	// added to the pool fee payout.
 	now := time.Now()
 	prng := mrand.New(mrand.NewSource(now.UnixNano()))
-	coinbaseValue := 1
+	// Realistic mainnet coinbase value as of DCP-12 activation.
+	coinbaseValue := 8388322 // 0.08388322 DCR
+	coinbase := dcrutil.Amount(coinbaseValue)
 	mul := 100000
 	weight := new(big.Rat).SetFloat64(1.0)
 	yWeight := new(big.Rat).Mul(weight, new(big.Rat).SetInt64(int64(mul)))
@@ -1444,11 +1437,6 @@ func testPaymentMgrDust(t *testing.T) {
 	err = persistShare(db, yID, yWeight, now.UnixNano(), prng.Uint64())
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	coinbase, err := dcrutil.NewAmount(float64(coinbaseValue))
-	if err != nil {
-		t.Fatalf("[NewAmount] unexpected error: %v", err)
 	}
 
 	// Ensure the expected payout amount for account x is dust.
@@ -1493,11 +1481,12 @@ func testPaymentMgrDust(t *testing.T) {
 		t.Fatalf("expected no payment amounts for account x, got %v", xt)
 	}
 
-	// Ensure the updated pool fee includes the dust amount from account x.
-	expectedFeeAmt := coinbase.MulF64(mgr.cfg.PoolFee)
-	if ft-maxRoundingDiff < expectedFeeAmt {
-		t.Fatalf("expected the updated pool fee (%v) to be greater "+
-			"than the initial (%v)", ft, expectedFeeAmt)
+	// Ensure the entire coinbase is paid to fees and y. Add an extra sat for
+	// rounding error.
+	totalPayment := yt + ft + dcrutil.Amount(1)
+	if totalPayment != coinbase {
+		t.Fatalf("incorrect total payment amount, expected %v, got %v",
+			coinbase, totalPayment)
 	}
 }
 
