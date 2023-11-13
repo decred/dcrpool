@@ -264,7 +264,7 @@ func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *Paym
 	amtSansFees := total - fee
 	sansFees := new(big.Rat).SetInt64(int64(amtSansFees))
 	paymentTotal := dcrutil.Amount(0)
-	dustAmts := make([]dcrutil.Amount, 0)
+	var dustTotal dcrutil.Amount
 
 	// Calculate each participating account's portion of the amount after fees.
 	payments := make([]*Payment, 0)
@@ -291,7 +291,7 @@ func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *Paym
 			// forfeited by their corresponding accounts and be added to
 			// the pool fee payout. This is intended to serve as a deterrent
 			// for contributing intermittent, sporadic work to the pool.
-			dustAmts = append(dustAmts, amt)
+			dustTotal += amt
 		} else {
 			payments = append(payments, NewPayment(account, source, amt, height,
 				estMaturity))
@@ -308,11 +308,6 @@ func (pm *PaymentMgr) calculatePayments(ratios map[string]*big.Rat, source *Paym
 
 	// Add a payout entry for pool fees, which includes any dust payments
 	// collected.
-	var dustTotal dcrutil.Amount
-	for _, amt := range dustAmts {
-		dustTotal += amt
-	}
-
 	feePayment := NewPayment(PoolFeesK, source, fee+dustTotal, height, estMaturity)
 	payments = append(payments, feePayment)
 
