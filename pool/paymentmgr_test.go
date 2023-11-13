@@ -184,7 +184,7 @@ func createPaymentMgr(t *testing.T, paymentMethod string) (*PaymentMgr, context.
 	pCfg := &PaymentMgrConfig{
 		db:                    db,
 		ActiveNet:             activeNet,
-		PoolFee:               0.1,
+		PoolFee:               0.05,
 		LastNPeriod:           time.Second * 120,
 		SoloPool:              false,
 		PaymentMethod:         paymentMethod,
