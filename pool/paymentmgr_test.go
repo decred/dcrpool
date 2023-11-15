@@ -475,6 +475,82 @@ func testPaymentMgrMaturity(t *testing.T) {
 	}
 }
 
+func testPaymentMgrApplyTxFees(t *testing.T) {
+	mgr, _, _ := createPaymentMgr(t, PPS)
+
+	amt, _ := dcrutil.NewAmount(5)
+
+	outV, _ := dcrutil.NewAmount(100)
+	in := chainjson.TransactionInput{
+		Amount: float64(outV),
+		Txid:   chainhash.Hash{1}.String(),
+		Vout:   2,
+		Tree:   wire.TxTreeRegular,
+	}
+
+	poolFeeValue := amt.MulF64(0.1)
+	xValue := amt.MulF64(0.6)
+	yValue := amt.MulF64(0.3)
+
+	feeAddr := poolFeeAddrs.String()
+	out := make(map[string]dcrutil.Amount)
+	out[xAddr] = xValue
+	out[yAddr] = yValue
+	out[feeAddr] = poolFeeValue
+
+	_, txFee, err := mgr.applyTxFees([]chainjson.TransactionInput{in},
+		out, outV, poolFeeAddrs)
+	if err != nil {
+		t.Fatalf("unexpected applyTxFees error: %v", err)
+	}
+
+	// Ensure the pool fee payment was exempted from tx fee deductions.
+	if out[feeAddr] != poolFeeValue {
+		t.Fatalf("expected pool fee payment to be %v, got %v",
+			poolFeeValue, out[feeAddr])
+	}
+
+	// Ensure the difference between initial account payments and updated
+	// account payments plus the transaction fee is not more than the
+	// maximum rounding difference.
+	initialAccountPayments := xValue + yValue
+	updatedAccountPaymentsPlusTxFee := out[xAddr] + out[yAddr] + txFee
+	if initialAccountPayments-updatedAccountPaymentsPlusTxFee <= maxRoundingDiff {
+		t.Fatalf("initial account payment total %v to be equal to updated "+
+			"values plus the transaction fee %v", initialAccountPayments,
+			updatedAccountPaymentsPlusTxFee)
+	}
+}
+
+// testPaymentMgrApplyTxFeesErrs ensures applyTxFees returns an error if it is
+// passed invalid parameters.
+func testPaymentMgrApplyTxFeesErrs(t *testing.T) {
+	mgr, _, _ := createPaymentMgr(t, PPS)
+
+	outV, _ := dcrutil.NewAmount(100)
+
+	in := chainjson.TransactionInput{
+		Amount: 100,
+		Txid:   chainhash.Hash{1}.String(),
+		Vout:   2,
+		Tree:   wire.TxTreeRegular,
+	}
+
+	// Ensure providing no tx inputs triggers an error.
+	_, _, err := mgr.applyTxFees([]chainjson.TransactionInput{},
+		make(map[string]dcrutil.Amount), outV, poolFeeAddrs)
+	if !errors.Is(err, errs.TxIn) {
+		t.Fatalf("expected a tx input error, got %v", err)
+	}
+
+	// Ensure providing no tx outputs triggers an error.
+	_, _, err = mgr.applyTxFees([]chainjson.TransactionInput{in},
+		make(map[string]dcrutil.Amount), outV, poolFeeAddrs)
+	if !errors.Is(err, errs.TxOut) {
+		t.Fatalf("expected a tx output error, got %v", err)
+	}
+}
+
 func testPaymentMgrPayment(t *testing.T) {
 	// Insert some test accounts.
 	accountX := NewAccount(xAddr)
@@ -559,62 +635,6 @@ func testPaymentMgrPayment(t *testing.T) {
 		cancel()
 		t.Fatalf("expected a single valid mature payment after "+
 			"pruning, got %v", len(pmtSet))
-	}
-
-	// applyTxFee tests.
-	outV, _ := dcrutil.NewAmount(100)
-	in := chainjson.TransactionInput{
-		Amount: float64(outV),
-		Txid:   chainhash.Hash{1}.String(),
-		Vout:   2,
-		Tree:   wire.TxTreeRegular,
-	}
-
-	poolFeeValue := amt.MulF64(0.1)
-	xValue := amt.MulF64(0.6)
-	yValue := amt.MulF64(0.3)
-
-	feeAddr := poolFeeAddrs.String()
-	out := make(map[string]dcrutil.Amount)
-	out[xAddr] = xValue
-	out[yAddr] = yValue
-	out[feeAddr] = poolFeeValue
-
-	_, txFee, err := mgr.applyTxFees([]chainjson.TransactionInput{in},
-		out, outV, poolFeeAddrs)
-	if err != nil {
-		t.Fatalf("unexpected applyTxFees error: %v", err)
-	}
-
-	// Ensure the pool fee payment was exempted from tx fee deductions.
-	if out[feeAddr] != poolFeeValue {
-		t.Fatalf("expected pool fee payment to be %v, got %v",
-			poolFeeValue, out[feeAddr])
-	}
-
-	// Ensure the difference between initial account payments and updated
-	// account payments plus the transaction fee is not more than the
-	// maximum rounding difference.
-	initialAccountPayments := xValue + yValue
-	updatedAccountPaymentsPlusTxFee := out[xAddr] + out[yAddr] + txFee
-	if initialAccountPayments-updatedAccountPaymentsPlusTxFee <= maxRoundingDiff {
-		t.Fatalf("initial account payment total %v to be equal to updated "+
-			"values plus the transaction fee %v", initialAccountPayments,
-			updatedAccountPaymentsPlusTxFee)
-	}
-
-	// Ensure providing no tx inputs triggers an error.
-	_, _, err = mgr.applyTxFees([]chainjson.TransactionInput{},
-		out, outV, poolFeeAddrs)
-	if !errors.Is(err, errs.TxIn) {
-		t.Fatalf("expected a tx input error, got %v", err)
-	}
-
-	// Ensure providing no tx outputs triggers an error.
-	_, _, err = mgr.applyTxFees([]chainjson.TransactionInput{in},
-		make(map[string]dcrutil.Amount), outV, poolFeeAddrs)
-	if !errors.Is(err, errs.TxOut) {
-		t.Fatalf("expected a tx output error, got %v", err)
 	}
 
 	// confirmCoinbases tests.
@@ -875,7 +895,7 @@ func testPaymentMgrPayment(t *testing.T) {
 
 	for addr := range outputs {
 		var match bool
-		if addr == feeAddr || addr == xAddr || addr == yAddr {
+		if addr == poolFeeAddrs.String() || addr == xAddr || addr == yAddr {
 			match = true
 		}
 		if !match {
