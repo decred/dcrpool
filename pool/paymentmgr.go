@@ -427,17 +427,17 @@ func (pm *PaymentMgr) pruneOrphanedPayments(ctx context.Context, pmts map[string
 // the ratio of the amount being paid to the total transaction output minus
 // pool fees.
 func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs map[string]dcrutil.Amount,
-	tOut dcrutil.Amount, feeAddr stdaddr.Address) (dcrutil.Amount, dcrutil.Amount, error) {
+	tOut dcrutil.Amount, feeAddr stdaddr.Address) (dcrutil.Amount, error) {
 	const funcName = "applyTxFees"
 	if len(inputs) == 0 {
 		desc := fmt.Sprintf("%s: cannot create a payout transaction "+
 			"without a tx input", funcName)
-		return 0, 0, errs.PoolError(errs.TxIn, desc)
+		return 0, errs.PoolError(errs.TxIn, desc)
 	}
 	if len(outputs) == 0 {
 		desc := fmt.Sprintf("%s: cannot create a payout transaction "+
 			"without a tx output", funcName)
-		return 0, 0, errs.PoolError(errs.TxOut, desc)
+		return 0, errs.PoolError(errs.TxOut, desc)
 	}
 	inSizes := make([]int, len(inputs))
 	for range inputs {
@@ -464,7 +464,7 @@ func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs m
 		outputs[addr] -= outFee
 	}
 
-	return sansFees, estFee, nil
+	return estFee, nil
 }
 
 // confirmCoinbases ensures the coinbases referenced by the provided
@@ -800,7 +800,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, coinbaseI
 		return err
 	}
 
-	_, estFee, err := pm.applyTxFees(inputs, outputs, tOut, feeAddr)
+	estFee, err := pm.applyTxFees(inputs, outputs, tOut, feeAddr)
 	if err != nil {
 		return err
 	}
