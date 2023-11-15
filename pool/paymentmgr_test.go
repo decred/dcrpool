@@ -498,7 +498,7 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 	out[yAddr] = yValue
 	out[feeAddr] = poolFeeValue
 
-	_, txFee, err := mgr.applyTxFees([]chainjson.TransactionInput{in},
+	txFee, err := mgr.applyTxFees([]chainjson.TransactionInput{in},
 		out, outV, poolFeeAddrs)
 	if err != nil {
 		t.Fatalf("unexpected applyTxFees error: %v", err)
@@ -537,14 +537,14 @@ func testPaymentMgrApplyTxFeesErrs(t *testing.T) {
 	}
 
 	// Ensure providing no tx inputs triggers an error.
-	_, _, err := mgr.applyTxFees([]chainjson.TransactionInput{},
+	_, err := mgr.applyTxFees([]chainjson.TransactionInput{},
 		make(map[string]dcrutil.Amount), outV, poolFeeAddrs)
 	if !errors.Is(err, errs.TxIn) {
 		t.Fatalf("expected a tx input error, got %v", err)
 	}
 
 	// Ensure providing no tx outputs triggers an error.
-	_, _, err = mgr.applyTxFees([]chainjson.TransactionInput{in},
+	_, err = mgr.applyTxFees([]chainjson.TransactionInput{in},
 		make(map[string]dcrutil.Amount), outV, poolFeeAddrs)
 	if !errors.Is(err, errs.TxOut) {
 		t.Fatalf("expected a tx output error, got %v", err)
