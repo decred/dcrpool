@@ -480,9 +480,8 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 
 	amt, _ := dcrutil.NewAmount(5)
 
-	outV, _ := dcrutil.NewAmount(100)
 	in := chainjson.TransactionInput{
-		Amount: float64(outV),
+		Amount: float64(amt),
 		Txid:   chainhash.Hash{1}.String(),
 		Vout:   2,
 		Tree:   wire.TxTreeRegular,
@@ -499,7 +498,7 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 	out[feeAddr] = poolFeeValue
 
 	txFee, err := mgr.applyTxFees([]chainjson.TransactionInput{in},
-		out, outV, poolFeeAddrs)
+		out, poolFeeAddrs)
 	if err != nil {
 		t.Fatalf("unexpected applyTxFees error: %v", err)
 	}
@@ -527,8 +526,6 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 func testPaymentMgrApplyTxFeesErrs(t *testing.T) {
 	mgr, _, _ := createPaymentMgr(t, PPS)
 
-	outV, _ := dcrutil.NewAmount(100)
-
 	in := chainjson.TransactionInput{
 		Amount: 100,
 		Txid:   chainhash.Hash{1}.String(),
@@ -538,14 +535,14 @@ func testPaymentMgrApplyTxFeesErrs(t *testing.T) {
 
 	// Ensure providing no tx inputs triggers an error.
 	_, err := mgr.applyTxFees([]chainjson.TransactionInput{},
-		make(map[string]dcrutil.Amount), outV, poolFeeAddrs)
+		make(map[string]dcrutil.Amount), poolFeeAddrs)
 	if !errors.Is(err, errs.TxIn) {
 		t.Fatalf("expected a tx input error, got %v", err)
 	}
 
 	// Ensure providing no tx outputs triggers an error.
 	_, err = mgr.applyTxFees([]chainjson.TransactionInput{in},
-		make(map[string]dcrutil.Amount), outV, poolFeeAddrs)
+		make(map[string]dcrutil.Amount), poolFeeAddrs)
 	if !errors.Is(err, errs.TxOut) {
 		t.Fatalf("expected a tx output error, got %v", err)
 	}
