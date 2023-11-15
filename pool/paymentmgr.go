@@ -427,7 +427,7 @@ func (pm *PaymentMgr) pruneOrphanedPayments(ctx context.Context, pmts map[string
 // the ratio of the amount being paid to the total transaction output minus
 // pool fees.
 func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs map[string]dcrutil.Amount,
-	tOut dcrutil.Amount, feeAddr stdaddr.Address) (dcrutil.Amount, error) {
+	feeAddr stdaddr.Address) (dcrutil.Amount, error) {
 	const funcName = "applyTxFees"
 	if len(inputs) == 0 {
 		desc := fmt.Sprintf("%s: cannot create a payout transaction "+
@@ -451,6 +451,12 @@ func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs m
 	estSize := txsizes.EstimateSerializeSizeFromScriptSizes(inSizes, outSizes,
 		changeScriptSize)
 	estFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, estSize)
+
+	var tOut dcrutil.Amount
+	for _, v := range outputs {
+		tOut += v
+	}
+
 	sansFees := tOut - estFee
 
 	for addr, v := range outputs {
@@ -800,7 +806,7 @@ func (pm *PaymentMgr) payDividends(ctx context.Context, height uint32, coinbaseI
 		return err
 	}
 
-	estFee, err := pm.applyTxFees(inputs, outputs, tOut, feeAddr)
+	estFee, err := pm.applyTxFees(inputs, outputs, feeAddr)
 	if err != nil {
 		return err
 	}
