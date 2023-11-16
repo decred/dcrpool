@@ -477,47 +477,122 @@ func testPaymentMgrMaturity(t *testing.T) {
 
 func testPaymentMgrApplyTxFees(t *testing.T) {
 	mgr, _, _ := createPaymentMgr(t, PPS)
-
-	amt, _ := dcrutil.NewAmount(5)
-
-	in := chainjson.TransactionInput{
-		Amount: float64(amt),
-		Txid:   chainhash.Hash{1}.String(),
-		Vout:   2,
-		Tree:   wire.TxTreeRegular,
-	}
-
-	poolFeeValue := amt.MulF64(0.1)
-	xValue := amt.MulF64(0.6)
-	yValue := amt.MulF64(0.3)
-
 	feeAddr := poolFeeAddrs.String()
-	out := make(map[string]dcrutil.Amount)
-	out[xAddr] = xValue
-	out[yAddr] = yValue
-	out[feeAddr] = poolFeeValue
 
-	txFee, err := mgr.applyTxFees([]chainjson.TransactionInput{in},
-		out, poolFeeAddrs)
-	if err != nil {
-		t.Fatalf("unexpected applyTxFees error: %v", err)
+	tests := map[string]struct {
+		// inputs and outputs are the params which are passed into applyTxFees.
+		inputs  []dcrutil.Amount
+		outputs map[string]dcrutil.Amount
+		// expectedOutputs are the output amounts which are expected after
+		// applyTxFees has been run. Note that the fee output should remain
+		// unchanged - tx fees are only deducted from user outputs.
+		expectedOutputs map[string]dcrutil.Amount
+	}{
+		"Single input, single output": {
+			inputs: []dcrutil.Amount{
+				dcrutil.Amount(900000000),
+			},
+			outputs: map[string]dcrutil.Amount{
+				feeAddr: dcrutil.Amount(100000000),
+				"user1": dcrutil.Amount(800000000),
+			},
+			expectedOutputs: map[string]dcrutil.Amount{
+				feeAddr: dcrutil.Amount(100000000),
+				"user1": dcrutil.Amount(799996006),
+			},
+		},
+		"Single input, multiple outputs": {
+			inputs: []dcrutil.Amount{
+				dcrutil.Amount(500000000),
+			},
+			outputs: map[string]dcrutil.Amount{
+				feeAddr: dcrutil.Amount(50000000),
+				"user1": dcrutil.Amount(300000000),
+				"user2": dcrutil.Amount(150000000),
+			},
+			expectedOutputs: map[string]dcrutil.Amount{
+				feeAddr: dcrutil.Amount(50000000),
+				"user1": dcrutil.Amount(299993117),
+				"user2": dcrutil.Amount(149986233),
+			},
+		},
+		"Multiple inputs, single output": {
+			inputs: []dcrutil.Amount{
+				dcrutil.Amount(500000000),
+				dcrutil.Amount(300000000),
+				dcrutil.Amount(200000000),
+			},
+			outputs: map[string]dcrutil.Amount{
+				feeAddr: dcrutil.Amount(100000000),
+				"user1": dcrutil.Amount(900000000),
+			},
+			expectedOutputs: map[string]dcrutil.Amount{
+				feeAddr: dcrutil.Amount(100000000),
+				"user1": dcrutil.Amount(899991078),
+			},
+		},
+		"Multiple inputs, multiple outputs": {
+			inputs: []dcrutil.Amount{
+				dcrutil.Amount(100000000),
+				dcrutil.Amount(100000000),
+				dcrutil.Amount(100000000),
+				dcrutil.Amount(100000000),
+				dcrutil.Amount(100000000),
+				dcrutil.Amount(100000000),
+				dcrutil.Amount(100000000),
+				dcrutil.Amount(100000000),
+				dcrutil.Amount(100000000),
+				dcrutil.Amount(100000000),
+				dcrutil.Amount(100000000),
+			},
+			outputs: map[string]dcrutil.Amount{
+				feeAddr: dcrutil.Amount(100000000),
+				"user1": dcrutil.Amount(100000000),
+				"user2": dcrutil.Amount(100000000),
+				"user3": dcrutil.Amount(100000000),
+				"user4": dcrutil.Amount(100000000),
+				"user5": dcrutil.Amount(100000000),
+				"user6": dcrutil.Amount(500000000),
+			},
+			expectedOutputs: map[string]dcrutil.Amount{
+				feeAddr: dcrutil.Amount(100000000),
+				"user1": dcrutil.Amount(99682658),
+				"user2": dcrutil.Amount(99682658),
+				"user3": dcrutil.Amount(99682658),
+				"user4": dcrutil.Amount(99682658),
+				"user5": dcrutil.Amount(99682658),
+				"user6": dcrutil.Amount(499936532),
+			},
+		},
 	}
 
-	// Ensure the pool fee payment was exempted from tx fee deductions.
-	if out[feeAddr] != poolFeeValue {
-		t.Fatalf("expected pool fee payment to be %v, got %v",
-			poolFeeValue, out[feeAddr])
-	}
+	for testName, test := range tests {
+		t.Run(testName, func(t *testing.T) {
+			// Create TransactionInputs from the provided input amounts.
+			txInputs := make([]chainjson.TransactionInput, len(test.inputs))
+			for i := 0; i < len(test.inputs); i++ {
+				txInputs[i] = chainjson.TransactionInput{
+					Amount: float64(test.inputs[i]),
+					Txid:   chainhash.Hash{1}.String(),
+					Vout:   2,
+					Tree:   wire.TxTreeRegular,
+				}
+			}
 
-	// Ensure the difference between initial account payments and updated
-	// account payments plus the transaction fee is not more than the
-	// maximum rounding difference.
-	initialAccountPayments := xValue + yValue
-	updatedAccountPaymentsPlusTxFee := out[xAddr] + out[yAddr] + txFee
-	if initialAccountPayments-updatedAccountPaymentsPlusTxFee <= maxRoundingDiff {
-		t.Fatalf("initial account payment total %v to be equal to updated "+
-			"values plus the transaction fee %v", initialAccountPayments,
-			updatedAccountPaymentsPlusTxFee)
+			// Call applyTxFees.
+			_, err := mgr.applyTxFees(txInputs, test.outputs, poolFeeAddrs)
+			if err != nil {
+				t.Fatalf("unexpected applyTxFees error: %v", err)
+			}
+
+			// Validate outputs have been modified as expected.
+			for addr, amt := range test.outputs {
+				if amt != test.expectedOutputs[addr] {
+					t.Fatalf("expected payment for %s to be %v, got %v",
+						addr, test.expectedOutputs[addr], amt)
+				}
+			}
+		})
 	}
 }
 
