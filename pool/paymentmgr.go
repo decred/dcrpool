@@ -419,6 +419,21 @@ func (pm *PaymentMgr) pruneOrphanedPayments(ctx context.Context, pmts map[string
 	return pmts, nil
 }
 
+func estimateTxFee(numInputs, numOutputs int) dcrutil.Amount {
+	inSizes := make([]int, numInputs)
+	for i := 0; i < numInputs; i++ {
+		inSizes[i] = txsizes.RedeemP2PKHSigScriptSize
+	}
+	outSizes := make([]int, numOutputs)
+	for i := 0; i < numOutputs; i++ {
+		outSizes[i] = txsizes.P2PKHOutputSize
+	}
+	const changeScriptSize = 0
+	estSize := txsizes.EstimateSerializeSizeFromScriptSizes(inSizes, outSizes,
+		changeScriptSize)
+	return txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, estSize)
+}
+
 // applyTxFees determines the transaction fees needed for the payout transaction
 // and deducts portions of the fee from outputs of participating accounts
 // being paid to.
@@ -439,25 +454,14 @@ func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs m
 			"without a tx output", funcName)
 		return 0, errs.PoolError(errs.TxOut, desc)
 	}
-	inSizes := make([]int, len(inputs))
-	for range inputs {
-		inSizes = append(inSizes, txsizes.RedeemP2PKHSigScriptSize)
-	}
-	outSizes := make([]int, len(outputs))
-	for range outputs {
-		outSizes = append(outSizes, txsizes.P2PKHOutputSize)
-	}
-	changeScriptSize := 0
-	estSize := txsizes.EstimateSerializeSizeFromScriptSizes(inSizes, outSizes,
-		changeScriptSize)
-	estFee := txrules.FeeForSerializeSize(txrules.DefaultRelayFeePerKb, estSize)
 
 	var tOut dcrutil.Amount
 	for _, v := range outputs {
 		tOut += v
 	}
 
-	sansFees := tOut - estFee
+	estTxFee := estimateTxFee(len(inputs), len(outputs))
+	sansFees := tOut - estTxFee
 
 	for addr, v := range outputs {
 		// Pool fee payments are excluded from tx fee deductions.
@@ -466,11 +470,11 @@ func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs m
 		}
 
 		ratio := float64(int64(sansFees)) / float64(int64(v))
-		outFee := estFee.MulF64(ratio)
+		outFee := estTxFee.MulF64(ratio)
 		outputs[addr] -= outFee
 	}
 
-	return estFee, nil
+	return estTxFee, nil
 }
 
 // confirmCoinbases ensures the coinbases referenced by the provided

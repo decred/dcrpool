@@ -498,7 +498,7 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 			},
 			expectedOutputs: map[string]dcrutil.Amount{
 				feeAddr: dcrutil.Amount(100000000),
-				"user1": dcrutil.Amount(799996006),
+				"user1": dcrutil.Amount(799996906),
 			},
 		},
 		"Single input, multiple outputs": {
@@ -512,8 +512,8 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 			},
 			expectedOutputs: map[string]dcrutil.Amount{
 				feeAddr: dcrutil.Amount(50000000),
-				"user1": dcrutil.Amount(299993117),
-				"user2": dcrutil.Amount(149986233),
+				"user1": dcrutil.Amount(299994633),
+				"user2": dcrutil.Amount(149989267),
 			},
 		},
 		"Multiple inputs, single output": {
@@ -528,7 +528,7 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 			},
 			expectedOutputs: map[string]dcrutil.Amount{
 				feeAddr: dcrutil.Amount(100000000),
-				"user1": dcrutil.Amount(899991078),
+				"user1": dcrutil.Amount(899993256),
 			},
 		},
 		"Multiple inputs, multiple outputs": {
@@ -556,12 +556,12 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 			},
 			expectedOutputs: map[string]dcrutil.Amount{
 				feeAddr: dcrutil.Amount(100000000),
-				"user1": dcrutil.Amount(99682658),
-				"user2": dcrutil.Amount(99682658),
-				"user3": dcrutil.Amount(99682658),
-				"user4": dcrutil.Amount(99682658),
-				"user5": dcrutil.Amount(99682658),
-				"user6": dcrutil.Amount(499936532),
+				"user1": dcrutil.Amount(99761305),
+				"user2": dcrutil.Amount(99761305),
+				"user3": dcrutil.Amount(99761305),
+				"user4": dcrutil.Amount(99761305),
+				"user5": dcrutil.Amount(99761305),
+				"user6": dcrutil.Amount(499952261),
 			},
 		},
 	}
