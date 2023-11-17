@@ -498,7 +498,7 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 			},
 			expectedOutputs: map[string]dcrutil.Amount{
 				feeAddr: dcrutil.Amount(100000000),
-				"user1": dcrutil.Amount(799996906),
+				"user1": dcrutil.Amount(799997250),
 			},
 		},
 		"Single input, multiple outputs": {
@@ -512,8 +512,8 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 			},
 			expectedOutputs: map[string]dcrutil.Amount{
 				feeAddr: dcrutil.Amount(50000000),
-				"user1": dcrutil.Amount(299994633),
-				"user2": dcrutil.Amount(149989267),
+				"user1": dcrutil.Amount(299997854),
+				"user2": dcrutil.Amount(149998927),
 			},
 		},
 		"Multiple inputs, single output": {
@@ -528,7 +528,7 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 			},
 			expectedOutputs: map[string]dcrutil.Amount{
 				feeAddr: dcrutil.Amount(100000000),
-				"user1": dcrutil.Amount(899993256),
+				"user1": dcrutil.Amount(899993930),
 			},
 		},
 		"Multiple inputs, multiple outputs": {
@@ -556,12 +556,12 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 			},
 			expectedOutputs: map[string]dcrutil.Amount{
 				feeAddr: dcrutil.Amount(100000000),
-				"user1": dcrutil.Amount(99761305),
-				"user2": dcrutil.Amount(99761305),
-				"user3": dcrutil.Amount(99761305),
-				"user4": dcrutil.Amount(99761305),
-				"user5": dcrutil.Amount(99761305),
-				"user6": dcrutil.Amount(499952261),
+				"user1": dcrutil.Amount(99997830),
+				"user2": dcrutil.Amount(99997830),
+				"user3": dcrutil.Amount(99997830),
+				"user4": dcrutil.Amount(99997830),
+				"user5": dcrutil.Amount(99997830),
+				"user6": dcrutil.Amount(499989150),
 			},
 		},
 	}
@@ -587,10 +587,33 @@ func testPaymentMgrApplyTxFees(t *testing.T) {
 
 			// Validate outputs have been modified as expected.
 			for addr, amt := range test.outputs {
-				if amt != test.expectedOutputs[addr] {
-					t.Fatalf("expected payment for %s to be %v, got %v",
-						addr, test.expectedOutputs[addr], amt)
+				// If the fee could not be split without rounding, extra atoms
+				// will be allocated to random outputs.
+				wantAmt1 := test.expectedOutputs[addr]
+				wantAmt2 := wantAmt1 - 1
+				if amt != wantAmt1 && amt != wantAmt2 {
+					t.Fatalf("expected payment for %s to be %v or %v, got %v",
+						addr, wantAmt1, wantAmt2, amt)
 				}
+			}
+
+			// Ensure the fee deduced from outputs matches expectation.
+			expectedFee := estimateTxFee(len(test.inputs), len(test.outputs))
+			actualFee := func() dcrutil.Amount {
+				var tIn dcrutil.Amount
+				for _, amt := range test.inputs {
+					tIn += amt
+				}
+				var tOut dcrutil.Amount
+				for _, amt := range test.outputs {
+					tOut += amt
+				}
+				return tIn - tOut
+			}()
+
+			if actualFee != expectedFee {
+				t.Fatalf("expected total fee to be %v, got %v",
+					expectedFee, actualFee)
 			}
 		})
 	}

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -455,23 +456,46 @@ func (pm *PaymentMgr) applyTxFees(inputs []chainjson.TransactionInput, outputs m
 		return 0, errs.PoolError(errs.TxOut, desc)
 	}
 
-	var tOut dcrutil.Amount
-	for _, v := range outputs {
-		tOut += v
+	estTxFee := estimateTxFee(len(inputs), len(outputs))
+
+	// Determine the total output amount without the pool fee.
+	var outputAmountSansPoolFee dcrutil.Amount
+	for addr, v := range outputs {
+		if addr == feeAddr.String() {
+			continue
+		}
+		outputAmountSansPoolFee += v
 	}
 
-	estTxFee := estimateTxFee(len(inputs), len(outputs))
-	sansFees := tOut - estTxFee
-
+	// Determine the proportional transaction fees for each output other than
+	// the pool fee.  Note that in order to avoid overpayment of the fee, each
+	// proportional fee is calculated via a floor.  This means there will still
+	// be a few atoms leftover to account for when the fee is not evenly
+	// divisible by the number of outputs.
+	var txFeesPaid dcrutil.Amount
+	proportionalTxFees := make(map[string]dcrutil.Amount)
 	for addr, v := range outputs {
 		// Pool fee payments are excluded from tx fee deductions.
 		if addr == feeAddr.String() {
 			continue
 		}
 
-		ratio := float64(int64(sansFees)) / float64(int64(v))
-		outFee := estTxFee.MulF64(ratio)
-		outputs[addr] -= outFee
+		ratio := float64(v) / float64(outputAmountSansPoolFee)
+		outFee := dcrutil.Amount(math.Floor(float64(estTxFee) * ratio))
+		proportionalTxFees[addr] = outFee
+		txFeesPaid += outFee
+	}
+
+	// Apply the fees to the outputs while accounting for any extra atoms needed
+	// to reach the required transaction fee by reducing random outputs
+	// accordingly.
+	remainingTxFeeAtoms := estTxFee - txFeesPaid
+	for addr, fee := range proportionalTxFees {
+		outputs[addr] -= fee
+		if remainingTxFeeAtoms > 0 {
+			outputs[addr]--
+			remainingTxFeeAtoms--
+		}
 	}
 
 	return estTxFee, nil
