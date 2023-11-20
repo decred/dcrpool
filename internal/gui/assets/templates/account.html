@@ -79,6 +79,7 @@
                     <thead>
                         <tr>
                             <th>Miner</th>
+                            <th>IP</th>
                             <th>Hash Rate</th>
                         </tr>
                     </thead>
@@ -86,6 +87,7 @@
                         {{ range .ConnectedClients }}
                         <tr>
                             <td>{{.Miner}}</td>
+                            <td>{{.IP}}</td>
                             <td>{{.HashRate}}</td>
                         </tr>
                         {{else}}
