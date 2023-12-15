@@ -55,6 +55,7 @@ const (
 // pool. Typically a dcrd client but can be stubbed for testing.
 type txCreator interface {
 	// GetTxOut fetches the output referenced by the provided txHash and index.
+	// WARNING: dcrd can return (nil, nil).
 	GetTxOut(context.Context, *chainhash.Hash, uint32, int8, bool) (*chainjson.GetTxOutResult, error)
 	// CreateRawTransaction generates a transaction from the provided
 	// inputs and payouts.
@@ -643,6 +644,10 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC txCreator
 		if err != nil {
 			desc := fmt.Sprintf("%s: unable to find tx output: %v",
 				funcName, err)
+			return nil, nil, nil, 0, errs.PoolError(errs.TxOut, desc)
+		}
+		if txOutResult == nil {
+			desc := fmt.Sprintf("%s: unable to find tx output", funcName)
 			return nil, nil, nil, 0, errs.PoolError(errs.TxOut, desc)
 		}
 		if txOutResult.Confirmations < int64(pm.cfg.ActiveNet.CoinbaseMaturity+1) {

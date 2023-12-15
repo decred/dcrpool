@@ -108,9 +108,11 @@ type WalletConnection interface {
 	Rescan(ctx context.Context, in *walletrpc.RescanRequest, opts ...grpc.CallOption) (walletrpc.WalletService_RescanClient, error)
 }
 
-// NodeConnection defines the functionality needed by a mining node
-// connection for the pool.
+// NodeConnection defines the functionality needed by a mining node connection
+// for the pool. Typically a dcrd client but can be stubbed for testing.
 type NodeConnection interface {
+	// GetTxOut fetches the output referenced by the provided txHash and index.
+	// WARNING: dcrd can return (nil, nil).
 	GetTxOut(context.Context, *chainhash.Hash, uint32, int8, bool) (*chainjson.GetTxOutResult, error)
 	CreateRawTransaction(context.Context, []chainjson.TransactionInput, map[stdaddr.Address]dcrutil.Amount, *int64, *int64) (*wire.MsgTx, error)
 	GetWorkSubmit(context.Context, string) (bool, error)
