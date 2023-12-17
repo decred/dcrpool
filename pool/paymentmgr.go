@@ -642,12 +642,13 @@ func (pm *PaymentMgr) generatePayoutTxDetails(ctx context.Context, txC txCreator
 		// the current height.
 		txOutResult, err := txC.GetTxOut(ctx, txHash, coinbaseIndex, wire.TxTreeRegular, false)
 		if err != nil {
-			desc := fmt.Sprintf("%s: unable to find tx output: %v",
-				funcName, err)
+			desc := fmt.Sprintf("%s: unable to find tx output %s:%d: %v",
+				funcName, txHash, coinbaseIndex, err)
 			return nil, nil, nil, 0, errs.PoolError(errs.TxOut, desc)
 		}
 		if txOutResult == nil {
-			desc := fmt.Sprintf("%s: unable to find tx output", funcName)
+			desc := fmt.Sprintf("%s: unable to find tx output %s:%d",
+				funcName, txHash, coinbaseIndex)
 			return nil, nil, nil, 0, errs.PoolError(errs.TxOut, desc)
 		}
 		if txOutResult.Confirmations < int64(pm.cfg.ActiveNet.CoinbaseMaturity+1) {
