@@ -840,6 +840,21 @@ func testPaymentMgrPayment(t *testing.T) {
 		t.Fatalf("expected a fetch txOut error, got %v", err)
 	}
 
+	// Ensure a (nil, nil) response from dcrd is handled gracefully.
+	// generatePayoutTxDetails should return a TxOut error rather than
+	// generating a panic.
+	txC = &txCreatorImpl{
+		getTxOut: func(ctx context.Context, txHash *chainhash.Hash, index uint32, tree int8, mempool bool) (*chainjson.GetTxOutResult, error) {
+			return nil, nil
+		},
+	}
+	_, _, _, _, err = mgr.generatePayoutTxDetails(ctx, txC, poolFeeAddrs,
+		mPmts, coinbaseIndex)
+	if !errors.Is(err, errs.TxOut) {
+		cancel()
+		t.Fatalf("expected a fetch txOut error, got %v", err)
+	}
+
 	// Ensure generating payout tx details returns an error if the returned
 	// output is not spendable.
 	txC = &txCreatorImpl{
