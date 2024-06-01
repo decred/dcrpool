@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2023 The Decred developers
+// Copyright (c) 2019-2024 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -22,7 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"decred.org/dcrwallet/v3/rpc/walletrpc"
+	"decred.org/dcrwallet/v4/rpc/walletrpc"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrjson/v4"
