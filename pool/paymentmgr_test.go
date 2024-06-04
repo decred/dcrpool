@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2023 The Decred developers
+// Copyright (c) 2021-2024 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"decred.org/dcrwallet/v3/rpc/walletrpc"
-	txrules "decred.org/dcrwallet/v3/wallet/txrules"
-	"decred.org/dcrwallet/v3/wallet/txsizes"
+	"decred.org/dcrwallet/v4/rpc/walletrpc"
+	txrules "decred.org/dcrwallet/v4/wallet/txrules"
+	"decred.org/dcrwallet/v4/wallet/txsizes"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"
