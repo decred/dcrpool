@@ -47,7 +47,7 @@ mining, a certificate from an authority (`CA`) like
 
 ## Build and installation
 
-- **Install Go 1.17 or higher**
+- **Install Go 1.21 or higher**
 
   Installation instructions can be found here: https://golang.org/doc/install.
   Ensure Go was installed properly and is a supported version:
@@ -65,7 +65,7 @@ mining, a certificate from an authority (`CA`) like
   command without cloning this repository:
 
   ```sh
-  $ go install github.com/decred/dcrpool@v1.2.0
+  $ go install github.com/decred/dcrpool@v1.3.0
   ```
 
   Using `@master` instead will perform a build using the latest code from the
