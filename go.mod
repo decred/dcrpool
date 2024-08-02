@@ -2,8 +2,6 @@ module github.com/decred/dcrpool
 
 go 1.21
 
-toolchain go1.22.3
-
 require (
 	decred.org/dcrwallet/v4 v4.1.0
 	github.com/decred/dcrd/blockchain/standalone/v2 v2.2.1
