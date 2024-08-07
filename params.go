@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 The Decred developers
+// Copyright (c) 2020-2024 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -10,28 +10,28 @@ import (
 
 type params struct {
 	*chaincfg.Params
-	DcrdRPCServerPort    string
-	WalletGRPCServerPort string
-	BlockExplorerURL     string
+	dcrdRPCServerPort    string
+	walletGRPCServerPort string
+	blockExplorerURL     string
 }
 
 var mainNetParams = params{
 	Params:               chaincfg.MainNetParams(),
-	DcrdRPCServerPort:    "9109",
-	WalletGRPCServerPort: "9111",
-	BlockExplorerURL:     "https://dcrdata.decred.org",
+	dcrdRPCServerPort:    "9109",
+	walletGRPCServerPort: "9111",
+	blockExplorerURL:     "https://dcrdata.decred.org",
 }
 
 var testNet3Params = params{
 	Params:               chaincfg.TestNet3Params(),
-	DcrdRPCServerPort:    "19109",
-	WalletGRPCServerPort: "19111",
-	BlockExplorerURL:     "https://testnet.dcrdata.org",
+	dcrdRPCServerPort:    "19109",
+	walletGRPCServerPort: "19111",
+	blockExplorerURL:     "https://testnet.dcrdata.org",
 }
 
 var simNetParams = params{
 	Params:               chaincfg.SimNetParams(),
-	DcrdRPCServerPort:    "19556",
-	WalletGRPCServerPort: "19558",
-	BlockExplorerURL:     "...",
+	dcrdRPCServerPort:    "19556",
+	walletGRPCServerPort: "19558",
+	blockExplorerURL:     "...",
 }

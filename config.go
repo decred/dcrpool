@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2023 The Decred developers
+// Copyright (c) 2019-2024 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -393,7 +393,7 @@ func loadConfig(appName string) (*config, []string, error) {
 	// Show the version and exit if the version flag was specified.
 	if preCfg.ShowVersion {
 		fmt.Printf("%s version %s (Go version %s %s/%s)\n", appName,
-			Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+			version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 		os.Exit(0)
 	}
 
@@ -581,8 +581,8 @@ func loadConfig(appName string) (*config, []string, error) {
 	}
 
 	// Add default ports for the active network if there are no ports specified.
-	cfg.DcrdRPCHost = normalizeAddress(cfg.DcrdRPCHost, cfg.net.DcrdRPCServerPort)
-	cfg.WalletGRPCHost = normalizeAddress(cfg.WalletGRPCHost, cfg.net.WalletGRPCServerPort)
+	cfg.DcrdRPCHost = normalizeAddress(cfg.DcrdRPCHost, cfg.net.dcrdRPCServerPort)
+	cfg.WalletGRPCHost = normalizeAddress(cfg.WalletGRPCHost, cfg.net.walletGRPCServerPort)
 
 	cfg.MinerListen = normalizeAddress(cfg.MinerListen, defaultMinerPort)
 	cfg.GUIListen = normalizeAddress(cfg.GUIListen, defaultGUIPort)
