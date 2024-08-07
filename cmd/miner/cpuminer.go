@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2016 The btcsuite developers
-// Copyright (c) 2015-2023 The Decred developers
+// Copyright (c) 2015-2024 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -31,27 +31,27 @@ const (
 	hpsUpdateSecs = 5
 )
 
-// SubmitWorkData encapsulates fields needed to create a stratum submit message.
-type SubmitWorkData struct {
+// submitWorkData encapsulates fields needed to create a stratum submit message.
+type submitWorkData struct {
 	nTime       string
 	nonce       string
 	extraNonce2 string
 }
 
-// CPUMiner provides facilities for solving blocks using the CPU in a
+// cpuMiner provides facilities for solving blocks using the CPU in a
 // concurrency-safe manner. It consists of a hash rate monitor and
 // worker goroutines which solve the received block.
-type CPUMiner struct {
-	miner        *Miner
+type cpuMiner struct {
+	miner        *miner
 	rateCh       chan float64
 	updateHashes chan uint64
-	workData     *SubmitWorkData
+	workData     *submitWorkData
 	workCh       chan *pool.Request
 }
 
 // hashRateMonitor tracks number of hashes per second the mining process is
 // performing. It must be run as a goroutine.
-func (m *CPUMiner) hashRateMonitor(ctx context.Context) {
+func (m *cpuMiner) hashRateMonitor(ctx context.Context) {
 	var hashRate float64
 	var totalHashes uint64
 	ticker := time.NewTicker(time.Second * hpsUpdateSecs)
@@ -88,7 +88,7 @@ func (m *CPUMiner) hashRateMonitor(ctx context.Context) {
 // This function will return early with false when conditions that trigger a
 // stale block such as a new block showing up or periodically when there are
 // new transactions and enough time has elapsed without finding a solution.
-func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.Rat) bool {
+func (m *cpuMiner) solveBlock(ctx context.Context, headerB []byte, target *big.Rat) bool {
 	ticker := time.NewTicker(333 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -188,7 +188,7 @@ func (m *CPUMiner) solveBlock(ctx context.Context, headerB []byte, target *big.R
 // solve is the main work horse of generateblocks. It attempts to solve blocks
 // while detecting when it is performing stale work. When a block is solved it
 // is sent via the work channel.
-func (m *CPUMiner) solve(ctx context.Context) {
+func (m *cpuMiner) solve(ctx context.Context) {
 	for {
 		m.miner.workMtx.RLock()
 		if m.miner.work.target == nil || m.miner.work.jobID == "" ||
@@ -248,7 +248,7 @@ func (m *CPUMiner) solve(ctx context.Context) {
 
 // generateBlocks handles sending solved block submissions to the mining pool.
 // It must be run as a goroutine.
-func (m *CPUMiner) generateBlocks(ctx context.Context) {
+func (m *cpuMiner) generateBlocks(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -277,21 +277,13 @@ func (m *CPUMiner) generateBlocks(ctx context.Context) {
 	}
 }
 
-// HashesPerSecond returns the number of hashes per second the mining process
-// is performing.
-//
-// This function is safe for concurrent access.
-func (m *CPUMiner) HashesPerSecond() float64 {
-	return <-m.rateCh
-}
-
-// NewCPUMiner returns a new instance of a CPU miner for the provided client.
+// newCPUMiner returns a new instance of a CPU miner for the provided client.
 // Use Start to begin the mining process.
-func NewCPUMiner(m *Miner) *CPUMiner {
-	return &CPUMiner{
+func newCPUMiner(m *miner) *cpuMiner {
+	return &cpuMiner{
 		rateCh:       make(chan float64),
 		updateHashes: make(chan uint64),
-		workData:     new(SubmitWorkData),
+		workData:     new(submitWorkData),
 		miner:        m,
 		workCh:       make(chan *pool.Request),
 	}
