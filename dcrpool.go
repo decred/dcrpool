@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2023 The Decred developers
+// Copyright (c) 2019-2024 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -82,7 +82,7 @@ func newGUI(cfg *config, hub *pool.Hub) (*gui.GUI, error) {
 		TLSCertFile:           cfg.GUITLSCert,
 		TLSKeyFile:            cfg.GUITLSKey,
 		ActiveNetName:         cfg.net.Params.Name,
-		BlockExplorerURL:      cfg.net.BlockExplorerURL,
+		BlockExplorerURL:      cfg.net.blockExplorerURL,
 		PaymentMethod:         cfg.PaymentMethod,
 		Designation:           cfg.Designation,
 		PoolFee:               cfg.PoolFee,
@@ -140,7 +140,7 @@ func realMain() error {
 
 	// Show version and home dir at startup.
 	mpLog.Infof("%s version %s (Go version %s %s/%s)", appName,
-		Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	mpLog.Infof("Home dir: %s", cfg.HomeDir)
 
 	var db pool.Database
