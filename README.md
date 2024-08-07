@@ -65,7 +65,7 @@ mining, a certificate from an authority (`CA`) like
   command without cloning this repository:
 
   ```sh
-  $ go install github.com/decred/dcrpool@v1.3.0
+  $ go install github.com/decred/dcrpool@release-v2.0.0
   ```
 
   Using `@master` instead will perform a build using the latest code from the
