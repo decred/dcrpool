@@ -16,7 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/decred/dcrpool/pool"
+	"github.com/decred/dcrpool/internal/pool"
 )
 
 // work represents the data received from a work notification. It comprises of

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 The Decred developers
+// Copyright (c) 2020-2024 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -24,7 +24,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 
-	"github.com/decred/dcrpool/pool"
+	"github.com/decred/dcrpool/internal/pool"
 )
 
 // Config contains all of the required configuration values for the GUI
