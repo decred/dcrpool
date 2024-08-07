@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 The Decred developers
+// Copyright (c) 2019-2024 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -38,7 +38,7 @@ func main() {
 
 	// Initialize and run the client.
 	ctx, cancel := context.WithCancel(context.Background())
-	miner := NewMiner(cfg, cancel)
+	miner := newMiner(cfg, cancel)
 
 	log.Infof("Version: %s", version())
 	log.Infof("Runtime: Go version %s", runtime.Version())

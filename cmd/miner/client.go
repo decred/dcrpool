@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 The Decred developers
+// Copyright (c) 2019-2024 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -19,23 +19,23 @@ import (
 	"github.com/decred/dcrpool/pool"
 )
 
-// Work represents the data received from a work notification. It comprises of
+// work represents the data received from a work notification. It comprises of
 // hex encoded block header and pool target data.
-type Work struct {
+type work struct {
 	jobID  string
 	header []byte
 	target *big.Rat
 }
 
-// Miner represents a stratum mining client.
-type Miner struct {
+// miner represents a stratum mining client.
+type miner struct {
 	id uint64 // update atomically.
 
 	conn            net.Conn
-	core            *CPUMiner
+	core            *cpuMiner
 	encoder         *json.Encoder
 	reader          *bufio.Reader
-	work            *Work
+	work            *work
 	workMtx         sync.RWMutex
 	config          *config
 	req             map[uint64]string
@@ -55,14 +55,14 @@ type Miner struct {
 }
 
 // recordRequest logs a request as an id/method pair.
-func (m *Miner) recordRequest(id uint64, method string) {
+func (m *miner) recordRequest(id uint64, method string) {
 	m.reqMtx.Lock()
 	m.req[id] = method
 	m.reqMtx.Unlock()
 }
 
 // fetchRequest fetches the method of the recorded request id.
-func (m *Miner) fetchRequest(id uint64) string {
+func (m *miner) fetchRequest(id uint64) string {
 	m.reqMtx.RLock()
 	method := m.req[id]
 	m.reqMtx.RUnlock()
@@ -70,19 +70,19 @@ func (m *Miner) fetchRequest(id uint64) string {
 }
 
 // deleteRequest removes the provided request id from the id cache.
-func (m *Miner) deleteRequest(id uint64) {
+func (m *miner) deleteRequest(id uint64) {
 	m.reqMtx.Lock()
 	delete(m.req, id)
 	m.reqMtx.Unlock()
 }
 
 // nextID returns the next message id for the client.
-func (m *Miner) nextID() uint64 {
+func (m *miner) nextID() uint64 {
 	return atomic.AddUint64(&m.id, 1)
 }
 
 // authenticate sends a stratum miner authentication message.
-func (m *Miner) authenticate() error {
+func (m *miner) authenticate() error {
 	id := m.nextID()
 	req := pool.AuthorizeRequest(&id, m.config.User, m.config.Address)
 	err := m.encoder.Encode(req)
@@ -96,7 +96,7 @@ func (m *Miner) authenticate() error {
 }
 
 // subscribe sends a stratum miner subscribe message.
-func (m *Miner) subscribe() error {
+func (m *miner) subscribe() error {
 	id := m.nextID()
 	req := pool.SubscribeRequest(&id, m.config.UserAgent, m.notifyID)
 	err := m.encoder.Encode(req)
@@ -111,7 +111,7 @@ func (m *Miner) subscribe() error {
 
 // keepAlive checks the state of the connection to the pool and reconnects
 // if needed. This should be run as a goroutine.
-func (m *Miner) keepAlive(ctx context.Context) {
+func (m *miner) keepAlive(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -157,7 +157,7 @@ func (m *Miner) keepAlive(ctx context.Context) {
 
 // read receives incoming data and passes the message received for
 // processing. It must be run as a goroutine.
-func (m *Miner) read(ctx context.Context) {
+func (m *miner) read(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -182,7 +182,7 @@ func (m *Miner) read(ctx context.Context) {
 			m.connectedMtx.Unlock()
 
 			m.workMtx.Lock()
-			m.work = new(Work)
+			m.work = new(work)
 			m.workMtx.Unlock()
 
 			// Signal the solver to abort hashing.
@@ -229,7 +229,7 @@ func (m *Miner) read(ctx context.Context) {
 
 // listen reads and processes incoming messages from the pool client. It must
 // be run as a goroutine.
-func (m *Miner) process(ctx context.Context) {
+func (m *miner) process(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -427,7 +427,7 @@ func (m *Miner) process(ctx context.Context) {
 }
 
 // run handles the process life cycles of the miner.
-func (m *Miner) run(ctx context.Context) {
+func (m *miner) run(ctx context.Context) {
 	m.wg.Add(3)
 	go m.read(ctx)
 	go m.keepAlive(ctx)
@@ -444,11 +444,11 @@ func (m *Miner) run(ctx context.Context) {
 	log.Infof("Miner terminated.")
 }
 
-// NewMiner creates a stratum mining client.
-func NewMiner(cfg *config, cancel context.CancelFunc) *Miner {
-	m := &Miner{
+// newMiner creates a stratum mining client.
+func newMiner(cfg *config, cancel context.CancelFunc) *miner {
+	m := &miner{
 		config:  cfg,
-		work:    new(Work),
+		work:    new(work),
 		cancel:  cancel,
 		chainCh: make(chan struct{}),
 		readCh:  make(chan []byte),
@@ -456,6 +456,6 @@ func NewMiner(cfg *config, cancel context.CancelFunc) *Miner {
 		started: time.Now().Unix(),
 	}
 
-	m.core = NewCPUMiner(m)
+	m.core = newCPUMiner(m)
 	return m
 }
