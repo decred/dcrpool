@@ -19,7 +19,7 @@ import (
 
 	"github.com/decred/dcrd/rpcclient/v8"
 	"github.com/decred/dcrpool/internal/gui"
-	"github.com/decred/dcrpool/pool"
+	"github.com/decred/dcrpool/internal/pool"
 )
 
 // newHub returns a new pool hub configured with the provided details that is

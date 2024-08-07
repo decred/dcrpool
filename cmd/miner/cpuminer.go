@@ -18,7 +18,7 @@ import (
 
 	"github.com/decred/dcrd/blockchain/standalone/v2"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrpool/pool"
+	"github.com/decred/dcrpool/internal/pool"
 )
 
 const (

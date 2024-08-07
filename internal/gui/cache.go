@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 The Decred developers
+// Copyright (c) 2020-2024 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"github.com/decred/dcrd/dcrutil/v4"
-	"github.com/decred/dcrpool/pool"
+	"github.com/decred/dcrpool/internal/pool"
 )
 
 // client represents a mining client. It is json annotated so it can easily be

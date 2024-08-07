@@ -6,7 +6,7 @@ tmp
 logs
 *.log
 *.conf
-/pool/testdb
+/internal/pool/testdb
 /certs/*
 
 # Testing, profiling, and benchmarking artifacts
