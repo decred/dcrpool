@@ -40,7 +40,7 @@ var (
 	// the app will panic at runtime.  Of particular note is the pre-release
 	// and build metadata portions MUST only contain characters from
 	// semanticAlphabet.
-	version = "1.3.0-pre"
+	version = "2.0.0-pre"
 
 	// NOTE: The following values are set via init by parsing the above version
 	// string.
