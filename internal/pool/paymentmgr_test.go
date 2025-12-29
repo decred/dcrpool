@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"decred.org/dcrwallet/v4/rpc/walletrpc"
-	txrules "decred.org/dcrwallet/v4/wallet/txrules"
-	"decred.org/dcrwallet/v4/wallet/txsizes"
+	"decred.org/dcrwallet/v5/rpc/walletrpc"
+	txrules "decred.org/dcrwallet/v5/wallet/txrules"
+	"decred.org/dcrwallet/v5/wallet/txsizes"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"

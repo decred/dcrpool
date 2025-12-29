@@ -22,7 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"decred.org/dcrwallet/v4/rpc/walletrpc"
+	"decred.org/dcrwallet/v5/rpc/walletrpc"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrjson/v4"
@@ -375,11 +375,12 @@ func (h *Hub) Connect(ctx context.Context) error {
 			RootCAs:      serverCAs,
 			MinVersion:   tls.VersionTLS12,
 		})
-		grpc, err := grpc.Dial(h.cfg.WalletGRPCHost,
+		grpc, err := grpc.NewClient(h.cfg.WalletGRPCHost,
 			grpc.WithTransportCredentials(creds))
 		if err != nil {
-			return fmt.Errorf("unable to establish wallet "+
-				"grpc connection: %v", err)
+			return fmt.Errorf("unable to create wallet "+
+				"grpc connection for %q: %v",
+				h.cfg.WalletGRPCHost, err)
 		}
 
 		// Perform a Balance request to check connectivity and account

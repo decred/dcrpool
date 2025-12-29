@@ -29,6 +29,7 @@ func newHub(cfg *config, db pool.Database) (*pool.Hub, error) {
 	dcrdRPCCfg := rpcclient.ConnConfig{
 		Host:         cfg.DcrdRPCHost,
 		Endpoint:     "ws",
+		AuthType:     rpcclient.AuthTypeBasic,
 		User:         cfg.RPCUser,
 		Pass:         cfg.RPCPass,
 		Certificates: cfg.dcrdRPCCerts,
@@ -81,7 +82,7 @@ func newGUI(cfg *config, hub *pool.Hub) (*gui.GUI, error) {
 		Domain:                cfg.Domain,
 		TLSCertFile:           cfg.GUITLSCert,
 		TLSKeyFile:            cfg.GUITLSKey,
-		ActiveNetName:         cfg.net.Params.Name,
+		ActiveNetName:         cfg.net.Name,
 		BlockExplorerURL:      cfg.net.blockExplorerURL,
 		PaymentMethod:         cfg.PaymentMethod,
 		Designation:           cfg.Designation,
